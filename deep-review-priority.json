@@ -1,0 +1,89 @@
+{
+  "createdAt": "2026-08-27T09:26:04.597Z",
+  "schools": [
+    {
+      "school": "仁愛堂劉皇發夫人小學",
+      "source": 9,
+      "app": 9,
+      "database": 25
+    },
+    {
+      "school": "仁德天主教小學",
+      "source": 1,
+      "app": 0,
+      "database": 0
+    },
+    {
+      "school": "元朗公立中學",
+      "source": 13,
+      "app": 10,
+      "database": 8
+    },
+    {
+      "school": "元朗商會小學",
+      "source": 21,
+      "app": 9,
+      "database": 9
+    },
+    {
+      "school": "天水圍香島中學",
+      "source": 2,
+      "app": 0,
+      "database": 0
+    },
+    {
+      "school": "屯門天主教中學",
+      "source": 18,
+      "app": 15,
+      "database": 11
+    },
+    {
+      "school": "屯門官立中學",
+      "source": 2,
+      "app": 12,
+      "database": 12
+    },
+    {
+      "school": "可道中學(嗇色園主辦)",
+      "source": 11,
+      "app": 0,
+      "database": 0
+    },
+    {
+      "school": "明愛元朗陳震夏中學",
+      "source": 2,
+      "app": 0,
+      "database": 0
+    },
+    {
+      "school": "金巴崙長老會耀道中學",
+      "source": 5,
+      "app": 0,
+      "database": 0
+    },
+    {
+      "school": "恩平工商會李琳明中學",
+      "source": 14,
+      "app": 0,
+      "database": 0
+    },
+    {
+      "school": "浸信會永隆中學",
+      "source": 15,
+      "app": 10,
+      "database": 9
+    },
+    {
+      "school": "新界鄉議局元朗區中學",
+      "source": 12,
+      "app": 8,
+      "database": 8
+    },
+    {
+      "school": "趙聿修紀念中學",
+      "source": 12,
+      "app": 0,
+      "database": 0
+    }
+  ]
+}

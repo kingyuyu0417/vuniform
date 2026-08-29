@@ -1,0 +1,9882 @@
+{
+  "checkedAt": "2026-08-27T09:10:13.607Z",
+  "sourceProducts": 496,
+  "appProducts": 469,
+  "databaseProducts": 485,
+  "appDifferences": [
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "男女生 – 藍白條子短袖恤",
+      "source": [
+        {
+          "size": "12",
+          "price": 41
+        },
+        {
+          "size": "12.5",
+          "price": 44
+        },
+        {
+          "size": "13",
+          "price": 47
+        },
+        {
+          "size": "13.5",
+          "price": 50
+        },
+        {
+          "size": "14",
+          "price": 54
+        },
+        {
+          "size": "14.5",
+          "price": 58
+        },
+        {
+          "size": "15",
+          "price": 62
+        },
+        {
+          "size": "15.5",
+          "price": 66
+        },
+        {
+          "size": "16",
+          "price": 70
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "男生 – 深藍色長西褲",
+      "source": [
+        {
+          "size": "34",
+          "price": 78
+        },
+        {
+          "size": "35",
+          "price": 82
+        },
+        {
+          "size": "36",
+          "price": 86
+        },
+        {
+          "size": "37",
+          "price": 90
+        },
+        {
+          "size": "38.5",
+          "price": 95
+        },
+        {
+          "size": "40",
+          "price": 105
+        },
+        {
+          "size": "41.5",
+          "price": 110
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "女生 – 深藍色半腰裙",
+      "source": [
+        {
+          "size": "21-22",
+          "price": 68
+        },
+        {
+          "size": "23-24",
+          "price": 73
+        },
+        {
+          "size": "25-26",
+          "price": 78
+        },
+        {
+          "size": "27-28",
+          "price": 83
+        },
+        {
+          "size": "29-30",
+          "price": 88
+        },
+        {
+          "size": "31-32",
+          "price": 95
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "非華裔女生 - 藍色條子長裙",
+      "source": [
+        {
+          "size": "32",
+          "price": 76
+        },
+        {
+          "size": "34",
+          "price": 82
+        },
+        {
+          "size": "36",
+          "price": 88
+        },
+        {
+          "size": "38",
+          "price": 94
+        },
+        {
+          "size": "40",
+          "price": 100
+        },
+        {
+          "size": "42",
+          "price": 106
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "男女生 - 短袖綑邊運動衣",
+      "source": [
+        {
+          "size": "34",
+          "price": 36
+        },
+        {
+          "size": "36",
+          "price": 40
+        },
+        {
+          "size": "38",
+          "price": 44
+        },
+        {
+          "size": "40",
+          "price": 48
+        },
+        {
+          "size": "43",
+          "price": 52
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "男女生 - 運動褲",
+      "source": [
+        {
+          "size": "S",
+          "price": 36
+        },
+        {
+          "size": "M",
+          "price": 40
+        },
+        {
+          "size": "L",
+          "price": 44
+        },
+        {
+          "size": "XL",
+          "price": 48
+        },
+        {
+          "size": "XXL",
+          "price": 52
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "男女生 - 運動套裝",
+      "source": [
+        {
+          "size": "34",
+          "price": 90
+        },
+        {
+          "size": "36",
+          "price": 96
+        },
+        {
+          "size": "38",
+          "price": 102
+        },
+        {
+          "size": "40",
+          "price": 110
+        },
+        {
+          "size": "42",
+          "price": 118
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "Boy`s & Girl`s - Short Sleeves Shirt",
+      "source": [
+        {
+          "size": "12",
+          "price": 41
+        },
+        {
+          "size": "12.5",
+          "price": 44
+        },
+        {
+          "size": "13",
+          "price": 47
+        },
+        {
+          "size": "13.5",
+          "price": 50
+        },
+        {
+          "size": "14",
+          "price": 54
+        },
+        {
+          "size": "14.5",
+          "price": 58
+        },
+        {
+          "size": "15",
+          "price": 62
+        },
+        {
+          "size": "15.5",
+          "price": 66
+        },
+        {
+          "size": "16",
+          "price": 70
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "Boy`s - Trousers",
+      "source": [
+        {
+          "size": "34",
+          "price": 78
+        },
+        {
+          "size": "35",
+          "price": 82
+        },
+        {
+          "size": "36",
+          "price": 86
+        },
+        {
+          "size": "37",
+          "price": 90
+        },
+        {
+          "size": "38.5",
+          "price": 95
+        },
+        {
+          "size": "40",
+          "price": 105
+        },
+        {
+          "size": "41.5",
+          "price": 110
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "Girl`s - Skirt",
+      "source": [
+        {
+          "size": "21-22",
+          "price": 68
+        },
+        {
+          "size": "23-24",
+          "price": 73
+        },
+        {
+          "size": "25-26",
+          "price": 78
+        },
+        {
+          "size": "27-28",
+          "price": 83
+        },
+        {
+          "size": "29-30",
+          "price": 88
+        },
+        {
+          "size": "31-32",
+          "price": 95
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "Non-Chinese Student - Dresses",
+      "source": [
+        {
+          "size": "32",
+          "price": 76
+        },
+        {
+          "size": "34",
+          "price": 82
+        },
+        {
+          "size": "36",
+          "price": 88
+        },
+        {
+          "size": "38",
+          "price": 94
+        },
+        {
+          "size": "40",
+          "price": 100
+        },
+        {
+          "size": "42",
+          "price": 106
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "Boy`s & Girl`s - P.E. T - Shirt",
+      "source": [
+        {
+          "size": "34",
+          "price": 36
+        },
+        {
+          "size": "36",
+          "price": 40
+        },
+        {
+          "size": "38",
+          "price": 44
+        },
+        {
+          "size": "40",
+          "price": 48
+        },
+        {
+          "size": "43",
+          "price": 52
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "Boy`s & Girl`s - P.E Shorts",
+      "source": [
+        {
+          "size": "S",
+          "price": 36
+        },
+        {
+          "size": "M",
+          "price": 40
+        },
+        {
+          "size": "L",
+          "price": 44
+        },
+        {
+          "size": "XL",
+          "price": 48
+        },
+        {
+          "size": "XXL",
+          "price": 52
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "Boys’& Girls’- Tracksuit",
+      "source": [
+        {
+          "size": "34",
+          "price": 90
+        },
+        {
+          "size": "36",
+          "price": 96
+        },
+        {
+          "size": "38",
+          "price": 102
+        },
+        {
+          "size": "40",
+          "price": 110
+        },
+        {
+          "size": "42",
+          "price": 118
+        }
+      ]
+    },
+    {
+      "type": "price-or-size-mismatch",
+      "school": "保良局莊啟程第二小學",
+      "name": "【男女生】短襪 $16 / 1對優惠價 $44/ 3對 $80/ 6對$140/ 12對【男女生】短襪 $16 / 1對優惠價 $44/ 3對 $80/ 6對$140/ 12對男女生- 夏季運動服",
+      "source": [
+        {
+          "size": "24",
+          "price": 57
+        },
+        {
+          "size": "26",
+          "price": 66
+        },
+        {
+          "size": "28",
+          "price": 71
+        },
+        {
+          "size": "30",
+          "price": 75
+        },
+        {
+          "size": "32",
+          "price": 79
+        },
+        {
+          "size": "34",
+          "price": 83
+        },
+        {
+          "size": "36",
+          "price": 87
+        }
+      ],
+      "target": [
+        {
+          "size": "24",
+          "price": 53
+        },
+        {
+          "size": "26",
+          "price": 57
+        },
+        {
+          "size": "28",
+          "price": 60
+        },
+        {
+          "size": "30",
+          "price": 63
+        },
+        {
+          "size": "32",
+          "price": 66
+        },
+        {
+          "size": "34",
+          "price": 69
+        },
+        {
+          "size": "36",
+          "price": 72
+        }
+      ]
+    },
+    {
+      "type": "price-or-size-mismatch",
+      "school": "保良局方王錦全小學",
+      "name": "【男女生】短襪 $16 / 1對優惠價 $44/ 3對 $80/ 6對$140/ 12對【男女生】短襪 $16 / 1對優惠價 $44/ 3對 $80/ 6對$140/ 12對男女生- 夏季運動服",
+      "source": [
+        {
+          "size": "24",
+          "price": 57
+        },
+        {
+          "size": "26",
+          "price": 66
+        },
+        {
+          "size": "28",
+          "price": 71
+        },
+        {
+          "size": "30",
+          "price": 75
+        },
+        {
+          "size": "32",
+          "price": 79
+        },
+        {
+          "size": "34",
+          "price": 83
+        },
+        {
+          "size": "36",
+          "price": 87
+        }
+      ],
+      "target": [
+        {
+          "size": "24",
+          "price": 53
+        },
+        {
+          "size": "26",
+          "price": 57
+        },
+        {
+          "size": "28",
+          "price": 60
+        },
+        {
+          "size": "30",
+          "price": 63
+        },
+        {
+          "size": "32",
+          "price": 66
+        },
+        {
+          "size": "34",
+          "price": 69
+        },
+        {
+          "size": "36",
+          "price": 72
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "可道中學(嗇色園主辦)",
+      "name": "女生 - 白色連身校裙",
+      "source": [
+        {
+          "size": "32",
+          "price": 78
+        },
+        {
+          "size": "34",
+          "price": 82
+        },
+        {
+          "size": "36",
+          "price": 86
+        },
+        {
+          "size": "38",
+          "price": 90
+        },
+        {
+          "size": "40",
+          "price": 95
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "可道中學(嗇色園主辦)",
+      "name": "男生 - 白色短袖恤衫",
+      "source": [
+        {
+          "size": "12",
+          "price": 37
+        },
+        {
+          "size": "12.5",
+          "price": 40
+        },
+        {
+          "size": "13",
+          "price": 43
+        },
+        {
+          "size": "13.5",
+          "price": 46
+        },
+        {
+          "size": "14",
+          "price": 49
+        },
+        {
+          "size": "14.5",
+          "price": 52
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "可道中學(嗇色園主辦)",
+      "name": "男生 - 灰色長西褲",
+      "source": [
+        {
+          "size": "23",
+          "price": 78
+        },
+        {
+          "size": "24",
+          "price": 81
+        },
+        {
+          "size": "25",
+          "price": 84
+        },
+        {
+          "size": "26",
+          "price": 87
+        },
+        {
+          "size": "27",
+          "price": 90
+        },
+        {
+          "size": "28",
+          "price": 94
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "可道中學(嗇色園主辦)",
+      "name": "男女生 - 運動短袖衫 - 運動短褲",
+      "source": [
+        {
+          "size": "32",
+          "price": 34
+        },
+        {
+          "size": "34",
+          "price": 38
+        },
+        {
+          "size": "36",
+          "price": 42
+        },
+        {
+          "size": "38",
+          "price": 46
+        },
+        {
+          "size": "40",
+          "price": 50
+        },
+        {
+          "size": "XS",
+          "price": 34
+        },
+        {
+          "size": "S",
+          "price": 37
+        },
+        {
+          "size": "M",
+          "price": 40
+        },
+        {
+          "size": "L",
+          "price": 43
+        },
+        {
+          "size": "XL",
+          "price": 47
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "可道中學(嗇色園主辦)",
+      "name": "男女生 - 運動外套 - 運動長褲",
+      "source": [
+        {
+          "size": "32",
+          "price": 93
+        },
+        {
+          "size": "34",
+          "price": 95
+        },
+        {
+          "size": "36",
+          "price": 98
+        },
+        {
+          "size": "38",
+          "price": 100
+        },
+        {
+          "size": "40",
+          "price": 103
+        },
+        {
+          "size": "32",
+          "price": 92
+        },
+        {
+          "size": "34",
+          "price": 95
+        },
+        {
+          "size": "36",
+          "price": 97
+        },
+        {
+          "size": "38",
+          "price": 100
+        },
+        {
+          "size": "40",
+          "price": 102
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "可道中學(嗇色園主辦)",
+      "name": "男女生 - 灰色開胸冷衫",
+      "source": [
+        {
+          "size": "32",
+          "price": 130
+        },
+        {
+          "size": "34",
+          "price": 133
+        },
+        {
+          "size": "36",
+          "price": 137
+        },
+        {
+          "size": "38",
+          "price": 142
+        },
+        {
+          "size": "40",
+          "price": 147
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "可道中學(嗇色園主辦)",
+      "name": "男生 - 白色長袖恤衫",
+      "source": [
+        {
+          "size": "12",
+          "price": 43
+        },
+        {
+          "size": "12.5",
+          "price": 47
+        },
+        {
+          "size": "13",
+          "price": 50
+        },
+        {
+          "size": "13.5",
+          "price": 53
+        },
+        {
+          "size": "14",
+          "price": 56
+        },
+        {
+          "size": "14.5",
+          "price": 59
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "可道中學(嗇色園主辦)",
+      "name": "男生 - 黑色長西褲",
+      "source": [
+        {
+          "size": "23",
+          "price": 93
+        },
+        {
+          "size": "24",
+          "price": 96
+        },
+        {
+          "size": "25",
+          "price": 99
+        },
+        {
+          "size": "26",
+          "price": 103
+        },
+        {
+          "size": "27",
+          "price": 107
+        },
+        {
+          "size": "28",
+          "price": 111
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "可道中學(嗇色園主辦)",
+      "name": "女生 - 灰色校裙",
+      "source": [
+        {
+          "size": "32",
+          "price": 99
+        },
+        {
+          "size": "34",
+          "price": 103
+        },
+        {
+          "size": "36",
+          "price": 107
+        },
+        {
+          "size": "38",
+          "price": 111
+        },
+        {
+          "size": "40",
+          "price": 115
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "可道中學(嗇色園主辦)",
+      "name": "男女生 - 運動套裝",
+      "source": [
+        {
+          "size": "32",
+          "price": 185
+        },
+        {
+          "size": "34",
+          "price": 190
+        },
+        {
+          "size": "36",
+          "price": 195
+        },
+        {
+          "size": "38",
+          "price": 200
+        },
+        {
+          "size": "40",
+          "price": 205
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "可道中學(嗇色園主辦)",
+      "name": "男女生 - 灰色開胸長袖冷衫",
+      "source": [
+        {
+          "size": "32",
+          "price": 130
+        },
+        {
+          "size": "34",
+          "price": 133
+        },
+        {
+          "size": "36",
+          "price": 137
+        },
+        {
+          "size": "38",
+          "price": 142
+        },
+        {
+          "size": "40",
+          "price": 147
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "屯門官立中學",
+      "name": "男女生 - 夏季運動套裝",
+      "source": [
+        {
+          "size": "XS",
+          "price": 34
+        },
+        {
+          "size": "S",
+          "price": 37
+        },
+        {
+          "size": "M",
+          "price": 40
+        },
+        {
+          "size": "L",
+          "price": 43
+        },
+        {
+          "size": "XL",
+          "price": 46
+        },
+        {
+          "size": "XXL",
+          "price": 50
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "屯門官立中學",
+      "name": "男女生 - 冬季運動套裝",
+      "source": [
+        {
+          "size": "XS",
+          "price": 82
+        },
+        {
+          "size": "S",
+          "price": 86
+        },
+        {
+          "size": "M",
+          "price": 90
+        },
+        {
+          "size": "L",
+          "price": 95
+        },
+        {
+          "size": "XL",
+          "price": 100
+        },
+        {
+          "size": "XXL",
+          "price": 105
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "男生 - 灰色長西褲",
+      "source": [
+        {
+          "size": "23",
+          "price": 84
+        },
+        {
+          "size": "24",
+          "price": 88
+        },
+        {
+          "size": "25",
+          "price": 92
+        },
+        {
+          "size": "26",
+          "price": 96
+        },
+        {
+          "size": "27",
+          "price": 100
+        },
+        {
+          "size": "28",
+          "price": 104
+        },
+        {
+          "size": "29",
+          "price": 108
+        },
+        {
+          "size": "30",
+          "price": 112
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "女生 - 白色校裙",
+      "source": [
+        {
+          "size": "34",
+          "price": 94
+        },
+        {
+          "size": "35",
+          "price": 98
+        },
+        {
+          "size": "36",
+          "price": 102
+        },
+        {
+          "size": "37",
+          "price": 106
+        },
+        {
+          "size": "38",
+          "price": 110
+        },
+        {
+          "size": "40",
+          "price": 118
+        },
+        {
+          "size": "42",
+          "price": 126
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "女生 - 灰色絨背心校裙",
+      "source": [
+        {
+          "size": "34",
+          "price": 108
+        },
+        {
+          "size": "35",
+          "price": 112
+        },
+        {
+          "size": "36",
+          "price": 116
+        },
+        {
+          "size": "37",
+          "price": 120
+        },
+        {
+          "size": "38",
+          "price": 124
+        },
+        {
+          "size": "40",
+          "price": 132
+        },
+        {
+          "size": "42",
+          "price": 140
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "男女生 - 運動短袖衫",
+      "source": [
+        {
+          "size": "32",
+          "price": 40
+        },
+        {
+          "size": "34",
+          "price": 43
+        },
+        {
+          "size": "36",
+          "price": 46
+        },
+        {
+          "size": "38",
+          "price": 50
+        },
+        {
+          "size": "40",
+          "price": 55
+        },
+        {
+          "size": "42",
+          "price": 60
+        },
+        {
+          "size": "44",
+          "price": 65
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "男女生 - 運動短褲",
+      "source": [
+        {
+          "size": "XS",
+          "price": 40
+        },
+        {
+          "size": "S",
+          "price": 43
+        },
+        {
+          "size": "M",
+          "price": 46
+        },
+        {
+          "size": "L",
+          "price": 52
+        },
+        {
+          "size": "XL",
+          "price": 58
+        },
+        {
+          "size": "XXL",
+          "price": 65
+        },
+        {
+          "size": "1-3",
+          "price": 75
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "男女生 - 運動長袖衛衣",
+      "source": [
+        {
+          "size": "32",
+          "price": 66
+        },
+        {
+          "size": "34",
+          "price": 70
+        },
+        {
+          "size": "36",
+          "price": 74
+        },
+        {
+          "size": "38",
+          "price": 78
+        },
+        {
+          "size": "40",
+          "price": 82
+        },
+        {
+          "size": "42",
+          "price": 86
+        },
+        {
+          "size": "44",
+          "price": 90
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "男女生 - 運動長褲",
+      "source": [
+        {
+          "size": "32",
+          "price": 94
+        },
+        {
+          "size": "34",
+          "price": 99
+        },
+        {
+          "size": "36",
+          "price": 104
+        },
+        {
+          "size": "38",
+          "price": 109
+        },
+        {
+          "size": "40",
+          "price": 114
+        },
+        {
+          "size": "42",
+          "price": 119
+        },
+        {
+          "size": "44",
+          "price": 125
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "男女生 - 運動風褸",
+      "source": [
+        {
+          "size": "32",
+          "price": 94
+        },
+        {
+          "size": "34",
+          "price": 99
+        },
+        {
+          "size": "36",
+          "price": 104
+        },
+        {
+          "size": "38",
+          "price": 109
+        },
+        {
+          "size": "40",
+          "price": 114
+        },
+        {
+          "size": "42",
+          "price": 119
+        },
+        {
+          "size": "44",
+          "price": 125
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "男女生 - 背心冷衫",
+      "source": [
+        {
+          "size": "32",
+          "price": 109
+        },
+        {
+          "size": "34",
+          "price": 114
+        },
+        {
+          "size": "36",
+          "price": 119
+        },
+        {
+          "size": "38",
+          "price": 124
+        },
+        {
+          "size": "40",
+          "price": 129
+        },
+        {
+          "size": "42",
+          "price": 134
+        },
+        {
+          "size": "44",
+          "price": 139
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "男女生– 開胸長袖冷衫",
+      "source": [
+        {
+          "size": "32",
+          "price": 129
+        },
+        {
+          "size": "34",
+          "price": 134
+        },
+        {
+          "size": "36",
+          "price": 139
+        },
+        {
+          "size": "38",
+          "price": 144
+        },
+        {
+          "size": "40",
+          "price": 149
+        },
+        {
+          "size": "42",
+          "price": 154
+        },
+        {
+          "size": "44",
+          "price": 160
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "冬季男生 - 灰色長西褲",
+      "source": [
+        {
+          "size": "23",
+          "price": 110
+        },
+        {
+          "size": "24",
+          "price": 115
+        },
+        {
+          "size": "25",
+          "price": 130
+        },
+        {
+          "size": "26",
+          "price": 135
+        },
+        {
+          "size": "27",
+          "price": 130
+        },
+        {
+          "size": "28",
+          "price": 135
+        },
+        {
+          "size": "29",
+          "price": 140
+        },
+        {
+          "size": "30",
+          "price": 145
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "夏季男生 - 灰色長西褲",
+      "source": [
+        {
+          "size": "23",
+          "price": 104
+        },
+        {
+          "size": "24",
+          "price": 108
+        },
+        {
+          "size": "25",
+          "price": 112
+        },
+        {
+          "size": "26",
+          "price": 116
+        },
+        {
+          "size": "27",
+          "price": 120
+        },
+        {
+          "size": "28",
+          "price": 124
+        },
+        {
+          "size": "29",
+          "price": 128
+        },
+        {
+          "size": "30",
+          "price": 132
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "金巴崙長老會耀道中學",
+      "name": "a. 秋、冬季男女生 - 藍色背心冷衫",
+      "source": [
+        {
+          "size": "32",
+          "price": 113
+        },
+        {
+          "size": "34",
+          "price": 118
+        },
+        {
+          "size": "36",
+          "price": 123
+        },
+        {
+          "size": "38",
+          "price": 128
+        },
+        {
+          "size": "40",
+          "price": 133
+        },
+        {
+          "size": "42",
+          "price": 138
+        },
+        {
+          "size": "44",
+          "price": 148
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "金巴崙長老會耀道中學",
+      "name": "b. 秋、冬季男女生 - 藍色長袖冷衫",
+      "source": [
+        {
+          "size": "32",
+          "price": 123
+        },
+        {
+          "size": "34",
+          "price": 128
+        },
+        {
+          "size": "36",
+          "price": 133
+        },
+        {
+          "size": "38",
+          "price": 138
+        },
+        {
+          "size": "40",
+          "price": 143
+        },
+        {
+          "size": "42",
+          "price": 148
+        },
+        {
+          "size": "44",
+          "price": 158
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "金巴崙長老會耀道中學",
+      "name": "b. 夏季男女生 - 藍色短運褲",
+      "source": [
+        {
+          "size": "XS",
+          "price": 42
+        },
+        {
+          "size": "S",
+          "price": 45
+        },
+        {
+          "size": "M",
+          "price": 48
+        },
+        {
+          "size": "L",
+          "price": 52
+        },
+        {
+          "size": "XL",
+          "price": 56
+        },
+        {
+          "size": "2XL",
+          "price": 60
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "金巴崙長老會耀道中學",
+      "name": "a. 冬季男女生 - 運動套裝",
+      "source": [
+        {
+          "size": "32",
+          "price": 93
+        },
+        {
+          "size": "34",
+          "price": 98
+        },
+        {
+          "size": "36",
+          "price": 103
+        },
+        {
+          "size": "38",
+          "price": 108
+        },
+        {
+          "size": "40",
+          "price": 113
+        },
+        {
+          "size": "42",
+          "price": 118
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "金巴崙長老會耀道中學",
+      "name": "b. 冬季男女生 - 運動套裝",
+      "source": [
+        {
+          "size": "32",
+          "price": 93
+        },
+        {
+          "size": "34",
+          "price": 98
+        },
+        {
+          "size": "36",
+          "price": 103
+        },
+        {
+          "size": "38",
+          "price": 108
+        },
+        {
+          "size": "40",
+          "price": 113
+        },
+        {
+          "size": "42",
+          "price": 118
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "天水圍香島中學",
+      "name": "男女生 運動短褲",
+      "source": [
+        {
+          "size": "40",
+          "price": 40
+        },
+        {
+          "size": "44",
+          "price": 44
+        },
+        {
+          "size": "48",
+          "price": 48
+        },
+        {
+          "size": "53",
+          "price": 53
+        },
+        {
+          "size": "58",
+          "price": 58
+        },
+        {
+          "size": "64",
+          "price": 64
+        },
+        {
+          "size": "75",
+          "price": 75
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "天水圍香島中學",
+      "name": "男女生 頸巾",
+      "source": [
+        {
+          "size": "80",
+          "price": 28
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "屯門天主教中學",
+      "name": "男女生 - 運動短褲",
+      "source": [
+        {
+          "size": "S",
+          "price": 44
+        },
+        {
+          "size": "M",
+          "price": 48
+        },
+        {
+          "size": "L",
+          "price": 52
+        },
+        {
+          "size": "XL",
+          "price": 57
+        },
+        {
+          "size": "2XL",
+          "price": 62
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "屯門天主教中學",
+      "name": "女生 - 白色長袖恤",
+      "source": [
+        {
+          "size": "12",
+          "price": 56
+        },
+        {
+          "size": "12.5",
+          "price": 60
+        },
+        {
+          "size": "13",
+          "price": 64
+        },
+        {
+          "size": "13.5",
+          "price": 68
+        },
+        {
+          "size": "14",
+          "price": 72
+        },
+        {
+          "size": "14.5",
+          "price": 76
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "屯門天主教中學",
+      "name": "男女生 - 運動外套 連校徽",
+      "source": [
+        {
+          "size": "32",
+          "price": 106
+        },
+        {
+          "size": "34",
+          "price": 110
+        },
+        {
+          "size": "36",
+          "price": 114
+        },
+        {
+          "size": "38",
+          "price": 119
+        },
+        {
+          "size": "40",
+          "price": 125
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "屯門天主教中學",
+      "name": "男女生 - 運動長褲",
+      "source": [
+        {
+          "size": "32",
+          "price": 96
+        },
+        {
+          "size": "34",
+          "price": 100
+        },
+        {
+          "size": "36",
+          "price": 104
+        },
+        {
+          "size": "38",
+          "price": 109
+        },
+        {
+          "size": "40",
+          "price": 115
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "屯門天主教中學",
+      "name": "男女生 - 黑色背心冷衫",
+      "source": [
+        {
+          "size": "32",
+          "price": 100
+        },
+        {
+          "size": "34",
+          "price": 105
+        },
+        {
+          "size": "36",
+          "price": 111
+        },
+        {
+          "size": "38",
+          "price": 118
+        },
+        {
+          "size": "40",
+          "price": 125
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "屯門天主教中學",
+      "name": "男女生 - 黑色長袖冷衫",
+      "source": [
+        {
+          "size": "32",
+          "price": 116
+        },
+        {
+          "size": "34",
+          "price": 121
+        },
+        {
+          "size": "36",
+          "price": 126
+        },
+        {
+          "size": "38",
+          "price": 133
+        },
+        {
+          "size": "40",
+          "price": 140
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "屯門天主教中學",
+      "name": "男女生 - 棉 褸",
+      "source": [
+        {
+          "size": "8",
+          "price": 213
+        },
+        {
+          "size": "10",
+          "price": 228
+        },
+        {
+          "size": "12",
+          "price": 243
+        },
+        {
+          "size": "14",
+          "price": 258
+        },
+        {
+          "size": "16",
+          "price": 273
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "明愛元朗陳震夏中學",
+      "name": "8.) 男女生 - 黑色「防水絹」面 配活動「抓毛」長袖外套校褸",
+      "source": [
+        {
+          "size": "140",
+          "price": 80
+        },
+        {
+          "size": "150",
+          "price": 85
+        },
+        {
+          "size": "160",
+          "price": 90
+        },
+        {
+          "size": "170",
+          "price": 95
+        },
+        {
+          "size": "180",
+          "price": 100
+        },
+        {
+          "size": "190",
+          "price": 105
+        },
+        {
+          "size": "210",
+          "price": 120
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "明愛元朗陳震夏中學",
+      "name": "10.) 男女生 -「珠地棉」針織長袖運動套裝，左上胸繡徽章",
+      "source": [
+        {
+          "size": "85",
+          "price": 85
+        },
+        {
+          "size": "95",
+          "price": 95
+        },
+        {
+          "size": "95",
+          "price": 95
+        },
+        {
+          "size": "100",
+          "price": 100
+        },
+        {
+          "size": "100",
+          "price": 100
+        },
+        {
+          "size": "105",
+          "price": 105
+        },
+        {
+          "size": "120",
+          "price": 120
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "1. 夏季 - 男生短袖恤衫",
+      "source": [
+        {
+          "size": "18",
+          "price": 45
+        },
+        {
+          "size": "20",
+          "price": 48
+        },
+        {
+          "size": "22",
+          "price": 51
+        },
+        {
+          "size": "24",
+          "price": 54
+        },
+        {
+          "size": "26",
+          "price": 58
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "2. 夏季 - 男生短西褲",
+      "source": [
+        {
+          "size": "11",
+          "price": 49
+        },
+        {
+          "size": "12",
+          "price": 52
+        },
+        {
+          "size": "13",
+          "price": 55
+        },
+        {
+          "size": "14",
+          "price": 59
+        },
+        {
+          "size": "15",
+          "price": 63
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "3. 夏季 - 女生短袖連身校裙",
+      "source": [
+        {
+          "size": "24",
+          "price": 82
+        },
+        {
+          "size": "26",
+          "price": 86
+        },
+        {
+          "size": "28",
+          "price": 90
+        },
+        {
+          "size": "30",
+          "price": 95
+        },
+        {
+          "size": "32",
+          "price": 100
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "5. 夏季 - 男女生運動短褲",
+      "source": [
+        {
+          "size": "XS",
+          "price": 38
+        },
+        {
+          "size": "S",
+          "price": 42
+        },
+        {
+          "size": "M",
+          "price": 46
+        },
+        {
+          "size": "L",
+          "price": 50
+        },
+        {
+          "size": "XL",
+          "price": 54
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "6. 冬季 - 男生長袖恤衫",
+      "source": [
+        {
+          "size": "10.5",
+          "price": 55
+        },
+        {
+          "size": "11",
+          "price": 59
+        },
+        {
+          "size": "11.5",
+          "price": 63
+        },
+        {
+          "size": "12",
+          "price": 67
+        },
+        {
+          "size": "12.5",
+          "price": 71
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "7. 冬季 - 男生長西褲",
+      "source": [
+        {
+          "size": "24",
+          "price": 90
+        },
+        {
+          "size": "26",
+          "price": 93
+        },
+        {
+          "size": "28",
+          "price": 96
+        },
+        {
+          "size": "30",
+          "price": 101
+        },
+        {
+          "size": "32",
+          "price": 106
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "8. 冬季 - 男女生校褸",
+      "source": [
+        {
+          "size": "4",
+          "price": 225
+        },
+        {
+          "size": "6",
+          "price": 240
+        },
+        {
+          "size": "8",
+          "price": 255
+        },
+        {
+          "size": "10",
+          "price": 270
+        },
+        {
+          "size": "12",
+          "price": 290
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "9. 冬季 - 女生長袖恤衫",
+      "source": [
+        {
+          "size": "10.5",
+          "price": 55
+        },
+        {
+          "size": "11",
+          "price": 59
+        },
+        {
+          "size": "11.5",
+          "price": 63
+        },
+        {
+          "size": "12",
+          "price": 67
+        },
+        {
+          "size": "12.5",
+          "price": 71
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "10. 冬季 - 女生背心裙",
+      "source": [
+        {
+          "size": "24",
+          "price": 122
+        },
+        {
+          "size": "26",
+          "price": 127
+        },
+        {
+          "size": "28",
+          "price": 132
+        },
+        {
+          "size": "30",
+          "price": 137
+        },
+        {
+          "size": "32",
+          "price": 142
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "12. 冬季 - 男女生運動長褲",
+      "source": [
+        {
+          "size": "24",
+          "price": 84
+        },
+        {
+          "size": "26",
+          "price": 89
+        },
+        {
+          "size": "28",
+          "price": 94
+        },
+        {
+          "size": "30",
+          "price": 99
+        },
+        {
+          "size": "32",
+          "price": 104
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "13. 男女生 運動風褸",
+      "source": [
+        {
+          "size": "24",
+          "price": 84
+        },
+        {
+          "size": "26",
+          "price": 89
+        },
+        {
+          "size": "28",
+          "price": 94
+        },
+        {
+          "size": "30",
+          "price": 99
+        },
+        {
+          "size": "32",
+          "price": 104
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "14. 男女生 長袖毛衣",
+      "source": [
+        {
+          "size": "4",
+          "price": 98
+        },
+        {
+          "size": "6",
+          "price": 103
+        },
+        {
+          "size": "8",
+          "price": 108
+        },
+        {
+          "size": "10",
+          "price": 113
+        },
+        {
+          "size": "12",
+          "price": 118
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗公立中學",
+      "name": "男女生反領短袖運動衫",
+      "source": [
+        {
+          "size": "34",
+          "price": 45
+        },
+        {
+          "size": "36",
+          "price": 47
+        },
+        {
+          "size": "38",
+          "price": 49
+        },
+        {
+          "size": "40",
+          "price": 52
+        },
+        {
+          "size": "42",
+          "price": 55
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗公立中學",
+      "name": "男女生黑色 運動短褲",
+      "source": [
+        {
+          "size": "S",
+          "price": 45
+        },
+        {
+          "size": "M",
+          "price": 47
+        },
+        {
+          "size": "L",
+          "price": 49
+        },
+        {
+          "size": "XL",
+          "price": 52
+        },
+        {
+          "size": "XXL",
+          "price": 55
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗公立中學",
+      "name": "夏季男女生 反領運動衫 + 運動短褲 全套",
+      "source": [
+        {
+          "size": "34",
+          "price": 90
+        },
+        {
+          "size": "36",
+          "price": 94
+        },
+        {
+          "size": "38",
+          "price": 98
+        },
+        {
+          "size": "40",
+          "price": 104
+        },
+        {
+          "size": "42",
+          "price": 110
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗公立中學",
+      "name": "冬季男女生 運動套裝",
+      "source": [
+        {
+          "size": "34",
+          "price": 80
+        },
+        {
+          "size": "36",
+          "price": 85
+        },
+        {
+          "size": "38",
+          "price": 90
+        },
+        {
+          "size": "40",
+          "price": 95
+        },
+        {
+          "size": "42",
+          "price": 100
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗公立中學",
+      "name": "冬季男女生 運動套裝全套",
+      "source": [
+        {
+          "size": "34",
+          "price": 160
+        },
+        {
+          "size": "36",
+          "price": 170
+        },
+        {
+          "size": "38",
+          "price": 180
+        },
+        {
+          "size": "40",
+          "price": 190
+        },
+        {
+          "size": "42",
+          "price": 200
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "新界鄉議局元朗區中學",
+      "name": "女生 - 白色恤衫",
+      "source": [
+        {
+          "size": "32",
+          "price": 60
+        },
+        {
+          "size": "34",
+          "price": 64
+        },
+        {
+          "size": "36",
+          "price": 69
+        },
+        {
+          "size": "38",
+          "price": 74
+        },
+        {
+          "size": "40",
+          "price": 79
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "新界鄉議局元朗區中學",
+      "name": "男女生 - 白色尖領長袖恤衫",
+      "source": [
+        {
+          "size": "12",
+          "price": 56
+        },
+        {
+          "size": "12.5",
+          "price": 59
+        },
+        {
+          "size": "13",
+          "price": 62
+        },
+        {
+          "size": "13.5",
+          "price": 65
+        },
+        {
+          "size": "14",
+          "price": 68
+        },
+        {
+          "size": "14.5",
+          "price": 73
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "新界鄉議局元朗區中學",
+      "name": "男生 - 灰色長西褲",
+      "source": [
+        {
+          "size": "23",
+          "price": 96
+        },
+        {
+          "size": "24",
+          "price": 100
+        },
+        {
+          "size": "25",
+          "price": 104
+        },
+        {
+          "size": "26",
+          "price": 108
+        },
+        {
+          "size": "27",
+          "price": 112
+        },
+        {
+          "size": "28",
+          "price": 116
+        },
+        {
+          "size": "29",
+          "price": 121
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "新界鄉議局元朗區中學",
+      "name": "女生 - 灰色半腰裙",
+      "source": [
+        {
+          "size": "21",
+          "price": 99
+        },
+        {
+          "size": "22",
+          "price": 102
+        },
+        {
+          "size": "23",
+          "price": 105
+        },
+        {
+          "size": "24",
+          "price": 109
+        },
+        {
+          "size": "25",
+          "price": 114
+        },
+        {
+          "size": "26",
+          "price": 119
+        },
+        {
+          "size": "27",
+          "price": 124
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "仁德天主教小學",
+      "name": "男女生 – 深藍色運動外套 連網裡",
+      "source": [
+        {
+          "size": "18",
+          "price": 86
+        },
+        {
+          "size": "19",
+          "price": 91
+        },
+        {
+          "size": "20",
+          "price": 94
+        },
+        {
+          "size": "21",
+          "price": 97
+        },
+        {
+          "size": "22",
+          "price": 100
+        },
+        {
+          "size": "23",
+          "price": 104
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "浸信會永隆中學",
+      "name": "男生 白色短袖恤衫",
+      "source": [
+        {
+          "size": "11.5",
+          "price": 42
+        },
+        {
+          "size": "12",
+          "price": 45
+        },
+        {
+          "size": "12.5",
+          "price": 48
+        },
+        {
+          "size": "13",
+          "price": 51
+        },
+        {
+          "size": "13.5",
+          "price": 54
+        },
+        {
+          "size": "14",
+          "price": 57
+        },
+        {
+          "size": "14.5",
+          "price": 60
+        },
+        {
+          "size": "15",
+          "price": 63
+        },
+        {
+          "size": "15.5",
+          "price": 67
+        },
+        {
+          "size": "16",
+          "price": 71
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "浸信會永隆中學",
+      "name": "男生 白色長西褲",
+      "source": [
+        {
+          "size": "33",
+          "price": 84
+        },
+        {
+          "size": "34",
+          "price": 87
+        },
+        {
+          "size": "35",
+          "price": 90
+        },
+        {
+          "size": "36",
+          "price": 93
+        },
+        {
+          "size": "37",
+          "price": 96
+        },
+        {
+          "size": "38.5",
+          "price": 99
+        },
+        {
+          "size": "40",
+          "price": 104
+        },
+        {
+          "size": "41.5",
+          "price": 109
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "浸信會永隆中學",
+      "name": "男女生 運動短褲",
+      "source": [
+        {
+          "size": "XS",
+          "price": 40
+        },
+        {
+          "size": "S",
+          "price": 44
+        },
+        {
+          "size": "M",
+          "price": 48
+        },
+        {
+          "size": "L",
+          "price": 52
+        },
+        {
+          "size": "XL",
+          "price": 56
+        },
+        {
+          "size": "XXL",
+          "price": 60
+        },
+        {
+          "size": "1",
+          "price": 75
+        },
+        {
+          "size": "3",
+          "price": 75
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "浸信會永隆中學",
+      "name": "男女生 白色長袖恤衫",
+      "source": [
+        {
+          "size": "11.5",
+          "price": 52
+        },
+        {
+          "size": "12",
+          "price": 55
+        },
+        {
+          "size": "12.5",
+          "price": 58
+        },
+        {
+          "size": "13",
+          "price": 61
+        },
+        {
+          "size": "13.5",
+          "price": 64
+        },
+        {
+          "size": "14",
+          "price": 67
+        },
+        {
+          "size": "14.5",
+          "price": 70
+        },
+        {
+          "size": "15",
+          "price": 73
+        },
+        {
+          "size": "15.5",
+          "price": 77
+        },
+        {
+          "size": "16",
+          "price": 81
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "浸信會永隆中學",
+      "name": "男生 灰色長西褲",
+      "source": [
+        {
+          "size": "33",
+          "price": 102
+        },
+        {
+          "size": "34",
+          "price": 105
+        },
+        {
+          "size": "35",
+          "price": 108
+        },
+        {
+          "size": "36",
+          "price": 111
+        },
+        {
+          "size": "37",
+          "price": 114
+        },
+        {
+          "size": "38.5",
+          "price": 118
+        },
+        {
+          "size": "40",
+          "price": 123
+        },
+        {
+          "size": "41.5",
+          "price": 130
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "浸信會永隆中學",
+      "name": "男女生 校 褸",
+      "source": [
+        {
+          "size": "8",
+          "price": 250
+        },
+        {
+          "size": "10",
+          "price": 265
+        },
+        {
+          "size": "12",
+          "price": 280
+        },
+        {
+          "size": "14",
+          "price": 295
+        },
+        {
+          "size": "16",
+          "price": 315
+        },
+        {
+          "size": "18",
+          "price": 330
+        },
+        {
+          "size": "20",
+          "price": 350
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "伊斯蘭學校",
+      "name": "女生 - 白色長褲 女生 - 白色頭巾",
+      "target": [
+        {
+          "size": "24-26",
+          "price": 66
+        },
+        {
+          "size": "28-30",
+          "price": 72
+        },
+        {
+          "size": "32-34",
+          "price": 78
+        },
+        {
+          "size": "36-38",
+          "price": 84
+        },
+        {
+          "size": "M",
+          "price": 98
+        },
+        {
+          "size": "L",
+          "price": 43
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "伊斯蘭學校",
+      "name": "男女生 - 白色短袖恤衫 男生 - 灰色短西褲",
+      "target": [
+        {
+          "size": "10.5",
+          "price": 48
+        },
+        {
+          "size": "11",
+          "price": 51
+        },
+        {
+          "size": "11.5",
+          "price": 54
+        },
+        {
+          "size": "12",
+          "price": 58
+        },
+        {
+          "size": "12.5",
+          "price": 62
+        },
+        {
+          "size": "10",
+          "price": 55
+        },
+        {
+          "size": "11",
+          "price": 58
+        },
+        {
+          "size": "12",
+          "price": 61
+        },
+        {
+          "size": "13",
+          "price": 64
+        },
+        {
+          "size": "14",
+          "price": 67
+        },
+        {
+          "size": "15",
+          "price": 71
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "伊斯蘭學校",
+      "name": "男生 - 灰色長西褲 女生 - 綠色格仔半腰裙",
+      "target": [
+        {
+          "size": "24",
+          "price": 95
+        },
+        {
+          "size": "26",
+          "price": 99
+        },
+        {
+          "size": "28",
+          "price": 102
+        },
+        {
+          "size": "30",
+          "price": 107
+        },
+        {
+          "size": "32",
+          "price": 112
+        },
+        {
+          "size": "17-18",
+          "price": 85
+        },
+        {
+          "size": "19-20",
+          "price": 88
+        },
+        {
+          "size": "21-22",
+          "price": 91
+        },
+        {
+          "size": "23-24",
+          "price": 94
+        },
+        {
+          "size": "25-26",
+          "price": 98
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "伊斯蘭學校",
+      "name": "男女生 - 綠色運動衣 男女生 - 黑色運動短褲",
+      "target": [
+        {
+          "size": "24",
+          "price": 41
+        },
+        {
+          "size": "26",
+          "price": 44
+        },
+        {
+          "size": "28",
+          "price": 47
+        },
+        {
+          "size": "30",
+          "price": 50
+        },
+        {
+          "size": "32",
+          "price": 54
+        },
+        {
+          "size": "XS",
+          "price": 41
+        },
+        {
+          "size": "S",
+          "price": 44
+        },
+        {
+          "size": "M",
+          "price": 47
+        },
+        {
+          "size": "L",
+          "price": 50
+        },
+        {
+          "size": "XL",
+          "price": 54
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "伊斯蘭學校",
+      "name": "男女生 - 黑色運動長褲 男女生 - 運動外套",
+      "target": [
+        {
+          "size": "24",
+          "price": 80
+        },
+        {
+          "size": "26",
+          "price": 85
+        },
+        {
+          "size": "28",
+          "price": 90
+        },
+        {
+          "size": "30",
+          "price": 95
+        },
+        {
+          "size": "32",
+          "price": 100
+        },
+        {
+          "size": "24",
+          "price": 85
+        },
+        {
+          "size": "26",
+          "price": 90
+        },
+        {
+          "size": "28",
+          "price": 95
+        },
+        {
+          "size": "30",
+          "price": 100
+        },
+        {
+          "size": "32",
+          "price": 105
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "伊斯蘭學校",
+      "name": "男女生 - 運動套裝",
+      "target": [
+        {
+          "size": "66",
+          "price": 82
+        },
+        {
+          "size": "70",
+          "price": 87
+        },
+        {
+          "size": "74",
+          "price": 92
+        },
+        {
+          "size": "78",
+          "price": 97
+        },
+        {
+          "size": "82",
+          "price": 102
+        },
+        {
+          "size": "86",
+          "price": 108
+        },
+        {
+          "size": "92",
+          "price": 114
+        },
+        {
+          "size": "106",
+          "price": 132
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "伊斯蘭學校",
+      "name": "Boys’ & Girls’",
+      "target": [
+        {
+          "size": "66",
+          "price": 82
+        },
+        {
+          "size": "70",
+          "price": 87
+        },
+        {
+          "size": "74",
+          "price": 92
+        },
+        {
+          "size": "78",
+          "price": 97
+        },
+        {
+          "size": "82",
+          "price": 102
+        },
+        {
+          "size": "86",
+          "price": 108
+        },
+        {
+          "size": "92",
+          "price": 114
+        },
+        {
+          "size": "106",
+          "price": 132
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "男生 - 白色短袖恤",
+      "target": [
+        {
+          "size": "12",
+          "price": 36
+        },
+        {
+          "size": "12.5",
+          "price": 39
+        },
+        {
+          "size": "13",
+          "price": 42
+        },
+        {
+          "size": "13.5",
+          "price": 45
+        },
+        {
+          "size": "14",
+          "price": 48
+        },
+        {
+          "size": "14.5",
+          "price": 51
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "男生 - 灰色長西褲",
+      "target": [
+        {
+          "size": "22-23",
+          "price": 80
+        },
+        {
+          "size": "24-25",
+          "price": 83
+        },
+        {
+          "size": "26-27",
+          "price": 86
+        },
+        {
+          "size": "28-29",
+          "price": 89
+        },
+        {
+          "size": "30-31",
+          "price": 94
+        },
+        {
+          "size": "32",
+          "price": 101
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "女生 - 短袖恤衫 配紅色格仔領呔",
+      "target": [
+        {
+          "size": "30",
+          "price": 57
+        },
+        {
+          "size": "32",
+          "price": 61
+        },
+        {
+          "size": "34",
+          "price": 65
+        },
+        {
+          "size": "36",
+          "price": 69
+        },
+        {
+          "size": "38",
+          "price": 73
+        },
+        {
+          "size": "40",
+          "price": 78
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "女生 - 紅色格仔半截裙",
+      "target": [
+        {
+          "size": "18-19",
+          "price": 75
+        },
+        {
+          "size": "20-21",
+          "price": 79
+        },
+        {
+          "size": "22-23",
+          "price": 83
+        },
+        {
+          "size": "24-25",
+          "price": 87
+        },
+        {
+          "size": "26-27",
+          "price": 92
+        },
+        {
+          "size": "28-29",
+          "price": 97
+        },
+        {
+          "size": "30-32",
+          "price": 103
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "男女生 - 運動短褲",
+      "target": [
+        {
+          "size": "XS",
+          "price": 34
+        },
+        {
+          "size": "S",
+          "price": 37
+        },
+        {
+          "size": "M",
+          "price": 40
+        },
+        {
+          "size": "L",
+          "price": 43
+        },
+        {
+          "size": "XL",
+          "price": 46
+        },
+        {
+          "size": "XXL",
+          "price": 50
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "男女生 - 白色長袖恤衫",
+      "target": [
+        {
+          "size": "12",
+          "price": 47
+        },
+        {
+          "size": "12.5",
+          "price": 49
+        },
+        {
+          "size": "13",
+          "price": 52
+        },
+        {
+          "size": "13.5",
+          "price": 55
+        },
+        {
+          "size": "14",
+          "price": 58
+        },
+        {
+          "size": "14.5",
+          "price": 61
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "女生 - 紅色格仔半腰校裙",
+      "target": [
+        {
+          "size": "18-19",
+          "price": 97
+        },
+        {
+          "size": "20-21",
+          "price": 102
+        },
+        {
+          "size": "22-23",
+          "price": 107
+        },
+        {
+          "size": "24-25",
+          "price": 112
+        },
+        {
+          "size": "26-27",
+          "price": 117
+        },
+        {
+          "size": "28-29",
+          "price": 122
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "男女生 - 校 褸",
+      "target": [
+        {
+          "size": "6",
+          "price": 223
+        },
+        {
+          "size": "8",
+          "price": 232
+        },
+        {
+          "size": "10",
+          "price": 243
+        },
+        {
+          "size": "12",
+          "price": 253
+        },
+        {
+          "size": "14",
+          "price": 268
+        },
+        {
+          "size": "16",
+          "price": 283
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "天主教培聖中學",
+      "name": "女生 - 校 裙",
+      "target": [
+        {
+          "size": "33",
+          "price": 92
+        },
+        {
+          "size": "34",
+          "price": 95
+        },
+        {
+          "size": "35",
+          "price": 98
+        },
+        {
+          "size": "36",
+          "price": 102
+        },
+        {
+          "size": "38",
+          "price": 106
+        },
+        {
+          "size": "40",
+          "price": 110
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "天主教培聖中學",
+      "name": "男生 - 白色短袖恤衫",
+      "target": [
+        {
+          "size": "12.5",
+          "price": 39
+        },
+        {
+          "size": "13",
+          "price": 42
+        },
+        {
+          "size": "13.5",
+          "price": 45
+        },
+        {
+          "size": "14",
+          "price": 48
+        },
+        {
+          "size": "14.5",
+          "price": 51
+        },
+        {
+          "size": "15",
+          "price": 55
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "天主教培聖中學",
+      "name": "男生 - 灰色長西褲",
+      "target": [
+        {
+          "size": "23",
+          "price": 80
+        },
+        {
+          "size": "24",
+          "price": 83
+        },
+        {
+          "size": "25",
+          "price": 86
+        },
+        {
+          "size": "26",
+          "price": 89
+        },
+        {
+          "size": "27",
+          "price": 92
+        },
+        {
+          "size": "28",
+          "price": 96
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "天主教培聖中學",
+      "name": "男女生 – 運動短袖衫",
+      "target": [
+        {
+          "size": "32",
+          "price": 40
+        },
+        {
+          "size": "34",
+          "price": 43
+        },
+        {
+          "size": "36",
+          "price": 46
+        },
+        {
+          "size": "38",
+          "price": 49
+        },
+        {
+          "size": "40",
+          "price": 52
+        },
+        {
+          "size": "42",
+          "price": 55
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "天主教培聖中學",
+      "name": "男女生 - 運動短褲",
+      "target": [
+        {
+          "size": "XS",
+          "price": 40
+        },
+        {
+          "size": "S",
+          "price": 43
+        },
+        {
+          "size": "M",
+          "price": 46
+        },
+        {
+          "size": "L",
+          "price": 49
+        },
+        {
+          "size": "XL",
+          "price": 52
+        },
+        {
+          "size": "XXL",
+          "price": 55
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "天主教培聖中學",
+      "name": "男生 白色長袖恤衫",
+      "target": [
+        {
+          "size": "12",
+          "price": 44
+        },
+        {
+          "size": "12.5",
+          "price": 45
+        },
+        {
+          "size": "13",
+          "price": 47
+        },
+        {
+          "size": "13.5",
+          "price": 50
+        },
+        {
+          "size": "14",
+          "price": 53
+        },
+        {
+          "size": "14.5",
+          "price": 56
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "天主教培聖中學",
+      "name": "男生 灰色長西褲",
+      "target": [
+        {
+          "size": "34",
+          "price": 96
+        },
+        {
+          "size": "35",
+          "price": 98
+        },
+        {
+          "size": "36",
+          "price": 100
+        },
+        {
+          "size": "37",
+          "price": 102
+        },
+        {
+          "size": "38",
+          "price": 105
+        },
+        {
+          "size": "39",
+          "price": 108
+        },
+        {
+          "size": "40",
+          "price": 111
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "天主教培聖中學",
+      "name": "女生 粉紅色長袖恤衫",
+      "target": [
+        {
+          "size": "12",
+          "price": 49
+        },
+        {
+          "size": "12.5",
+          "price": 51
+        },
+        {
+          "size": "13",
+          "price": 53
+        },
+        {
+          "size": "13.5",
+          "price": 56
+        },
+        {
+          "size": "14",
+          "price": 59
+        },
+        {
+          "size": "14.5",
+          "price": 62
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "天主教培聖中學",
+      "name": "男女生 深藍色二合一棉褸",
+      "target": [
+        {
+          "size": "8",
+          "price": 148
+        },
+        {
+          "size": "10",
+          "price": 158
+        },
+        {
+          "size": "12",
+          "price": 168
+        },
+        {
+          "size": "14",
+          "price": 178
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "天主教培聖中學",
+      "name": "男女生 運動套裝",
+      "target": [
+        {
+          "size": "34",
+          "price": 180
+        },
+        {
+          "size": "36",
+          "price": 185
+        },
+        {
+          "size": "38",
+          "price": 23
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "東華三院郭一葦中學",
+      "name": "男女生 – 運動外套 – 運動長褲",
+      "target": [
+        {
+          "size": "32-34",
+          "price": 120
+        },
+        {
+          "size": "36-38",
+          "price": 134
+        },
+        {
+          "size": "40-42",
+          "price": 148
+        },
+        {
+          "size": "32-34",
+          "price": 95
+        },
+        {
+          "size": "36-38",
+          "price": 110
+        },
+        {
+          "size": "40-42",
+          "price": 125
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "女生 - 連身校裙",
+      "target": [
+        {
+          "size": "32",
+          "price": 90
+        },
+        {
+          "size": "34",
+          "price": 97
+        },
+        {
+          "size": "36",
+          "price": 105
+        },
+        {
+          "size": "38",
+          "price": 110
+        },
+        {
+          "size": "40",
+          "price": 115
+        },
+        {
+          "size": "42",
+          "price": 120
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "男生 - 白色短袖恤衫",
+      "target": [
+        {
+          "size": "13",
+          "price": 43
+        },
+        {
+          "size": "13.5",
+          "price": 48
+        },
+        {
+          "size": "14",
+          "price": 52
+        },
+        {
+          "size": "14.5",
+          "price": 55
+        },
+        {
+          "size": "15",
+          "price": 58
+        },
+        {
+          "size": "15.5",
+          "price": 61
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "男生 – 四季灰色長西褲",
+      "target": [
+        {
+          "size": "32",
+          "price": 80
+        },
+        {
+          "size": "33",
+          "price": 84
+        },
+        {
+          "size": "34",
+          "price": 88
+        },
+        {
+          "size": "35",
+          "price": 91
+        },
+        {
+          "size": "36",
+          "price": 94
+        },
+        {
+          "size": "37",
+          "price": 97
+        },
+        {
+          "size": "38.5",
+          "price": 101
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "男女生 – 夏季運動套裝",
+      "target": [
+        {
+          "size": "44",
+          "price": 44
+        },
+        {
+          "size": "50",
+          "price": 50
+        },
+        {
+          "size": "54",
+          "price": 54
+        },
+        {
+          "size": "58",
+          "price": 58
+        },
+        {
+          "size": "62",
+          "price": 62
+        },
+        {
+          "size": "68",
+          "price": 68
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "男女生 – 四季運動套裝",
+      "target": [
+        {
+          "size": "32",
+          "price": 77
+        },
+        {
+          "size": "34",
+          "price": 84
+        },
+        {
+          "size": "36",
+          "price": 90
+        },
+        {
+          "size": "38",
+          "price": 96
+        },
+        {
+          "size": "40",
+          "price": 102
+        },
+        {
+          "size": "42",
+          "price": 109
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "男女生 – 灰色有帽衛衣",
+      "target": [
+        {
+          "size": "32",
+          "price": 90
+        },
+        {
+          "size": "34",
+          "price": 100
+        },
+        {
+          "size": "36",
+          "price": 110
+        },
+        {
+          "size": "38",
+          "price": 120
+        },
+        {
+          "size": "40",
+          "price": 130
+        },
+        {
+          "size": "42",
+          "price": 140
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "男生 - 白色長袖恤衫",
+      "target": [
+        {
+          "size": "13",
+          "price": 49
+        },
+        {
+          "size": "13.5",
+          "price": 54
+        },
+        {
+          "size": "14",
+          "price": 58
+        },
+        {
+          "size": "14.5",
+          "price": 61
+        },
+        {
+          "size": "15",
+          "price": 64
+        },
+        {
+          "size": "15.5",
+          "price": 67
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "男生 - 灰色長西褲",
+      "target": [
+        {
+          "size": "32",
+          "price": 80
+        },
+        {
+          "size": "33",
+          "price": 84
+        },
+        {
+          "size": "34",
+          "price": 88
+        },
+        {
+          "size": "35",
+          "price": 91
+        },
+        {
+          "size": "36",
+          "price": 94
+        },
+        {
+          "size": "37",
+          "price": 97
+        },
+        {
+          "size": "38.5",
+          "price": 101
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "女生 - 灰色校裙",
+      "target": [
+        {
+          "size": "32",
+          "price": 95
+        },
+        {
+          "size": "34",
+          "price": 102
+        },
+        {
+          "size": "36",
+          "price": 110
+        },
+        {
+          "size": "38",
+          "price": 115
+        },
+        {
+          "size": "40",
+          "price": 120
+        },
+        {
+          "size": "42",
+          "price": 125
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "男女生 - 黑色混合毛冷衫",
+      "target": [
+        {
+          "size": "32",
+          "price": 109
+        },
+        {
+          "size": "34",
+          "price": 116
+        },
+        {
+          "size": "36",
+          "price": 122
+        },
+        {
+          "size": "38",
+          "price": 127
+        },
+        {
+          "size": "40",
+          "price": 132
+        },
+        {
+          "size": "42",
+          "price": 138
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "男女生–運動套裝",
+      "target": [
+        {
+          "size": "32",
+          "price": 77
+        },
+        {
+          "size": "34",
+          "price": 84
+        },
+        {
+          "size": "36",
+          "price": 90
+        },
+        {
+          "size": "38",
+          "price": 96
+        },
+        {
+          "size": "40",
+          "price": 102
+        },
+        {
+          "size": "42",
+          "price": 109
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "男女生 –夾棉校褸",
+      "target": [
+        {
+          "size": "6",
+          "price": 154
+        },
+        {
+          "size": "8",
+          "price": 160
+        },
+        {
+          "size": "10",
+          "price": 165
+        },
+        {
+          "size": "12",
+          "price": 172
+        },
+        {
+          "size": "14",
+          "price": 179
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "東華三院鄺錫坤伉儷中學",
+      "name": "男女生 – 運動外套 – 運動長褲",
+      "target": [
+        {
+          "size": "32-34",
+          "price": 108
+        },
+        {
+          "size": "36-38",
+          "price": 123
+        },
+        {
+          "size": "40-42",
+          "price": 138
+        },
+        {
+          "size": "32-34",
+          "price": 80
+        },
+        {
+          "size": "36-38",
+          "price": 95
+        },
+        {
+          "size": "40-42",
+          "price": 110
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "東華三院鄺錫坤伉儷中學",
+      "name": "男女生 - 藍色V領背心毛衣 - 藍色V領長袖毛衣",
+      "target": [
+        {
+          "size": "32",
+          "price": 115
+        },
+        {
+          "size": "34",
+          "price": 118
+        },
+        {
+          "size": "36",
+          "price": 122
+        },
+        {
+          "size": "38",
+          "price": 127
+        },
+        {
+          "size": "40",
+          "price": 132
+        },
+        {
+          "size": "32",
+          "price": 125
+        },
+        {
+          "size": "34",
+          "price": 128
+        },
+        {
+          "size": "36",
+          "price": 132
+        },
+        {
+          "size": "38",
+          "price": 137
+        },
+        {
+          "size": "40",
+          "price": 142
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "東華三院鄺錫坤伉儷中學",
+      "name": "女生 - 半腰校裙 男女生–校褸",
+      "target": [
+        {
+          "size": "23-25",
+          "price": 95
+        },
+        {
+          "size": "26-28",
+          "price": 110
+        },
+        {
+          "size": "29-32",
+          "price": 125
+        },
+        {
+          "size": "8-10",
+          "price": 250
+        },
+        {
+          "size": "12-14",
+          "price": 265
+        },
+        {
+          "size": "16-18",
+          "price": 285
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "東華三院鄺錫坤伉儷中學",
+      "name": "男女生 - 運動長褲 運動外套",
+      "target": [
+        {
+          "size": "32-34",
+          "price": 87
+        },
+        {
+          "size": "36-38",
+          "price": 94
+        },
+        {
+          "size": "40-42",
+          "price": 101
+        },
+        {
+          "size": "32-34",
+          "price": 108
+        },
+        {
+          "size": "36-38",
+          "price": 118
+        },
+        {
+          "size": "40-42",
+          "price": 128
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "東華三院鄺錫坤伉儷中學",
+      "name": "男女生 - 藍色V領背心冷衫 藍色V領長袖冷衫",
+      "target": [
+        {
+          "size": "32",
+          "price": 115
+        },
+        {
+          "size": "34",
+          "price": 118
+        },
+        {
+          "size": "36",
+          "price": 122
+        },
+        {
+          "size": "38",
+          "price": 127
+        },
+        {
+          "size": "40",
+          "price": 132
+        },
+        {
+          "size": "32",
+          "price": 125
+        },
+        {
+          "size": "34",
+          "price": 128
+        },
+        {
+          "size": "36",
+          "price": 132
+        },
+        {
+          "size": "38",
+          "price": 137
+        },
+        {
+          "size": "40",
+          "price": 142
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "中華基督教會基元中學",
+      "name": "男生 - 白色短袖恤衫",
+      "target": [
+        {
+          "size": "12",
+          "price": 36
+        },
+        {
+          "size": "12.5",
+          "price": 39
+        },
+        {
+          "size": "13",
+          "price": 42
+        },
+        {
+          "size": "13.5",
+          "price": 45
+        },
+        {
+          "size": "14",
+          "price": 48
+        },
+        {
+          "size": "14.5",
+          "price": 51
+        },
+        {
+          "size": "15",
+          "price": 54
+        },
+        {
+          "size": "15.5",
+          "price": 57
+        },
+        {
+          "size": "16",
+          "price": 61
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "中華基督教會基元中學",
+      "name": "男生 - 藍白條子長西褲",
+      "target": [
+        {
+          "size": "22",
+          "price": 78
+        },
+        {
+          "size": "23",
+          "price": 81
+        },
+        {
+          "size": "24",
+          "price": 84
+        },
+        {
+          "size": "25",
+          "price": 87
+        },
+        {
+          "size": "26",
+          "price": 90
+        },
+        {
+          "size": "27",
+          "price": 93
+        },
+        {
+          "size": "28",
+          "price": 96
+        },
+        {
+          "size": "29",
+          "price": 99
+        },
+        {
+          "size": "30",
+          "price": 102
+        },
+        {
+          "size": "32",
+          "price": 108
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "中華基督教會基元中學",
+      "name": "女生 - 藍白條子校裙",
+      "target": [
+        {
+          "size": "34",
+          "price": 86
+        },
+        {
+          "size": "36",
+          "price": 91
+        },
+        {
+          "size": "38",
+          "price": 96
+        },
+        {
+          "size": "40",
+          "price": 101
+        },
+        {
+          "size": "42",
+          "price": 106
+        },
+        {
+          "size": "44",
+          "price": 111
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "中華基督教會基元中學",
+      "name": "男女生 - 運動短袖衫 - 運動短褲",
+      "target": [
+        {
+          "size": "34",
+          "price": 35
+        },
+        {
+          "size": "36",
+          "price": 38
+        },
+        {
+          "size": "38",
+          "price": 41
+        },
+        {
+          "size": "40",
+          "price": 45
+        },
+        {
+          "size": "42",
+          "price": 49
+        },
+        {
+          "size": "44",
+          "price": 53
+        },
+        {
+          "size": "XS",
+          "price": 35
+        },
+        {
+          "size": "S",
+          "price": 38
+        },
+        {
+          "size": "M",
+          "price": 41
+        },
+        {
+          "size": "L",
+          "price": 45
+        },
+        {
+          "size": "XL",
+          "price": 49
+        },
+        {
+          "size": "XXL",
+          "price": 53
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "中華基督教會基元中學",
+      "name": "男女生 - 四季運動外套 - 四季運動長褲",
+      "target": [
+        {
+          "size": "34",
+          "price": 81
+        },
+        {
+          "size": "36",
+          "price": 86
+        },
+        {
+          "size": "38",
+          "price": 91
+        },
+        {
+          "size": "40",
+          "price": 96
+        },
+        {
+          "size": "42",
+          "price": 101
+        },
+        {
+          "size": "44",
+          "price": 106
+        },
+        {
+          "size": "34",
+          "price": 81
+        },
+        {
+          "size": "36",
+          "price": 86
+        },
+        {
+          "size": "38",
+          "price": 91
+        },
+        {
+          "size": "40",
+          "price": 96
+        },
+        {
+          "size": "42",
+          "price": 101
+        },
+        {
+          "size": "44",
+          "price": 106
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "中華基督教會基元中學",
+      "name": "男女生 - 藍色V領背心 冷衫 - 藍色V領長袖 冷衫",
+      "target": [
+        {
+          "size": "34",
+          "price": 90
+        },
+        {
+          "size": "36",
+          "price": 94
+        },
+        {
+          "size": "38",
+          "price": 98
+        },
+        {
+          "size": "40",
+          "price": 102
+        },
+        {
+          "size": "42",
+          "price": 106
+        },
+        {
+          "size": "44",
+          "price": 110
+        },
+        {
+          "size": "34",
+          "price": 100
+        },
+        {
+          "size": "36",
+          "price": 105
+        },
+        {
+          "size": "38",
+          "price": 110
+        },
+        {
+          "size": "40",
+          "price": 115
+        },
+        {
+          "size": "42",
+          "price": 120
+        },
+        {
+          "size": "44",
+          "price": 125
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "中華基督教會基元中學",
+      "name": "男女生 - 白色長袖恤衫",
+      "target": [
+        {
+          "size": "12",
+          "price": 42
+        },
+        {
+          "size": "12.5",
+          "price": 47
+        },
+        {
+          "size": "13",
+          "price": 50
+        },
+        {
+          "size": "13.5",
+          "price": 53
+        },
+        {
+          "size": "14",
+          "price": 56
+        },
+        {
+          "size": "14.5",
+          "price": 59
+        },
+        {
+          "size": "15",
+          "price": 62
+        },
+        {
+          "size": "15.5",
+          "price": 65
+        },
+        {
+          "size": "16",
+          "price": 69
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "中華基督教會基元中學",
+      "name": "男生 - 灰色長西褲",
+      "target": [
+        {
+          "size": "22",
+          "price": 84
+        },
+        {
+          "size": "23",
+          "price": 87
+        },
+        {
+          "size": "24",
+          "price": 90
+        },
+        {
+          "size": "25",
+          "price": 93
+        },
+        {
+          "size": "26",
+          "price": 96
+        },
+        {
+          "size": "27",
+          "price": 99
+        },
+        {
+          "size": "28",
+          "price": 102
+        },
+        {
+          "size": "29",
+          "price": 105
+        },
+        {
+          "size": "30",
+          "price": 108
+        },
+        {
+          "size": "32",
+          "price": 115
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "中華基督教會基元中學",
+      "name": "女生 - 灰色背心校裙",
+      "target": [
+        {
+          "size": "34",
+          "price": 85
+        },
+        {
+          "size": "36",
+          "price": 90
+        },
+        {
+          "size": "38",
+          "price": 95
+        },
+        {
+          "size": "40",
+          "price": 100
+        },
+        {
+          "size": "42",
+          "price": 105
+        },
+        {
+          "size": "44",
+          "price": 110
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "男女生 - 運動短袖衫",
+      "target": [
+        {
+          "size": "30/XS",
+          "price": 34
+        },
+        {
+          "size": "32/S",
+          "price": 37
+        },
+        {
+          "size": "34/M",
+          "price": 40
+        },
+        {
+          "size": "36/L",
+          "price": 43
+        },
+        {
+          "size": "38/XL",
+          "price": 46
+        },
+        {
+          "size": "40/XXL",
+          "price": 50
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "男女生 - 四季運動套裝",
+      "target": [
+        {
+          "size": "30/XS",
+          "price": 164
+        },
+        {
+          "size": "32/S",
+          "price": 172
+        },
+        {
+          "size": "34/M",
+          "price": 180
+        },
+        {
+          "size": "36/L",
+          "price": 190
+        },
+        {
+          "size": "38/XL",
+          "price": 200
+        },
+        {
+          "size": "40/XXL",
+          "price": 210
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "男生 - 灰色長西褲（冬季）",
+      "target": [
+        {
+          "size": "22-23",
+          "price": 89
+        },
+        {
+          "size": "24-25",
+          "price": 92
+        },
+        {
+          "size": "26-27",
+          "price": 95
+        },
+        {
+          "size": "28-29",
+          "price": 98
+        },
+        {
+          "size": "30-31",
+          "price": 103
+        },
+        {
+          "size": "32",
+          "price": 110
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "男女生 - 藍色頸巾",
+      "target": [
+        {
+          "size": "均碼",
+          "price": 43
+        }
+      ]
+    }
+  ],
+  "databaseDifferences": [
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "男女生 – 藍白條子短袖恤",
+      "source": [
+        {
+          "size": "12",
+          "price": 41
+        },
+        {
+          "size": "12.5",
+          "price": 44
+        },
+        {
+          "size": "13",
+          "price": 47
+        },
+        {
+          "size": "13.5",
+          "price": 50
+        },
+        {
+          "size": "14",
+          "price": 54
+        },
+        {
+          "size": "14.5",
+          "price": 58
+        },
+        {
+          "size": "15",
+          "price": 62
+        },
+        {
+          "size": "15.5",
+          "price": 66
+        },
+        {
+          "size": "16",
+          "price": 70
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "男生 – 深藍色長西褲",
+      "source": [
+        {
+          "size": "34",
+          "price": 78
+        },
+        {
+          "size": "35",
+          "price": 82
+        },
+        {
+          "size": "36",
+          "price": 86
+        },
+        {
+          "size": "37",
+          "price": 90
+        },
+        {
+          "size": "38.5",
+          "price": 95
+        },
+        {
+          "size": "40",
+          "price": 105
+        },
+        {
+          "size": "41.5",
+          "price": 110
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "女生 – 深藍色半腰裙",
+      "source": [
+        {
+          "size": "21-22",
+          "price": 68
+        },
+        {
+          "size": "23-24",
+          "price": 73
+        },
+        {
+          "size": "25-26",
+          "price": 78
+        },
+        {
+          "size": "27-28",
+          "price": 83
+        },
+        {
+          "size": "29-30",
+          "price": 88
+        },
+        {
+          "size": "31-32",
+          "price": 95
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "非華裔女生 - 藍色條子長裙",
+      "source": [
+        {
+          "size": "32",
+          "price": 76
+        },
+        {
+          "size": "34",
+          "price": 82
+        },
+        {
+          "size": "36",
+          "price": 88
+        },
+        {
+          "size": "38",
+          "price": 94
+        },
+        {
+          "size": "40",
+          "price": 100
+        },
+        {
+          "size": "42",
+          "price": 106
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "男女生 - 短袖綑邊運動衣",
+      "source": [
+        {
+          "size": "34",
+          "price": 36
+        },
+        {
+          "size": "36",
+          "price": 40
+        },
+        {
+          "size": "38",
+          "price": 44
+        },
+        {
+          "size": "40",
+          "price": 48
+        },
+        {
+          "size": "43",
+          "price": 52
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "男女生 - 運動褲",
+      "source": [
+        {
+          "size": "S",
+          "price": 36
+        },
+        {
+          "size": "M",
+          "price": 40
+        },
+        {
+          "size": "L",
+          "price": 44
+        },
+        {
+          "size": "XL",
+          "price": 48
+        },
+        {
+          "size": "XXL",
+          "price": 52
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "男女生 - 運動套裝",
+      "source": [
+        {
+          "size": "34",
+          "price": 90
+        },
+        {
+          "size": "36",
+          "price": 96
+        },
+        {
+          "size": "38",
+          "price": 102
+        },
+        {
+          "size": "40",
+          "price": 110
+        },
+        {
+          "size": "42",
+          "price": 118
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "Boy`s & Girl`s - Short Sleeves Shirt",
+      "source": [
+        {
+          "size": "12",
+          "price": 41
+        },
+        {
+          "size": "12.5",
+          "price": 44
+        },
+        {
+          "size": "13",
+          "price": 47
+        },
+        {
+          "size": "13.5",
+          "price": 50
+        },
+        {
+          "size": "14",
+          "price": 54
+        },
+        {
+          "size": "14.5",
+          "price": 58
+        },
+        {
+          "size": "15",
+          "price": 62
+        },
+        {
+          "size": "15.5",
+          "price": 66
+        },
+        {
+          "size": "16",
+          "price": 70
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "Boy`s - Trousers",
+      "source": [
+        {
+          "size": "34",
+          "price": 78
+        },
+        {
+          "size": "35",
+          "price": 82
+        },
+        {
+          "size": "36",
+          "price": 86
+        },
+        {
+          "size": "37",
+          "price": 90
+        },
+        {
+          "size": "38.5",
+          "price": 95
+        },
+        {
+          "size": "40",
+          "price": 105
+        },
+        {
+          "size": "41.5",
+          "price": 110
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "Girl`s - Skirt",
+      "source": [
+        {
+          "size": "21-22",
+          "price": 68
+        },
+        {
+          "size": "23-24",
+          "price": 73
+        },
+        {
+          "size": "25-26",
+          "price": 78
+        },
+        {
+          "size": "27-28",
+          "price": 83
+        },
+        {
+          "size": "29-30",
+          "price": 88
+        },
+        {
+          "size": "31-32",
+          "price": 95
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "Non-Chinese Student - Dresses",
+      "source": [
+        {
+          "size": "32",
+          "price": 76
+        },
+        {
+          "size": "34",
+          "price": 82
+        },
+        {
+          "size": "36",
+          "price": 88
+        },
+        {
+          "size": "38",
+          "price": 94
+        },
+        {
+          "size": "40",
+          "price": 100
+        },
+        {
+          "size": "42",
+          "price": 106
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "Boy`s & Girl`s - P.E. T - Shirt",
+      "source": [
+        {
+          "size": "34",
+          "price": 36
+        },
+        {
+          "size": "36",
+          "price": 40
+        },
+        {
+          "size": "38",
+          "price": 44
+        },
+        {
+          "size": "40",
+          "price": 48
+        },
+        {
+          "size": "43",
+          "price": 52
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "Boy`s & Girl`s - P.E Shorts",
+      "source": [
+        {
+          "size": "S",
+          "price": 36
+        },
+        {
+          "size": "M",
+          "price": 40
+        },
+        {
+          "size": "L",
+          "price": 44
+        },
+        {
+          "size": "XL",
+          "price": 48
+        },
+        {
+          "size": "XXL",
+          "price": 52
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "恩平工商會李琳明中學",
+      "name": "Boys’& Girls’- Tracksuit",
+      "source": [
+        {
+          "size": "34",
+          "price": 90
+        },
+        {
+          "size": "36",
+          "price": 96
+        },
+        {
+          "size": "38",
+          "price": 102
+        },
+        {
+          "size": "40",
+          "price": 110
+        },
+        {
+          "size": "42",
+          "price": 118
+        }
+      ]
+    },
+    {
+      "type": "price-or-size-mismatch",
+      "school": "保良局莊啟程第二小學",
+      "name": "【男女生】短襪 $16 / 1對優惠價 $44/ 3對 $80/ 6對$140/ 12對【男女生】短襪 $16 / 1對優惠價 $44/ 3對 $80/ 6對$140/ 12對男女生- 夏季運動服",
+      "source": [
+        {
+          "size": "24",
+          "price": 57
+        },
+        {
+          "size": "26",
+          "price": 66
+        },
+        {
+          "size": "28",
+          "price": 71
+        },
+        {
+          "size": "30",
+          "price": 75
+        },
+        {
+          "size": "32",
+          "price": 79
+        },
+        {
+          "size": "34",
+          "price": 83
+        },
+        {
+          "size": "36",
+          "price": 87
+        }
+      ],
+      "target": [
+        {
+          "size": "24",
+          "price": 53
+        },
+        {
+          "size": "26",
+          "price": 57
+        },
+        {
+          "size": "28",
+          "price": 60
+        },
+        {
+          "size": "30",
+          "price": 63
+        },
+        {
+          "size": "32",
+          "price": 66
+        },
+        {
+          "size": "34",
+          "price": 69
+        },
+        {
+          "size": "36",
+          "price": 72
+        }
+      ]
+    },
+    {
+      "type": "price-or-size-mismatch",
+      "school": "保良局方王錦全小學",
+      "name": "【男女生】短襪 $16 / 1對優惠價 $44/ 3對 $80/ 6對$140/ 12對【男女生】短襪 $16 / 1對優惠價 $44/ 3對 $80/ 6對$140/ 12對男女生- 夏季運動服",
+      "source": [
+        {
+          "size": "24",
+          "price": 57
+        },
+        {
+          "size": "26",
+          "price": 66
+        },
+        {
+          "size": "28",
+          "price": 71
+        },
+        {
+          "size": "30",
+          "price": 75
+        },
+        {
+          "size": "32",
+          "price": 79
+        },
+        {
+          "size": "34",
+          "price": 83
+        },
+        {
+          "size": "36",
+          "price": 87
+        }
+      ],
+      "target": [
+        {
+          "size": "24",
+          "price": 53
+        },
+        {
+          "size": "26",
+          "price": 57
+        },
+        {
+          "size": "28",
+          "price": 60
+        },
+        {
+          "size": "30",
+          "price": 63
+        },
+        {
+          "size": "32",
+          "price": 66
+        },
+        {
+          "size": "34",
+          "price": 69
+        },
+        {
+          "size": "36",
+          "price": 72
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "可道中學(嗇色園主辦)",
+      "name": "女生 - 白色連身校裙",
+      "source": [
+        {
+          "size": "32",
+          "price": 78
+        },
+        {
+          "size": "34",
+          "price": 82
+        },
+        {
+          "size": "36",
+          "price": 86
+        },
+        {
+          "size": "38",
+          "price": 90
+        },
+        {
+          "size": "40",
+          "price": 95
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "可道中學(嗇色園主辦)",
+      "name": "男生 - 白色短袖恤衫",
+      "source": [
+        {
+          "size": "12",
+          "price": 37
+        },
+        {
+          "size": "12.5",
+          "price": 40
+        },
+        {
+          "size": "13",
+          "price": 43
+        },
+        {
+          "size": "13.5",
+          "price": 46
+        },
+        {
+          "size": "14",
+          "price": 49
+        },
+        {
+          "size": "14.5",
+          "price": 52
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "可道中學(嗇色園主辦)",
+      "name": "男生 - 灰色長西褲",
+      "source": [
+        {
+          "size": "23",
+          "price": 78
+        },
+        {
+          "size": "24",
+          "price": 81
+        },
+        {
+          "size": "25",
+          "price": 84
+        },
+        {
+          "size": "26",
+          "price": 87
+        },
+        {
+          "size": "27",
+          "price": 90
+        },
+        {
+          "size": "28",
+          "price": 94
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "可道中學(嗇色園主辦)",
+      "name": "男女生 - 運動短袖衫 - 運動短褲",
+      "source": [
+        {
+          "size": "32",
+          "price": 34
+        },
+        {
+          "size": "34",
+          "price": 38
+        },
+        {
+          "size": "36",
+          "price": 42
+        },
+        {
+          "size": "38",
+          "price": 46
+        },
+        {
+          "size": "40",
+          "price": 50
+        },
+        {
+          "size": "XS",
+          "price": 34
+        },
+        {
+          "size": "S",
+          "price": 37
+        },
+        {
+          "size": "M",
+          "price": 40
+        },
+        {
+          "size": "L",
+          "price": 43
+        },
+        {
+          "size": "XL",
+          "price": 47
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "可道中學(嗇色園主辦)",
+      "name": "男女生 - 運動外套 - 運動長褲",
+      "source": [
+        {
+          "size": "32",
+          "price": 93
+        },
+        {
+          "size": "34",
+          "price": 95
+        },
+        {
+          "size": "36",
+          "price": 98
+        },
+        {
+          "size": "38",
+          "price": 100
+        },
+        {
+          "size": "40",
+          "price": 103
+        },
+        {
+          "size": "32",
+          "price": 92
+        },
+        {
+          "size": "34",
+          "price": 95
+        },
+        {
+          "size": "36",
+          "price": 97
+        },
+        {
+          "size": "38",
+          "price": 100
+        },
+        {
+          "size": "40",
+          "price": 102
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "可道中學(嗇色園主辦)",
+      "name": "男女生 - 灰色開胸冷衫",
+      "source": [
+        {
+          "size": "32",
+          "price": 130
+        },
+        {
+          "size": "34",
+          "price": 133
+        },
+        {
+          "size": "36",
+          "price": 137
+        },
+        {
+          "size": "38",
+          "price": 142
+        },
+        {
+          "size": "40",
+          "price": 147
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "可道中學(嗇色園主辦)",
+      "name": "男生 - 白色長袖恤衫",
+      "source": [
+        {
+          "size": "12",
+          "price": 43
+        },
+        {
+          "size": "12.5",
+          "price": 47
+        },
+        {
+          "size": "13",
+          "price": 50
+        },
+        {
+          "size": "13.5",
+          "price": 53
+        },
+        {
+          "size": "14",
+          "price": 56
+        },
+        {
+          "size": "14.5",
+          "price": 59
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "可道中學(嗇色園主辦)",
+      "name": "男生 - 黑色長西褲",
+      "source": [
+        {
+          "size": "23",
+          "price": 93
+        },
+        {
+          "size": "24",
+          "price": 96
+        },
+        {
+          "size": "25",
+          "price": 99
+        },
+        {
+          "size": "26",
+          "price": 103
+        },
+        {
+          "size": "27",
+          "price": 107
+        },
+        {
+          "size": "28",
+          "price": 111
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "可道中學(嗇色園主辦)",
+      "name": "女生 - 灰色校裙",
+      "source": [
+        {
+          "size": "32",
+          "price": 99
+        },
+        {
+          "size": "34",
+          "price": 103
+        },
+        {
+          "size": "36",
+          "price": 107
+        },
+        {
+          "size": "38",
+          "price": 111
+        },
+        {
+          "size": "40",
+          "price": 115
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "可道中學(嗇色園主辦)",
+      "name": "男女生 - 運動套裝",
+      "source": [
+        {
+          "size": "32",
+          "price": 185
+        },
+        {
+          "size": "34",
+          "price": 190
+        },
+        {
+          "size": "36",
+          "price": 195
+        },
+        {
+          "size": "38",
+          "price": 200
+        },
+        {
+          "size": "40",
+          "price": 205
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "可道中學(嗇色園主辦)",
+      "name": "男女生 - 灰色開胸長袖冷衫",
+      "source": [
+        {
+          "size": "32",
+          "price": 130
+        },
+        {
+          "size": "34",
+          "price": 133
+        },
+        {
+          "size": "36",
+          "price": 137
+        },
+        {
+          "size": "38",
+          "price": 142
+        },
+        {
+          "size": "40",
+          "price": 147
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "屯門官立中學",
+      "name": "男女生 - 夏季運動套裝",
+      "source": [
+        {
+          "size": "XS",
+          "price": 34
+        },
+        {
+          "size": "S",
+          "price": 37
+        },
+        {
+          "size": "M",
+          "price": 40
+        },
+        {
+          "size": "L",
+          "price": 43
+        },
+        {
+          "size": "XL",
+          "price": 46
+        },
+        {
+          "size": "XXL",
+          "price": 50
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "屯門官立中學",
+      "name": "男女生 - 冬季運動套裝",
+      "source": [
+        {
+          "size": "XS",
+          "price": 82
+        },
+        {
+          "size": "S",
+          "price": 86
+        },
+        {
+          "size": "M",
+          "price": 90
+        },
+        {
+          "size": "L",
+          "price": 95
+        },
+        {
+          "size": "XL",
+          "price": 100
+        },
+        {
+          "size": "XXL",
+          "price": 105
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "男生 - 灰色長西褲",
+      "source": [
+        {
+          "size": "23",
+          "price": 84
+        },
+        {
+          "size": "24",
+          "price": 88
+        },
+        {
+          "size": "25",
+          "price": 92
+        },
+        {
+          "size": "26",
+          "price": 96
+        },
+        {
+          "size": "27",
+          "price": 100
+        },
+        {
+          "size": "28",
+          "price": 104
+        },
+        {
+          "size": "29",
+          "price": 108
+        },
+        {
+          "size": "30",
+          "price": 112
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "女生 - 白色校裙",
+      "source": [
+        {
+          "size": "34",
+          "price": 94
+        },
+        {
+          "size": "35",
+          "price": 98
+        },
+        {
+          "size": "36",
+          "price": 102
+        },
+        {
+          "size": "37",
+          "price": 106
+        },
+        {
+          "size": "38",
+          "price": 110
+        },
+        {
+          "size": "40",
+          "price": 118
+        },
+        {
+          "size": "42",
+          "price": 126
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "女生 - 灰色絨背心校裙",
+      "source": [
+        {
+          "size": "34",
+          "price": 108
+        },
+        {
+          "size": "35",
+          "price": 112
+        },
+        {
+          "size": "36",
+          "price": 116
+        },
+        {
+          "size": "37",
+          "price": 120
+        },
+        {
+          "size": "38",
+          "price": 124
+        },
+        {
+          "size": "40",
+          "price": 132
+        },
+        {
+          "size": "42",
+          "price": 140
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "男女生 - 運動短袖衫",
+      "source": [
+        {
+          "size": "32",
+          "price": 40
+        },
+        {
+          "size": "34",
+          "price": 43
+        },
+        {
+          "size": "36",
+          "price": 46
+        },
+        {
+          "size": "38",
+          "price": 50
+        },
+        {
+          "size": "40",
+          "price": 55
+        },
+        {
+          "size": "42",
+          "price": 60
+        },
+        {
+          "size": "44",
+          "price": 65
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "男女生 - 運動短褲",
+      "source": [
+        {
+          "size": "XS",
+          "price": 40
+        },
+        {
+          "size": "S",
+          "price": 43
+        },
+        {
+          "size": "M",
+          "price": 46
+        },
+        {
+          "size": "L",
+          "price": 52
+        },
+        {
+          "size": "XL",
+          "price": 58
+        },
+        {
+          "size": "XXL",
+          "price": 65
+        },
+        {
+          "size": "1-3",
+          "price": 75
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "男女生 - 運動長袖衛衣",
+      "source": [
+        {
+          "size": "32",
+          "price": 66
+        },
+        {
+          "size": "34",
+          "price": 70
+        },
+        {
+          "size": "36",
+          "price": 74
+        },
+        {
+          "size": "38",
+          "price": 78
+        },
+        {
+          "size": "40",
+          "price": 82
+        },
+        {
+          "size": "42",
+          "price": 86
+        },
+        {
+          "size": "44",
+          "price": 90
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "男女生 - 運動長褲",
+      "source": [
+        {
+          "size": "32",
+          "price": 94
+        },
+        {
+          "size": "34",
+          "price": 99
+        },
+        {
+          "size": "36",
+          "price": 104
+        },
+        {
+          "size": "38",
+          "price": 109
+        },
+        {
+          "size": "40",
+          "price": 114
+        },
+        {
+          "size": "42",
+          "price": 119
+        },
+        {
+          "size": "44",
+          "price": 125
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "男女生 - 運動風褸",
+      "source": [
+        {
+          "size": "32",
+          "price": 94
+        },
+        {
+          "size": "34",
+          "price": 99
+        },
+        {
+          "size": "36",
+          "price": 104
+        },
+        {
+          "size": "38",
+          "price": 109
+        },
+        {
+          "size": "40",
+          "price": 114
+        },
+        {
+          "size": "42",
+          "price": 119
+        },
+        {
+          "size": "44",
+          "price": 125
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "男女生 - 背心冷衫",
+      "source": [
+        {
+          "size": "32",
+          "price": 109
+        },
+        {
+          "size": "34",
+          "price": 114
+        },
+        {
+          "size": "36",
+          "price": 119
+        },
+        {
+          "size": "38",
+          "price": 124
+        },
+        {
+          "size": "40",
+          "price": 129
+        },
+        {
+          "size": "42",
+          "price": 134
+        },
+        {
+          "size": "44",
+          "price": 139
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "男女生– 開胸長袖冷衫",
+      "source": [
+        {
+          "size": "32",
+          "price": 129
+        },
+        {
+          "size": "34",
+          "price": 134
+        },
+        {
+          "size": "36",
+          "price": 139
+        },
+        {
+          "size": "38",
+          "price": 144
+        },
+        {
+          "size": "40",
+          "price": 149
+        },
+        {
+          "size": "42",
+          "price": 154
+        },
+        {
+          "size": "44",
+          "price": 160
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "冬季男生 - 灰色長西褲",
+      "source": [
+        {
+          "size": "23",
+          "price": 110
+        },
+        {
+          "size": "24",
+          "price": 115
+        },
+        {
+          "size": "25",
+          "price": 130
+        },
+        {
+          "size": "26",
+          "price": 135
+        },
+        {
+          "size": "27",
+          "price": 130
+        },
+        {
+          "size": "28",
+          "price": 135
+        },
+        {
+          "size": "29",
+          "price": 140
+        },
+        {
+          "size": "30",
+          "price": 145
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "趙聿修紀念中學",
+      "name": "夏季男生 - 灰色長西褲",
+      "source": [
+        {
+          "size": "23",
+          "price": 104
+        },
+        {
+          "size": "24",
+          "price": 108
+        },
+        {
+          "size": "25",
+          "price": 112
+        },
+        {
+          "size": "26",
+          "price": 116
+        },
+        {
+          "size": "27",
+          "price": 120
+        },
+        {
+          "size": "28",
+          "price": 124
+        },
+        {
+          "size": "29",
+          "price": 128
+        },
+        {
+          "size": "30",
+          "price": 132
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "金巴崙長老會耀道中學",
+      "name": "a. 秋、冬季男女生 - 藍色背心冷衫",
+      "source": [
+        {
+          "size": "32",
+          "price": 113
+        },
+        {
+          "size": "34",
+          "price": 118
+        },
+        {
+          "size": "36",
+          "price": 123
+        },
+        {
+          "size": "38",
+          "price": 128
+        },
+        {
+          "size": "40",
+          "price": 133
+        },
+        {
+          "size": "42",
+          "price": 138
+        },
+        {
+          "size": "44",
+          "price": 148
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "金巴崙長老會耀道中學",
+      "name": "b. 秋、冬季男女生 - 藍色長袖冷衫",
+      "source": [
+        {
+          "size": "32",
+          "price": 123
+        },
+        {
+          "size": "34",
+          "price": 128
+        },
+        {
+          "size": "36",
+          "price": 133
+        },
+        {
+          "size": "38",
+          "price": 138
+        },
+        {
+          "size": "40",
+          "price": 143
+        },
+        {
+          "size": "42",
+          "price": 148
+        },
+        {
+          "size": "44",
+          "price": 158
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "金巴崙長老會耀道中學",
+      "name": "b. 夏季男女生 - 藍色短運褲",
+      "source": [
+        {
+          "size": "XS",
+          "price": 42
+        },
+        {
+          "size": "S",
+          "price": 45
+        },
+        {
+          "size": "M",
+          "price": 48
+        },
+        {
+          "size": "L",
+          "price": 52
+        },
+        {
+          "size": "XL",
+          "price": 56
+        },
+        {
+          "size": "2XL",
+          "price": 60
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "金巴崙長老會耀道中學",
+      "name": "a. 冬季男女生 - 運動套裝",
+      "source": [
+        {
+          "size": "32",
+          "price": 93
+        },
+        {
+          "size": "34",
+          "price": 98
+        },
+        {
+          "size": "36",
+          "price": 103
+        },
+        {
+          "size": "38",
+          "price": 108
+        },
+        {
+          "size": "40",
+          "price": 113
+        },
+        {
+          "size": "42",
+          "price": 118
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "金巴崙長老會耀道中學",
+      "name": "b. 冬季男女生 - 運動套裝",
+      "source": [
+        {
+          "size": "32",
+          "price": 93
+        },
+        {
+          "size": "34",
+          "price": 98
+        },
+        {
+          "size": "36",
+          "price": 103
+        },
+        {
+          "size": "38",
+          "price": 108
+        },
+        {
+          "size": "40",
+          "price": 113
+        },
+        {
+          "size": "42",
+          "price": 118
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "天水圍香島中學",
+      "name": "男女生 運動短褲",
+      "source": [
+        {
+          "size": "40",
+          "price": 40
+        },
+        {
+          "size": "44",
+          "price": 44
+        },
+        {
+          "size": "48",
+          "price": 48
+        },
+        {
+          "size": "53",
+          "price": 53
+        },
+        {
+          "size": "58",
+          "price": 58
+        },
+        {
+          "size": "64",
+          "price": 64
+        },
+        {
+          "size": "75",
+          "price": 75
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "天水圍香島中學",
+      "name": "男女生 頸巾",
+      "source": [
+        {
+          "size": "80",
+          "price": 28
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "屯門天主教中學",
+      "name": "男女生 - 運動短褲",
+      "source": [
+        {
+          "size": "S",
+          "price": 44
+        },
+        {
+          "size": "M",
+          "price": 48
+        },
+        {
+          "size": "L",
+          "price": 52
+        },
+        {
+          "size": "XL",
+          "price": 57
+        },
+        {
+          "size": "2XL",
+          "price": 62
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "屯門天主教中學",
+      "name": "女生 - 白色長袖恤",
+      "source": [
+        {
+          "size": "12",
+          "price": 56
+        },
+        {
+          "size": "12.5",
+          "price": 60
+        },
+        {
+          "size": "13",
+          "price": 64
+        },
+        {
+          "size": "13.5",
+          "price": 68
+        },
+        {
+          "size": "14",
+          "price": 72
+        },
+        {
+          "size": "14.5",
+          "price": 76
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "屯門天主教中學",
+      "name": "男女生 - 運動外套 連校徽",
+      "source": [
+        {
+          "size": "32",
+          "price": 106
+        },
+        {
+          "size": "34",
+          "price": 110
+        },
+        {
+          "size": "36",
+          "price": 114
+        },
+        {
+          "size": "38",
+          "price": 119
+        },
+        {
+          "size": "40",
+          "price": 125
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "屯門天主教中學",
+      "name": "男女生 - 運動長褲",
+      "source": [
+        {
+          "size": "32",
+          "price": 96
+        },
+        {
+          "size": "34",
+          "price": 100
+        },
+        {
+          "size": "36",
+          "price": 104
+        },
+        {
+          "size": "38",
+          "price": 109
+        },
+        {
+          "size": "40",
+          "price": 115
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "屯門天主教中學",
+      "name": "男女生 - 黑色背心冷衫",
+      "source": [
+        {
+          "size": "32",
+          "price": 100
+        },
+        {
+          "size": "34",
+          "price": 105
+        },
+        {
+          "size": "36",
+          "price": 111
+        },
+        {
+          "size": "38",
+          "price": 118
+        },
+        {
+          "size": "40",
+          "price": 125
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "屯門天主教中學",
+      "name": "男女生 - 黑色長袖冷衫",
+      "source": [
+        {
+          "size": "32",
+          "price": 116
+        },
+        {
+          "size": "34",
+          "price": 121
+        },
+        {
+          "size": "36",
+          "price": 126
+        },
+        {
+          "size": "38",
+          "price": 133
+        },
+        {
+          "size": "40",
+          "price": 140
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "屯門天主教中學",
+      "name": "男女生 - 棉 褸",
+      "source": [
+        {
+          "size": "8",
+          "price": 213
+        },
+        {
+          "size": "10",
+          "price": 228
+        },
+        {
+          "size": "12",
+          "price": 243
+        },
+        {
+          "size": "14",
+          "price": 258
+        },
+        {
+          "size": "16",
+          "price": 273
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "明愛元朗陳震夏中學",
+      "name": "8.) 男女生 - 黑色「防水絹」面 配活動「抓毛」長袖外套校褸",
+      "source": [
+        {
+          "size": "140",
+          "price": 80
+        },
+        {
+          "size": "150",
+          "price": 85
+        },
+        {
+          "size": "160",
+          "price": 90
+        },
+        {
+          "size": "170",
+          "price": 95
+        },
+        {
+          "size": "180",
+          "price": 100
+        },
+        {
+          "size": "190",
+          "price": 105
+        },
+        {
+          "size": "210",
+          "price": 120
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "明愛元朗陳震夏中學",
+      "name": "10.) 男女生 -「珠地棉」針織長袖運動套裝，左上胸繡徽章",
+      "source": [
+        {
+          "size": "85",
+          "price": 85
+        },
+        {
+          "size": "95",
+          "price": 95
+        },
+        {
+          "size": "95",
+          "price": 95
+        },
+        {
+          "size": "100",
+          "price": 100
+        },
+        {
+          "size": "100",
+          "price": 100
+        },
+        {
+          "size": "105",
+          "price": 105
+        },
+        {
+          "size": "120",
+          "price": 120
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "1. 夏季 - 男生短袖恤衫",
+      "source": [
+        {
+          "size": "18",
+          "price": 45
+        },
+        {
+          "size": "20",
+          "price": 48
+        },
+        {
+          "size": "22",
+          "price": 51
+        },
+        {
+          "size": "24",
+          "price": 54
+        },
+        {
+          "size": "26",
+          "price": 58
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "2. 夏季 - 男生短西褲",
+      "source": [
+        {
+          "size": "11",
+          "price": 49
+        },
+        {
+          "size": "12",
+          "price": 52
+        },
+        {
+          "size": "13",
+          "price": 55
+        },
+        {
+          "size": "14",
+          "price": 59
+        },
+        {
+          "size": "15",
+          "price": 63
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "3. 夏季 - 女生短袖連身校裙",
+      "source": [
+        {
+          "size": "24",
+          "price": 82
+        },
+        {
+          "size": "26",
+          "price": 86
+        },
+        {
+          "size": "28",
+          "price": 90
+        },
+        {
+          "size": "30",
+          "price": 95
+        },
+        {
+          "size": "32",
+          "price": 100
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "5. 夏季 - 男女生運動短褲",
+      "source": [
+        {
+          "size": "XS",
+          "price": 38
+        },
+        {
+          "size": "S",
+          "price": 42
+        },
+        {
+          "size": "M",
+          "price": 46
+        },
+        {
+          "size": "L",
+          "price": 50
+        },
+        {
+          "size": "XL",
+          "price": 54
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "6. 冬季 - 男生長袖恤衫",
+      "source": [
+        {
+          "size": "10.5",
+          "price": 55
+        },
+        {
+          "size": "11",
+          "price": 59
+        },
+        {
+          "size": "11.5",
+          "price": 63
+        },
+        {
+          "size": "12",
+          "price": 67
+        },
+        {
+          "size": "12.5",
+          "price": 71
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "7. 冬季 - 男生長西褲",
+      "source": [
+        {
+          "size": "24",
+          "price": 90
+        },
+        {
+          "size": "26",
+          "price": 93
+        },
+        {
+          "size": "28",
+          "price": 96
+        },
+        {
+          "size": "30",
+          "price": 101
+        },
+        {
+          "size": "32",
+          "price": 106
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "8. 冬季 - 男女生校褸",
+      "source": [
+        {
+          "size": "4",
+          "price": 225
+        },
+        {
+          "size": "6",
+          "price": 240
+        },
+        {
+          "size": "8",
+          "price": 255
+        },
+        {
+          "size": "10",
+          "price": 270
+        },
+        {
+          "size": "12",
+          "price": 290
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "9. 冬季 - 女生長袖恤衫",
+      "source": [
+        {
+          "size": "10.5",
+          "price": 55
+        },
+        {
+          "size": "11",
+          "price": 59
+        },
+        {
+          "size": "11.5",
+          "price": 63
+        },
+        {
+          "size": "12",
+          "price": 67
+        },
+        {
+          "size": "12.5",
+          "price": 71
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "10. 冬季 - 女生背心裙",
+      "source": [
+        {
+          "size": "24",
+          "price": 122
+        },
+        {
+          "size": "26",
+          "price": 127
+        },
+        {
+          "size": "28",
+          "price": 132
+        },
+        {
+          "size": "30",
+          "price": 137
+        },
+        {
+          "size": "32",
+          "price": 142
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "12. 冬季 - 男女生運動長褲",
+      "source": [
+        {
+          "size": "24",
+          "price": 84
+        },
+        {
+          "size": "26",
+          "price": 89
+        },
+        {
+          "size": "28",
+          "price": 94
+        },
+        {
+          "size": "30",
+          "price": 99
+        },
+        {
+          "size": "32",
+          "price": 104
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "13. 男女生 運動風褸",
+      "source": [
+        {
+          "size": "24",
+          "price": 84
+        },
+        {
+          "size": "26",
+          "price": 89
+        },
+        {
+          "size": "28",
+          "price": 94
+        },
+        {
+          "size": "30",
+          "price": 99
+        },
+        {
+          "size": "32",
+          "price": 104
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗商會小學",
+      "name": "14. 男女生 長袖毛衣",
+      "source": [
+        {
+          "size": "4",
+          "price": 98
+        },
+        {
+          "size": "6",
+          "price": 103
+        },
+        {
+          "size": "8",
+          "price": 108
+        },
+        {
+          "size": "10",
+          "price": 113
+        },
+        {
+          "size": "12",
+          "price": 118
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗公立中學",
+      "name": "男女生反領短袖運動衫",
+      "source": [
+        {
+          "size": "34",
+          "price": 45
+        },
+        {
+          "size": "36",
+          "price": 47
+        },
+        {
+          "size": "38",
+          "price": 49
+        },
+        {
+          "size": "40",
+          "price": 52
+        },
+        {
+          "size": "42",
+          "price": 55
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗公立中學",
+      "name": "男女生黑色 運動短褲",
+      "source": [
+        {
+          "size": "S",
+          "price": 45
+        },
+        {
+          "size": "M",
+          "price": 47
+        },
+        {
+          "size": "L",
+          "price": 49
+        },
+        {
+          "size": "XL",
+          "price": 52
+        },
+        {
+          "size": "XXL",
+          "price": 55
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗公立中學",
+      "name": "夏季男女生 反領運動衫 + 運動短褲 全套",
+      "source": [
+        {
+          "size": "34",
+          "price": 90
+        },
+        {
+          "size": "36",
+          "price": 94
+        },
+        {
+          "size": "38",
+          "price": 98
+        },
+        {
+          "size": "40",
+          "price": 104
+        },
+        {
+          "size": "42",
+          "price": 110
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗公立中學",
+      "name": "冬季男女生 運動套裝",
+      "source": [
+        {
+          "size": "34",
+          "price": 80
+        },
+        {
+          "size": "36",
+          "price": 85
+        },
+        {
+          "size": "38",
+          "price": 90
+        },
+        {
+          "size": "40",
+          "price": 95
+        },
+        {
+          "size": "42",
+          "price": 100
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "元朗公立中學",
+      "name": "冬季男女生 運動套裝全套",
+      "source": [
+        {
+          "size": "34",
+          "price": 160
+        },
+        {
+          "size": "36",
+          "price": 170
+        },
+        {
+          "size": "38",
+          "price": 180
+        },
+        {
+          "size": "40",
+          "price": 190
+        },
+        {
+          "size": "42",
+          "price": 200
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "新界鄉議局元朗區中學",
+      "name": "女生 - 白色恤衫",
+      "source": [
+        {
+          "size": "32",
+          "price": 60
+        },
+        {
+          "size": "34",
+          "price": 64
+        },
+        {
+          "size": "36",
+          "price": 69
+        },
+        {
+          "size": "38",
+          "price": 74
+        },
+        {
+          "size": "40",
+          "price": 79
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "新界鄉議局元朗區中學",
+      "name": "男女生 - 白色尖領長袖恤衫",
+      "source": [
+        {
+          "size": "12",
+          "price": 56
+        },
+        {
+          "size": "12.5",
+          "price": 59
+        },
+        {
+          "size": "13",
+          "price": 62
+        },
+        {
+          "size": "13.5",
+          "price": 65
+        },
+        {
+          "size": "14",
+          "price": 68
+        },
+        {
+          "size": "14.5",
+          "price": 73
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "新界鄉議局元朗區中學",
+      "name": "男生 - 灰色長西褲",
+      "source": [
+        {
+          "size": "23",
+          "price": 96
+        },
+        {
+          "size": "24",
+          "price": 100
+        },
+        {
+          "size": "25",
+          "price": 104
+        },
+        {
+          "size": "26",
+          "price": 108
+        },
+        {
+          "size": "27",
+          "price": 112
+        },
+        {
+          "size": "28",
+          "price": 116
+        },
+        {
+          "size": "29",
+          "price": 121
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "新界鄉議局元朗區中學",
+      "name": "女生 - 灰色半腰裙",
+      "source": [
+        {
+          "size": "21",
+          "price": 99
+        },
+        {
+          "size": "22",
+          "price": 102
+        },
+        {
+          "size": "23",
+          "price": 105
+        },
+        {
+          "size": "24",
+          "price": 109
+        },
+        {
+          "size": "25",
+          "price": 114
+        },
+        {
+          "size": "26",
+          "price": 119
+        },
+        {
+          "size": "27",
+          "price": 124
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "仁德天主教小學",
+      "name": "男女生 – 深藍色運動外套 連網裡",
+      "source": [
+        {
+          "size": "18",
+          "price": 86
+        },
+        {
+          "size": "19",
+          "price": 91
+        },
+        {
+          "size": "20",
+          "price": 94
+        },
+        {
+          "size": "21",
+          "price": 97
+        },
+        {
+          "size": "22",
+          "price": 100
+        },
+        {
+          "size": "23",
+          "price": 104
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "浸信會永隆中學",
+      "name": "男生 白色短袖恤衫",
+      "source": [
+        {
+          "size": "11.5",
+          "price": 42
+        },
+        {
+          "size": "12",
+          "price": 45
+        },
+        {
+          "size": "12.5",
+          "price": 48
+        },
+        {
+          "size": "13",
+          "price": 51
+        },
+        {
+          "size": "13.5",
+          "price": 54
+        },
+        {
+          "size": "14",
+          "price": 57
+        },
+        {
+          "size": "14.5",
+          "price": 60
+        },
+        {
+          "size": "15",
+          "price": 63
+        },
+        {
+          "size": "15.5",
+          "price": 67
+        },
+        {
+          "size": "16",
+          "price": 71
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "浸信會永隆中學",
+      "name": "男生 白色長西褲",
+      "source": [
+        {
+          "size": "33",
+          "price": 84
+        },
+        {
+          "size": "34",
+          "price": 87
+        },
+        {
+          "size": "35",
+          "price": 90
+        },
+        {
+          "size": "36",
+          "price": 93
+        },
+        {
+          "size": "37",
+          "price": 96
+        },
+        {
+          "size": "38.5",
+          "price": 99
+        },
+        {
+          "size": "40",
+          "price": 104
+        },
+        {
+          "size": "41.5",
+          "price": 109
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "浸信會永隆中學",
+      "name": "男女生 運動短褲",
+      "source": [
+        {
+          "size": "XS",
+          "price": 40
+        },
+        {
+          "size": "S",
+          "price": 44
+        },
+        {
+          "size": "M",
+          "price": 48
+        },
+        {
+          "size": "L",
+          "price": 52
+        },
+        {
+          "size": "XL",
+          "price": 56
+        },
+        {
+          "size": "XXL",
+          "price": 60
+        },
+        {
+          "size": "1",
+          "price": 75
+        },
+        {
+          "size": "3",
+          "price": 75
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "浸信會永隆中學",
+      "name": "男女生 白色長袖恤衫",
+      "source": [
+        {
+          "size": "11.5",
+          "price": 52
+        },
+        {
+          "size": "12",
+          "price": 55
+        },
+        {
+          "size": "12.5",
+          "price": 58
+        },
+        {
+          "size": "13",
+          "price": 61
+        },
+        {
+          "size": "13.5",
+          "price": 64
+        },
+        {
+          "size": "14",
+          "price": 67
+        },
+        {
+          "size": "14.5",
+          "price": 70
+        },
+        {
+          "size": "15",
+          "price": 73
+        },
+        {
+          "size": "15.5",
+          "price": 77
+        },
+        {
+          "size": "16",
+          "price": 81
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "浸信會永隆中學",
+      "name": "男生 灰色長西褲",
+      "source": [
+        {
+          "size": "33",
+          "price": 102
+        },
+        {
+          "size": "34",
+          "price": 105
+        },
+        {
+          "size": "35",
+          "price": 108
+        },
+        {
+          "size": "36",
+          "price": 111
+        },
+        {
+          "size": "37",
+          "price": 114
+        },
+        {
+          "size": "38.5",
+          "price": 118
+        },
+        {
+          "size": "40",
+          "price": 123
+        },
+        {
+          "size": "41.5",
+          "price": 130
+        }
+      ]
+    },
+    {
+      "type": "missing",
+      "school": "浸信會永隆中學",
+      "name": "男女生 校 褸",
+      "source": [
+        {
+          "size": "8",
+          "price": 250
+        },
+        {
+          "size": "10",
+          "price": 265
+        },
+        {
+          "size": "12",
+          "price": 280
+        },
+        {
+          "size": "14",
+          "price": 295
+        },
+        {
+          "size": "16",
+          "price": 315
+        },
+        {
+          "size": "18",
+          "price": 330
+        },
+        {
+          "size": "20",
+          "price": 350
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂劉皇發夫人小學",
+      "name": "藍／紫色短袖恤衫（連繡章／領圍）",
+      "target": [
+        {
+          "size": "10.5",
+          "price": 51
+        },
+        {
+          "size": "11",
+          "price": 54
+        },
+        {
+          "size": "11.5",
+          "price": 57
+        },
+        {
+          "size": "12",
+          "price": 61
+        },
+        {
+          "size": "12.5",
+          "price": 65
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂劉皇發夫人小學",
+      "name": "黑色短西褲（半橡筋）",
+      "target": [
+        {
+          "size": "11",
+          "price": 53
+        },
+        {
+          "size": "12",
+          "price": 56
+        },
+        {
+          "size": "13",
+          "price": 59
+        },
+        {
+          "size": "14",
+          "price": 62
+        },
+        {
+          "size": "15",
+          "price": 66
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂劉皇發夫人小學",
+      "name": "藍／紫色連身校裙（連繡章／長度）",
+      "target": [
+        {
+          "size": "24",
+          "price": 90
+        },
+        {
+          "size": "26",
+          "price": 93
+        },
+        {
+          "size": "28",
+          "price": 96
+        },
+        {
+          "size": "30",
+          "price": 99
+        },
+        {
+          "size": "32",
+          "price": 103
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂劉皇發夫人小學",
+      "name": "藍／紫色POLO運動短袖衫（連繡章）",
+      "target": [
+        {
+          "size": "24",
+          "price": 45
+        },
+        {
+          "size": "26",
+          "price": 48
+        },
+        {
+          "size": "28",
+          "price": 51
+        },
+        {
+          "size": "30",
+          "price": 54
+        },
+        {
+          "size": "32",
+          "price": 58
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂劉皇發夫人小學",
+      "name": "黑色運動短褲（兩側白邊）",
+      "target": [
+        {
+          "size": "XS",
+          "price": 45
+        },
+        {
+          "size": "S",
+          "price": 48
+        },
+        {
+          "size": "M",
+          "price": 51
+        },
+        {
+          "size": "L",
+          "price": 54
+        },
+        {
+          "size": "XL",
+          "price": 58
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂劉皇發夫人小學",
+      "name": "白色開胸長袖線衫",
+      "target": [
+        {
+          "size": "4",
+          "price": 97
+        },
+        {
+          "size": "6",
+          "price": 102
+        },
+        {
+          "size": "8",
+          "price": 107
+        },
+        {
+          "size": "10",
+          "price": 112
+        },
+        {
+          "size": "12",
+          "price": 117
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂劉皇發夫人小學",
+      "name": "長袖恤衫（連繡章／領圍）",
+      "target": [
+        {
+          "size": "10.5",
+          "length": "18",
+          "price": 59
+        },
+        {
+          "size": "11",
+          "length": "20",
+          "price": 62
+        },
+        {
+          "size": "11.5",
+          "length": "22",
+          "price": 65
+        },
+        {
+          "size": "12",
+          "length": "24",
+          "price": 69
+        },
+        {
+          "size": "12.5",
+          "length": "26",
+          "price": 73
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂劉皇發夫人小學",
+      "name": "男生長西褲（半橡筋）",
+      "target": [
+        {
+          "size": "24",
+          "price": 93
+        },
+        {
+          "size": "26",
+          "price": 96
+        },
+        {
+          "size": "28",
+          "price": 99
+        },
+        {
+          "size": "30",
+          "price": 103
+        },
+        {
+          "size": "32",
+          "price": 108
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂劉皇發夫人小學",
+      "name": "女生背心校裙（連章）",
+      "target": [
+        {
+          "size": "24",
+          "price": 115
+        },
+        {
+          "size": "26",
+          "price": 120
+        },
+        {
+          "size": "28",
+          "price": 125
+        },
+        {
+          "size": "30",
+          "price": 130
+        },
+        {
+          "size": "32",
+          "price": 137
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂劉皇發夫人小學",
+      "name": "運動衛衣（連章）",
+      "target": [
+        {
+          "size": "24",
+          "price": 68
+        },
+        {
+          "size": "26",
+          "price": 71
+        },
+        {
+          "size": "28",
+          "price": 75
+        },
+        {
+          "size": "30",
+          "price": 79
+        },
+        {
+          "size": "32",
+          "price": 83
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂劉皇發夫人小學",
+      "name": "運動外套（連章）",
+      "target": [
+        {
+          "size": "24",
+          "price": 89
+        },
+        {
+          "size": "26",
+          "price": 94
+        },
+        {
+          "size": "28",
+          "price": 99
+        },
+        {
+          "size": "30",
+          "price": 104
+        },
+        {
+          "size": "32",
+          "price": 109
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂劉皇發夫人小學",
+      "name": "運動長褲（連章）",
+      "target": [
+        {
+          "size": "24",
+          "price": 86
+        },
+        {
+          "size": "26",
+          "price": 91
+        },
+        {
+          "size": "28",
+          "price": 96
+        },
+        {
+          "size": "30",
+          "price": 101
+        },
+        {
+          "size": "32",
+          "price": 106
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂劉皇發夫人小學",
+      "name": "黑色開胸長袖冷衫（連繡章）",
+      "target": [
+        {
+          "size": "4",
+          "price": 135
+        },
+        {
+          "size": "6",
+          "price": 139
+        },
+        {
+          "size": "8",
+          "price": 142
+        },
+        {
+          "size": "10",
+          "price": 145
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂劉皇發夫人小學",
+      "name": "黑色絨褸（連繡章）",
+      "target": [
+        {
+          "size": "18",
+          "price": 280
+        },
+        {
+          "size": "19",
+          "price": 290
+        },
+        {
+          "size": "20",
+          "price": 305
+        },
+        {
+          "size": "21",
+          "price": 315
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂劉皇發夫人小學",
+      "name": "男生黑色短襪（3對）",
+      "target": [
+        {
+          "size": "均碼",
+          "price": 37
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂劉皇發夫人小學",
+      "name": "女生黑色長襪",
+      "target": [
+        {
+          "size": "均碼",
+          "price": 24
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "伊斯蘭學校",
+      "name": "女生 - 白色長褲 女生 - 白色頭巾",
+      "target": [
+        {
+          "size": "24-26",
+          "price": 66
+        },
+        {
+          "size": "28-30",
+          "price": 72
+        },
+        {
+          "size": "32-34",
+          "price": 78
+        },
+        {
+          "size": "36-38",
+          "price": 84
+        },
+        {
+          "size": "M",
+          "price": 98
+        },
+        {
+          "size": "L",
+          "price": 43
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "伊斯蘭學校",
+      "name": "男女生 - 白色短袖恤衫 男生 - 灰色短西褲",
+      "target": [
+        {
+          "size": "10.5",
+          "price": 48
+        },
+        {
+          "size": "11",
+          "price": 51
+        },
+        {
+          "size": "11.5",
+          "price": 54
+        },
+        {
+          "size": "12",
+          "price": 58
+        },
+        {
+          "size": "12.5",
+          "price": 62
+        },
+        {
+          "size": "10",
+          "price": 55
+        },
+        {
+          "size": "11",
+          "price": 58
+        },
+        {
+          "size": "12",
+          "price": 61
+        },
+        {
+          "size": "13",
+          "price": 64
+        },
+        {
+          "size": "14",
+          "price": 67
+        },
+        {
+          "size": "15",
+          "price": 71
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "伊斯蘭學校",
+      "name": "男生 - 灰色長西褲 女生 - 綠色格仔半腰裙",
+      "target": [
+        {
+          "size": "24",
+          "price": 95
+        },
+        {
+          "size": "26",
+          "price": 99
+        },
+        {
+          "size": "28",
+          "price": 102
+        },
+        {
+          "size": "30",
+          "price": 107
+        },
+        {
+          "size": "32",
+          "price": 112
+        },
+        {
+          "size": "17-18",
+          "price": 85
+        },
+        {
+          "size": "19-20",
+          "price": 88
+        },
+        {
+          "size": "21-22",
+          "price": 91
+        },
+        {
+          "size": "23-24",
+          "price": 94
+        },
+        {
+          "size": "25-26",
+          "price": 98
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "伊斯蘭學校",
+      "name": "男女生 - 綠色運動衣 男女生 - 黑色運動短褲",
+      "target": [
+        {
+          "size": "24",
+          "price": 41
+        },
+        {
+          "size": "26",
+          "price": 44
+        },
+        {
+          "size": "28",
+          "price": 47
+        },
+        {
+          "size": "30",
+          "price": 50
+        },
+        {
+          "size": "32",
+          "price": 54
+        },
+        {
+          "size": "XS",
+          "price": 41
+        },
+        {
+          "size": "S",
+          "price": 44
+        },
+        {
+          "size": "M",
+          "price": 47
+        },
+        {
+          "size": "L",
+          "price": 50
+        },
+        {
+          "size": "XL",
+          "price": 54
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "伊斯蘭學校",
+      "name": "男女生 - 黑色運動長褲 男女生 - 運動外套",
+      "target": [
+        {
+          "size": "24",
+          "price": 80
+        },
+        {
+          "size": "26",
+          "price": 85
+        },
+        {
+          "size": "28",
+          "price": 90
+        },
+        {
+          "size": "30",
+          "price": 95
+        },
+        {
+          "size": "32",
+          "price": 100
+        },
+        {
+          "size": "24",
+          "price": 85
+        },
+        {
+          "size": "26",
+          "price": 90
+        },
+        {
+          "size": "28",
+          "price": 95
+        },
+        {
+          "size": "30",
+          "price": 100
+        },
+        {
+          "size": "32",
+          "price": 105
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "伊斯蘭學校",
+      "name": "男女生 - 運動套裝",
+      "target": [
+        {
+          "size": "66",
+          "price": 82
+        },
+        {
+          "size": "70",
+          "price": 87
+        },
+        {
+          "size": "74",
+          "price": 92
+        },
+        {
+          "size": "78",
+          "price": 97
+        },
+        {
+          "size": "82",
+          "price": 102
+        },
+        {
+          "size": "86",
+          "price": 108
+        },
+        {
+          "size": "92",
+          "price": 114
+        },
+        {
+          "size": "106",
+          "price": 132
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "伊斯蘭學校",
+      "name": "Boys’ & Girls’",
+      "target": [
+        {
+          "size": "66",
+          "price": 82
+        },
+        {
+          "size": "70",
+          "price": 87
+        },
+        {
+          "size": "74",
+          "price": 92
+        },
+        {
+          "size": "78",
+          "price": 97
+        },
+        {
+          "size": "82",
+          "price": 102
+        },
+        {
+          "size": "86",
+          "price": 108
+        },
+        {
+          "size": "92",
+          "price": 114
+        },
+        {
+          "size": "106",
+          "price": 132
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "男生 - 白色短袖恤",
+      "target": [
+        {
+          "size": "12",
+          "price": 36
+        },
+        {
+          "size": "12.5",
+          "price": 39
+        },
+        {
+          "size": "13",
+          "price": 42
+        },
+        {
+          "size": "13.5",
+          "price": 45
+        },
+        {
+          "size": "14",
+          "price": 48
+        },
+        {
+          "size": "14.5",
+          "price": 51
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "男生 - 灰色長西褲",
+      "target": [
+        {
+          "size": "22-23",
+          "price": 80
+        },
+        {
+          "size": "24-25",
+          "price": 83
+        },
+        {
+          "size": "26-27",
+          "price": 86
+        },
+        {
+          "size": "28-29",
+          "price": 89
+        },
+        {
+          "size": "30-31",
+          "price": 94
+        },
+        {
+          "size": "32",
+          "price": 101
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "女生 - 短袖恤衫 配紅色格仔領呔",
+      "target": [
+        {
+          "size": "30",
+          "price": 57
+        },
+        {
+          "size": "32",
+          "price": 61
+        },
+        {
+          "size": "34",
+          "price": 65
+        },
+        {
+          "size": "36",
+          "price": 69
+        },
+        {
+          "size": "38",
+          "price": 73
+        },
+        {
+          "size": "40",
+          "price": 78
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "女生 - 紅色格仔半截裙",
+      "target": [
+        {
+          "size": "18-19",
+          "price": 75
+        },
+        {
+          "size": "20-21",
+          "price": 79
+        },
+        {
+          "size": "22-23",
+          "price": 83
+        },
+        {
+          "size": "24-25",
+          "price": 87
+        },
+        {
+          "size": "26-27",
+          "price": 92
+        },
+        {
+          "size": "28-29",
+          "price": 97
+        },
+        {
+          "size": "30-32",
+          "price": 103
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "男女生 - 運動短褲",
+      "target": [
+        {
+          "size": "XS",
+          "price": 34
+        },
+        {
+          "size": "S",
+          "price": 37
+        },
+        {
+          "size": "M",
+          "price": 40
+        },
+        {
+          "size": "L",
+          "price": 43
+        },
+        {
+          "size": "XL",
+          "price": 46
+        },
+        {
+          "size": "XXL",
+          "price": 50
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "男女生 - 白色長袖恤衫",
+      "target": [
+        {
+          "size": "12",
+          "price": 47
+        },
+        {
+          "size": "12.5",
+          "price": 49
+        },
+        {
+          "size": "13",
+          "price": 52
+        },
+        {
+          "size": "13.5",
+          "price": 55
+        },
+        {
+          "size": "14",
+          "price": 58
+        },
+        {
+          "size": "14.5",
+          "price": 61
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "女生 - 紅色格仔半腰校裙",
+      "target": [
+        {
+          "size": "18-19",
+          "price": 97
+        },
+        {
+          "size": "20-21",
+          "price": 102
+        },
+        {
+          "size": "22-23",
+          "price": 107
+        },
+        {
+          "size": "24-25",
+          "price": 112
+        },
+        {
+          "size": "26-27",
+          "price": 117
+        },
+        {
+          "size": "28-29",
+          "price": 122
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "男女生 - 校 褸",
+      "target": [
+        {
+          "size": "6",
+          "price": 223
+        },
+        {
+          "size": "8",
+          "price": 232
+        },
+        {
+          "size": "10",
+          "price": 243
+        },
+        {
+          "size": "12",
+          "price": 253
+        },
+        {
+          "size": "14",
+          "price": 268
+        },
+        {
+          "size": "16",
+          "price": 283
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "天主教培聖中學",
+      "name": "女生 - 校 裙",
+      "target": [
+        {
+          "size": "33",
+          "price": 92
+        },
+        {
+          "size": "34",
+          "price": 95
+        },
+        {
+          "size": "35",
+          "price": 98
+        },
+        {
+          "size": "36",
+          "price": 102
+        },
+        {
+          "size": "38",
+          "price": 106
+        },
+        {
+          "size": "40",
+          "price": 110
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "天主教培聖中學",
+      "name": "男生 - 白色短袖恤衫",
+      "target": [
+        {
+          "size": "12.5",
+          "price": 39
+        },
+        {
+          "size": "13",
+          "price": 42
+        },
+        {
+          "size": "13.5",
+          "price": 45
+        },
+        {
+          "size": "14",
+          "price": 48
+        },
+        {
+          "size": "14.5",
+          "price": 51
+        },
+        {
+          "size": "15",
+          "price": 55
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "天主教培聖中學",
+      "name": "男生 - 灰色長西褲",
+      "target": [
+        {
+          "size": "23",
+          "price": 80
+        },
+        {
+          "size": "24",
+          "price": 83
+        },
+        {
+          "size": "25",
+          "price": 86
+        },
+        {
+          "size": "26",
+          "price": 89
+        },
+        {
+          "size": "27",
+          "price": 92
+        },
+        {
+          "size": "28",
+          "price": 96
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "天主教培聖中學",
+      "name": "男女生 – 運動短袖衫",
+      "target": [
+        {
+          "size": "32",
+          "price": 40
+        },
+        {
+          "size": "34",
+          "price": 43
+        },
+        {
+          "size": "36",
+          "price": 46
+        },
+        {
+          "size": "38",
+          "price": 49
+        },
+        {
+          "size": "40",
+          "price": 52
+        },
+        {
+          "size": "42",
+          "price": 55
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "天主教培聖中學",
+      "name": "男女生 - 運動短褲",
+      "target": [
+        {
+          "size": "XS",
+          "price": 40
+        },
+        {
+          "size": "S",
+          "price": 43
+        },
+        {
+          "size": "M",
+          "price": 46
+        },
+        {
+          "size": "L",
+          "price": 49
+        },
+        {
+          "size": "XL",
+          "price": 52
+        },
+        {
+          "size": "XXL",
+          "price": 55
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "天主教培聖中學",
+      "name": "男生 白色長袖恤衫",
+      "target": [
+        {
+          "size": "12",
+          "price": 44
+        },
+        {
+          "size": "12.5",
+          "price": 45
+        },
+        {
+          "size": "13",
+          "price": 47
+        },
+        {
+          "size": "13.5",
+          "price": 50
+        },
+        {
+          "size": "14",
+          "price": 53
+        },
+        {
+          "size": "14.5",
+          "price": 56
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "天主教培聖中學",
+      "name": "男生 灰色長西褲",
+      "target": [
+        {
+          "size": "34",
+          "price": 96
+        },
+        {
+          "size": "35",
+          "price": 98
+        },
+        {
+          "size": "36",
+          "price": 100
+        },
+        {
+          "size": "37",
+          "price": 102
+        },
+        {
+          "size": "38",
+          "price": 105
+        },
+        {
+          "size": "39",
+          "price": 108
+        },
+        {
+          "size": "40",
+          "price": 111
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "天主教培聖中學",
+      "name": "女生 粉紅色長袖恤衫",
+      "target": [
+        {
+          "size": "12",
+          "price": 49
+        },
+        {
+          "size": "12.5",
+          "price": 51
+        },
+        {
+          "size": "13",
+          "price": 53
+        },
+        {
+          "size": "13.5",
+          "price": 56
+        },
+        {
+          "size": "14",
+          "price": 59
+        },
+        {
+          "size": "14.5",
+          "price": 62
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "天主教培聖中學",
+      "name": "男女生 深藍色二合一棉褸",
+      "target": [
+        {
+          "size": "8",
+          "price": 148
+        },
+        {
+          "size": "10",
+          "price": 158
+        },
+        {
+          "size": "12",
+          "price": 168
+        },
+        {
+          "size": "14",
+          "price": 178
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "天主教培聖中學",
+      "name": "男女生 運動套裝",
+      "target": [
+        {
+          "size": "34",
+          "price": 180
+        },
+        {
+          "size": "36",
+          "price": 185
+        },
+        {
+          "size": "38",
+          "price": 23
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "東華三院郭一葦中學",
+      "name": "男女生 – 運動外套 – 運動長褲",
+      "target": [
+        {
+          "size": "32-34",
+          "price": 120
+        },
+        {
+          "size": "36-38",
+          "price": 134
+        },
+        {
+          "size": "40-42",
+          "price": 148
+        },
+        {
+          "size": "32-34",
+          "price": 95
+        },
+        {
+          "size": "36-38",
+          "price": 110
+        },
+        {
+          "size": "40-42",
+          "price": 125
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "女生 - 連身校裙",
+      "target": [
+        {
+          "size": "32",
+          "price": 90
+        },
+        {
+          "size": "34",
+          "price": 97
+        },
+        {
+          "size": "36",
+          "price": 105
+        },
+        {
+          "size": "38",
+          "price": 110
+        },
+        {
+          "size": "40",
+          "price": 115
+        },
+        {
+          "size": "42",
+          "price": 120
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "男生 - 白色短袖恤衫",
+      "target": [
+        {
+          "size": "13",
+          "price": 43
+        },
+        {
+          "size": "13.5",
+          "price": 48
+        },
+        {
+          "size": "14",
+          "price": 52
+        },
+        {
+          "size": "14.5",
+          "price": 55
+        },
+        {
+          "size": "15",
+          "price": 58
+        },
+        {
+          "size": "15.5",
+          "price": 61
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "男生 – 四季灰色長西褲",
+      "target": [
+        {
+          "size": "32",
+          "price": 80
+        },
+        {
+          "size": "33",
+          "price": 84
+        },
+        {
+          "size": "34",
+          "price": 88
+        },
+        {
+          "size": "35",
+          "price": 91
+        },
+        {
+          "size": "36",
+          "price": 94
+        },
+        {
+          "size": "37",
+          "price": 97
+        },
+        {
+          "size": "38.5",
+          "price": 101
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "男女生 – 夏季運動套裝",
+      "target": [
+        {
+          "size": "44",
+          "price": 44
+        },
+        {
+          "size": "50",
+          "price": 50
+        },
+        {
+          "size": "54",
+          "price": 54
+        },
+        {
+          "size": "58",
+          "price": 58
+        },
+        {
+          "size": "62",
+          "price": 62
+        },
+        {
+          "size": "68",
+          "price": 68
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "男女生 – 四季運動套裝",
+      "target": [
+        {
+          "size": "32",
+          "price": 77
+        },
+        {
+          "size": "34",
+          "price": 84
+        },
+        {
+          "size": "36",
+          "price": 90
+        },
+        {
+          "size": "38",
+          "price": 96
+        },
+        {
+          "size": "40",
+          "price": 102
+        },
+        {
+          "size": "42",
+          "price": 109
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "男女生 – 灰色有帽衛衣",
+      "target": [
+        {
+          "size": "32",
+          "price": 90
+        },
+        {
+          "size": "34",
+          "price": 100
+        },
+        {
+          "size": "36",
+          "price": 110
+        },
+        {
+          "size": "38",
+          "price": 120
+        },
+        {
+          "size": "40",
+          "price": 130
+        },
+        {
+          "size": "42",
+          "price": 140
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "男生 - 白色長袖恤衫",
+      "target": [
+        {
+          "size": "13",
+          "price": 49
+        },
+        {
+          "size": "13.5",
+          "price": 54
+        },
+        {
+          "size": "14",
+          "price": 58
+        },
+        {
+          "size": "14.5",
+          "price": 61
+        },
+        {
+          "size": "15",
+          "price": 64
+        },
+        {
+          "size": "15.5",
+          "price": 67
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "男生 - 灰色長西褲",
+      "target": [
+        {
+          "size": "32",
+          "price": 80
+        },
+        {
+          "size": "33",
+          "price": 84
+        },
+        {
+          "size": "34",
+          "price": 88
+        },
+        {
+          "size": "35",
+          "price": 91
+        },
+        {
+          "size": "36",
+          "price": 94
+        },
+        {
+          "size": "37",
+          "price": 97
+        },
+        {
+          "size": "38.5",
+          "price": 101
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "女生 - 灰色校裙",
+      "target": [
+        {
+          "size": "32",
+          "price": 95
+        },
+        {
+          "size": "34",
+          "price": 102
+        },
+        {
+          "size": "36",
+          "price": 110
+        },
+        {
+          "size": "38",
+          "price": 115
+        },
+        {
+          "size": "40",
+          "price": 120
+        },
+        {
+          "size": "42",
+          "price": 125
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "男女生 - 黑色混合毛冷衫",
+      "target": [
+        {
+          "size": "32",
+          "price": 109
+        },
+        {
+          "size": "34",
+          "price": 116
+        },
+        {
+          "size": "36",
+          "price": 122
+        },
+        {
+          "size": "38",
+          "price": 127
+        },
+        {
+          "size": "40",
+          "price": 132
+        },
+        {
+          "size": "42",
+          "price": 138
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "男女生–運動套裝",
+      "target": [
+        {
+          "size": "32",
+          "price": 77
+        },
+        {
+          "size": "34",
+          "price": 84
+        },
+        {
+          "size": "36",
+          "price": 90
+        },
+        {
+          "size": "38",
+          "price": 96
+        },
+        {
+          "size": "40",
+          "price": 102
+        },
+        {
+          "size": "42",
+          "price": 109
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "仁愛堂陳黃淑芳紀念中學",
+      "name": "男女生 –夾棉校褸",
+      "target": [
+        {
+          "size": "6",
+          "price": 154
+        },
+        {
+          "size": "8",
+          "price": 160
+        },
+        {
+          "size": "10",
+          "price": 165
+        },
+        {
+          "size": "12",
+          "price": 172
+        },
+        {
+          "size": "14",
+          "price": 179
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "東華三院鄺錫坤伉儷中學",
+      "name": "男女生 – 運動外套 – 運動長褲",
+      "target": [
+        {
+          "size": "32-34",
+          "price": 108
+        },
+        {
+          "size": "36-38",
+          "price": 123
+        },
+        {
+          "size": "40-42",
+          "price": 138
+        },
+        {
+          "size": "32-34",
+          "price": 80
+        },
+        {
+          "size": "36-38",
+          "price": 95
+        },
+        {
+          "size": "40-42",
+          "price": 110
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "東華三院鄺錫坤伉儷中學",
+      "name": "男女生 - 藍色V領背心毛衣 - 藍色V領長袖毛衣",
+      "target": [
+        {
+          "size": "32",
+          "price": 115
+        },
+        {
+          "size": "34",
+          "price": 118
+        },
+        {
+          "size": "36",
+          "price": 122
+        },
+        {
+          "size": "38",
+          "price": 127
+        },
+        {
+          "size": "40",
+          "price": 132
+        },
+        {
+          "size": "32",
+          "price": 125
+        },
+        {
+          "size": "34",
+          "price": 128
+        },
+        {
+          "size": "36",
+          "price": 132
+        },
+        {
+          "size": "38",
+          "price": 137
+        },
+        {
+          "size": "40",
+          "price": 142
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "東華三院鄺錫坤伉儷中學",
+      "name": "女生 - 半腰校裙 男女生–校褸",
+      "target": [
+        {
+          "size": "23-25",
+          "price": 95
+        },
+        {
+          "size": "26-28",
+          "price": 110
+        },
+        {
+          "size": "29-32",
+          "price": 125
+        },
+        {
+          "size": "8-10",
+          "price": 250
+        },
+        {
+          "size": "12-14",
+          "price": 265
+        },
+        {
+          "size": "16-18",
+          "price": 285
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "東華三院鄺錫坤伉儷中學",
+      "name": "男女生 - 運動長褲 運動外套",
+      "target": [
+        {
+          "size": "32-34",
+          "price": 87
+        },
+        {
+          "size": "36-38",
+          "price": 94
+        },
+        {
+          "size": "40-42",
+          "price": 101
+        },
+        {
+          "size": "32-34",
+          "price": 108
+        },
+        {
+          "size": "36-38",
+          "price": 118
+        },
+        {
+          "size": "40-42",
+          "price": 128
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "東華三院鄺錫坤伉儷中學",
+      "name": "男女生 - 藍色V領背心冷衫 藍色V領長袖冷衫",
+      "target": [
+        {
+          "size": "32",
+          "price": 115
+        },
+        {
+          "size": "34",
+          "price": 118
+        },
+        {
+          "size": "36",
+          "price": 122
+        },
+        {
+          "size": "38",
+          "price": 127
+        },
+        {
+          "size": "40",
+          "price": 132
+        },
+        {
+          "size": "32",
+          "price": 125
+        },
+        {
+          "size": "34",
+          "price": 128
+        },
+        {
+          "size": "36",
+          "price": 132
+        },
+        {
+          "size": "38",
+          "price": 137
+        },
+        {
+          "size": "40",
+          "price": 142
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "中華基督教會基元中學",
+      "name": "男生 - 白色短袖恤衫",
+      "target": [
+        {
+          "size": "12",
+          "price": 36
+        },
+        {
+          "size": "12.5",
+          "price": 39
+        },
+        {
+          "size": "13",
+          "price": 42
+        },
+        {
+          "size": "13.5",
+          "price": 45
+        },
+        {
+          "size": "14",
+          "price": 48
+        },
+        {
+          "size": "14.5",
+          "price": 51
+        },
+        {
+          "size": "15",
+          "price": 54
+        },
+        {
+          "size": "15.5",
+          "price": 57
+        },
+        {
+          "size": "16",
+          "price": 61
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "中華基督教會基元中學",
+      "name": "男生 - 藍白條子長西褲",
+      "target": [
+        {
+          "size": "22",
+          "price": 78
+        },
+        {
+          "size": "23",
+          "price": 81
+        },
+        {
+          "size": "24",
+          "price": 84
+        },
+        {
+          "size": "25",
+          "price": 87
+        },
+        {
+          "size": "26",
+          "price": 90
+        },
+        {
+          "size": "27",
+          "price": 93
+        },
+        {
+          "size": "28",
+          "price": 96
+        },
+        {
+          "size": "29",
+          "price": 99
+        },
+        {
+          "size": "30",
+          "price": 102
+        },
+        {
+          "size": "32",
+          "price": 108
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "中華基督教會基元中學",
+      "name": "女生 - 藍白條子校裙",
+      "target": [
+        {
+          "size": "34",
+          "price": 86
+        },
+        {
+          "size": "36",
+          "price": 91
+        },
+        {
+          "size": "38",
+          "price": 96
+        },
+        {
+          "size": "40",
+          "price": 101
+        },
+        {
+          "size": "42",
+          "price": 106
+        },
+        {
+          "size": "44",
+          "price": 111
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "中華基督教會基元中學",
+      "name": "男女生 - 運動短袖衫 - 運動短褲",
+      "target": [
+        {
+          "size": "34",
+          "price": 35
+        },
+        {
+          "size": "36",
+          "price": 38
+        },
+        {
+          "size": "38",
+          "price": 41
+        },
+        {
+          "size": "40",
+          "price": 45
+        },
+        {
+          "size": "42",
+          "price": 49
+        },
+        {
+          "size": "44",
+          "price": 53
+        },
+        {
+          "size": "XS",
+          "price": 35
+        },
+        {
+          "size": "S",
+          "price": 38
+        },
+        {
+          "size": "M",
+          "price": 41
+        },
+        {
+          "size": "L",
+          "price": 45
+        },
+        {
+          "size": "XL",
+          "price": 49
+        },
+        {
+          "size": "XXL",
+          "price": 53
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "中華基督教會基元中學",
+      "name": "男女生 - 四季運動外套 - 四季運動長褲",
+      "target": [
+        {
+          "size": "34",
+          "price": 81
+        },
+        {
+          "size": "36",
+          "price": 86
+        },
+        {
+          "size": "38",
+          "price": 91
+        },
+        {
+          "size": "40",
+          "price": 96
+        },
+        {
+          "size": "42",
+          "price": 101
+        },
+        {
+          "size": "44",
+          "price": 106
+        },
+        {
+          "size": "34",
+          "price": 81
+        },
+        {
+          "size": "36",
+          "price": 86
+        },
+        {
+          "size": "38",
+          "price": 91
+        },
+        {
+          "size": "40",
+          "price": 96
+        },
+        {
+          "size": "42",
+          "price": 101
+        },
+        {
+          "size": "44",
+          "price": 106
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "中華基督教會基元中學",
+      "name": "男女生 - 藍色V領背心 冷衫 - 藍色V領長袖 冷衫",
+      "target": [
+        {
+          "size": "34",
+          "price": 90
+        },
+        {
+          "size": "36",
+          "price": 94
+        },
+        {
+          "size": "38",
+          "price": 98
+        },
+        {
+          "size": "40",
+          "price": 102
+        },
+        {
+          "size": "42",
+          "price": 106
+        },
+        {
+          "size": "44",
+          "price": 110
+        },
+        {
+          "size": "34",
+          "price": 100
+        },
+        {
+          "size": "36",
+          "price": 105
+        },
+        {
+          "size": "38",
+          "price": 110
+        },
+        {
+          "size": "40",
+          "price": 115
+        },
+        {
+          "size": "42",
+          "price": 120
+        },
+        {
+          "size": "44",
+          "price": 125
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "中華基督教會基元中學",
+      "name": "男女生 - 白色長袖恤衫",
+      "target": [
+        {
+          "size": "12",
+          "price": 42
+        },
+        {
+          "size": "12.5",
+          "price": 47
+        },
+        {
+          "size": "13",
+          "price": 50
+        },
+        {
+          "size": "13.5",
+          "price": 53
+        },
+        {
+          "size": "14",
+          "price": 56
+        },
+        {
+          "size": "14.5",
+          "price": 59
+        },
+        {
+          "size": "15",
+          "price": 62
+        },
+        {
+          "size": "15.5",
+          "price": 65
+        },
+        {
+          "size": "16",
+          "price": 69
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "中華基督教會基元中學",
+      "name": "男生 - 灰色長西褲",
+      "target": [
+        {
+          "size": "22",
+          "price": 84
+        },
+        {
+          "size": "23",
+          "price": 87
+        },
+        {
+          "size": "24",
+          "price": 90
+        },
+        {
+          "size": "25",
+          "price": 93
+        },
+        {
+          "size": "26",
+          "price": 96
+        },
+        {
+          "size": "27",
+          "price": 99
+        },
+        {
+          "size": "28",
+          "price": 102
+        },
+        {
+          "size": "29",
+          "price": 105
+        },
+        {
+          "size": "30",
+          "price": 108
+        },
+        {
+          "size": "32",
+          "price": 115
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "中華基督教會基元中學",
+      "name": "女生 - 灰色背心校裙",
+      "target": [
+        {
+          "size": "34",
+          "price": 85
+        },
+        {
+          "size": "36",
+          "price": 90
+        },
+        {
+          "size": "38",
+          "price": 95
+        },
+        {
+          "size": "40",
+          "price": 100
+        },
+        {
+          "size": "42",
+          "price": 105
+        },
+        {
+          "size": "44",
+          "price": 110
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "男女生 - 運動短袖衫",
+      "target": [
+        {
+          "size": "30/XS",
+          "price": 34
+        },
+        {
+          "size": "32/S",
+          "price": 37
+        },
+        {
+          "size": "34/M",
+          "price": 40
+        },
+        {
+          "size": "36/L",
+          "price": 43
+        },
+        {
+          "size": "38/XL",
+          "price": 46
+        },
+        {
+          "size": "40/XXL",
+          "price": 50
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "男女生 - 四季運動套裝",
+      "target": [
+        {
+          "size": "30/XS",
+          "price": 164
+        },
+        {
+          "size": "32/S",
+          "price": 172
+        },
+        {
+          "size": "34/M",
+          "price": 180
+        },
+        {
+          "size": "36/L",
+          "price": 190
+        },
+        {
+          "size": "38/XL",
+          "price": 200
+        },
+        {
+          "size": "40/XXL",
+          "price": 210
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "男生 - 灰色長西褲（冬季）",
+      "target": [
+        {
+          "size": "22-23",
+          "price": 89
+        },
+        {
+          "size": "24-25",
+          "price": 92
+        },
+        {
+          "size": "26-27",
+          "price": 95
+        },
+        {
+          "size": "28-29",
+          "price": 98
+        },
+        {
+          "size": "30-31",
+          "price": 103
+        },
+        {
+          "size": "32",
+          "price": 110
+        }
+      ]
+    },
+    {
+      "type": "extra-or-wrong-school",
+      "school": "屯門官立中學",
+      "name": "男女生 - 藍色頸巾",
+      "target": [
+        {
+          "size": "均碼",
+          "price": 43
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "app": {
+      "total": 141,
+      "missing": 83,
+      "mismatches": 2,
+      "extraOrWrongSchool": 56,
+      "schools": [
+        "恩平工商會李琳明中學",
+        "保良局莊啟程第二小學",
+        "保良局方王錦全小學",
+        "可道中學(嗇色園主辦)",
+        "屯門官立中學",
+        "趙聿修紀念中學",
+        "金巴崙長老會耀道中學",
+        "天水圍香島中學",
+        "屯門天主教中學",
+        "明愛元朗陳震夏中學",
+        "元朗商會小學",
+        "元朗公立中學",
+        "新界鄉議局元朗區中學",
+        "仁德天主教小學",
+        "浸信會永隆中學",
+        "伊斯蘭學校",
+        "天主教培聖中學",
+        "東華三院郭一葦中學",
+        "仁愛堂陳黃淑芳紀念中學",
+        "東華三院鄺錫坤伉儷中學",
+        "中華基督教會基元中學"
+      ]
+    },
+    "database": {
+      "total": 157,
+      "missing": 83,
+      "mismatches": 2,
+      "extraOrWrongSchool": 72,
+      "schools": [
+        "恩平工商會李琳明中學",
+        "保良局莊啟程第二小學",
+        "保良局方王錦全小學",
+        "可道中學(嗇色園主辦)",
+        "屯門官立中學",
+        "趙聿修紀念中學",
+        "金巴崙長老會耀道中學",
+        "天水圍香島中學",
+        "屯門天主教中學",
+        "明愛元朗陳震夏中學",
+        "元朗商會小學",
+        "元朗公立中學",
+        "新界鄉議局元朗區中學",
+        "仁德天主教小學",
+        "浸信會永隆中學",
+        "仁愛堂劉皇發夫人小學",
+        "伊斯蘭學校",
+        "天主教培聖中學",
+        "東華三院郭一葦中學",
+        "仁愛堂陳黃淑芳紀念中學",
+        "東華三院鄺錫坤伉儷中學",
+        "中華基督教會基元中學"
+      ]
+    }
+  }
+}

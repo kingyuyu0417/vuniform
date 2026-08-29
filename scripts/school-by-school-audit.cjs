@@ -1,0 +1,11 @@
+const fs = require("fs");
+const path = require("path");
+const root = path.resolve(__dirname, "..");
+const read = (file) => { let text = fs.readFileSync(file, "utf8"); if (text.charCodeAt(0) === 0xfeff) text = text.slice(1); return JSON.parse(text); };
+const source = read(path.join(root, "vu-2026-products.json"));
+const app = read(path.join(root, "src", "dedeLamLatestProducts.json"));
+const database = read(path.join(root, "database-products-snapshot.json"));
+const schools = [...new Set([...source, ...app, ...database].map((item) => item.school))].sort((a, b) => a.localeCompare(b, "zh-Hant"));
+const rows = schools.map((school) => ({ school, source: source.filter((x) => x.school === school).length, app: app.filter((x) => x.school === school).length, database: database.filter((x) => x.school === school).length }));
+fs.writeFileSync(path.join(root, "school-by-school-audit.json"), `${JSON.stringify(rows, null, 2)}\n`, "utf8");
+console.log(JSON.stringify({ schools: rows.length, rows }, null, 2));

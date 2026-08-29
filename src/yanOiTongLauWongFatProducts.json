@@ -1,0 +1,18 @@
+[
+  { "id": "yot-lwf-summer-shirt", "school": "仁愛堂劉皇發夫人小學", "name": "藍／紫色短袖恤衫（連繡章／領圍）", "sizes": [{"size":"10.5","price":51},{"size":"11","price":54},{"size":"11.5","price":57},{"size":"12","price":61},{"size":"12.5","price":65}] },
+  { "id": "yot-lwf-summer-trousers", "school": "仁愛堂劉皇發夫人小學", "name": "黑色短西褲（半橡筋）", "sizes": [{"size":"11","price":53},{"size":"12","price":56},{"size":"13","price":59},{"size":"14","price":62},{"size":"15","price":66}] },
+  { "id": "yot-lwf-summer-dress", "school": "仁愛堂劉皇發夫人小學", "name": "藍／紫色連身校裙（連繡章／長度）", "sizes": [{"size":"24","price":90},{"size":"26","price":93},{"size":"28","price":96},{"size":"30","price":99},{"size":"32","price":103}] },
+  { "id": "yot-lwf-sport-shirt", "school": "仁愛堂劉皇發夫人小學", "name": "藍／紫色POLO運動短袖衫（連繡章）", "sizes": [{"size":"24","price":45},{"size":"26","price":48},{"size":"28","price":51},{"size":"30","price":54},{"size":"32","price":58}] },
+  { "id": "yot-lwf-sport-shorts", "school": "仁愛堂劉皇發夫人小學", "name": "黑色運動短褲（兩側白邊）", "sizes": [{"size":"XS","price":45},{"size":"S","price":48},{"size":"M","price":51},{"size":"L","price":54},{"size":"XL","price":58}] },
+  { "id": "yot-lwf-summer-sweater", "school": "仁愛堂劉皇發夫人小學", "name": "白色開胸長袖線衫", "sizes": [{"size":"4","price":97},{"size":"6","price":102},{"size":"8","price":107},{"size":"10","price":112},{"size":"12","price":117}] },
+  { "id": "yot-lwf-winter-shirt", "school": "仁愛堂劉皇發夫人小學", "name": "長袖恤衫（連繡章／領圍）", "sizes": [{"size":"10.5","length":"18","price":59},{"size":"11","length":"20","price":62},{"size":"11.5","length":"22","price":65},{"size":"12","length":"24","price":69},{"size":"12.5","length":"26","price":73}] },
+  { "id": "yot-lwf-winter-trousers", "school": "仁愛堂劉皇發夫人小學", "name": "男生長西褲（半橡筋）", "sizes": [{"size":"24","price":93},{"size":"26","price":96},{"size":"28","price":99},{"size":"30","price":103},{"size":"32","price":108}] },
+  { "id": "yot-lwf-winter-dress", "school": "仁愛堂劉皇發夫人小學", "name": "女生背心校裙（連章）", "sizes": [{"size":"24","price":115},{"size":"26","price":120},{"size":"28","price":125},{"size":"30","price":130},{"size":"32","price":137}] },
+  { "id": "yot-lwf-sport-sweater", "school": "仁愛堂劉皇發夫人小學", "name": "運動衛衣（連章）", "sizes": [{"size":"24","price":68},{"size":"26","price":71},{"size":"28","price":75},{"size":"30","price":79},{"size":"32","price":83}] },
+  { "id": "yot-lwf-sport-jacket", "school": "仁愛堂劉皇發夫人小學", "name": "運動外套（連章）", "sizes": [{"size":"24","price":89},{"size":"26","price":94},{"size":"28","price":99},{"size":"30","price":104},{"size":"32","price":109}] },
+  { "id": "yot-lwf-sport-pants", "school": "仁愛堂劉皇發夫人小學", "name": "運動長褲（連章）", "sizes": [{"size":"24","price":86},{"size":"26","price":91},{"size":"28","price":96},{"size":"30","price":101},{"size":"32","price":106}] },
+  { "id": "yot-lwf-cardigan", "school": "仁愛堂劉皇發夫人小學", "name": "黑色開胸長袖冷衫（連繡章）", "sizes": [{"size":"4","price":135},{"size":"6","price":139},{"size":"8","price":142},{"size":"10","price":145}] },
+  { "id": "yot-lwf-winter-coat", "school": "仁愛堂劉皇發夫人小學", "name": "黑色絨褸（連繡章）", "sizes": [{"size":"18","price":280},{"size":"19","price":290},{"size":"20","price":305},{"size":"21","price":315}] },
+  { "id": "yot-lwf-mens-socks", "school": "仁愛堂劉皇發夫人小學", "name": "男生黑色短襪（3對）", "sizes": [{"size":"均碼","price":37}] },
+  { "id": "yot-lwf-womens-socks", "school": "仁愛堂劉皇發夫人小學", "name": "女生黑色長襪", "sizes": [{"size":"均碼","price":24}] }
+]

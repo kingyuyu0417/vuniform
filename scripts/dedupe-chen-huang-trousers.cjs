@@ -1,0 +1,11 @@
+const fs = require("fs");
+let text = fs.readFileSync("src/dedeLamLatestProducts.json", "utf8");
+if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+const products = JSON.parse(text);
+const school = "仁愛堂陳黃淑芳紀念中學";
+const duplicate = "男生 - 灰色長西褲";
+const fourSeason = "男生 – 四季灰色長西褲";
+const result = products.filter((item) => !(item.school === school && item.name === duplicate));
+const renamed = result.map((item) => item.school === school && item.name === fourSeason ? { ...item, name: "男女生 - 四季灰色長西褲" } : item);
+fs.writeFileSync("src/dedeLamLatestProducts.json", `${JSON.stringify(renamed, null, 2)}\n`, "utf8");
+console.log(JSON.stringify({ removedDuplicate: products.length - result.length, renamed: renamed.filter((item) => item.school === school && item.name === "男女生 - 四季灰色長西褲").length }));

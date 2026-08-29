@@ -1,0 +1,444 @@
+﻿[
+    {
+        "id":  "dede-11893636ecd04be2ab2d24eed81b5aef",
+        "school":  "恩平工商會李琳明中學",
+        "name":  "男女生 – 藍白條子短袖恤",
+        "sizes":  [
+                      {
+                          "size":  "12",
+                          "price":  41
+                      },
+                      {
+                          "size":  "12.5",
+                          "price":  44
+                      },
+                      {
+                          "size":  "13",
+                          "price":  47
+                      },
+                      {
+                          "size":  "13.5",
+                          "price":  50
+                      },
+                      {
+                          "size":  "14",
+                          "price":  54
+                      },
+                      {
+                          "size":  "14.5",
+                          "price":  58
+                      },
+                      {
+                          "size":  "15",
+                          "price":  62
+                      },
+                      {
+                          "size":  "15.5",
+                          "price":  66
+                      },
+                      {
+                          "size":  "16",
+                          "price":  70
+                      }
+                  ]
+    },
+    {
+        "id":  "dede-c2effc75646943e28353d1357620d404",
+        "school":  "恩平工商會李琳明中學",
+        "name":  "男生 – 深藍色長西褲",
+        "sizes":  [
+                      {
+                          "size":  "34",
+                          "price":  78
+                      },
+                      {
+                          "size":  "35",
+                          "price":  82
+                      },
+                      {
+                          "size":  "36",
+                          "price":  86
+                      },
+                      {
+                          "size":  "37",
+                          "price":  90
+                      },
+                      {
+                          "size":  "38.5",
+                          "price":  95
+                      },
+                      {
+                          "size":  "40",
+                          "price":  105
+                      },
+                      {
+                          "size":  "41.5",
+                          "price":  110
+                      }
+                  ]
+    },
+    {
+        "id":  "dede-7b9fd3a97de0446aa3c419536fbccaf1",
+        "school":  "恩平工商會李琳明中學",
+        "name":  "女生 – 深藍色半腰裙",
+        "sizes":  [
+                      {
+                          "size":  "21-22",
+                          "price":  68
+                      },
+                      {
+                          "size":  "23-24",
+                          "price":  73
+                      },
+                      {
+                          "size":  "25-26",
+                          "price":  78
+                      },
+                      {
+                          "size":  "27-28",
+                          "price":  83
+                      },
+                      {
+                          "size":  "29-30",
+                          "price":  88
+                      },
+                      {
+                          "size":  "31-32",
+                          "price":  95
+                      }
+                  ]
+    },
+    {
+        "id":  "dede-d3c7e6dd517b4aa6aa2f0e834ab8869c",
+        "school":  "恩平工商會李琳明中學",
+        "name":  "非華裔女生 - 藍色條子長裙",
+        "sizes":  [
+                      {
+                          "size":  "32",
+                          "price":  76
+                      },
+                      {
+                          "size":  "34",
+                          "price":  82
+                      },
+                      {
+                          "size":  "36",
+                          "price":  88
+                      },
+                      {
+                          "size":  "38",
+                          "price":  94
+                      },
+                      {
+                          "size":  "40",
+                          "price":  100
+                      },
+                      {
+                          "size":  "42",
+                          "price":  106
+                      }
+                  ]
+    },
+    {
+        "id":  "dede-7f8e3b150f484ce2b38afd327641eba9",
+        "school":  "恩平工商會李琳明中學",
+        "name":  "男女生 - 短袖綑邊運動衣",
+        "sizes":  [
+                      {
+                          "size":  "34",
+                          "price":  36
+                      },
+                      {
+                          "size":  "36",
+                          "price":  40
+                      },
+                      {
+                          "size":  "38",
+                          "price":  44
+                      },
+                      {
+                          "size":  "40",
+                          "price":  48
+                      },
+                      {
+                          "size":  "43",
+                          "price":  52
+                      }
+                  ]
+    },
+    {
+        "id":  "dede-7966c5ad644f474ab5a024a6ff7ec67d",
+        "school":  "恩平工商會李琳明中學",
+        "name":  "男女生 - 運動褲",
+        "sizes":  [
+                      {
+                          "size":  "S",
+                          "price":  36
+                      },
+                      {
+                          "size":  "M",
+                          "price":  40
+                      },
+                      {
+                          "size":  "L",
+                          "price":  44
+                      },
+                      {
+                          "size":  "XL",
+                          "price":  48
+                      },
+                      {
+                          "size":  "XXL",
+                          "price":  52
+                      }
+                  ]
+    },
+    {
+        "id":  "dede-1388830e2efe4856b977fd950ee0aeed",
+        "school":  "恩平工商會李琳明中學",
+        "name":  "男女生 - 運動套裝",
+        "sizes":  [
+                      {
+                          "size":  "34",
+                          "price":  90
+                      },
+                      {
+                          "size":  "36",
+                          "price":  96
+                      },
+                      {
+                          "size":  "38",
+                          "price":  102
+                      },
+                      {
+                          "size":  "40",
+                          "price":  110
+                      },
+                      {
+                          "size":  "42",
+                          "price":  118
+                      }
+                  ]
+    },
+    {
+        "id":  "dede-d8f41eed59974bbf83bd8d236aca3d92",
+        "school":  "恩平工商會李琳明中學",
+        "name":  "Boy`s \u0026 Girl`s - Short Sleeves Shirt",
+        "sizes":  [
+                      {
+                          "size":  "12",
+                          "price":  41
+                      },
+                      {
+                          "size":  "12.5",
+                          "price":  44
+                      },
+                      {
+                          "size":  "13",
+                          "price":  47
+                      },
+                      {
+                          "size":  "13.5",
+                          "price":  50
+                      },
+                      {
+                          "size":  "14",
+                          "price":  54
+                      },
+                      {
+                          "size":  "14.5",
+                          "price":  58
+                      },
+                      {
+                          "size":  "15",
+                          "price":  62
+                      },
+                      {
+                          "size":  "15.5",
+                          "price":  66
+                      },
+                      {
+                          "size":  "16",
+                          "price":  70
+                      }
+                  ]
+    },
+    {
+        "id":  "dede-23ebb90bf3484970a244ac34ea40586a",
+        "school":  "恩平工商會李琳明中學",
+        "name":  "Boy`s - Trousers",
+        "sizes":  [
+                      {
+                          "size":  "34",
+                          "price":  78
+                      },
+                      {
+                          "size":  "35",
+                          "price":  82
+                      },
+                      {
+                          "size":  "36",
+                          "price":  86
+                      },
+                      {
+                          "size":  "37",
+                          "price":  90
+                      },
+                      {
+                          "size":  "38.5",
+                          "price":  95
+                      },
+                      {
+                          "size":  "40",
+                          "price":  105
+                      },
+                      {
+                          "size":  "41.5",
+                          "price":  110
+                      }
+                  ]
+    },
+    {
+        "id":  "dede-9f2596db8d354570840d3e800f8b096c",
+        "school":  "恩平工商會李琳明中學",
+        "name":  "Girl`s - Skirt",
+        "sizes":  [
+                      {
+                          "size":  "21-22",
+                          "price":  68
+                      },
+                      {
+                          "size":  "23-24",
+                          "price":  73
+                      },
+                      {
+                          "size":  "25-26",
+                          "price":  78
+                      },
+                      {
+                          "size":  "27-28",
+                          "price":  83
+                      },
+                      {
+                          "size":  "29-30",
+                          "price":  88
+                      },
+                      {
+                          "size":  "31-32",
+                          "price":  95
+                      }
+                  ]
+    },
+    {
+        "id":  "dede-0ae17883724346ef8c50ee18d1cf75f4",
+        "school":  "恩平工商會李琳明中學",
+        "name":  "Non-Chinese Student - Dresses",
+        "sizes":  [
+                      {
+                          "size":  "32",
+                          "price":  76
+                      },
+                      {
+                          "size":  "34",
+                          "price":  82
+                      },
+                      {
+                          "size":  "36",
+                          "price":  88
+                      },
+                      {
+                          "size":  "38",
+                          "price":  94
+                      },
+                      {
+                          "size":  "40",
+                          "price":  100
+                      },
+                      {
+                          "size":  "42",
+                          "price":  106
+                      }
+                  ]
+    },
+    {
+        "id":  "dede-f0905b9d319242e2994976f67e377b49",
+        "school":  "恩平工商會李琳明中學",
+        "name":  "Boy`s \u0026 Girl`s - P.E. T - Shirt",
+        "sizes":  [
+                      {
+                          "size":  "34",
+                          "price":  36
+                      },
+                      {
+                          "size":  "36",
+                          "price":  40
+                      },
+                      {
+                          "size":  "38",
+                          "price":  44
+                      },
+                      {
+                          "size":  "40",
+                          "price":  48
+                      },
+                      {
+                          "size":  "43",
+                          "price":  52
+                      }
+                  ]
+    },
+    {
+        "id":  "dede-8a2e9e2443e14925b3523205e52fae5d",
+        "school":  "恩平工商會李琳明中學",
+        "name":  "Boy`s \u0026 Girl`s - P.E Shorts",
+        "sizes":  [
+                      {
+                          "size":  "S",
+                          "price":  36
+                      },
+                      {
+                          "size":  "M",
+                          "price":  40
+                      },
+                      {
+                          "size":  "L",
+                          "price":  44
+                      },
+                      {
+                          "size":  "XL",
+                          "price":  48
+                      },
+                      {
+                          "size":  "XXL",
+                          "price":  52
+                      }
+                  ]
+    },
+    {
+        "id":  "dede-14b9c426268540bd92868cc22de9f1d2",
+        "school":  "恩平工商會李琳明中學",
+        "name":  "Boys’\u0026 Girls’- Tracksuit",
+        "sizes":  [
+                      {
+                          "size":  "34",
+                          "price":  90
+                      },
+                      {
+                          "size":  "36",
+                          "price":  96
+                      },
+                      {
+                          "size":  "38",
+                          "price":  102
+                      },
+                      {
+                          "size":  "40",
+                          "price":  110
+                      },
+                      {
+                          "size":  "42",
+                          "price":  118
+                      }
+                  ]
+    }
+]

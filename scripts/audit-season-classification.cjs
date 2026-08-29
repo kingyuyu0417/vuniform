@@ -1,0 +1,11 @@
+const fs = require("fs");
+let text = fs.readFileSync("src/dedeLamLatestProducts.json", "utf8");
+if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+const products = JSON.parse(text);
+const winter = /冬季|冬裝|長袖|冷衫|校褸|棉褸|衛衣|外套|長褲|長西褲|頸巾/;
+const summer = /夏季|夏裝|短袖|短褲|短西褲|校裙/;
+const winterClues = /長西褲|長褲|校\s*褸|冷衫|棉褸|衛衣|外套|長袖|頸巾/;
+const summerClues = /短袖|短褲|短西褲|校裙|夏季|夏裝/;
+const misplacedWinter = products.filter((item) => winterClues.test(item.name) && !winter.test(item.name.replace(/\s+/g, "")));
+const misplacedSummer = products.filter((item) => summerClues.test(item.name) && winter.test(item.name.replace(/\s+/g, "")));
+console.log(JSON.stringify({ misplacedWinter: misplacedWinter.map((item) => ({ school: item.school, name: item.name })), misplacedSummer: misplacedSummer.map((item) => ({ school: item.school, name: item.name })) }, null, 2));

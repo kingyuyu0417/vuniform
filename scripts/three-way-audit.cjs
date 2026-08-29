@@ -1,0 +1,14 @@
+const fs = require("fs");
+const read = (file) => { let s = fs.readFileSync(file, "utf8"); if (s.charCodeAt(0) === 0xfeff) s = s.slice(1); return JSON.parse(s); };
+const source = read("fresh-2026-products.json");
+const app = read("src/dedeLamLatestProducts.json");
+const database = read("database-products-snapshot.json");
+const clean = (s) => String(s || "").replace(/（[^）]*）|\([^)]*\)/g, "").replace(/[–—]/g, "-").replace(/\s+/g, "").trim();
+const aliases = { "中華基督教會譚李麗芬紀念中學": "順德聯誼總會譚李麗芬紀念中學", "中華基督教會何福堂書院": "聖公會聖西門呂明才中學 / 何福堂中學", "中華基督教會基元中學": "基督教香港信義會基元中學", "元朗朗屏邨東莞學校": "東莞學校", "博愛醫院歷屆總理聯誼會梁省德學校": "梁省德學校" };
+const key = (x) => `${clean(aliases[x.school] || x.school)}\u0000${clean(x.name)}`;
+const sig = (x) => JSON.stringify(x.sizes || []);
+const compare = (target) => { const map = new Map(target.map(x => [key(x), x])); const missing=[], mismatch=[]; for(const x of source){const y=map.get(key(x));if(!y)missing.push(x);else if(sig(x)!==sig(y))mismatch.push({source:x,target:y});} return {missing,mismatch}; };
+const result = { source: source.length, app: app.length, database: database.length, app: compare(app), database: compare(database) };
+const summary = { source: source.length, app: app.length, database: database.length, appMissing: result.app.missing.length, appPriceMismatches: result.app.mismatch.length, databaseMissing: result.database.missing.length, databasePriceMismatches: result.database.mismatch.length, mismatchedSchools: [...new Set([...result.app.missing, ...result.database.missing].map(x => x.school))] };
+fs.writeFileSync("three-way-audit-report.json", `${JSON.stringify(result, null, 2)}\n`, "utf8");
+console.log(JSON.stringify(summary, null, 2));

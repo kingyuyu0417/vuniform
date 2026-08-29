@@ -1,0 +1,338 @@
+[
+  {
+    "school": "十八鄉鄉事委員會公益社中學",
+    "source": 3,
+    "app": 5,
+    "database": 3
+  },
+  {
+    "school": "中華基督教會何福堂書院",
+    "source": 9,
+    "app": 11,
+    "database": 9
+  },
+  {
+    "school": "中華基督教會基元中學",
+    "source": 0,
+    "app": 12,
+    "database": 9
+  },
+  {
+    "school": "中華基督教會譚李麗芬紀念中學",
+    "source": 12,
+    "app": 13,
+    "database": 12
+  },
+  {
+    "school": "中華廚藝學院",
+    "source": 0,
+    "app": 8,
+    "database": 0
+  },
+  {
+    "school": "仁愛堂幼稚園",
+    "source": 0,
+    "app": 13,
+    "database": 0
+  },
+  {
+    "school": "仁愛堂田家炳中學",
+    "source": 11,
+    "app": 18,
+    "database": 11
+  },
+  {
+    "school": "仁愛堂陳黃淑芳紀念中學",
+    "source": 0,
+    "app": 11,
+    "database": 12
+  },
+  {
+    "school": "仁愛堂劉皇發夫人小學",
+    "source": 9,
+    "app": 9,
+    "database": 25
+  },
+  {
+    "school": "仁德天主教小學",
+    "source": 1,
+    "app": 0,
+    "database": 0
+  },
+  {
+    "school": "元朗公立中學",
+    "source": 13,
+    "app": 10,
+    "database": 8
+  },
+  {
+    "school": "元朗天主教中學",
+    "source": 15,
+    "app": 20,
+    "database": 15
+  },
+  {
+    "school": "元朗朗屏邨東莞學校",
+    "source": 26,
+    "app": 27,
+    "database": 26
+  },
+  {
+    "school": "元朗商會小學",
+    "source": 21,
+    "app": 9,
+    "database": 9
+  },
+  {
+    "school": "元朗商會中學",
+    "source": 9,
+    "app": 13,
+    "database": 9
+  },
+  {
+    "school": "天水圍香島中學",
+    "source": 2,
+    "app": 0,
+    "database": 0
+  },
+  {
+    "school": "天主教培聖中學",
+    "source": 0,
+    "app": 10,
+    "database": 10
+  },
+  {
+    "school": "屯門天主教中學",
+    "source": 18,
+    "app": 14,
+    "database": 11
+  },
+  {
+    "school": "屯門官立中學",
+    "source": 2,
+    "app": 12,
+    "database": 12
+  },
+  {
+    "school": "屯門晨崗學校",
+    "source": 1,
+    "app": 1,
+    "database": 1
+  },
+  {
+    "school": "屯門晨輝學校",
+    "source": 2,
+    "app": 2,
+    "database": 2
+  },
+  {
+    "school": "屯門晨曦學校",
+    "source": 11,
+    "app": 11,
+    "database": 11
+  },
+  {
+    "school": "加拿大神召會嘉智中學",
+    "source": 10,
+    "app": 19,
+    "database": 10
+  },
+  {
+    "school": "可道中學(嗇色園主辦)",
+    "source": 11,
+    "app": 0,
+    "database": 0
+  },
+  {
+    "school": "伊斯蘭學校",
+    "source": 0,
+    "app": 11,
+    "database": 7
+  },
+  {
+    "school": "光明學校",
+    "source": 12,
+    "app": 13,
+    "database": 12
+  },
+  {
+    "school": "伯特利中學",
+    "source": 20,
+    "app": 29,
+    "database": 20
+  },
+  {
+    "school": "佛教沈香林紀念中學",
+    "source": 7,
+    "app": 12,
+    "database": 7
+  },
+  {
+    "school": "妙法寺劉金龍中學",
+    "source": 5,
+    "app": 5,
+    "database": 5
+  },
+  {
+    "school": "明愛元朗陳震夏中學",
+    "source": 2,
+    "app": 0,
+    "database": 0
+  },
+  {
+    "school": "東華三院辛亥年總理中學",
+    "source": 2,
+    "app": 3,
+    "database": 2
+  },
+  {
+    "school": "東華三院郭一葦中學",
+    "source": 0,
+    "app": 2,
+    "database": 1
+  },
+  {
+    "school": "東華三院鄺錫坤伉儷中學",
+    "source": 0,
+    "app": 7,
+    "database": 5
+  },
+  {
+    "school": "金巴崙長老會耀道中學",
+    "source": 5,
+    "app": 0,
+    "database": 0
+  },
+  {
+    "school": "長洲官立中學",
+    "source": 10,
+    "app": 15,
+    "database": 10
+  },
+  {
+    "school": "青山天主教小學",
+    "source": 9,
+    "app": 9,
+    "database": 9
+  },
+  {
+    "school": "保良局方王錦全小學",
+    "source": 24,
+    "app": 24,
+    "database": 24
+  },
+  {
+    "school": "保良局白普理幼稚園",
+    "source": 0,
+    "app": 8,
+    "database": 0
+  },
+  {
+    "school": "保良局西區婦女福利會馮李佩瑤小學",
+    "source": 9,
+    "app": 9,
+    "database": 9
+  },
+  {
+    "school": "保良局梁周順琴小學",
+    "source": 9,
+    "app": 9,
+    "database": 9
+  },
+  {
+    "school": "保良局莊啟程第二小學",
+    "source": 10,
+    "app": 10,
+    "database": 10
+  },
+  {
+    "school": "保良局董玉娣中學",
+    "source": 10,
+    "app": 10,
+    "database": 10
+  },
+  {
+    "school": "南屯門官立中學",
+    "source": 12,
+    "app": 15,
+    "database": 12
+  },
+  {
+    "school": "迦密唐賓南紀念中學",
+    "source": 0,
+    "app": 14,
+    "database": 0
+  },
+  {
+    "school": "香海正覺蓮社佛教梁植偉中學",
+    "source": 11,
+    "app": 16,
+    "database": 11
+  },
+  {
+    "school": "香港青年協會李兆基書院",
+    "source": 4,
+    "app": 4,
+    "database": 4
+  },
+  {
+    "school": "恩平工商會李琳明中學",
+    "source": 14,
+    "app": 12,
+    "database": 0
+  },
+  {
+    "school": "浸信會永隆中學",
+    "source": 15,
+    "app": 10,
+    "database": 9
+  },
+  {
+    "school": "博愛醫院歷屆總理聯誼會梁省德學校",
+    "source": 9,
+    "app": 9,
+    "database": 9
+  },
+  {
+    "school": "嗇色園主辦可銘學校",
+    "source": 30,
+    "app": 30,
+    "database": 30
+  },
+  {
+    "school": "新界鄉議局元朗區中學",
+    "source": 12,
+    "app": 8,
+    "database": 8
+  },
+  {
+    "school": "新會商會中學",
+    "source": 11,
+    "app": 13,
+    "database": 11
+  },
+  {
+    "school": "聖公會偉倫小學",
+    "source": 23,
+    "app": 23,
+    "database": 23
+  },
+  {
+    "school": "僑港伍氏宗親會伍時暢紀念學校",
+    "source": 14,
+    "app": 14,
+    "database": 14
+  },
+  {
+    "school": "趙聿修紀念中學",
+    "source": 12,
+    "app": 0,
+    "database": 0
+  },
+  {
+    "school": "鐘聲慈善社胡陳金枝中學",
+    "source": 9,
+    "app": 12,
+    "database": 9
+  }
+]

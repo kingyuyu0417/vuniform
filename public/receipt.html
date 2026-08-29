@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>電子收據</title>
+  <style>
+    :root { color: #17212b; font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif; }
+    body { margin: 0; background: #eef1f5; }
+    main { max-width: 520px; margin: 24px auto; padding: 0 16px 32px; }
+    .receipt { background: #fff; padding: 28px 24px; box-shadow: 0 8px 24px rgba(24, 42, 58, .12); }
+    header { text-align: center; border-bottom: 2px solid #1f3a5f; padding-bottom: 18px; }
+    .company-logo { display: block; width: 76px; height: 52px; margin: 0 auto 10px; background: #fff; border: 0; }
+    h1 { margin: 0; font-size: 21px; letter-spacing: 0; }
+    .subtitle { color: #66717d; font-size: 12px; margin-top: 5px; }
+    dl { display: grid; grid-template-columns: 92px 1fr; gap: 7px 12px; margin: 20px 0; font-size: 13px; }
+    dt { color: #66717d; } dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+    .items { border-top: 1px solid #dbe1e7; border-bottom: 1px solid #dbe1e7; padding: 12px 0; }
+    .item { padding: 8px 0; }
+    .item-main, .item-sub, .total { display: flex; justify-content: space-between; gap: 12px; }
+    .item-main { font-weight: 600; font-size: 14px; }
+    .item-sub { color: #66717d; font-size: 12px; margin-top: 3px; }
+    .item-sub span:first-child { color: #999; min-width: 40px; }
+    .summary { padding-top: 16px; font-size: 14px; }
+    .total { font-size: 19px; font-weight: 700; color: #1f3a5f; margin-top: 10px; }
+    footer { text-align: center; color: #66717d; font-size: 12px; line-height: 1.6; margin-top: 24px; }
+    .actions { display: flex; gap: 8px; margin-top: 16px; }
+    button { flex: 1; border: 0; border-radius: 7px; padding: 12px; background: #1f3a5f; color: #fff; font-size: 14px; cursor: pointer; }
+    .secondary { background: #fff; color: #1f3a5f; border: 1px solid #1f3a5f; }
+    .error { text-align: center; background: #fff; padding: 32px 20px; color: #b42318; }
+    @media print {
+      body { background: #fff; }
+      main { margin: 0; max-width: none; padding: 0; }
+      .receipt { box-shadow: none; padding: 0; }
+      .actions { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main id="app"></main>
+  <script>
+    const app = document.getElementById("app");
+    const money = (value) => "$" + Math.round(Number(value) || 0).toLocaleString("en-HK");
+    const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
+    const text = (value, fallback = "-") => escapeHtml(value == null || value === "" ? fallback : value);
+    const sizeLabel = (item) => item.length ? `${item.size}／${item.length}` : item.size;
+    const getSizeDimensionLabel = (productName) => {
+      if (!productName) return "尺碼";
+      const name = String(productName);
+      return /(褲|短褲|長褲|西褲|運動褲|裙)/.test(name) ? "腰圍" : "尺碼";
+    };
+    const formatSizeDisplay = (productName, size, length) => {
+      const isDimensioned = /(褲|短褲|長褲|西褲|運動褲|裙)/.test(productName);
+      if (isDimensioned && length) {
+        return `腰圍：${text(size)} 長度：${text(length)}`;
+      } else if (isDimensioned) {
+        return `腰圍：${text(size)}`;
+      } else {
+        return `尺碼：${text(size)}`;
+      }
+    };
+    const render = (order) => {
+      document.title = "電子收據 #" + text(order.id).toUpperCase();
+      const items = Array.isArray(order.items) ? order.items : [];
+      app.innerHTML = `
+        <section class="receipt">
+          <header>
+            <h1>Victoria Uniform 校服銷售</h1>
+            <div class="subtitle">電子銷售單 ELECTRONIC RECEIPT</div>
+          </header>
+          <dl>
+            <dt>收據編號</dt><dd>#${text(order.id).toUpperCase()}</dd>
+            <dt>交易日期</dt><dd>${text(order.date)} ${text(order.time, "")}</dd>
+            <dt>學校</dt><dd>${text(order.school)}</dd>
+          </dl>
+          <div class="items">
+              ${items.map((item) => `<div class="item"><div class="item-main"><span>${text(item.name)}</span><span>${money(Number(item.price) * Number(item.qty))}</span></div><div class="item-sub"><span>${formatSizeDisplay(item.name, item.size, item.length)}</span></div><div class="item-sub"><span>數量</span><span>${text(item.qty, "0")} 件 × ${money(item.price)}</span></div></div>`).join("")}
+          </div>
+          <div class="summary">
+            <div class="item-sub"><span>商品件數</span><span>${text(order.itemCount, "0")}</span></div>
+            <div class="total"><span>應付總額</span><span>${money(order.total)}</span></div>
+            <div class="item-sub" style="margin-top:8px"><span>交易狀態</span><span>已完成</span></div>
+          </div>
+          <div class="policy">換貨條款：全新校服可於購買日起一個月內到指定門店換貨。<br>不設退款；貨品必須未經洗滌、未曾使用，並保留完整吊牌及剪牌，否則恕不接受換貨。</div>
+          <footer>多謝惠顧，歡迎重臨</footer>
+        </section>
+        <div class="actions"><button onclick="window.print()">列印／另存為 PDF</button><button class="secondary" onclick="window.close()">關閉</button></div>`;
+    };
+    try {
+      const value = new URLSearchParams(location.search).get("data");
+      if (!value) throw new Error("missing receipt data");
+      const binary = atob(value);
+      const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+      const json = new TextDecoder("utf-8").decode(bytes);
+      render(JSON.parse(json));
+    } catch (error) {
+      app.innerHTML = '<div class="error">收據連結無效或已損壞，請向店員索取新的 QR Code。</div>';
+    }
+  </script>
+</body>
+</html>
