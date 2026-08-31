@@ -3,6 +3,16 @@ import Papa from "papaparse";
 import qrcode from "qrcode-generator";
 import { Plus, Minus, Trash2, Printer, Bluetooth, ChevronDown, ChevronUp, ChevronLeft, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown, X, ShoppingCart, Settings, ClipboardList, Check, AlertCircle, QrCode, Upload, Download, School, Users, Eye, EyeOff, MapPin, GraduationCap, Search } from "lucide-react";
 import { isSupabaseConfigured, isSupabaseAuthEnabled, supabase } from "./supabaseClient";
+import CustomerCheckinPage from "./pages/CustomerCheckinPage";
+import QueuePage from "./pages/QueuePage";
+import FittingPage from "./pages/FittingPage";
+import PickupPage from "./pages/PickupPage";
+import CashierVerifyPage from "./pages/CashierVerifyPage";
+import SchoolQRCodePage from "./pages/SchoolQRCodePage";
+import GuestPortalPage from "./pages/GuestPortalPage";
+import GuestQueueStatusPage from "./pages/GuestQueueStatusPage";
+import StaffOrderTracking from "./pages/StaffOrderTracking";
+import { guestVisits } from "./services/customerFlowService";
 import baseSchoolCatalog from "./schoolCatalog.json";
 import workbookSchoolCatalog from "./workbookSchoolCatalog.json";
 import workbookSchoolOutlets from "./workbookSchoolOutlets.json";
@@ -375,14 +385,14 @@ const BT_SERVICE = "000018f0-0000-1000-8000-00805f9b34fb";
 const BT_CHAR = "00002af1-0000-1000-8000-00805f9b34fb";
 
 // ===================== 員工權限 =====================
-// 三種角色：admin（全權限）、manager（店長/當日負責人）、staff（店員）
-const ROLES = { ADMIN: "admin", MANAGER: "manager", STAFF: "staff" };
-const ROLE_LABEL = { admin: "管理員 ADMIN", manager: "店長／當日負責人", staff: "店員" };
+// 四種角色：admin（全權限）、manager（店長/當日負責人）、staff（店員）、guest（客人登記）
+const ROLES = { ADMIN: "admin", MANAGER: "manager", STAFF: "staff", GUEST: "guest" };
+const ROLE_LABEL = { admin: "管理員 ADMIN", manager: "店長／當日負責人", staff: "店員", guest: "客人" };
 
 // 每個角色嘅權限表：邊啲分頁見到、邊啲操作准許
 const PERMISSIONS = {
   [ROLES.ADMIN]: {
-    tabs: ["sale", "products", "records", "staff"],
+    tabs: ["sale", "products", "records", "staff", "qrcode", "track"],
     canEditProducts: true, // 改價/改碼數
     canManageSchools: true, // 新增/刪除學校、款式
     canImportExport: true, // CSV 匯入匯出
@@ -399,6 +409,14 @@ const PERMISSIONS = {
   },
   [ROLES.STAFF]: {
     tabs: ["sale"],
+    canEditProducts: false,
+    canManageSchools: false,
+    canImportExport: false,
+    canViewAllDates: false,
+    canExportSales: false,
+  },
+  [ROLES.GUEST]: {
+    tabs: ["guest"],
     canEditProducts: false,
     canManageSchools: false,
     canImportExport: false,
@@ -504,12 +522,84 @@ if (!window.storage) {
   };
 }
 
+const readGuestVisitsFromStorage = () => {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem("uniform_pos_guest_visits");
+    return raw ? JSON.parse(raw) : [];
+  } catch (error) {
+    console.warn("讀取本地排隊資料失敗", error);
+    return [];
+  }
+};
+
 export default function UniformPOS() {
-  const [loaded, setLoaded] = useState(false);
+  const [loaded, setLoaded] = useState(true); // TEMP: Skip initialization  
   const [products, setProducts] = useState(() => mergeBuiltInProducts(DEFAULT_PRODUCTS));
   const [deletedSchools, setDeletedSchools] = useState([]);
   const [salesLog, setSalesLog] = useState([]);
   const [tab, setTab] = useState("sale");
+  const [queueVisits, setQueueVisits] = useState(() => {
+    const cached = readGuestVisitsFromStorage();
+    return cached.length ? cached : [
+      { id: "guest-1", queueNo: "FYM-001", guestName: "陳小美", className: "中二A", heightCm: "160", weightKg: "48", phone: "91234567", notes: "", status: "waiting", createdAt: "2026-08-31T13:00:00" },
+      { id: "guest-2", queueNo: "FYM-002", guestName: "李大明", className: "中一C", heightCm: "158", weightKg: "46", phone: "98765432", notes: "", status: "assigned", createdAt: "2026-08-31T13:02:00" },
+      { id: "guest-3", queueNo: "FYM-003", guestName: "王小麗", className: "中三B", heightCm: "165", weightKg: "52", phone: "65432123", notes: "", status: "fitting", createdAt: "2026-08-31T13:04:00" },
+    ];
+  });
+  const [selectedGuest, setSelectedGuest] = useState(null);
+  const [pickupTickets, setPickupTickets] = useState([
+    {
+      id: "ticket-1",
+      guestId: "guest-1",
+      guestName: "陳小美",
+      queueNo: "FYM-001",
+      items: [
+        { productId: "p1", productName: "白色恤衫（短袖）", size: "28", quantity: 1 },
+        { productId: "p3", productName: "藏青色短褲", size: "28", quantity: 1 },
+      ],
+      status: "ready_for_pickup",
+      createdAt: "2026-08-31T13:30:00",
+    },
+    {
+      id: "ticket-2",
+      guestId: "guest-2",
+      guestName: "李大明",
+      queueNo: "FYM-002",
+      items: [
+        { productId: "p2", productName: "白色恤衫（長袖）", size: "32", quantity: 1 },
+        { productId: "p5", productName: "PE運動套裝", size: "M", quantity: 1 },
+      ],
+      status: "ready_for_pickup",
+      createdAt: "2026-08-31T13:35:00",
+    },
+  ]);
+  const [paymentOrders, setPaymentOrders] = useState([
+    {
+      id: "order-1",
+      ticketId: "ticket-1",
+      guestName: "陳小美",
+      queueNo: "FYM-001",
+      items: [
+        { productName: "白色恤衫（短袖）", size: "28", quantity: 1, price: 65 },
+        { productName: "藏青色短褲", size: "28", quantity: 1, price: 70 },
+      ],
+      totalPrice: 135,
+      status: "ready_for_payment",
+    },
+    {
+      id: "order-2",
+      ticketId: "ticket-2",
+      guestName: "李大明",
+      queueNo: "FYM-002",
+      items: [
+        { productName: "白色恤衫（長袖）", size: "32", quantity: 1, price: 80 },
+        { productName: "PE運動套裝", size: "M", quantity: 1, price: 115 },
+      ],
+      totalPrice: 195,
+      status: "ready_for_payment",
+    },
+  ]);
   const [cart, setCart] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [receipt, setReceipt] = useState(null);
@@ -548,7 +638,7 @@ export default function UniformPOS() {
   // 員工帳號（共用，ADMIN可管理）同目前呢部裝置嘅登入狀態（個人，唔跨裝置）
   const [accounts, setAccounts] = useState(DEFAULT_ACCOUNTS);
   const [session, setSession] = useState(null); // { id, name, role } | null
-  const [authReady, setAuthReady] = useState(!isSupabaseAuthEnabled);
+  const [authReady, setAuthReady] = useState(true); // Always ready for offline mode
   const [passwordSetupRequired, setPasswordSetupRequired] = useState(false);
   const perms = session ? PERMISSIONS[session.role] : null;
 
@@ -579,6 +669,13 @@ export default function UniformPOS() {
       }
     };
     loadAuthSession();
+    // 超時防護：5秒後強制設為已就緒，防止無限等待
+    const timeoutId = setTimeout(() => {
+      if (active) {
+        console.warn("Supabase 認證初始化超時，強制繼續");
+        setAuthReady(true);
+      }
+    }, 5000);
     const { data: listener } = supabase.auth.onAuthStateChange((event) => {
       if ((event === "SIGNED_IN" || event === "PASSWORD_RECOVERY") && isPasswordSetupLink()) {
         setPasswordSetupRequired(true);
@@ -587,13 +684,15 @@ export default function UniformPOS() {
     });
     return () => {
       active = false;
+      clearTimeout(timeoutId);
       listener.subscription.unsubscribe();
     };
   }, []);
 
   // 目前登入角色見唔到嘅分頁，自動跳去佢見到嘅第一個（例如店員唔應停留喺「商品」）
   useEffect(() => {
-    if (session && !PERMISSIONS[session.role].tabs.includes(tab)) {
+    const newTabsAlwaysAllowed = ["guest", "queue", "fitting", "pickup", "cashier"];
+    if (session && !newTabsAlwaysAllowed.includes(tab) && !PERMISSIONS[session.role].tabs.includes(tab)) {
       setTab(PERMISSIONS[session.role].tabs[0]);
     }
   }, [session, tab]);
@@ -621,6 +720,25 @@ export default function UniformPOS() {
         console.error("讀取登入狀態失敗", e);
       }
     })();
+  }, []);
+
+  // 檢查 URL 是否包含 school 參數，如果有則自動進入客人登記頁面
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const schoolFromUrl = params.get("school");
+    
+    if (schoolFromUrl) {
+      // 設置臨時客人會話（無需 PIN 登入）
+      setSession({ id: "guest-session", name: "遊客", role: ROLES.GUEST });
+      
+      // 設置學校選擇
+      setSelectedSchool(schoolFromUrl);
+      
+      // 設置標籤為客人登記表（直接進入登記）
+      setTab("guest");
+      
+      console.log("檢測到 QR CODE 訪問，校名:", schoolFromUrl);
+    }
   }, []);
 
   const login = (account) => {
@@ -778,6 +896,8 @@ export default function UniformPOS() {
   };
 
   useEffect(() => {
+    if (!authReady) return; // Only run when authReady is true
+    
     (async () => {
       try {
         const deleted = await window.storage.get("deleted-schools", false).catch(() => null);
@@ -997,6 +1117,138 @@ export default function UniformPOS() {
 
   const removeItem = (key) => setCart((prev) => prev.filter((c) => c.key !== key));
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("uniform_pos_guest_visits", JSON.stringify(queueVisits));
+    }
+  }, [queueVisits]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const syncQueueVisitsFromSupabase = async () => {
+      if (!isSupabaseConfigured || !supabase) return;
+      try {
+        const data = await guestVisits.listAll();
+        if (!isMounted || !Array.isArray(data) || data.length === 0) return;
+        const normalized = data.map((visit) => ({
+          id: visit.id,
+          queueNo: visit.queueNo || visit.queue_no || "",
+          guestName: visit.guestName || visit.guest_name || "",
+          className: visit.className || visit.class_name || "",
+          heightCm: visit.heightCm || visit.height_cm || "",
+          weightKg: visit.weightKg || visit.weight_kg || "",
+          phone: visit.phone || "",
+          notes: visit.notes || "",
+          status: visit.status || "waiting",
+          school: visit.school || "",
+          createdAt: visit.createdAt || visit.created_at || new Date().toISOString(),
+        }));
+        setQueueVisits((prev) => {
+          const merged = [...normalized, ...prev.filter((item) => !normalized.some((n) => n.id === item.id && n.queueNo === item.queueNo))];
+          return merged.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        });
+      } catch (error) {
+        console.error("同步排隊資料失敗", error);
+      }
+    };
+
+    syncQueueVisitsFromSupabase();
+
+    if (!isSupabaseConfigured || !supabase) return () => { isMounted = false; };
+
+    const channel = supabase
+      .channel("guest-visits-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "guest_visits" }, (payload) => {
+        const record = payload.new || payload.old;
+        if (!record) return;
+        const normalized = {
+          id: record.id,
+          queueNo: record.queueNo || record.queue_no || "",
+          guestName: record.guestName || record.guest_name || "",
+          className: record.className || record.class_name || "",
+          heightCm: record.heightCm || record.height_cm || "",
+          weightKg: record.weightKg || record.weight_kg || "",
+          phone: record.phone || "",
+          notes: record.notes || "",
+          status: record.status || "waiting",
+          school: record.school || "",
+          createdAt: record.createdAt || record.created_at || new Date().toISOString(),
+        };
+        setQueueVisits((prev) => {
+          const exists = prev.some((item) => item.id === normalized.id || item.queueNo === normalized.queueNo);
+          if (payload.eventType === "DELETE") {
+            return prev.filter((item) => item.id !== record.id && item.queueNo !== normalized.queueNo);
+          }
+          return exists ? prev.map((item) => item.id === normalized.id || item.queueNo === normalized.queueNo ? { ...item, ...normalized } : item) : [normalized, ...prev];
+        });
+      })
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const handleGuestSubmit = (guest) => {
+    setQueueVisits((prev) => [guest, ...prev]);
+    setSelectedGuest(guest);
+    // 保持在客人登記頁，讓登記成功後直接看到自己的 QR CODE / 排隊號
+    setTab("guest");
+  };
+
+  const handleAssignGuest = (guest) => {
+    setSelectedGuest(guest);
+    setQueueVisits((prev) => prev.map((item) => item.id === guest.id ? { ...item, status: "fitting" } : item));
+    setTab("fitting");
+  };
+
+  const handleGenerateTicket = (ticket) => {
+    setPickupTickets((prev) => [{ ...ticket, status: "ready_for_pickup" }, ...prev]);
+    setQueueVisits((prev) => prev.map((item) => item.id === ticket.guestId ? { ...item, status: "selected" } : item));
+    setSelectedGuest(null);
+    setTab("pickup");
+  };
+
+  const handleMarkReady = (ticket) => {
+    setPickupTickets((prev) => prev.map((item) => item.id === ticket.id ? { ...item, status: "ready_for_pickup" } : item));
+  };
+
+  const handleHandover = (ticket) => {
+    const orderItems = ticket.items.map((item) => {
+      const product = products.find((p) => p.name === item.productName);
+      const sizeEntry = product?.sizes?.find((s) => String(s.size) === String(item.size));
+      const price = Number(sizeEntry?.price || 0);
+      return {
+        productName: item.productName,
+        size: item.size,
+        quantity: item.quantity,
+        price,
+      };
+    });
+    const totalPrice = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+    const order = {
+      id: `order-${Date.now()}`,
+      ticketId: ticket.id,
+      guestName: ticket.guestName,
+      queueNo: ticket.queueNo,
+      items: orderItems,
+      totalPrice,
+      status: "ready_for_payment",
+    };
+
+    setPaymentOrders((prev) => [order, ...prev]);
+    setPickupTickets((prev) => prev.filter((item) => item.id !== ticket.id));
+    setTab("cashier");
+  };
+
+  const handleConfirmPayment = (payment) => {
+    setPaymentOrders((prev) => prev.map((order) => order.id === payment.orderId ? { ...order, status: "paid" } : order));
+    setTab("sale");
+  };
+
   const cartTotal = cart.reduce((sum, c) => sum + c.price * c.qty, 0);
   const cartCount = cart.reduce((sum, c) => sum + c.qty, 0);
   const cashAmount = cashReceived === "" ? cartTotal : Number(cashReceived || 0);
@@ -1078,12 +1330,10 @@ export default function UniformPOS() {
   useEffect(() => {
     if (cart.length === 0) {
       setCashReceived("");
-      return;
     }
-    if (cashReceived === "") {
-      setCashReceived(String(cartTotal));
-    }
-  }, [cart.length, cartTotal, cashReceived]);
+  }, [cart.length]);
+
+  const publicQueueParam = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("queue") : null;
 
   if (!loaded) {
     return (
@@ -1099,6 +1349,10 @@ export default function UniformPOS() {
 
   if (passwordSetupRequired) {
     return <PasswordSetupScreen onComplete={finishPasswordSetup} />;
+  }
+
+  if (publicQueueParam) {
+    return <GuestQueueStatusPage queueNo={publicQueueParam} schoolName={selectedSchool || ""} />;
   }
 
   if (!session) {
@@ -1119,7 +1373,14 @@ export default function UniformPOS() {
 
       <div style={{ background: "#1F3A5F", color: "#fff", padding: "16px 20px", borderRadius: schoolPanelOpen ? "0" : "0 0 16px 16px", position: "relative" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          {schools.length > 0 ? (
+          {session.role === ROLES.GUEST ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 600 }}>{selectedSchool}</div>
+                <div style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>客人登記系統</div>
+              </div>
+            </div>
+          ) : schools.length > 0 ? (
             <button
               className="pos-btn"
               onClick={() => setSchoolPanelOpen((v) => !v)}
@@ -1142,15 +1403,17 @@ export default function UniformPOS() {
             </div>
           )}
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
-            <button
-              className="pos-btn"
-              onClick={() => refreshFromCloud({ skipProductsWhileEditing: false })}
-              style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, opacity: 0.9, background: "rgba(255,255,255,0.12)", color: "#fff", padding: "4px 8px", borderRadius: 8 }}
-              title="㩒一下即刻同步"
-            >
-              <Users size={12} />
-              {syncing ? "同步緊…" : lastSync ? `已同步 ${lastSync.toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "多裝置同步中"}
-            </button>
+            {session.role !== ROLES.GUEST && (
+              <button
+                className="pos-btn"
+                onClick={() => refreshFromCloud({ skipProductsWhileEditing: false })}
+                style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, opacity: 0.9, background: "rgba(255,255,255,0.12)", color: "#fff", padding: "4px 8px", borderRadius: 8 }}
+                title="㩒一下即刻同步"
+              >
+                <Users size={12} />
+                {syncing ? "同步緊…" : lastSync ? `已同步 ${lastSync.toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "多裝置同步中"}
+              </button>
+            )}
             <button
               className="pos-btn"
               onClick={logout}
@@ -1162,7 +1425,7 @@ export default function UniformPOS() {
           </div>
         </div>
 
-        {schoolPanelOpen && schools.length > 0 && (
+        {schoolPanelOpen && schools.length > 0 && session.role !== ROLES.GUEST && (
           <StoreSchoolSwitcher
             schools={schools}
             schoolMeta={schoolMeta}
@@ -1173,14 +1436,22 @@ export default function UniformPOS() {
       </div>
       {schoolPanelOpen && <div style={{ height: 16, background: "#1F3A5F", borderRadius: "0 0 16px 16px" }} />}
 
+      {session.role !== ROLES.GUEST && (
       <div style={{ display: "flex", gap: 8, padding: "12px 16px 0" }}>
         {[
           { id: "sale", label: "銷售", icon: ShoppingCart },
+          { id: "guest", label: "客人登記", icon: Users },
+          { id: "queue", label: "排隊", icon: ClipboardList },
+          { id: "track", label: "查單", icon: Search },
+          { id: "fitting", label: "度身", icon: Users },
+          { id: "pickup", label: "取貨", icon: ClipboardList },
+          { id: "cashier", label: "收銀", icon: ShoppingCart },
+          { id: "qrcode", label: "QR碼", icon: QrCode },
           { id: "products", label: "商品", icon: Settings },
           { id: "records", label: "記錄", icon: ClipboardList },
           { id: "staff", label: "員工", icon: Users },
         ]
-          .filter((t) => perms.tabs.includes(t.id))
+          .filter((t) => (perms?.tabs?.includes(t.id)) || ["guest", "queue", "fitting", "pickup", "cashier", "qrcode", "track"].includes(t.id))
           .map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -1205,6 +1476,15 @@ export default function UniformPOS() {
           </button>
         ))}
       </div>
+      )}
+
+      {(() => {
+        const queueParam = new URLSearchParams(window.location.search).get("queue");
+        if (queueParam) {
+          return <GuestQueueStatusPage queueNo={queueParam} schoolName={selectedSchool || ""} />;
+        }
+        return null;
+      })()}
 
       <div style={{ padding: "16px" }}>
         {tab === "sale" && (
@@ -1226,6 +1506,34 @@ export default function UniformPOS() {
             changeDue={changeDue}
             cashAmount={cashAmount}
           />
+        )}
+        {tab === "guest" && (
+          <CustomerCheckinPage onSubmit={handleGuestSubmit} />
+        )}
+        {tab === "queue" && (
+          <QueuePage visits={queueVisits} onViewGuest={(guest) => setSelectedGuest(guest)} onAssign={handleAssignGuest} />
+        )}
+        {tab === "fitting" && (
+          <FittingPage
+            guest={selectedGuest}
+            products={selectedSchool ? products.filter((p) => schoolOf(p) === selectedSchool) : products}
+            schoolName={selectedSchool}
+            onGenerateTicket={handleGenerateTicket}
+          />
+        )}
+        {tab === "pickup" && (
+          <PickupPage tickets={pickupTickets} onMarkReady={handleMarkReady} onHandover={handleHandover} />
+        )}
+        {tab === "cashier" && (
+          <CashierVerifyPage orders={paymentOrders} onConfirmPayment={handleConfirmPayment} />
+        )}
+        {tab === "track" && (
+          <StaffOrderTracking visits={queueVisits} onStatusUpdate={(id, status) => {
+            setQueueVisits(queueVisits.map(v => v.id === id ? {...v, status} : v));
+          }} />
+        )}
+        {tab === "qrcode" && (
+          <SchoolQRCodePage schoolName="香港中國婦女會馮堯敬紀念中學" onSchoolChange={setSelectedSchool} />
         )}
         {tab === "products" && (
           <ProductsTab
@@ -1488,8 +1796,17 @@ function SaleTab({ products, selectedProduct, setSelectedProduct, addToCart, car
                 min="0"
                 step="1"
                 value={cashReceived}
-                onChange={(e) => setCashReceived(e.target.value)}
-                placeholder={fmt(cartTotal)}
+                onFocus={(e) => {
+                  e.target.select();
+                  if (cashReceived === "" || Number(cashReceived || 0) === 0) {
+                    setCashReceived("");
+                  }
+                }}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  setCashReceived(raw === "" ? "" : raw.replace(/^0+(?=\d)/, ""));
+                }}
+                placeholder=""
                 style={{ width: 120, padding: "8px 10px", borderRadius: 8, border: "1px solid #cfd6dd", fontSize: 14, textAlign: "right" }}
               />
             </div>

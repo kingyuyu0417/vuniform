@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "deploy:check": "npm run build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "setup:supabase": "node scripts/setup-wizard.js",
+    "verify:supabase": "node scripts/setup-supabase.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
