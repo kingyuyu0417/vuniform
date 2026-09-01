@@ -1412,7 +1412,7 @@ export default function UniformPOS() {
   }
 
   if (location.pathname === "/" || location.pathname === "") {
-    return <PublicHomePage onCheckin={() => navigate(`/checkin?school_id=${encodeURIComponent(DESIGNATED_SCHOOL)}`)} onStaffLogin={() => navigate("/staff")} />;
+    return <PublicHomePage schools={[DESIGNATED_SCHOOL, ...schools]} onStaffLogin={() => navigate("/staff")} />;
   }
 
   if (!session) {
@@ -3175,7 +3175,11 @@ function SchoolSwitcher({ schools, schoolMeta, selectedSchool, onPick }) {
           {typedSchools.length > 6 && searchInput}
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginBottom: 6 }}>第三步：揀學校</div>
  */
-function PublicHomePage({ onCheckin, onStaffLogin }) {
+function PublicHomePage({ schools = [], onStaffLogin }) {
+  const navigate = useNavigate();
+  const [selectedSchoolForRegistration, setSelectedSchoolForRegistration] = useState("");
+  const schoolOptions = [...new Set(schools.filter(Boolean))];
+
   return (
     <div style={{ minHeight: "100vh", background: "#F4F7FB", padding: "32px 16px", boxSizing: "border-box", fontFamily: "system-ui, -apple-system, sans-serif" }}>
       <div style={{ maxWidth: 560, margin: "0 auto", display: "grid", gap: 18 }}>
@@ -3185,10 +3189,26 @@ function PublicHomePage({ onCheckin, onStaffLogin }) {
           <div style={{ marginTop: 10, fontSize: 14, opacity: 0.82 }}>請選擇你要使用的服務</div>
         </div>
 
-        <button type="button" onClick={onCheckin} style={{ border: "1px solid #D5DDE5", borderRadius: 14, background: "#fff", padding: 22, textAlign: "left", cursor: "pointer" }}>
+        <div style={{ border: "1px solid #D5DDE5", borderRadius: 14, background: "#fff", padding: 22 }}>
           <div style={{ fontSize: 18, fontWeight: 800, color: "#1F3A5F" }}>登記學校</div>
-          <div style={{ marginTop: 6, fontSize: 13, color: "#66717D" }}>客人登記、排隊及查詢進度</div>
-        </button>
+          <div style={{ marginTop: 6, fontSize: 13, color: "#66717D" }}>請先選擇學校，再進行客人登記</div>
+          <select
+            value={selectedSchoolForRegistration}
+            onChange={(event) => setSelectedSchoolForRegistration(event.target.value)}
+            style={{ width: "100%", marginTop: 14, padding: "11px 12px", border: "1px solid #D5DDE5", borderRadius: 8, fontSize: 14, background: "#fff" }}
+          >
+            <option value="">請選擇學校</option>
+            {schoolOptions.map((school) => <option key={school} value={school}>{school}</option>)}
+          </select>
+          <button
+            type="button"
+            disabled={!selectedSchoolForRegistration}
+            onClick={() => navigate(`/checkin?school_id=${encodeURIComponent(selectedSchoolForRegistration)}`)}
+            style={{ width: "100%", marginTop: 12, border: "none", borderRadius: 10, background: selectedSchoolForRegistration ? "#1F3A5F" : "#C7D0DA", color: "#fff", padding: "12px 16px", fontWeight: 800, cursor: selectedSchoolForRegistration ? "pointer" : "not-allowed" }}
+          >
+            開始登記
+          </button>
+        </div>
 
         <button type="button" onClick={onStaffLogin} style={{ border: "none", borderRadius: 14, background: "#D97757", color: "#fff", padding: 22, textAlign: "left", cursor: "pointer" }}>
           <div style={{ fontSize: 18, fontWeight: 800 }}>登入後台</div>
