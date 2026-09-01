@@ -1562,6 +1562,7 @@ export default function UniformPOS() {
             element={
               <FittingPage
                 guest={selectedGuest}
+                currentSchoolId={selectedSchool || publicRouteSchool}
                 selectedOrderId={routeId || selectedGuest?.id || ""}
                 products={selectedSchool ? products.filter((p) => schoolOf(p) === selectedSchool) : products}
                 schoolName={selectedSchool}
@@ -1686,6 +1687,7 @@ export default function UniformPOS() {
                 {tab === "fitting" && (
                   <FittingPage
                     guest={selectedGuest}
+                    currentSchoolId={selectedSchool || publicRouteSchool}
                     products={selectedSchool ? products.filter((p) => schoolOf(p) === selectedSchool) : products}
                     schoolName={selectedSchool}
                     onGenerateTicket={handleGenerateTicket}

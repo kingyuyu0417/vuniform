@@ -48,6 +48,7 @@ const emptySelection = { productId: "", size: "", quantity: 1 };
 
 export default function FittingPage({ currentSchoolId = "", products = defaultProducts, selectedOrderId = "", onStatusChange }) {
   const navigate = useNavigate();
+  const safeProducts = Array.isArray(products) ? products.filter(Boolean) : [];
   const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [selection, setSelection] = useState([{ ...emptySelection }]);
@@ -83,7 +84,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
 
     try {
       const rows = await queueOrderService.listOrders({ schoolId: currentSchoolId });
-      const normalized = Array.isArray(rows) ? rows.map(getSafeOrder) : [];
+      const normalized = Array.isArray(rows) ? rows.filter(Boolean).map(getSafeOrder) : [];
       setOrders(normalized);
 
       if (selectedOrderId) {
@@ -92,6 +93,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
           safeSetSelectedOrder(match);
           return;
         }
+        setNotice("找不到此訂單，請返回排隊頁重新選擇客人。");
       }
 
       const nextSelected = normalized.find((o) => [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STATUS.READY].includes(o.status)) || null;
@@ -306,7 +308,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       .filter((row) => row && row.productId && row.size)
       .map((row) => ({
         product_id: row.productId,
-        product_name: products.find((p) => p.id === row.productId)?.name || "未知產品",
+        product_name: safeProducts.find((p) => p.id === row.productId)?.name || "未知產品",
         size: row.size,
         quantity: Number(row.quantity || 1),
       }));
@@ -486,7 +488,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
                 </div>
 
                 <div style={styles.productGrid}>
-                  {products.map((product) => (
+                  {safeProducts.map((product) => (
                     <button
                       key={product.id}
                       onClick={() => updateSelection(index, { productId: item.productId === product.id ? "" : product.id, size: "" })}
@@ -504,7 +506,10 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
 
                 {selectedProduct && (
                   <div style={styles.sizeGrid}>
-                    {selectedProduct.sizes.map((size) => (
+                    {(Array.isArray(selectedProduct.sizes) ? selectedProduct.sizes : []).map((sizeOption) => {
+                      const size = typeof sizeOption === "object" ? sizeOption.size : sizeOption;
+                      if (!size) return null;
+                      return (
                       <button
                         key={size}
                         onClick={() => updateSelection(index, { size: item.size === size ? "" : size })}
@@ -517,7 +522,8 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
                       >
                         {size}
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
