@@ -26,9 +26,16 @@ export default function PickupPage({ currentSchoolId = "" }) {
 
   const syncOrders = async () => {
     setLoading(true);
+    setNotice("");
     try {
       const rows = await queueOrderService.listOrders({ schoolId: currentSchoolId });
-      setOrders((rows || []).map(getSafeOrder));
+      const nextOrders = (Array.isArray(rows) ? rows : []).map(getSafeOrder);
+      setOrders(nextOrders);
+      return nextOrders;
+    } catch (error) {
+      console.error("pickup orders sync failed", error);
+      setNotice("同步失敗，請重試");
+      return [];
     } finally {
       setLoading(false);
     }
@@ -68,11 +75,19 @@ export default function PickupPage({ currentSchoolId = "" }) {
 
   const markReady = async (orderId) => {
     if (updatingId) return;
-    setNotice("");
+    if (!orderId) {
+      setNotice("同步失敗，請重試");
+      return;
+    }
     setUpdatingId(orderId);
+    setNotice("");
     try {
       const order = orders.find((o) => o.id === orderId);
-      const updated = await queueOrderService.updateStatus(orderId, ORDER_STATUS.READY, {
+      if (!order) {
+        throw new Error("找不到此訂單");
+      }
+
+      const updated = await queueOrderService.updateStatus(orderId, "READY", {
         tailor_info: {
           ...(order?.tailor_info || {}),
           ready_at: new Date().toISOString(),
@@ -82,10 +97,14 @@ export default function PickupPage({ currentSchoolId = "" }) {
         throw new Error("找不到要更新的訂單");
       }
       setOrders((current) => current.filter((item) => item.id !== orderId));
-      setNotice(`${order?.queue_number || "此訂單"} 已執好，狀態已更新為 READY。`);
+      const nextOrders = await syncOrders();
+      const nextPreparingOrder = nextOrders.find((item) => item.status === ORDER_STATUS.PREPARING);
+      setNotice(nextPreparingOrder
+        ? `${order.queue_number || "此訂單"} 已執好，已載入下一張待執貨單。`
+        : `${order.queue_number || "此訂單"} 已執好，目前沒有需要執貨的訂單。`);
     } catch (error) {
       console.error("mark ready failed", error);
-      setNotice(`更新失敗：${error?.message || "請檢查 Supabase 資料表及網絡連線"}`);
+      setNotice("同步失敗，請重試");
     } finally {
       setUpdatingId("");
     }
