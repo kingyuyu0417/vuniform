@@ -196,18 +196,16 @@ export const queueOrderService = {
         .select();
 
       if (error) throw error;
-      const saved = (data && data[0]) || { id, status };
+      const saved = data && data[0];
+      if (!saved) throw new Error("找不到要更新的訂單");
       const normalized = normalizeOrderRow(saved);
       const rows = readQueueCache();
       const updated = rows.map((row) => (row.id === id ? { ...row, ...normalized, status: normalized.status } : row));
       writeQueueCache(updated);
       return normalized;
     } catch (error) {
-      console.warn("updateStatus fallback to local cache", error);
-      const rows = readQueueCache();
-      const updated = rows.map((row) => (row.id === id ? { ...row, ...nextPatch, status } : row));
-      writeQueueCache(updated);
-      return updated.find((row) => row.id === id) || { id, status };
+      console.error("updateStatus failed; Supabase status was not changed", error);
+      throw error;
     }
   },
 

@@ -102,7 +102,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
         setNotice("找不到此訂單，請返回排隊頁重新選擇客人。");
       }
 
-      const nextSelected = normalized.find((o) => [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STATUS.READY].includes(o.status)) || null;
+      const nextSelected = normalized.find((o) => o.status === ORDER_STATUS.PENDING) || null;
       safeSetSelectedOrder(nextSelected);
     } catch (error) {
       console.error("FittingPage syncOrders failed", error);
@@ -124,19 +124,14 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
         schoolId: currentSchoolId,
         onChange: (rows) => {
           try {
-            const normalized = (Array.isArray(rows) ? rows : []).map(getSafeOrder);
+            const normalized = (Array.isArray(rows) ? rows : []).filter((order) => order.status === ORDER_STATUS.PENDING).map(getSafeOrder);
             setOrders(normalized);
-
-            if (!selectedOrder && normalized.length) {
-              const pending = normalized.find((o) => [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STATUS.READY].includes(o.status));
-              safeSetSelectedOrder(pending || normalized[0]);
-            }
 
             if (selectedOrder) {
               const next = normalized.find((o) => o.id === selectedOrder.id);
-              if (next) {
-                safeSetSelectedOrder(next);
-              }
+              safeSetSelectedOrder(next || null);
+            } else if (normalized.length) {
+              safeSetSelectedOrder(normalized[0]);
             }
           } catch (innerError) {
             console.error("FittingPage subscription update failed", innerError);
@@ -173,7 +168,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
 
   const ticketOptions = useMemo(() => {
     return orders
-      .filter((o) => [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STATUS.READY].includes(o.status))
+      .filter((o) => o.status === ORDER_STATUS.PENDING)
       .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
   }, [orders]);
 
@@ -351,16 +346,8 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       writeDrafts(drafts);
 
       setSelection([{ ...emptySelection }]);
-      const nextOrder = result ? getSafeOrder(result) : getSafeOrder(current);
-      safeSetSelectedOrder(nextOrder);
-
-      const remaining = orders.filter((order) => order.id !== current.id && [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STATUS.READY].includes(order.status));
-      if (remaining.length > 0) {
-        safeSetSelectedOrder(getSafeOrder(remaining[0]));
-      } else {
-        safeSetSelectedOrder(null);
-        navigate("/pickup");
-      }
+      const remaining = orders.filter((order) => order.id !== current.id && order.status === ORDER_STATUS.PENDING);
+      safeSetSelectedOrder(remaining[0] ? getSafeOrder(remaining[0]) : null);
     } catch (error) {
       console.error("FittingPage submit failed", error);
       try {

@@ -1218,7 +1218,6 @@ export default function UniformPOS() {
 
   const handleAssignGuest = (guest) => {
     setSelectedGuest(guest);
-    setQueueVisits((prev) => prev.map((item) => item.id === guest.id ? { ...item, status: "fitting" } : item));
     setTab("fitting");
     const guestId = guest?.id || guest?.queueNo || "";
     navigate(`/fitting?id=${encodeURIComponent(guestId)}`);
