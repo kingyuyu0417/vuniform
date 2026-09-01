@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { queueOrderService, ORDER_STATUS } from "../services/queueOrderService";
+import { supabase, isSupabaseConfigured } from "../supabaseClient";
 
 const STORAGE_DRAFT_KEY = "uniform-pos-fitting-drafts";
 
@@ -319,7 +320,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       return;
     }
 
-    if (!queueOrderService || typeof queueOrderService.updateStatus !== "function") {
+    if (!isSupabaseConfigured || !supabase) {
       setNotice("資料更新服務不可用，請稍後再試");
       return;
     }
@@ -335,7 +336,15 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
         },
       };
 
-      const result = await queueOrderService.updateStatus(current.id, ORDER_STATUS.PREPARING, payload);
+      const { data, error } = await supabase
+        .from("customer_orders")
+        .update({ status: "PREPARING", tailor_info: payload.tailor_info })
+        .eq("id", current.id)
+        .select()
+        .single();
+      if (error) throw error;
+      if (!data?.id) throw new Error("訂單未成功更新");
+      const result = getSafeOrder(data);
       onStatusChange?.(result || current);
       setNotice("已更新為 PREPARING，等待倉務執貨");
 

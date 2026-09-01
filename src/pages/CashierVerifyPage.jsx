@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ORDER_STATUS, queueOrderService } from "../services/queueOrderService";
+import { isSupabaseConfigured, supabase } from "../supabaseClient";
 
 const paymentMethods = [
   { id: "cash", label: "現金" },
@@ -30,9 +31,12 @@ export default function CashierVerifyPage({ currentSchoolId = "", onConfirmPayme
 
   const syncReadyOrders = async () => {
     try {
-      const rows = await queueOrderService.listOrders({ schoolId: currentSchoolId });
-      const ready = (Array.isArray(rows) ? rows : [])
-        .filter((order) => order.status === ORDER_STATUS.READY)
+      if (!isSupabaseConfigured || !supabase) throw new Error("Supabase 未設定");
+      let query = supabase.from("customer_orders").select("*").eq("status", "READY").order("created_at", { ascending: true });
+      if (currentSchoolId) query = query.eq("school_id", currentSchoolId);
+      const { data, error: queryError } = await query;
+      if (queryError) throw queryError;
+      const ready = (Array.isArray(data) ? data : [])
         .map(normalizeOrder);
       setOrders(ready);
       setSelectedOrder((current) => ready.find((order) => order.id === current?.id) || ready[0] || null);
@@ -46,17 +50,21 @@ export default function CashierVerifyPage({ currentSchoolId = "", onConfirmPayme
 
   useEffect(() => {
     syncReadyOrders();
-    const subscription = queueOrderService.subscribe({
-      schoolId: currentSchoolId,
-      onChange: (rows) => {
-        const ready = (Array.isArray(rows) ? rows : [])
-          .filter((order) => order.status === ORDER_STATUS.READY)
-          .map(normalizeOrder);
-        setOrders(ready);
-        setSelectedOrder((current) => ready.find((order) => order.id === current?.id) || ready[0] || null);
-      },
-    });
-    return () => subscription?.unsubscribe?.();
+    if (!isSupabaseConfigured || !supabase) return undefined;
+    const channel = supabase
+      .channel(`cashier-ready-orders-${currentSchoolId || "all"}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "customer_orders",
+          filter: "status=eq.READY",
+        },
+        () => { syncReadyOrders(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [currentSchoolId]);
 
   const selectedTotal = useMemo(

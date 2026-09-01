@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { CheckCheck, Clock3, PackageCheck, Zap } from "lucide-react";
 import { ORDER_STATUS, queueOrderService } from "../services/queueOrderService";
+import { supabase, isSupabaseConfigured } from "../supabaseClient";
 
 const statusLabel = {
   [ORDER_STATUS.PENDING]: "排隊中",
@@ -87,15 +88,15 @@ export default function PickupPage({ currentSchoolId = "" }) {
         throw new Error("找不到此訂單");
       }
 
-      const updated = await queueOrderService.updateStatus(orderId, "READY", {
-        tailor_info: {
-          ...(order?.tailor_info || {}),
-          ready_at: new Date().toISOString(),
-        },
-      });
-      if (!updated || updated.id !== orderId) {
-        throw new Error("找不到要更新的訂單");
-      }
+      if (!isSupabaseConfigured || !supabase) throw new Error("Supabase 未設定");
+      const { data: updated, error } = await supabase
+        .from("customer_orders")
+        .update({ status: "READY" })
+        .eq("id", orderId)
+        .select()
+        .single();
+      if (error) throw error;
+      if (!updated?.id) throw new Error("找不到要更新的訂單");
       setOrders((current) => current.filter((item) => item.id !== orderId));
       const nextOrders = await syncOrders();
       const nextPreparingOrder = nextOrders.find((item) => item.status === ORDER_STATUS.PREPARING);
