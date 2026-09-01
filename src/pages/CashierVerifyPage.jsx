@@ -32,8 +32,7 @@ export default function CashierVerifyPage({ currentSchoolId = "", onConfirmPayme
   const syncReadyOrders = async () => {
     try {
       if (!isSupabaseConfigured || !supabase) throw new Error("Supabase 未設定");
-      let query = supabase.from("customer_orders").select("*").eq("status", "READY").order("created_at", { ascending: true });
-      if (currentSchoolId) query = query.eq("school_id", currentSchoolId);
+      const query = supabase.from("customer_orders").select("*").eq("status", "READY").order("created_at", { ascending: true });
       const { data, error: queryError } = await query;
       if (queryError) throw queryError;
       const ready = (Array.isArray(data) ? data : [])
