@@ -116,6 +116,7 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
       const { error: saleError } = await supabase.from("orders").insert({
         id: receiptId,
         school: selectedOrder.school_id || "香港中國婦女會馮堯敬紀念中學",
+        cashier_id: null,
         cashier_name: "收銀員",
         total: selectedTotal,
         item_count: saleItems.reduce((count, item) => count + item.qty, 0),

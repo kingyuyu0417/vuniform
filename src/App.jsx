@@ -1083,7 +1083,7 @@ export default function UniformPOS() {
             outlet_name: fallbackOrder.outletName || null,
             outlet_address: fallbackOrder.outletAddress || null,
             outlet_phone: fallbackOrder.outletPhone || null,
-            cashier_id: fallbackOrder.cashierId,
+            cashier_id: fallbackOrder.cashierId || null,
             cashier_name: fallbackOrder.cashierName || "",
             total: fallbackOrder.total,
             item_count: fallbackOrder.itemCount,

@@ -1,7 +1,13 @@
 -- Fix public POS write access for the cashier payment flow.
 -- This enables the anonymous/public app key to insert/update/select sales records.
 
--- orders table
+-- The public app is anonymous and has no auth user id, so cashier_id must be nullable.
+alter table public.orders alter column cashier_id drop not null;
+
+-- If the table was created with a foreign-key constraint to auth.users, remove it for the public anonymous mode.
+alter table public.orders drop constraint if exists orders_cashier_id_fkey;
+
+-- orders table RLS
  drop policy if exists "Allow order access" on public.orders;
 create policy "Allow order access"
 on public.orders
@@ -10,7 +16,7 @@ to anon
 using (true)
 with check (true);
 
--- order_items table
+-- order_items table RLS
  drop policy if exists "Allow order item access" on public.order_items;
 create policy "Allow order item access"
 on public.order_items
@@ -28,39 +34,45 @@ to anon
 using (true)
 with check (true);
 
--- optional: keep authenticated access as well
-create policy if not exists "Authenticated staff can read orders"
+-- optional authenticated access
+ drop policy if exists "Authenticated staff can read orders" on public.orders;
+create policy "Authenticated staff can read orders"
 on public.orders
 for select
 to authenticated
 using (true);
 
-create policy if not exists "Authenticated staff can write orders"
+drop policy if exists "Authenticated staff can write orders" on public.orders;
+create policy "Authenticated staff can write orders"
 on public.orders
 for insert
 to authenticated
 with check (true);
 
-create policy if not exists "Authenticated staff can update orders"
+drop policy if exists "Authenticated staff can update orders" on public.orders;
+create policy "Authenticated staff can update orders"
 on public.orders
 for update
 to authenticated
 using (true)
 with check (true);
 
-create policy if not exists "Authenticated staff can read order items"
+drop policy if exists "Authenticated staff can read order items" on public.order_items;
+create policy "Authenticated staff can read order items"
 on public.order_items
 for select
 to authenticated
 using (true);
 
-create policy if not exists "Authenticated staff can write order items"
+drop policy if exists "Authenticated staff can write order items" on public.order_items;
+create policy "Authenticated staff can write order items"
 on public.order_items
 for insert
 to authenticated
 with check (true);
 
-create policy if not exists "Authenticated staff can update order items"
+drop policy if exists "Authenticated staff can update order items" on public.order_items;
+create policy "Authenticated staff can update order items"
 on public.order_items
 for update
 to authenticated
