@@ -83,12 +83,18 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
     }
 
     try {
-      const rows = await queueOrderService.listOrders({ schoolId: currentSchoolId });
-      const normalized = Array.isArray(rows) ? rows.filter(Boolean).map(getSafeOrder) : [];
+          const rows = await queueOrderService.listOrders({ schoolId: currentSchoolId });
+          let normalized = Array.isArray(rows) ? rows.filter(Boolean).map(getSafeOrder) : [];
       setOrders(normalized);
 
       if (selectedOrderId) {
-        const match = normalized.find((o) => o.id === selectedOrderId);
+            let match = normalized.find((o) => o.id === selectedOrderId || o.queue_number === selectedOrderId || o.queueNumber === selectedOrderId);
+            if (!match && currentSchoolId) {
+              const allRows = await queueOrderService.listOrders();
+              normalized = Array.isArray(allRows) ? allRows.filter(Boolean).map(getSafeOrder) : normalized;
+              setOrders(normalized);
+              match = normalized.find((o) => o.id === selectedOrderId || o.queue_number === selectedOrderId || o.queueNumber === selectedOrderId);
+            }
         if (match) {
           safeSetSelectedOrder(match);
           return;
