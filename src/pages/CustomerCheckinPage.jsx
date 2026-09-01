@@ -119,6 +119,9 @@ export default function CustomerCheckinPage({ onSubmit, school = "" }) {
     <div style={{ display: "grid", gap: 16 }}>
       <div style={{ background: "#F7F7F5", borderRadius: 12, padding: 16 }}>
         <div style={{ fontSize: 18, fontWeight: 700, color: "#1F3A5F", marginBottom: 12 }}>客人登記</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#52627A", marginBottom: 14 }}>
+          香港中國婦女會馮堯敬紀念中學
+        </div>
         <form onSubmit={handleSubmit} style={{ display: "grid", gap: 12 }}>
           <div style={{ display: "grid", gap: 6 }}>
             <label style={{ fontSize: 13, fontWeight: 600, color: "#45515F" }}>姓名</label>

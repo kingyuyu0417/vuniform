@@ -1412,7 +1412,7 @@ export default function UniformPOS() {
   }
 
   if (location.pathname === "/" || location.pathname === "") {
-    return <CustomerCheckinPage school={publicRouteSchool} />;
+    return <PublicHomePage onCheckin={() => navigate(`/checkin?school_id=${encodeURIComponent(DESIGNATED_SCHOOL)}`)} onStaffLogin={() => navigate("/staff")} />;
   }
 
   if (!session) {
@@ -3175,6 +3175,30 @@ function SchoolSwitcher({ schools, schoolMeta, selectedSchool, onPick }) {
           {typedSchools.length > 6 && searchInput}
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginBottom: 6 }}>第三步：揀學校</div>
  */
+function PublicHomePage({ onCheckin, onStaffLogin }) {
+  return (
+    <div style={{ minHeight: "100vh", background: "#F4F7FB", padding: "32px 16px", boxSizing: "border-box", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+      <div style={{ maxWidth: 560, margin: "0 auto", display: "grid", gap: 18 }}>
+        <div style={{ background: "#1F3A5F", color: "#fff", borderRadius: 18, padding: "28px 24px" }}>
+          <div style={{ fontSize: 13, opacity: 0.78, marginBottom: 8 }}>Victoria Uniform 校服銷售系統</div>
+          <h1 style={{ margin: 0, fontSize: 26, lineHeight: 1.35 }}>香港中國婦女會馮堯敬紀念中學</h1>
+          <div style={{ marginTop: 10, fontSize: 14, opacity: 0.82 }}>請選擇你要使用的服務</div>
+        </div>
+
+        <button type="button" onClick={onCheckin} style={{ border: "1px solid #D5DDE5", borderRadius: 14, background: "#fff", padding: 22, textAlign: "left", cursor: "pointer" }}>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#1F3A5F" }}>登記學校</div>
+          <div style={{ marginTop: 6, fontSize: 13, color: "#66717D" }}>客人登記、排隊及查詢進度</div>
+        </button>
+
+        <button type="button" onClick={onStaffLogin} style={{ border: "none", borderRadius: 14, background: "#D97757", color: "#fff", padding: 22, textAlign: "left", cursor: "pointer" }}>
+          <div style={{ fontSize: 18, fontWeight: 800 }}>登入後台</div>
+          <div style={{ marginTop: 6, fontSize: 13, opacity: 0.88 }}>員工登入、銷售、度身、取貨及收銀</div>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function LoginScreen({ accounts, onLogin, onAuthLogin, useSupabaseAuth = false }) {
   const [pin, setPin] = useState("");
   const [email, setEmail] = useState("");
