@@ -1551,7 +1551,7 @@ export default function UniformPOS() {
         <Routes>
           <Route
             path="/checkin"
-            element={<CustomerCheckinPage school={publicRouteSchool} onSubmit={handleGuestSubmit} />}
+            element={<CustomerCheckinPage school={publicRouteSchool} />}
           />
           <Route
             path="/queue-status"

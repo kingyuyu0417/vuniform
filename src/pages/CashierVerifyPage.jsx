@@ -104,6 +104,26 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
       };
 
       if (!isSupabaseConfigured || !supabase) throw new Error("Supabase 未設定");
+      const receiptId = `receipt-${selectedOrder.id}`;
+      const saleItems = selectedOrder.items.map((item) => ({
+        order_id: receiptId,
+        name: item.productName,
+        size: item.size,
+        length: item.length || null,
+        price: item.price,
+        qty: item.quantity,
+      }));
+      const { error: saleError } = await supabase.from("orders").insert({
+        id: receiptId,
+        school: selectedOrder.school_id || "香港中國婦女會馮堯敬紀念中學",
+        cashier_name: "收銀員",
+        total: selectedTotal,
+        item_count: saleItems.reduce((count, item) => count + item.qty, 0),
+      });
+      if (saleError && saleError.code !== "23505") throw saleError;
+      const { error: itemError } = await supabase.from("order_items").insert(saleItems);
+      if (itemError) throw itemError;
+
       const { data: completedOrder, error: completionError } = await supabase
         .from("customer_orders")
         .update({

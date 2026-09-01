@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Camera,
   Check,
@@ -48,7 +47,6 @@ const defaultProducts = [
 const emptySelection = { productId: "", size: "", quantity: 1 };
 
 export default function FittingPage({ currentSchoolId = "", products = defaultProducts, selectedOrderId = "", onStatusChange }) {
-  const navigate = useNavigate();
   const safeProducts = Array.isArray(products) ? products.filter(Boolean) : [];
   const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
