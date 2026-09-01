@@ -1,6 +1,7 @@
 ﻿import React, { useState, useEffect, useRef } from "react";
 import Papa from "papaparse";
 import qrcode from "qrcode-generator";
+import { useLocation, useNavigate, Routes, Route } from "react-router-dom";
 import { Plus, Minus, Trash2, Printer, Bluetooth, ChevronDown, ChevronUp, ChevronLeft, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown, X, ShoppingCart, Settings, ClipboardList, Check, AlertCircle, QrCode, Upload, Download, School, Users, Eye, EyeOff, MapPin, GraduationCap, Search } from "lucide-react";
 import { isSupabaseConfigured, isSupabaseAuthEnabled, supabase } from "./supabaseClient";
 import CustomerCheckinPage from "./pages/CustomerCheckinPage";
@@ -12,7 +13,7 @@ import SchoolQRCodePage from "./pages/SchoolQRCodePage";
 import GuestPortalPage from "./pages/GuestPortalPage";
 import GuestQueueStatusPage from "./pages/GuestQueueStatusPage";
 import StaffOrderTracking from "./pages/StaffOrderTracking";
-import { guestVisits } from "./services/customerFlowService";
+import { queueOrderService } from "./services/queueOrderService";
 import baseSchoolCatalog from "./schoolCatalog.json";
 import workbookSchoolCatalog from "./workbookSchoolCatalog.json";
 import workbookSchoolOutlets from "./workbookSchoolOutlets.json";
@@ -532,84 +533,83 @@ if (!window.storage) {
   };
 }
 
-const readGuestVisitsFromStorage = () => {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem("uniform_pos_guest_visits");
-    return raw ? JSON.parse(raw) : [];
-  } catch (error) {
-    console.warn("讀取本地排隊資料失敗", error);
-    return [];
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
   }
-};
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("App error boundary caught a runtime error", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          padding: 24,
+          background: "#f8fafc",
+          color: "#1f2937",
+          fontFamily: "system-ui, -apple-system, sans-serif",
+        }}>
+          <div style={{
+            maxWidth: 520,
+            width: "100%",
+            background: "#fff",
+            border: "1px solid #fecaca",
+            borderRadius: 18,
+            boxShadow: "0 16px 40px rgba(15,23,42,0.08)",
+            padding: 28,
+            display: "grid",
+            gap: 12,
+            textAlign: "center",
+          }}>
+            <div style={{ fontSize: 28, fontWeight: 800, color: "#7f1d1d" }}>頁面發生異常</div>
+            <div style={{ fontSize: 14, color: "#475569", lineHeight: 1.6 }}>
+              目前頁面無法正常載入，系統已自動切換到安全提示頁。請重新整理，若問題持續請檢查資料來源與網絡連線。
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              style={{
+                border: "none",
+                background: "#b91c1c",
+                color: "#fff",
+                borderRadius: 10,
+                padding: "11px 16px",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              重新整理
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 export default function UniformPOS() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [loaded, setLoaded] = useState(false); // 啟用正確的初始化以從 Supabase 加載產品
   const [products, setProducts] = useState(() => enforceAuthoritativeProducts(DEFAULT_PRODUCTS));
   const [deletedSchools, setDeletedSchools] = useState([]);
   const [salesLog, setSalesLog] = useState([]);
   const [tab, setTab] = useState("sale");
-  const [queueVisits, setQueueVisits] = useState(() => {
-    const cached = readGuestVisitsFromStorage();
-    return cached.length ? cached : [
-      { id: "guest-1", queueNo: "FYM-001", guestName: "陳小美", className: "中二A", heightCm: "160", weightKg: "48", phone: "91234567", notes: "", status: "waiting", createdAt: "2026-08-31T13:00:00" },
-      { id: "guest-2", queueNo: "FYM-002", guestName: "李大明", className: "中一C", heightCm: "158", weightKg: "46", phone: "98765432", notes: "", status: "assigned", createdAt: "2026-08-31T13:02:00" },
-      { id: "guest-3", queueNo: "FYM-003", guestName: "王小麗", className: "中三B", heightCm: "165", weightKg: "52", phone: "65432123", notes: "", status: "fitting", createdAt: "2026-08-31T13:04:00" },
-    ];
-  });
+  const [queueVisits, setQueueVisits] = useState([]);
   const [selectedGuest, setSelectedGuest] = useState(null);
-  const [pickupTickets, setPickupTickets] = useState([
-    {
-      id: "ticket-1",
-      guestId: "guest-1",
-      guestName: "陳小美",
-      queueNo: "FYM-001",
-      items: [
-        { productId: "p1", productName: "白色恤衫（短袖）", size: "28", quantity: 1 },
-        { productId: "p3", productName: "藏青色短褲", size: "28", quantity: 1 },
-      ],
-      status: "ready_for_pickup",
-      createdAt: "2026-08-31T13:30:00",
-    },
-    {
-      id: "ticket-2",
-      guestId: "guest-2",
-      guestName: "李大明",
-      queueNo: "FYM-002",
-      items: [
-        { productId: "p2", productName: "白色恤衫（長袖）", size: "32", quantity: 1 },
-        { productId: "p5", productName: "PE運動套裝", size: "M", quantity: 1 },
-      ],
-      status: "ready_for_pickup",
-      createdAt: "2026-08-31T13:35:00",
-    },
-  ]);
-  const [paymentOrders, setPaymentOrders] = useState([
-    {
-      id: "order-1",
-      ticketId: "ticket-1",
-      guestName: "陳小美",
-      queueNo: "FYM-001",
-      items: [
-        { productName: "白色恤衫（短袖）", size: "28", quantity: 1, price: 65 },
-        { productName: "藏青色短褲", size: "28", quantity: 1, price: 70 },
-      ],
-      totalPrice: 135,
-      status: "ready_for_payment",
-    },
-    {
-      id: "order-2",
-      ticketId: "ticket-2",
-      guestName: "李大明",
-      queueNo: "FYM-002",
-      items: [
-        { productName: "白色恤衫（長袖）", size: "32", quantity: 1, price: 80 },
-        { productName: "PE運動套裝", size: "M", quantity: 1, price: 115 },
-      ],
-      totalPrice: 195,
-      status: "ready_for_payment",
-    },
-  ]);
+  const [pickupTickets, setPickupTickets] = useState([]);
+  const [paymentOrders, setPaymentOrders] = useState([]);
   const [cart, setCart] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [receipt, setReceipt] = useState(null);
@@ -1143,38 +1143,36 @@ export default function UniformPOS() {
   const removeItem = (key) => setCart((prev) => prev.filter((c) => c.key !== key));
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem("uniform_pos_guest_visits", JSON.stringify(queueVisits));
-    }
-  }, [queueVisits]);
-
-  useEffect(() => {
     let isMounted = true;
 
     const syncQueueVisitsFromSupabase = async () => {
-      if (!isSupabaseConfigured || !supabase) return;
+      if (!isSupabaseConfigured || !supabase) {
+        setQueueVisits([]);
+        return;
+      }
+
       try {
-        const data = await guestVisits.listAll();
-        if (!isMounted || !Array.isArray(data) || data.length === 0) return;
+        const data = await queueOrderService.listOrders();
+        if (!isMounted || !Array.isArray(data)) return;
+
         const normalized = data.map((visit) => ({
           id: visit.id,
-          queueNo: visit.queueNo || visit.queue_no || "",
-          guestName: visit.guestName || visit.guest_name || "",
-          className: visit.className || visit.class_name || "",
-          heightCm: visit.heightCm || visit.height_cm || "",
-          weightKg: visit.weightKg || visit.weight_kg || "",
-          phone: visit.phone || "",
-          notes: visit.notes || "",
+          queueNo: visit.queue_number || visit.queueNumber || "",
+          guestName: visit.customer_info?.guestName || visit.guestName || "",
+          className: visit.customer_info?.className || visit.className || "",
+          heightCm: visit.customer_info?.heightCm || visit.heightCm || "",
+          weightKg: visit.customer_info?.weightKg || visit.weightKg || "",
+          phone: visit.customer_info?.phone || visit.phone || "",
+          notes: visit.customer_info?.notes || visit.notes || "",
           status: visit.status || "waiting",
-          school: visit.school || "",
-          createdAt: visit.createdAt || visit.created_at || new Date().toISOString(),
+          school: visit.school_id || visit.schoolId || "",
+          createdAt: visit.created_at || visit.createdAt || new Date().toISOString(),
         }));
-        setQueueVisits((prev) => {
-          const merged = [...normalized, ...prev.filter((item) => !normalized.some((n) => n.id === item.id && n.queueNo === item.queueNo))];
-          return merged.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-        });
+
+        setQueueVisits(normalized.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
       } catch (error) {
         console.error("同步排隊資料失敗", error);
+        if (isMounted) setQueueVisits([]);
       }
     };
 
@@ -1183,30 +1181,24 @@ export default function UniformPOS() {
     if (!isSupabaseConfigured || !supabase) return () => { isMounted = false; };
 
     const channel = supabase
-      .channel("guest-visits-sync")
-      .on("postgres_changes", { event: "*", schema: "public", table: "guest_visits" }, (payload) => {
-        const record = payload.new || payload.old;
-        if (!record) return;
-        const normalized = {
-          id: record.id,
-          queueNo: record.queueNo || record.queue_no || "",
-          guestName: record.guestName || record.guest_name || "",
-          className: record.className || record.class_name || "",
-          heightCm: record.heightCm || record.height_cm || "",
-          weightKg: record.weightKg || record.weight_kg || "",
-          phone: record.phone || "",
-          notes: record.notes || "",
-          status: record.status || "waiting",
-          school: record.school || "",
-          createdAt: record.createdAt || record.created_at || new Date().toISOString(),
-        };
-        setQueueVisits((prev) => {
-          const exists = prev.some((item) => item.id === normalized.id || item.queueNo === normalized.queueNo);
-          if (payload.eventType === "DELETE") {
-            return prev.filter((item) => item.id !== record.id && item.queueNo !== normalized.queueNo);
-          }
-          return exists ? prev.map((item) => item.id === normalized.id || item.queueNo === normalized.queueNo ? { ...item, ...normalized } : item) : [normalized, ...prev];
-        });
+      .channel("customer-orders-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "customer_orders" }, async () => {
+        if (!isMounted) return;
+        const data = await queueOrderService.listOrders();
+        const normalized = (data || []).map((visit) => ({
+          id: visit.id,
+          queueNo: visit.queue_number || visit.queueNumber || "",
+          guestName: visit.customer_info?.guestName || visit.guestName || "",
+          className: visit.customer_info?.className || visit.className || "",
+          heightCm: visit.customer_info?.heightCm || visit.heightCm || "",
+          weightKg: visit.customer_info?.weightKg || visit.weightKg || "",
+          phone: visit.customer_info?.phone || visit.phone || "",
+          notes: visit.customer_info?.notes || visit.notes || "",
+          status: visit.status || "waiting",
+          school: visit.school_id || visit.schoolId || "",
+          createdAt: visit.created_at || visit.createdAt || new Date().toISOString(),
+        }));
+        setQueueVisits(normalized.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
       })
       .subscribe();
 
@@ -1221,12 +1213,15 @@ export default function UniformPOS() {
     setSelectedGuest(guest);
     // 保持在客人登記頁，讓登記成功後直接看到自己的 QR CODE / 排隊號
     setTab("guest");
+    navigate("/checkin");
   };
 
   const handleAssignGuest = (guest) => {
     setSelectedGuest(guest);
     setQueueVisits((prev) => prev.map((item) => item.id === guest.id ? { ...item, status: "fitting" } : item));
     setTab("fitting");
+    const guestId = guest?.id || guest?.queueNo || "";
+    navigate(`/fitting?id=${encodeURIComponent(guestId)}`);
   };
 
   const handleGenerateTicket = (ticket) => {
@@ -1359,6 +1354,42 @@ export default function UniformPOS() {
   }, [cart.length]);
 
   const publicQueueParam = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("queue") : null;
+  const publicRouteSchool = new URLSearchParams(location.search).get("school_id") || new URLSearchParams(location.search).get("school") || "";
+  const routeId = new URLSearchParams(location.search).get("id");
+
+  useEffect(() => {
+    if (location.pathname === "/" && publicRouteSchool) {
+      navigate(`/checkin?school_id=${encodeURIComponent(publicRouteSchool)}`);
+    }
+  }, [location.pathname, publicRouteSchool, navigate]);
+
+  const handleTabChange = (nextTab) => {
+    setTab(nextTab);
+    const routeMap = {
+      guest: "/checkin",
+      queue: "/queue",
+      fitting: "/fitting",
+      pickup: "/pickup",
+      cashier: "/cashier",
+      sale: "/sale",
+      track: "/track",
+      qrcode: "/qrcode",
+      products: "/products",
+      records: "/records",
+      staff: "/staff",
+    };
+    if (routeMap[nextTab]) {
+      navigate(routeMap[nextTab]);
+    }
+  };
+
+  if (location.pathname === "/checkin") {
+    return <CustomerCheckinPage school={publicRouteSchool} />;
+  }
+
+  if (location.pathname === "/queue-status") {
+    return <GuestQueueStatusPage queueNo={routeId || publicQueueParam || ""} schoolName={publicRouteSchool || ""} />;
+  }
 
   if (!loaded) {
     return (
@@ -1380,13 +1411,18 @@ export default function UniformPOS() {
     return <GuestQueueStatusPage queueNo={publicQueueParam} schoolName={selectedSchool || ""} />;
   }
 
+  if (location.pathname === "/" || location.pathname === "") {
+    return <CustomerCheckinPage school={publicRouteSchool} />;
+  }
+
   if (!session) {
     return <LoginScreen accounts={accounts} onLogin={login} onAuthLogin={loginWithAuth} useSupabaseAuth={isSupabaseAuthEnabled} />;
   }
 
   return (
-    <div style={{ maxWidth: 460, margin: "0 auto", fontFamily: "system-ui, -apple-system, sans-serif" }}>
-      <style>{`
+    <AppErrorBoundary>
+      <div style={{ maxWidth: 460, margin: "0 auto", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+        <style>{`
         @media print {
           body * { visibility: hidden; }
           #print-receipt, #print-receipt * { visibility: visible; }
@@ -1481,7 +1517,7 @@ export default function UniformPOS() {
           <button
             key={id}
             className="pos-btn"
-            onClick={() => setTab(id)}
+            onClick={() => handleTabChange(id)}
             style={{
               flex: 1,
               display: "flex",
@@ -1512,82 +1548,195 @@ export default function UniformPOS() {
       })()}
 
       <div style={{ padding: "16px" }}>
-        {tab === "sale" && (
-          <SaleTab
-            products={products}
-            selectedProduct={selectedProduct}
-            setSelectedProduct={setSelectedProduct}
-            addToCart={addToCart}
-            cart={cart}
-            changeQty={changeQty}
-            removeItem={removeItem}
-            cartTotal={cartTotal}
-            cartCount={cartCount}
-            checkout={checkout}
-            selectedSchool={selectedSchool}
-            storageError={storageError}
-            cashReceived={cashReceived}
-            setCashReceived={setCashReceived}
-            changeDue={changeDue}
-            cashAmount={cashAmount}
+        <Routes>
+          <Route
+            path="/checkin"
+            element={<CustomerCheckinPage school={publicRouteSchool} onSubmit={handleGuestSubmit} />}
           />
-        )}
-        {tab === "guest" && (
-          <CustomerCheckinPage onSubmit={handleGuestSubmit} />
-        )}
-        {tab === "queue" && (
-          <QueuePage visits={queueVisits} onViewGuest={(guest) => setSelectedGuest(guest)} onAssign={handleAssignGuest} />
-        )}
-        {tab === "fitting" && (
-          <FittingPage
-            guest={selectedGuest}
-            products={selectedSchool ? products.filter((p) => schoolOf(p) === selectedSchool) : products}
-            schoolName={selectedSchool}
-            onGenerateTicket={handleGenerateTicket}
+          <Route
+            path="/queue-status"
+            element={<GuestQueueStatusPage queueNo={routeId || publicQueueParam || ""} schoolName={publicRouteSchool || ""} />}
           />
-        )}
-        {tab === "pickup" && (
-          <PickupPage tickets={pickupTickets} onMarkReady={handleMarkReady} onHandover={handleHandover} />
-        )}
-        {tab === "cashier" && (
-          <CashierVerifyPage orders={paymentOrders} onConfirmPayment={handleConfirmPayment} />
-        )}
-        {tab === "track" && (
-          <StaffOrderTracking visits={queueVisits} onStatusUpdate={(id, status) => {
-            setQueueVisits(queueVisits.map(v => v.id === id ? {...v, status} : v));
-          }} />
-        )}
-        {tab === "qrcode" && (
-          <SchoolQRCodePage schoolName="香港中國婦女會馮堯敬紀念中學" onSchoolChange={setSelectedSchool} />
-        )}
-        {tab === "products" && (
-          <ProductsTab
-            products={products}
-            saveProducts={saveProducts}
-            importResult={importResult}
-            setImportResult={setImportResult}
-            productsSaveError={productsSaveError}
-            productsSaveState={productsSaveState}
-            saveProductsNow={saveProductsNow}
-            canManageSchools={perms.canManageSchools}
-            canImportExport={perms.canImportExport}
-            schoolMeta={schoolMeta}
-            saveSchoolMeta={saveSchoolMeta}
-            setDeletedSchools={setDeletedSchools}
-            selectedSchool={selectedSchool}
-            setSelectedSchool={setSelectedSchool}
+          <Route
+            path="/fitting"
+            element={
+              <FittingPage
+                guest={selectedGuest}
+                selectedOrderId={routeId || selectedGuest?.id || ""}
+                products={selectedSchool ? products.filter((p) => schoolOf(p) === selectedSchool) : products}
+                schoolName={selectedSchool}
+                onGenerateTicket={handleGenerateTicket}
+              />
+            }
           />
-        )}
-        {tab === "records" && (
-          <RecordsTab
-            salesLog={salesLog}
-            onReprint={(o) => setReceipt(o)}
-            canViewAllDates={perms.canViewAllDates}
-            canExportSales={perms.canExportSales}
-            schoolMeta={schoolMeta}
+          <Route
+            path="/queue"
+            element={<QueuePage visits={queueVisits} onViewGuest={(guest) => setSelectedGuest(guest)} onAssign={handleAssignGuest} />}
           />
-        )}
-        {tab === "staff" && (isSupabaseAuthEnabled ? <AuthStaffTab manageStaff={manageStaff} currentId={session.id} /> : <StaffTab accounts={accounts} saveAccounts={saveAccounts} currentId={session.id} />)}
+          <Route
+            path="/pickup"
+            element={<PickupPage tickets={pickupTickets} onMarkReady={handleMarkReady} onHandover={handleHandover} />}
+          />
+          <Route
+            path="/cashier"
+            element={<CashierVerifyPage orders={paymentOrders} onConfirmPayment={handleConfirmPayment} />}
+          />
+          <Route
+            path="/track"
+            element={
+              <StaffOrderTracking visits={queueVisits} onStatusUpdate={(id, status) => {
+                setQueueVisits(queueVisits.map(v => v.id === id ? {...v, status} : v));
+              }} />
+            }
+          />
+          <Route
+            path="/qrcode"
+            element={<SchoolQRCodePage schoolName="香港中國婦女會馮堯敬紀念中學" onSchoolChange={setSelectedSchool} />}
+          />
+          <Route
+            path="/products"
+            element={
+              <ProductsTab
+                products={products}
+                saveProducts={saveProducts}
+                importResult={importResult}
+                setImportResult={setImportResult}
+                productsSaveError={productsSaveError}
+                productsSaveState={productsSaveState}
+                saveProductsNow={saveProductsNow}
+                canManageSchools={perms.canManageSchools}
+                canImportExport={perms.canImportExport}
+                schoolMeta={schoolMeta}
+                saveSchoolMeta={saveSchoolMeta}
+                setDeletedSchools={setDeletedSchools}
+                selectedSchool={selectedSchool}
+                setSelectedSchool={setSelectedSchool}
+              />
+            }
+          />
+          <Route
+            path="/records"
+            element={
+              <RecordsTab
+                salesLog={salesLog}
+                onReprint={(o) => setReceipt(o)}
+                canViewAllDates={perms.canViewAllDates}
+                canExportSales={perms.canExportSales}
+                schoolMeta={schoolMeta}
+              />
+            }
+          />
+          <Route
+            path="/staff"
+            element={isSupabaseAuthEnabled ? <AuthStaffTab manageStaff={manageStaff} currentId={session.id} /> : <StaffTab accounts={accounts} saveAccounts={saveAccounts} currentId={session.id} />}
+          />
+          <Route
+            path="/sale"
+            element={
+              <SaleTab
+                products={products}
+                selectedProduct={selectedProduct}
+                setSelectedProduct={setSelectedProduct}
+                addToCart={addToCart}
+                cart={cart}
+                changeQty={changeQty}
+                removeItem={removeItem}
+                cartTotal={cartTotal}
+                cartCount={cartCount}
+                checkout={checkout}
+                selectedSchool={selectedSchool}
+                storageError={storageError}
+                cashReceived={cashReceived}
+                setCashReceived={setCashReceived}
+                changeDue={changeDue}
+                cashAmount={cashAmount}
+              />
+            }
+          />
+          <Route
+            path="*"
+            element={
+              <>
+                {tab === "sale" && (
+                  <SaleTab
+                    products={products}
+                    selectedProduct={selectedProduct}
+                    setSelectedProduct={setSelectedProduct}
+                    addToCart={addToCart}
+                    cart={cart}
+                    changeQty={changeQty}
+                    removeItem={removeItem}
+                    cartTotal={cartTotal}
+                    cartCount={cartCount}
+                    checkout={checkout}
+                    selectedSchool={selectedSchool}
+                    storageError={storageError}
+                    cashReceived={cashReceived}
+                    setCashReceived={setCashReceived}
+                    changeDue={changeDue}
+                    cashAmount={cashAmount}
+                  />
+                )}
+                {tab === "guest" && (
+                  <CustomerCheckinPage school={publicRouteSchool} />
+                )}
+                {tab === "queue" && (
+                  <QueuePage visits={queueVisits} onViewGuest={(guest) => setSelectedGuest(guest)} onAssign={handleAssignGuest} />
+                )}
+                {tab === "fitting" && (
+                  <FittingPage
+                    guest={selectedGuest}
+                    products={selectedSchool ? products.filter((p) => schoolOf(p) === selectedSchool) : products}
+                    schoolName={selectedSchool}
+                    onGenerateTicket={handleGenerateTicket}
+                  />
+                )}
+                {tab === "pickup" && (
+                  <PickupPage tickets={pickupTickets} onMarkReady={handleMarkReady} onHandover={handleHandover} />
+                )}
+                {tab === "cashier" && (
+                  <CashierVerifyPage orders={paymentOrders} onConfirmPayment={handleConfirmPayment} />
+                )}
+                {tab === "track" && (
+                  <StaffOrderTracking visits={queueVisits} onStatusUpdate={(id, status) => {
+                    setQueueVisits(queueVisits.map(v => v.id === id ? {...v, status} : v));
+                  }} />
+                )}
+                {tab === "qrcode" && (
+                  <SchoolQRCodePage schoolName="香港中國婦女會馮堯敬紀念中學" onSchoolChange={setSelectedSchool} />
+                )}
+                {tab === "products" && (
+                  <ProductsTab
+                    products={products}
+                    saveProducts={saveProducts}
+                    importResult={importResult}
+                    setImportResult={setImportResult}
+                    productsSaveError={productsSaveError}
+                    productsSaveState={productsSaveState}
+                    saveProductsNow={saveProductsNow}
+                    canManageSchools={perms.canManageSchools}
+                    canImportExport={perms.canImportExport}
+                    schoolMeta={schoolMeta}
+                    saveSchoolMeta={saveSchoolMeta}
+                    setDeletedSchools={setDeletedSchools}
+                    selectedSchool={selectedSchool}
+                    setSelectedSchool={setSelectedSchool}
+                  />
+                )}
+                {tab === "records" && (
+                  <RecordsTab
+                    salesLog={salesLog}
+                    onReprint={(o) => setReceipt(o)}
+                    canViewAllDates={perms.canViewAllDates}
+                    canExportSales={perms.canExportSales}
+                    schoolMeta={schoolMeta}
+                  />
+                )}
+                {tab === "staff" && (isSupabaseAuthEnabled ? <AuthStaffTab manageStaff={manageStaff} currentId={session.id} /> : <StaffTab accounts={accounts} saveAccounts={saveAccounts} currentId={session.id} />)}
+              </>
+            }
+          />
+        </Routes>
       </div>
 
       {receipt && (

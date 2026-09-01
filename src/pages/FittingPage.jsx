@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Camera,
   Check,
@@ -46,6 +47,7 @@ const defaultProducts = [
 const emptySelection = { productId: "", size: "", quantity: 1 };
 
 export default function FittingPage({ currentSchoolId = "", products = defaultProducts, selectedOrderId = "", onStatusChange }) {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [selection, setSelection] = useState([{ ...emptySelection }]);
@@ -55,47 +57,100 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
   const [cameraError, setCameraError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notice, setNotice] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   const videoRef = useRef(null);
   const streamRef = useRef(null);
 
+  const safeSetSelectedOrder = (order) => {
+    if (!order || typeof order !== "object") {
+      setSelectedOrder(null);
+      return;
+    }
+
+    setSelectedOrder(getSafeOrder(order));
+  };
+
   const syncOrders = async () => {
-    const rows = await queueOrderService.listOrders({ schoolId: currentSchoolId });
-    const normalized = rows.map(getSafeOrder);
-    setOrders(normalized);
-    if (selectedOrderId) {
-      const match = normalized.find((o) => o.id === selectedOrderId);
-      if (match) setSelectedOrder(match);
-    } else if (normalized.length) {
-      const pending = normalized.find((o) => o.status === ORDER_STATUS.PENDING);
-      if (pending) setSelectedOrder(pending);
+    setLoadError("");
+
+    if (!queueOrderService || typeof queueOrderService.listOrders !== "function") {
+      setLoadError("排隊服務不可用，請重新整理頁面後再試。");
+      setOrders([]);
+      setSelectedOrder(null);
+      return;
+    }
+
+    try {
+      const rows = await queueOrderService.listOrders({ schoolId: currentSchoolId });
+      const normalized = Array.isArray(rows) ? rows.map(getSafeOrder) : [];
+      setOrders(normalized);
+
+      if (selectedOrderId) {
+        const match = normalized.find((o) => o.id === selectedOrderId);
+        if (match) {
+          safeSetSelectedOrder(match);
+          return;
+        }
+      }
+
+      const nextSelected = normalized.find((o) => [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STATUS.READY].includes(o.status)) || null;
+      safeSetSelectedOrder(nextSelected);
+    } catch (error) {
+      console.error("FittingPage syncOrders failed", error);
+      setOrders([]);
+      setSelectedOrder(null);
+      setLoadError("目前無法載入排隊資料，請確認網絡或資料來源正常後重試。");
     }
   };
 
   useEffect(() => {
     syncOrders();
-    const unsub = queueOrderService.subscribe({
-      schoolId: currentSchoolId,
-      onChange: (rows) => {
-        const normalized = (rows || []).map(getSafeOrder);
-        setOrders(normalized);
-        if (!selectedOrder && normalized.length) {
-          const pending = normalized.find((o) => o.status === ORDER_STATUS.PENDING);
-          if (pending) setSelectedOrder(pending);
+
+    if (!queueOrderService || typeof queueOrderService.subscribe !== "function") {
+      return undefined;
+    }
+
+    try {
+      const unsub = queueOrderService.subscribe({
+        schoolId: currentSchoolId,
+        onChange: (rows) => {
+          try {
+            const normalized = (Array.isArray(rows) ? rows : []).map(getSafeOrder);
+            setOrders(normalized);
+
+            if (!selectedOrder && normalized.length) {
+              const pending = normalized.find((o) => [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STATUS.READY].includes(o.status));
+              safeSetSelectedOrder(pending || normalized[0]);
+            }
+
+            if (selectedOrder) {
+              const next = normalized.find((o) => o.id === selectedOrder.id);
+              if (next) {
+                safeSetSelectedOrder(next);
+              }
+            }
+          } catch (innerError) {
+            console.error("FittingPage subscription update failed", innerError);
+          }
+        },
+      });
+
+      return () => {
+        if (unsub && typeof unsub.unsubscribe === "function") {
+          unsub.unsubscribe();
         }
-        if (selectedOrder) {
-          const next = normalized.find((o) => o.id === selectedOrder.id);
-          if (next) setSelectedOrder(next);
-        }
-      },
-    });
-    return () => unsub.unsubscribe();
+      };
+    } catch (error) {
+      console.error("FittingPage subscribe failed", error);
+      return undefined;
+    }
   }, [currentSchoolId]);
 
   useEffect(() => {
     const drafts = readDrafts();
     const saved = currentSchoolId ? drafts[currentSchoolId]?.[selectedOrder?.id] : null;
-    if (saved && saved.items) {
+    if (saved && Array.isArray(saved.items)) {
       setSelection(saved.items);
     } else {
       setSelection([{ ...emptySelection }]);
@@ -111,13 +166,14 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
   const ticketOptions = useMemo(() => {
     return orders
       .filter((o) => [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STATUS.READY].includes(o.status))
-      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
   }, [orders]);
 
   const activeOrder = selectedOrder || ticketOptions[0] || null;
 
   const handleSelectOrder = (order) => {
-    setSelectedOrder(order);
+    if (!order) return;
+    safeSetSelectedOrder(order);
     setNotice("");
     const drafts = readDrafts();
     const saved = drafts[currentSchoolId]?.[order.id];
@@ -132,26 +188,36 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
     const cleaned = String(rawValue || "").trim();
     if (!cleaned) return;
 
-    const found = orders.find((o) => (o.queue_number || "").toUpperCase() === cleaned.toUpperCase());
-    if (found) {
-      setSelectedOrder(found);
-      setScanOpen(false);
-      setScanText("");
-      setCameraReady(false);
-      return;
-    }
+    try {
+      const found = orders.find((o) => (o.queue_number || "").toUpperCase() === cleaned.toUpperCase());
+      if (found) {
+        safeSetSelectedOrder(found);
+        setScanOpen(false);
+        setScanText("");
+        setCameraReady(false);
+        return;
+      }
 
-    const rows = await queueOrderService.listOrders({ schoolId: currentSchoolId });
-    const fallback = rows.find((o) => (o.queue_number || o.queueNumber || "").toUpperCase() === cleaned.toUpperCase());
-    if (fallback) {
-      setSelectedOrder(getSafeOrder(fallback));
-      setScanOpen(false);
-      setScanText("");
-      setCameraReady(false);
-      return;
-    }
+      if (!queueOrderService || typeof queueOrderService.listOrders !== "function") {
+        setNotice("掃碼查詢服務未可用，請稍後再試");
+        return;
+      }
 
-    setNotice("找不到此排隊號，請確認學校或號碼正確");
+      const rows = await queueOrderService.listOrders({ schoolId: currentSchoolId });
+      const fallback = (Array.isArray(rows) ? rows : []).find((o) => (o.queue_number || o.queueNumber || "").toUpperCase() === cleaned.toUpperCase());
+      if (fallback) {
+        safeSetSelectedOrder(fallback);
+        setScanOpen(false);
+        setScanText("");
+        setCameraReady(false);
+        return;
+      }
+
+      setNotice("找不到此排隊號，請確認學校或號碼正確");
+    } catch (error) {
+      console.error("FittingPage handleScanValue failed", error);
+      setNotice("掃碼查詢失敗，請檢查資料來源或手動輸入排隊號");
+    }
   };
 
   const startCameraScan = async () => {
@@ -190,7 +256,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       setCameraReady(true);
     } catch (error) {
       setCameraError("相機未開啟，請手動輸入排隊號");
-      console.error(error);
+      console.error("FittingPage camera init failed", error);
     }
   };
 
@@ -207,11 +273,15 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
     setSelection((prev) => {
       const next = [...prev];
       next[index] = { ...next[index], ...patch };
-      const drafts = readDrafts();
-      const base = drafts[currentSchoolId] || {};
-      base[selectedOrder?.id] = { items: next };
-      drafts[currentSchoolId] = base;
-      writeDrafts(drafts);
+      try {
+        const drafts = readDrafts();
+        const base = drafts[currentSchoolId] || {};
+        base[selectedOrder?.id] = { items: next };
+        drafts[currentSchoolId] = base;
+        writeDrafts(drafts);
+      } catch (error) {
+        console.error("FittingPage draft save failed", error);
+      }
       return next;
     });
   };
@@ -226,13 +296,14 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
   };
 
   const handleSubmit = async () => {
-    if (!activeOrder) {
+    const current = activeOrder || selectedOrder;
+    if (!current?.id) {
       setNotice("請先選擇客人");
       return;
     }
 
-    const items = selection
-      .filter((row) => row.productId && row.size)
+    const nextItems = selection
+      .filter((row) => row && row.productId && row.size)
       .map((row) => ({
         product_id: row.productId,
         product_name: products.find((p) => p.id === row.productId)?.name || "未知產品",
@@ -240,8 +311,13 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
         quantity: Number(row.quantity || 1),
       }));
 
-    if (!items.length) {
+    if (!nextItems.length) {
       setNotice("請至少選擇一個款式與尺碼");
+      return;
+    }
+
+    if (!queueOrderService || typeof queueOrderService.updateStatus !== "function") {
+      setNotice("資料更新服務不可用，請稍後再試");
       return;
     }
 
@@ -249,33 +325,46 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
     try {
       const payload = {
         tailor_info: {
-          customer_name: activeOrder.customer_info?.guestName || "",
-          queue_number: activeOrder.queue_number,
-          items,
+          customer_name: current.customer_info?.guestName || current.guestName || "",
+          queue_number: current.queue_number || current.queueNumber || current.queueNo || "",
+          items: nextItems,
           prepared_at: new Date().toISOString(),
         },
       };
 
-      const result = await queueOrderService.updateStatus(activeOrder.id, ORDER_STATUS.PREPARING, payload);
-      onStatusChange?.(result);
+      const result = await queueOrderService.updateStatus(current.id, ORDER_STATUS.PREPARING, payload);
+      onStatusChange?.(result || current);
       setNotice("已更新為 PREPARING，等待倉務執貨");
 
       const drafts = readDrafts();
       const schoolDrafts = drafts[currentSchoolId] || {};
-      delete schoolDrafts[activeOrder.id];
+      delete schoolDrafts[current.id];
       drafts[currentSchoolId] = schoolDrafts;
       writeDrafts(drafts);
 
       setSelection([{ ...emptySelection }]);
-      setSelectedOrder(getSafeOrder(result));
+      const nextOrder = result ? getSafeOrder(result) : getSafeOrder(current);
+      safeSetSelectedOrder(nextOrder);
+
+      const remaining = orders.filter((order) => order.id !== current.id && [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STATUS.READY].includes(order.status));
+      if (remaining.length > 0) {
+        safeSetSelectedOrder(getSafeOrder(remaining[0]));
+      } else {
+        safeSetSelectedOrder(null);
+        navigate("/pickup");
+      }
     } catch (error) {
-      const drafts = readDrafts();
-      const schoolDrafts = drafts[currentSchoolId] || {};
-      schoolDrafts[activeOrder.id] = { items: selection };
-      drafts[currentSchoolId] = schoolDrafts;
-      writeDrafts(drafts);
-      setNotice("網絡異常已暫存到手機，恢復後會自動同步");
-      console.error("fitting submit failed", error);
+      console.error("FittingPage submit failed", error);
+      try {
+        const drafts = readDrafts();
+        const schoolDrafts = drafts[currentSchoolId] || {};
+        schoolDrafts[current.id] = { items: selection };
+        drafts[currentSchoolId] = schoolDrafts;
+        writeDrafts(drafts);
+      } catch (draftError) {
+        console.error("FittingPage draft save failed after submit error", draftError);
+      }
+      setNotice("提交失敗，已安全暫存草稿，請稍後再試");
     } finally {
       setIsSubmitting(false);
     }
@@ -284,6 +373,11 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
   const handleSkip = async () => {
     if (!activeOrder) return;
     try {
+      if (!queueOrderService || typeof queueOrderService.updateStatus !== "function") {
+        setNotice("過號功能目前不可用，請稍後再試");
+        return;
+      }
+
       await queueOrderService.updateStatus(activeOrder.id, ORDER_STATUS.SKIPPED, {
         tailor_info: {
           ...(activeOrder.tailor_info || {}),
@@ -299,11 +393,26 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       drafts[currentSchoolId] = schoolDrafts;
       writeDrafts(drafts);
       setSelection([{ ...emptySelection }]);
-      setSelectedOrder(null);
+      safeSetSelectedOrder(null);
     } catch (error) {
+      console.error("FittingPage skip failed", error);
       setNotice("過號暫存成功，恢復後會自動同步");
     }
   };
+
+  if (loadError) {
+    return (
+      <div style={styles.errorStateWrap}>
+        <div style={styles.errorCard}>
+          <div style={styles.errorTitle}>資料載入異常</div>
+          <div style={styles.errorText}>{loadError}</div>
+          <button style={styles.retryButton} onClick={() => syncOrders()}>
+            重新整理
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={styles.wrap}>
@@ -626,6 +735,42 @@ const styles = {
     color: "#475569",
     textAlign: "center",
     fontWeight: 700,
+  },
+  errorStateWrap: {
+    display: "grid",
+    placeItems: "center",
+    minHeight: "40vh",
+    padding: 20,
+  },
+  errorCard: {
+    width: "min(520px, 92vw)",
+    background: "#fff",
+    border: "1px solid #fecaca",
+    borderRadius: 18,
+    padding: 24,
+    boxShadow: "0 12px 30px rgba(15,23,42,0.08)",
+    display: "grid",
+    gap: 12,
+    textAlign: "center",
+  },
+  errorTitle: {
+    fontSize: 22,
+    fontWeight: 800,
+    color: "#7f1d1d",
+  },
+  errorText: {
+    fontSize: 14,
+    color: "#475569",
+    lineHeight: 1.6,
+  },
+  retryButton: {
+    background: "#b91c1c",
+    color: "#fff",
+    border: "none",
+    borderRadius: 10,
+    padding: "11px 16px",
+    fontWeight: 700,
+    cursor: "pointer",
   },
   notice: {
     background: "#ecfdf5",

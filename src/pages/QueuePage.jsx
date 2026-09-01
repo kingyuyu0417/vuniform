@@ -1,35 +1,6 @@
 import React, { useMemo, useEffect, useState } from "react";
-import { guestVisits } from "../services/customerFlowService";
-
-const sampleQueue = [
-  {
-    id: "guest-1",
-    queueNo: "FYM-001",
-    guestName: "陳小美",
-    className: "中二A",
-    phone: "91234567",
-    status: "waiting",
-    createdAt: "2026-08-31T13:00:00",
-  },
-  {
-    id: "guest-2",
-    queueNo: "FYM-002",
-    guestName: "李大明",
-    className: "中一C",
-    phone: "98765432",
-    status: "assigned",
-    createdAt: "2026-08-31T13:02:00",
-  },
-  {
-    id: "guest-3",
-    queueNo: "FYM-003",
-    guestName: "王小麗",
-    className: "中三B",
-    phone: "65432123",
-    status: "fitting",
-    createdAt: "2026-08-31T13:04:00",
-  },
-];
+import { useNavigate } from "react-router-dom";
+import { queueOrderService } from "../services/queueOrderService";
 
 const statusLabel = {
   waiting: "待處理",
@@ -40,7 +11,8 @@ const statusLabel = {
   completed: "已完成",
 };
 
-export default function QueuePage({ visits = sampleQueue, onViewGuest, onAssign }) {
+export default function QueuePage({ visits = [], onViewGuest, onAssign }) {
+  const navigate = useNavigate();
   const [visitsData, setVisitsData] = useState(visits);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -48,9 +20,18 @@ export default function QueuePage({ visits = sampleQueue, onViewGuest, onAssign 
     const loadVisits = async () => {
       setIsLoading(true);
       try {
-        const data = await guestVisits.listAll();
-        if (data && data.length > 0) {
-          setVisitsData(data);
+        const data = await queueOrderService.listOrders();
+        const normalized = (data || []).map((item) => ({
+          id: item.id,
+          queueNo: item.queue_number || item.queueNumber || "",
+          guestName: item.customer_info?.guestName || item.guestName || "",
+          className: item.customer_info?.className || item.className || "",
+          phone: item.customer_info?.phone || item.phone || "",
+          status: item.status || "waiting",
+          createdAt: item.created_at || item.createdAt || new Date().toISOString(),
+        }));
+        if (normalized.length > 0) {
+          setVisitsData(normalized);
         }
       } catch (err) {
         console.error("加載待命單失敗", err);
@@ -72,6 +53,11 @@ export default function QueuePage({ visits = sampleQueue, onViewGuest, onAssign 
           <div style={{ fontSize: 12, color: "#66717D" }}>{rows.length} 位客人</div>
         </div>
 
+        {rows.length === 0 ? (
+          <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 10, padding: "20px 16px", textAlign: "center", color: "#66717D", fontSize: 14 }}>
+            目前沒有人在排隊
+          </div>
+        ) : (
         <div style={{ display: "grid", gap: 10 }}>
           {rows.map((visit) => (
             <div key={visit.id} style={{ background: "#fff", borderRadius: 10, border: "1px solid #E2E8F0", padding: 12 }}>
@@ -108,7 +94,11 @@ export default function QueuePage({ visits = sampleQueue, onViewGuest, onAssign 
                 </button>
                 <button
                   className="pos-btn"
-                  onClick={() => onAssign?.(visit)}
+                  onClick={() => {
+                    onAssign?.(visit);
+                    const visitId = visit.id || visit.queueNo || "";
+                    navigate(`/fitting?id=${encodeURIComponent(visitId)}`);
+                  }}
                   style={{ flex: 1, background: "#1F3A5F", color: "#fff", padding: "8px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600 }}
                 >
                   開始度身
@@ -117,6 +107,7 @@ export default function QueuePage({ visits = sampleQueue, onViewGuest, onAssign 
             </div>
           ))}
         </div>
+        )}
       </div>
     </div>
   );

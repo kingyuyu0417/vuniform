@@ -12,7 +12,7 @@ const statusLabel = {
 };
 
 export default function GuestQueueStatusPage({ queueNo: queueNoProp, schoolName = "" }) {
-  const [queueNo, setQueueNo] = useState(queueNoProp || new URLSearchParams(window.location.search).get("queue") || "");
+  const [queueNo, setQueueNo] = useState(queueNoProp || new URLSearchParams(window.location.search).get("id") || new URLSearchParams(window.location.search).get("queue") || "");
   const [guest, setGuest] = useState(null);
   const [queueList, setQueueList] = useState([]);
   const [qrCode, setQrCode] = useState("");
@@ -44,7 +44,7 @@ export default function GuestQueueStatusPage({ queueNo: queueNoProp, schoolName 
   useEffect(() => {
     if (!queueNo) return;
     const schoolId = schoolName || new URLSearchParams(window.location.search).get("school_id") || new URLSearchParams(window.location.search).get("school") || "";
-    const url = `${window.location.origin}?school_id=${encodeURIComponent(schoolId)}&queue=${encodeURIComponent(queueNo)}`;
+    const url = `${window.location.origin}/queue-status?id=${encodeURIComponent(queueNo)}&school_id=${encodeURIComponent(schoolId)}`;
     try {
       const qr = qrcodeGenerator(0, "M");
       qr.addData(url);

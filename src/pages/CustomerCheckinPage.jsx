@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import qrcodeGenerator from "qrcode-generator";
 import { Copy, QrCode } from "lucide-react";
 import { queueOrderService } from "../services/queueOrderService";
@@ -23,6 +24,7 @@ const fieldStyle = {
 };
 
 export default function CustomerCheckinPage({ onSubmit, school = "" }) {
+  const navigate = useNavigate();
   const [form, setForm] = useState(emptyForm);
   const [submitted, setSubmitted] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -82,13 +84,14 @@ export default function CustomerCheckinPage({ onSubmit, school = "" }) {
         school: schoolId,
       };
 
-      const trackingUrl = `${window.location.origin}?school_id=${encodeURIComponent(schoolId)}&queue=${encodeURIComponent(record.queueNo)}`;
-      record.recordUrl = trackingUrl;
-      generateQRCode(trackingUrl);
+      const statusUrl = `${window.location.origin}/queue-status?id=${encodeURIComponent(record.queueNo)}&school_id=${encodeURIComponent(schoolId)}`;
+      record.recordUrl = statusUrl;
+      generateQRCode(statusUrl);
 
       setSubmitted(record);
       onSubmit?.(record);
       setForm(emptyForm);
+      navigate(`/queue-status?id=${encodeURIComponent(record.queueNo)}&school_id=${encodeURIComponent(schoolId)}`);
     } catch (err) {
       setError("登記失敗：" + (err.message || "未知錯誤"));
     } finally {

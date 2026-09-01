@@ -9,7 +9,7 @@ const SchoolQRCodePage = ({ schoolName, onSchoolChange }) => {
 
   useEffect(() => {
     const schoolId = String(schoolName || "").trim() || "default-school";
-    const url = `${window.location.origin}?school_id=${encodeURIComponent(schoolId)}&school=${encodeURIComponent(schoolName)}&tab=guest`;
+    const url = `${window.location.origin}/checkin?school_id=${encodeURIComponent(schoolId)}&school=${encodeURIComponent(schoolName)}`;
     setSchoolUrl(url);
     generateQRCode(url);
   }, [schoolName]);
