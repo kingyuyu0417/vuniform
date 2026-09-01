@@ -21,6 +21,8 @@ const getSafeOrder = (row) => ({
 export default function PickupPage({ currentSchoolId = "" }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [updatingId, setUpdatingId] = useState("");
+  const [notice, setNotice] = useState("");
 
   const syncOrders = async () => {
     setLoading(true);
@@ -65,16 +67,27 @@ export default function PickupPage({ currentSchoolId = "" }) {
   const summaryRows = useMemo(() => Object.values(batchSummary), [batchSummary]);
 
   const markReady = async (orderId) => {
+    if (updatingId) return;
+    setNotice("");
+    setUpdatingId(orderId);
     try {
       const order = orders.find((o) => o.id === orderId);
-      await queueOrderService.updateStatus(orderId, ORDER_STATUS.READY, {
+      const updated = await queueOrderService.updateStatus(orderId, ORDER_STATUS.READY, {
         tailor_info: {
           ...(order?.tailor_info || {}),
           ready_at: new Date().toISOString(),
         },
       });
+      if (!updated || updated.id !== orderId) {
+        throw new Error("找不到要更新的訂單");
+      }
+      setOrders((current) => current.filter((item) => item.id !== orderId));
+      setNotice(`${order?.queue_number || "此訂單"} 已執好，狀態已更新為 READY。`);
     } catch (error) {
       console.error("mark ready failed", error);
+      setNotice(`更新失敗：${error?.message || "請檢查 Supabase 資料表及網絡連線"}`);
+    } finally {
+      setUpdatingId("");
     }
   };
 
@@ -90,6 +103,8 @@ export default function PickupPage({ currentSchoolId = "" }) {
           0 延遲
         </div>
       </div>
+
+      {notice && <div style={styles.notice}>{notice}</div>}
 
       <div style={styles.summaryPanel}>
         <div style={styles.summaryTitle}>同款加總</div>
@@ -131,9 +146,13 @@ export default function PickupPage({ currentSchoolId = "" }) {
               ))}
             </div>
 
-            <button style={styles.readyButton} onClick={() => markReady(order.id)}>
+            <button
+              style={{ ...styles.readyButton, opacity: updatingId === order.id ? 0.65 : 1 }}
+              onClick={() => markReady(order.id)}
+              disabled={Boolean(updatingId)}
+            >
               <PackageCheck size={16} />
-              執好 / 準備結帳
+              {updatingId === order.id ? "更新中..." : "執好 / 準備結帳"}
             </button>
           </div>
         ))}
@@ -190,6 +209,15 @@ const styles = {
   emptySummary: { color: "#dbeafe", fontSize: 13, fontWeight: 700 },
   list: { display: "grid", gap: 12 },
   loading: { textAlign: "center", fontWeight: 700, color: "#475569", padding: 16 },
+  notice: {
+    background: "#ecfdf5",
+    border: "1px solid #a7f3d0",
+    color: "#047857",
+    borderRadius: 12,
+    padding: "10px 12px",
+    fontSize: 13,
+    fontWeight: 700,
+  },
   empty: {
     background: "#f8fafc",
     border: "1px solid #dfe7f1",
