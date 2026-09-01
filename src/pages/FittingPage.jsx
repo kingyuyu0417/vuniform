@@ -350,6 +350,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       if (!data?.id) throw new Error("訂單未成功更新");
       const result = getSafeOrder(data);
       onStatusChange?.(result || current);
+      setOrders((prev) => prev.filter((order) => order.id !== current.id));
       setNotice("已更新為 PREPARING，等待倉務執貨");
 
       const drafts = readDrafts();
@@ -395,6 +396,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       });
       setNotice("已標記為 SKIPPED，隊伍已繼續");
       onStatusChange?.({ id: activeOrder.id, status: ORDER_STATUS.SKIPPED });
+      setOrders((prev) => prev.filter((order) => order.id !== activeOrder.id));
       const drafts = readDrafts();
       const schoolDrafts = drafts[currentSchoolId] || {};
       delete schoolDrafts[activeOrder.id];

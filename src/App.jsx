@@ -1212,9 +1212,14 @@ export default function UniformPOS() {
   const handleGuestSubmit = (guest) => {
     setQueueVisits((prev) => [guest, ...prev]);
     setSelectedGuest(guest);
-    // 登記成功後，先回到排隊單，讓員工確認排隊順序，再手動開始度身
     setTab("queue");
     navigate("/queue");
+  };
+
+  const handleFittingStatusChange = (updatedOrder) => {
+    if (!updatedOrder?.id) return;
+    setQueueVisits((prev) => prev.filter((item) => item.id !== updatedOrder.id));
+    setSelectedGuest((prev) => (prev && prev.id === updatedOrder.id ? null : prev));
   };
 
   const handleAssignGuest = (guest) => {
@@ -1567,6 +1572,7 @@ export default function UniformPOS() {
                 products={selectedSchool ? products.filter((p) => schoolOf(p) === selectedSchool) : products}
                 schoolName={selectedSchool}
                 onGenerateTicket={handleGenerateTicket}
+                onStatusChange={handleFittingStatusChange}
               />
             }
           />
@@ -1691,6 +1697,7 @@ export default function UniformPOS() {
                     products={selectedSchool ? products.filter((p) => schoolOf(p) === selectedSchool) : products}
                     schoolName={selectedSchool}
                     onGenerateTicket={handleGenerateTicket}
+                    onStatusChange={handleFittingStatusChange}
                   />
                 )}
                 {tab === "pickup" && (
