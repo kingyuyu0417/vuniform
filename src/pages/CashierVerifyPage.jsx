@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ORDER_STATUS, queueOrderService } from "../services/queueOrderService";
+import { ORDER_STATUS } from "../services/queueOrderService";
 import { isSupabaseConfigured, supabase } from "../supabaseClient";
 
 const paymentMethods = [
@@ -102,9 +102,18 @@ export default function CashierVerifyPage({ currentSchoolId = "", onConfirmPayme
         completedAt: new Date().toISOString(),
       };
 
-      await queueOrderService.updateStatus(selectedOrder.id, ORDER_STATUS.COMPLETED, {
-        tailor_info: { ...(selectedOrder.tailor_info || {}), paid_at: payment.completedAt, payment },
-      });
+      if (!isSupabaseConfigured || !supabase) throw new Error("Supabase 未設定");
+      const { data: completedOrder, error: completionError } = await supabase
+        .from("customer_orders")
+        .update({
+          status: "COMPLETED",
+          tailor_info: { ...(selectedOrder.tailor_info || {}), paid_at: payment.completedAt, payment },
+        })
+        .eq("id", selectedOrder.id)
+        .select()
+        .single();
+      if (completionError) throw completionError;
+      if (!completedOrder?.id) throw new Error("訂單未成功完成");
 
       setSubmitted(payment);
       onConfirmPayment?.(payment);

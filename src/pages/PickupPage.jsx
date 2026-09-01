@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { CheckCheck, Clock3, PackageCheck, Zap } from "lucide-react";
-import { ORDER_STATUS, queueOrderService } from "../services/queueOrderService";
+import { ORDER_STATUS } from "../services/queueOrderService";
 import { supabase, isSupabaseConfigured } from "../supabaseClient";
 
 const statusLabel = {
@@ -29,8 +29,12 @@ export default function PickupPage({ currentSchoolId = "" }) {
     setLoading(true);
     setNotice("");
     try {
-      const rows = await queueOrderService.listOrders({ schoolId: currentSchoolId });
-      const nextOrders = (Array.isArray(rows) ? rows : []).map(getSafeOrder);
+      if (!isSupabaseConfigured || !supabase) throw new Error("Supabase 未設定");
+      let query = supabase.from("customer_orders").select("*").eq("status", "PREPARING").order("created_at", { ascending: true });
+      if (currentSchoolId) query = query.eq("school_id", currentSchoolId);
+      const { data, error } = await query;
+      if (error) throw error;
+      const nextOrders = (Array.isArray(data) ? data : []).map(getSafeOrder);
       setOrders(nextOrders);
       return nextOrders;
     } catch (error) {
@@ -44,11 +48,21 @@ export default function PickupPage({ currentSchoolId = "" }) {
 
   useEffect(() => {
     syncOrders();
-    const unsub = queueOrderService.subscribe({
-      schoolId: currentSchoolId,
-      onChange: (rows) => setOrders((rows || []).map(getSafeOrder)),
-    });
-    return () => unsub.unsubscribe();
+    if (!isSupabaseConfigured || !supabase) return undefined;
+    const channel = supabase
+      .channel(`pickup-preparing-orders-${currentSchoolId || "all"}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "customer_orders",
+          filter: "status=eq.PREPARING",
+        },
+        () => { syncOrders(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [currentSchoolId]);
 
   const preparingOrders = useMemo(
