@@ -312,6 +312,12 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
         product_id: row.productId,
         product_name: safeProducts.find((p) => p.id === row.productId)?.name || "未知產品",
         size: row.size,
+        length: row.length || "",
+        price: Number(safeProducts.find((p) => p.id === row.productId)?.sizes?.find((sizeOption) => {
+          const size = typeof sizeOption === "object" ? sizeOption.size : sizeOption;
+          const length = typeof sizeOption === "object" ? sizeOption.length || "" : "";
+          return String(size) === String(row.size) && length === (row.length || "");
+        })?.price || 0),
         quantity: Number(row.quantity || 1),
       }));
 

@@ -20,6 +20,7 @@ import workbookSchoolOutlets from "./workbookSchoolOutlets.json";
 import { loadProducts, saveProducts as saveProductsToStore } from "./data/productsStore";
 
 const DEFAULT_SCHOOL = "示範學校（可刪除）";
+const DESIGNATED_SCHOOL = "香港中國婦女會馮堯敬紀念中學";
 const EXTRA_SCHOOL_CATALOG = {
   "香港中國婦女會馮堯敬紀念中學": { category: "資助中學", level: "中學", region: "新界區", district: "沙田區" },
 };
@@ -631,7 +632,7 @@ export default function UniformPOS() {
   const tabRef = useRef(tab);
   useEffect(() => { tabRef.current = tab; }, [tab]);
 
-  const [selectedSchool, setSelectedSchool] = useState(null);
+  const [selectedSchool, setSelectedSchool] = useState(DESIGNATED_SCHOOL);
   const [schoolPanelOpen, setSchoolPanelOpen] = useState(false);
   const schools = listSchools(products);
 
@@ -713,7 +714,7 @@ export default function UniformPOS() {
     (async () => {
       try {
         const saved = await window.storage.get("last-school", false).catch(() => null);
-        if (saved && saved.value) setSelectedSchool(saved.value);
+        if (saved && saved.value) setSelectedSchool(DESIGNATED_SCHOOL);
       } catch (e) {
         console.error("讀取上次學校選擇失敗", e);
       }
@@ -741,7 +742,7 @@ export default function UniformPOS() {
 
     if (schoolFromUrl) {
       setSession({ id: "guest-session", name: "遊客", role: ROLES.GUEST });
-      setSelectedSchool(schoolFromUrl);
+      setSelectedSchool(DESIGNATED_SCHOOL);
       setTab("guest");
       console.log("檢測到 QR CODE 訪問，校名:", schoolFromUrl);
     }
@@ -827,8 +828,8 @@ export default function UniformPOS() {
   };
 
   useEffect(() => {
-    if (schools.length && (!selectedSchool || !schools.includes(selectedSchool))) {
-      setSelectedSchool(products.length ? schoolOf(products[0]) : schools[0]);
+    if (selectedSchool !== DESIGNATED_SCHOOL) {
+      setSelectedSchool(DESIGNATED_SCHOOL);
     }
   }, [products]);
 
@@ -839,10 +840,10 @@ export default function UniformPOS() {
   }, [products, selectedProduct]);
 
   const pickSchool = (sc) => {
-    setSelectedSchool(sc);
+    setSelectedSchool(DESIGNATED_SCHOOL);
     setSelectedProduct(null);
     setSchoolPanelOpen(false);
-    window.storage.set("last-school", sc, false).catch((e) => console.error("記住學校選擇失敗", e));
+    window.storage.set("last-school", DESIGNATED_SCHOOL, false).catch((e) => console.error("記住學校選擇失敗", e));
   };
 
   // 由雲端（共用儲存）攞返最新一份 products / sales-log
@@ -1579,7 +1580,7 @@ export default function UniformPOS() {
           />
           <Route
             path="/cashier"
-            element={<CashierVerifyPage currentSchoolId={selectedSchool || publicRouteSchool} onConfirmPayment={handleConfirmPayment} />}
+            element={<CashierVerifyPage currentSchoolId={selectedSchool || publicRouteSchool} products={products} onConfirmPayment={handleConfirmPayment} />}
           />
           <Route
             path="/track"
@@ -1696,7 +1697,7 @@ export default function UniformPOS() {
                   <PickupPage tickets={pickupTickets} onMarkReady={handleMarkReady} onHandover={handleHandover} />
                 )}
                 {tab === "cashier" && (
-                  <CashierVerifyPage currentSchoolId={selectedSchool || publicRouteSchool} onConfirmPayment={handleConfirmPayment} />
+                  <CashierVerifyPage currentSchoolId={selectedSchool || publicRouteSchool} products={products} onConfirmPayment={handleConfirmPayment} />
                 )}
                 {tab === "track" && (
                   <StaffOrderTracking visits={queueVisits} onStatusUpdate={(id, status) => {

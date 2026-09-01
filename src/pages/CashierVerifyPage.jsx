@@ -8,7 +8,7 @@ const paymentMethods = [
   { id: "transfer", label: "轉帳" },
 ];
 
-export default function CashierVerifyPage({ currentSchoolId = "", onConfirmPayment }) {
+export default function CashierVerifyPage({ currentSchoolId = "", products = [], onConfirmPayment }) {
   const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState("");
@@ -25,7 +25,9 @@ export default function CashierVerifyPage({ currentSchoolId = "", onConfirmPayme
       productName: item.product_name || item.productName || "未知產品",
       size: item.size || "",
       quantity: Number(item.quantity || 1),
-      price: Number(item.price || 0),
+      price: Number(item.price || products
+        .find((product) => product.name === (item.product_name || item.productName))?.sizes
+        ?.find((sizeOption) => String(sizeOption.size) === String(item.size) && String(sizeOption.length || "") === String(item.length || ""))?.price || 0),
     })),
   });
 
@@ -128,8 +130,14 @@ export default function CashierVerifyPage({ currentSchoolId = "", onConfirmPayme
 
   if (!selectedOrder) {
     return (
-      <div style={{ background: "#F7F7F5", borderRadius: 12, padding: 16, textAlign: "center" }}>
-        <div style={{ fontSize: 14, color: "#66717D" }}>沒有待支付訂單</div>
+      <div style={{ display: "grid", gap: 12 }}>
+        <div style={{ background: "#F7F7F5", borderRadius: 12, padding: 16, textAlign: "center" }}>
+          <div style={{ fontSize: 14, color: "#66717D" }}>沒有待支付訂單</div>
+        </div>
+        {submitted && <div style={{ background: "#EAF7EF", border: "1px solid #B7E0C6", borderRadius: 12, padding: 16 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#21693C" }}>支付成功</div>
+          <div style={{ fontSize: 13, color: "#255F3D", marginTop: 6 }}>訂單號：{submitted.orderId}，總額：${submitted.totalPrice}</div>
+        </div>}
       </div>
     );
   }

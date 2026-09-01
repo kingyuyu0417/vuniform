@@ -4,6 +4,8 @@ import qrcodeGenerator from "qrcode-generator";
 import { Copy, QrCode } from "lucide-react";
 import { queueOrderService } from "../services/queueOrderService";
 
+const DESIGNATED_SCHOOL = "香港中國婦女會馮堯敬紀念中學";
+
 const emptyForm = {
   guestName: "",
   className: "",
@@ -62,7 +64,7 @@ export default function CustomerCheckinPage({ onSubmit, school = "" }) {
 
     setIsLoading(true);
     try {
-      const schoolId = school || "default-school";
+      const schoolId = DESIGNATED_SCHOOL;
       const queue = await queueOrderService.createOrder({
         school_id: schoolId,
         customer_info: {
