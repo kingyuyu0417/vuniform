@@ -6,10 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "deploy:check": "npm run build",
+    "deploy:check": "npm run build && node scripts/verify-authoritative-products.js && node scripts/verify-all-schools.js",
     "preview": "vite preview",
     "setup:supabase": "node scripts/setup-wizard.js",
-    "verify:supabase": "node scripts/setup-supabase.js"
+    "verify:supabase": "node scripts/setup-supabase.js",
+    "verify:products": "node scripts/verify-authoritative-products.js",
+    "verify:schools": "node scripts/verify-all-schools.js",
+    "verify:report": "node scripts/verify-all-schools.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",

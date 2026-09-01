@@ -16,9 +16,7 @@ import { guestVisits } from "./services/customerFlowService";
 import baseSchoolCatalog from "./schoolCatalog.json";
 import workbookSchoolCatalog from "./workbookSchoolCatalog.json";
 import workbookSchoolOutlets from "./workbookSchoolOutlets.json";
-import yanOiTongLauWongFatProducts from "./yanOiTongLauWongFatProducts.json";
-import dedeLamLatestProducts from "./dedeLamLatestProducts.json";
-import fungYiuKingProducts from "./fung-yiu-king-products.json";
+import { loadProducts, saveProducts as saveProductsToStore } from "./data/productsStore";
 
 const DEFAULT_SCHOOL = "示範學校（可刪除）";
 const EXTRA_SCHOOL_CATALOG = {
@@ -202,56 +200,45 @@ const listSchools = (products) => {
   return Array.from(set).sort((a, b) => a.localeCompare(b, "zh-Hant"));
 };
 
-const mergeBuiltInProducts = (products) => {
-  const normalizedProducts = products.map((product) => ({
+const normalizeProductState = (products) => {
+  const normalizedProducts = (Array.isArray(products) ? products : []).map((product) => ({
     ...product,
     school: canonicalSchoolName(product.school),
     name: cleanProductName(product.name),
     sizes: normalizeProductSizes(product.sizes),
   }));
-  const dedupeProducts = (items) => items.reduce((result, product) => {
+
+  return normalizedProducts.reduce((result, product) => {
     const productParts = productIdentityParts(schoolOf(product), product.name);
     const duplicate = result.find((item) => {
       const itemParts = productIdentityParts(schoolOf(item), item.name);
       return productIdentityKey(itemParts.school, item.name) === productIdentityKey(productParts.school, product.name)
         && compatibleProductGenders(itemParts.gender, productParts.gender);
     });
+
     if (!duplicate) {
       result.push(product);
-    } else {
-      const sizes = [...(duplicate.sizes || [])];
-      (product.sizes || []).forEach((size) => {
-        const existingSize = sizes.find((item) => item.size === size.size && (item.length || "") === (size.length || ""));
-        if (!existingSize) sizes.push(size);
-      });
-      duplicate.sizes = sizes;
+      return result;
     }
+
+    const sizes = [...(duplicate.sizes || [])];
+    (product.sizes || []).forEach((size) => {
+      const exists = sizes.some((item) => item.size === size.size && (item.length || "") === (size.length || ""));
+      if (!exists) sizes.push(size);
+    });
+    duplicate.sizes = sizes;
     return result;
   }, []);
-  const dedupedProducts = dedupeProducts(normalizedProducts);
-  const schoolAliases = {
-    "元朗朗屏邨東莞學校": "東莞學校",
-    "博愛醫院歷屆總理聯誼會梁省德學校": "梁省德學校",
-    "嗇色園主辦可銘學校": "中華基督教會可銘學校",
-    "香海正覺蓮社佛教梁植偉中學": "仁濟醫院梁植偉中學",
-    "鐘聲慈善社胡陳金枝中學": "中華基督教會胡陳金枝中學",
-    "中華基督教會何福堂書院": "聖公會聖西門呂明才中學 / 何福堂中學",
-    "中華基督教會基元中學": "基督教香港信義會基元中學",
-    "中華基督教會譚李麗芬紀念中學": "順德聯誼總會譚李麗芬紀念中學",
-    "仁愛堂陳黃淑芳紀念中學": "東華三院陳黃淑芳紀念中學",
-    "加拿大神召會嘉智中學": "嘉智中學",
-    "保良局西區婦女福利會馮李佩瑤小學": "保良局馮李佩瑤小學",
-    "香港青年協會李兆基書院": "順德聯誼總會李兆基書院",
-    "僑港伍氏宗親會伍時暢紀念學校": "順德聯誼總會伍時暢學校",
-    "東華三院鄺錫坤伉儷中學": "鄺錫坤中學"
-  };
-  const builtInProducts = [...yanOiTongLauWongFatProducts, ...dedeLamLatestProducts, ...fungYiuKingProducts]
-    .map((product) => ({ ...product, school: schoolAliases[product.school] || product.school, name: cleanProductName(product.name) }))
-    .filter((product) => !deletedSchoolsRuntime.has(schoolOf(product)))
-    .filter((product) => product.school === "仁愛堂劉皇發夫人小學" || Object.prototype.hasOwnProperty.call(schoolCatalog, product.school));
-  const existingSchools = new Set(dedupedProducts.map((product) => schoolOf(product)));
-  const productsForNewSchools = builtInProducts.filter((product) => !existingSchools.has(schoolOf(product)));
-  return dedupeProducts([...dedupedProducts, ...productsForNewSchools]);
+};
+
+const enforceAuthoritativeProducts = (products) => {
+  const normalized = normalizeProductState(products);
+  const demoOnly = normalized.length > 0 && normalized.every((product) => product.id?.startsWith("p") && schoolOf(product) === DEFAULT_SCHOOL);
+  if (demoOnly && normalized.length <= 5) {
+    console.warn("[App] Refusing to accept demo fallback products as authoritative product data.");
+    return [];
+  }
+  return normalized;
 };
 
 // ===================== 香港學校分類（教育階段 → 地區 → 18區） =====================
@@ -483,40 +470,63 @@ const buildReceiptUrl = (order) => {
 // ===================== 儲存層 =====================
 // 有 Supabase 設定時使用雲端；未設定時保留 localStorage，方便本機試用。
 if (!window.storage) {
+  const localStorageKey = (key, shared = false) => (shared ? `shared:${key}` : key);
+
   window.storage = {
     get: async (key, shared = false) => {
+      const localKey = localStorageKey(key, shared);
       if (shared && isSupabaseConfigured) {
-        const { data, error } = await supabase
-          .from("app_storage")
-          .select("value")
-          .eq("key", key)
-          .maybeSingle();
-        if (error) throw error;
-        return data ? { value: data.value } : null;
+        try {
+          const { data, error } = await supabase
+            .from("app_storage")
+            .select("value")
+            .eq("key", key)
+            .maybeSingle();
+          if (error) throw error;
+          if (data?.value !== undefined) return { value: data.value };
+        } catch (error) {
+          console.warn(`cloud storage read failed for ${key}, falling back to localStorage`, error);
+        }
       }
-      const value = localStorage.getItem(shared ? `shared:${key}` : key);
+      const value = localStorage.getItem(localKey);
       return value ? { value } : null;
     },
     set: async (key, value, shared = false) => {
+      const localKey = localStorageKey(key, shared);
       if (shared && isSupabaseConfigured) {
-        const { error } = await supabase.from("app_storage").upsert({
-          key,
-          value,
-          updated_at: new Date().toISOString(),
-        });
-        if (error) throw error;
-        return true;
+        try {
+          const { error } = await supabase.from("app_storage").upsert({
+            key,
+            value,
+            updated_at: new Date().toISOString(),
+          });
+          if (!error) {
+            localStorage.setItem(localKey, value);
+            return true;
+          }
+          throw error;
+        } catch (error) {
+          console.warn(`cloud storage write failed for ${key}, saved to localStorage instead`, error);
+        }
       }
-      localStorage.setItem(shared ? `shared:${key}` : key, value);
+      localStorage.setItem(localKey, value);
       return true;
     },
     delete: async (key, shared = false) => {
+      const localKey = localStorageKey(key, shared);
       if (shared && isSupabaseConfigured) {
-        const { error } = await supabase.from("app_storage").delete().eq("key", key);
-        if (error) throw error;
-        return true;
+        try {
+          const { error } = await supabase.from("app_storage").delete().eq("key", key);
+          if (!error) {
+            localStorage.removeItem(localKey);
+            return true;
+          }
+          throw error;
+        } catch (error) {
+          console.warn(`cloud storage delete failed for ${key}, cleaned localStorage instead`, error);
+        }
       }
-      localStorage.removeItem(shared ? `shared:${key}` : key);
+      localStorage.removeItem(localKey);
       return true;
     },
   };
@@ -534,8 +544,8 @@ const readGuestVisitsFromStorage = () => {
 };
 
 export default function UniformPOS() {
-  const [loaded, setLoaded] = useState(true); // TEMP: Skip initialization  
-  const [products, setProducts] = useState(() => mergeBuiltInProducts(DEFAULT_PRODUCTS));
+  const [loaded, setLoaded] = useState(false); // 啟用正確的初始化以從 Supabase 加載產品
+  const [products, setProducts] = useState(() => enforceAuthoritativeProducts(DEFAULT_PRODUCTS));
   const [deletedSchools, setDeletedSchools] = useState([]);
   const [salesLog, setSalesLog] = useState([]);
   const [tab, setTab] = useState("sale");
@@ -613,6 +623,7 @@ export default function UniformPOS() {
   const [storageError, setStorageError] = useState("");
   const [productsSaveError, setProductsSaveError] = useState("");
   const [productsSaveState, setProductsSaveState] = useState("saved");
+  const [sourceIntegrityWarning, setSourceIntegrityWarning] = useState("");
   const productsSaveTimerRef = useRef(null);
   const productsPersistQueueRef = useRef(Promise.resolve());
   const productsSavePendingRef = useRef(false);
@@ -725,18 +736,13 @@ export default function UniformPOS() {
   // 檢查 URL 是否包含 school 參數，如果有則自動進入客人登記頁面
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const schoolFromUrl = params.get("school");
-    
+    const schoolIdFromUrl = params.get("school_id");
+    const schoolFromUrl = schoolIdFromUrl || params.get("school");
+
     if (schoolFromUrl) {
-      // 設置臨時客人會話（無需 PIN 登入）
       setSession({ id: "guest-session", name: "遊客", role: ROLES.GUEST });
-      
-      // 設置學校選擇
       setSelectedSchool(schoolFromUrl);
-      
-      // 設置標籤為客人登記表（直接進入登記）
       setTab("guest");
-      
       console.log("檢測到 QR CODE 訪問，校名:", schoolFromUrl);
     }
   }, []);
@@ -826,6 +832,12 @@ export default function UniformPOS() {
     }
   }, [products]);
 
+  useEffect(() => {
+    if (!products.some((product) => product.id === selectedProduct)) {
+      setSelectedProduct(null);
+    }
+  }, [products, selectedProduct]);
+
   const pickSchool = (sc) => {
     setSelectedSchool(sc);
     setSelectedProduct(null);
@@ -839,12 +851,21 @@ export default function UniformPOS() {
     try {
       const skipProducts = skipProductsWhileEditing && (tabRef.current === "products" || productsSavePendingRef.current);
       const [p, s, a, sm] = await Promise.all([
-        skipProducts ? Promise.resolve(null) : isSupabaseAuthEnabled ? loadSecureProducts() : window.storage.get("products", true).catch(() => null),
+        skipProducts ? Promise.resolve(null) : loadProducts({
+          storage: window.storage,
+          supabase,
+          isSupabaseAuthEnabled,
+          fallbackProducts: DEFAULT_PRODUCTS,
+        }),
         isSupabaseAuthEnabled ? loadSecureOrders() : window.storage.get("sales-log", true).catch(() => null),
         window.storage.get("staff-accounts", true).catch(() => null),
         window.storage.get("school-meta", true).catch(() => null),
       ]);
-      if (p && !productsSavePendingRef.current) setProducts(mergeBuiltInProducts(isSupabaseAuthEnabled ? p : JSON.parse(p.value)));
+      if (p && !productsSavePendingRef.current) {
+        const authoritative = enforceAuthoritativeProducts(p);
+        setSourceIntegrityWarning(authoritative.length === 0 && p.length > 0 ? "產品資料來源不完整：目前只檢測到示範資料，已阻止當作正式產品庫。" : "");
+        setProducts(authoritative);
+      }
       if (s) setSalesLog(isSupabaseAuthEnabled ? s : JSON.parse(s.value));
       if (a && a.value) setAccounts(JSON.parse(a.value));
       if (sm && sm.value) setSchoolMeta(JSON.parse(sm.value));
@@ -904,11 +925,20 @@ export default function UniformPOS() {
         const deletedList = deleted && deleted.value ? JSON.parse(deleted.value) : [];
         deletedSchoolsRuntime = new Set(Array.isArray(deletedList) ? deletedList : []);
         setDeletedSchools([...deletedSchoolsRuntime]);
-        const p = isSupabaseAuthEnabled ? await loadSecureProducts() : await window.storage.get("products", true).catch(() => null);
+        const p = await loadProducts({
+          storage: window.storage,
+          supabase,
+          isSupabaseAuthEnabled,
+          fallbackProducts: DEFAULT_PRODUCTS,
+        });
         const s = isSupabaseAuthEnabled ? await loadSecureOrders() : await window.storage.get("sales-log", true).catch(() => null);
         const a = await window.storage.get("staff-accounts", true).catch(() => null);
         const sm = await window.storage.get("school-meta", true).catch(() => null);
-        if (p) setProducts(mergeBuiltInProducts(isSupabaseAuthEnabled ? p : JSON.parse(p.value)));
+        if (p) {
+          const authoritative = enforceAuthoritativeProducts(p);
+          setSourceIntegrityWarning(authoritative.length === 0 && p.length > 0 ? "產品資料來源不完整：目前只檢測到示範資料，已阻止當作正式產品庫。" : "");
+          setProducts(authoritative);
+        }
         if (s) setSalesLog(isSupabaseAuthEnabled ? s : JSON.parse(s.value));
         if (a && a.value) {
           setAccounts(JSON.parse(a.value));
@@ -925,6 +955,17 @@ export default function UniformPOS() {
     })();
   }, [authReady]);
 
+  // 第一次加載時自動刷新以確保從 Supabase 加載產品
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (loaded && products.length <= 20) {
+        // 如果只有默認產品或很少的產品，嘗試從 Supabase 重新加載
+        refreshFromCloud({ skipProductsWhileEditing: false });
+      }
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [loaded]);
+
   // 每30秒自動由雲端拉一次最新資料
   useEffect(() => {
     const timer = setInterval(() => {
@@ -936,41 +977,25 @@ export default function UniformPOS() {
   const persistProducts = async (next, { orderOnly = false } = {}) => {
     try {
       if (isSupabaseAuthEnabled && supabase) {
-        const uniqueProducts = next.reduce((result, product) => {
-          const duplicate = result.find((item) => item.id === product.id);
-          if (!duplicate) {
-            result.push(product);
-            return result;
-          }
-          const sizes = [...(duplicate.sizes || [])];
-          (product.sizes || []).forEach((size) => {
-            const exists = sizes.some((item) => item.size === size.size && (item.length || "") === (size.length || ""));
-            if (!exists) sizes.push(size);
-          });
-          duplicate.sizes = sizes;
-          return result;
-        }, []);
         if (orderOnly) {
-          const results = await Promise.all(uniqueProducts.map((product, index) =>
+          const results = await Promise.all(next.map((product, index) =>
             supabase.from("products").update({ display_order: index }).eq("id", product.id)
           ));
           const orderError = results.find(({ error }) => error)?.error;
           if (orderError) throw orderError;
           return;
         }
-        const { data: existing, error: existingError } = await supabase.from("products").select("id");
-        if (existingError) throw existingError;
-        const nextIds = new Set(uniqueProducts.map((product) => product.id));
-        const deletedIds = (existing || []).map((product) => product.id).filter((id) => !nextIds.has(id));
-        if (deletedIds.length > 0) {
-          const { error: deleteError } = await supabase.from("products").delete().in("id", deletedIds);
-          if (deleteError) throw deleteError;
-        }
-        const { error } = await supabase.from("products").upsert(uniqueProducts.map(({ id, school, name, sizes }, index) => ({ id, school: school || "", name, sizes, display_order: index })));
-        if (error) throw error;
-      } else {
-        await window.storage.set("products", JSON.stringify(next), true);
+
+        await saveProductsToStore({
+          products: next,
+          storage: window.storage,
+          supabase,
+          isSupabaseAuthEnabled,
+        });
+        return;
       }
+
+      await window.storage.set("products", JSON.stringify(next), true);
     } catch (e) {
       console.error("儲存商品失敗", e);
       throw e;
@@ -1700,6 +1725,8 @@ function SaleTab({ products, selectedProduct, setSelectedProduct, addToCart, car
           })()}
           {(() => {
             const product = products.find((p) => p.id === selectedProduct);
+            if (!product) return null;
+            if (!product) return null;
             const hasLengths = hasLengthOptions(product);
             if (!hasLengths) return (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -1851,7 +1878,7 @@ function SaleTab({ products, selectedProduct, setSelectedProduct, addToCart, car
   );
 }
 
-function ProductsTab({ products, saveProducts, saveProductsNow, importResult, setImportResult, productsSaveError = "", productsSaveState = "saved", canManageSchools = true, canImportExport = true, schoolMeta = {}, saveSchoolMeta = async () => {}, setDeletedSchools = () => {}, selectedSchool = null, setSelectedSchool = () => {} }) {
+function ProductsTab({ products, saveProducts, saveProductsNow, importResult, setImportResult, productsSaveError = "", productsSaveState = "saved", sourceIntegrityWarning = "", canManageSchools = true, canImportExport = true, schoolMeta = {}, saveSchoolMeta = async () => {}, setDeletedSchools = () => {}, selectedSchool = null, setSelectedSchool = () => {} }) {
   const [expanded, setExpanded] = useState(null);
   const [importing, setImporting] = useState(false);
   const [lengthPromptProductId, setLengthPromptProductId] = useState(null);

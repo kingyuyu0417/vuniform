@@ -10,5 +10,14 @@ export const isSupabaseConfigured = Boolean(isValidSupabaseUrl && supabaseAnonKe
 export const isSupabaseAuthEnabled = isSupabaseConfigured && import.meta.env.VITE_USE_SUPABASE_AUTH === "true";
 
 export const supabase = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+    })
   : null;
+
+export const buildSchoolId = (schoolName = "") => String(schoolName || "").trim() || "default-school";
+export const getSchoolRealtimeFilter = (schoolName) => `school_id=eq.${encodeURIComponent(buildSchoolId(schoolName))}`;

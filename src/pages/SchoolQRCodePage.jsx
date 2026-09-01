@@ -8,8 +8,8 @@ const SchoolQRCodePage = ({ schoolName, onSchoolChange }) => {
   const [schoolUrl, setSchoolUrl] = useState("");
 
   useEffect(() => {
-    // 生成該學校專用的 URL（帶有 school 參數）
-    const url = `${window.location.origin}?school=${encodeURIComponent(schoolName)}&tab=guest`;
+    const schoolId = String(schoolName || "").trim() || "default-school";
+    const url = `${window.location.origin}?school_id=${encodeURIComponent(schoolId)}&school=${encodeURIComponent(schoolName)}&tab=guest`;
     setSchoolUrl(url);
     generateQRCode(url);
   }, [schoolName]);

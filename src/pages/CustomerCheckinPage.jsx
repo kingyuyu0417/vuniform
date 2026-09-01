@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
-import { guestVisits } from "../services/customerFlowService";
+import React, { useState } from "react";
 import qrcodeGenerator from "qrcode-generator";
 import { Copy, QrCode } from "lucide-react";
+import { queueOrderService } from "../services/queueOrderService";
 
 const emptyForm = {
   guestName: "",
@@ -10,6 +10,16 @@ const emptyForm = {
   weightKg: "",
   phone: "",
   notes: "",
+};
+
+const fieldStyle = {
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "10px 12px",
+  borderRadius: 8,
+  border: "1px solid #D5DDE5",
+  fontSize: 14,
+  background: "#fff",
 };
 
 export default function CustomerCheckinPage({ onSubmit, school = "" }) {
@@ -22,6 +32,17 @@ export default function CustomerCheckinPage({ onSubmit, school = "" }) {
 
   const handleChange = (field) => (event) => {
     setForm((prev) => ({ ...prev, [field]: event.target.value }));
+  };
+
+  const generateQRCode = (url) => {
+    try {
+      const qr = qrcodeGenerator(0, "M");
+      qr.addData(url);
+      qr.make();
+      setQrCode(qr.createDataURL(10));
+    } catch (error) {
+      console.error("QR Code 生成失敗:", error);
+    }
   };
 
   const handleSubmit = async (event) => {
@@ -39,43 +60,39 @@ export default function CustomerCheckinPage({ onSubmit, school = "" }) {
 
     setIsLoading(true);
     try {
-      const guest = await guestVisits.create({
-        guestName: name,
-        className,
-        heightCm: form.heightCm || "",
-        weightKg: form.weightKg || "",
-        phone,
-        notes: form.notes || "",
-        school,
+      const schoolId = school || "default-school";
+      const queue = await queueOrderService.createOrder({
+        school_id: schoolId,
+        customer_info: {
+          guestName: name,
+          className,
+          heightCm: form.heightCm || "",
+          weightKg: form.weightKg || "",
+          phone,
+          notes: form.notes || "",
+        },
       });
 
-      // 生成排隊號（簡單格式：學校縮寫 + 流水號）
-      const queueNo = `FYM-${String((guest.id || "").slice(-3)).padStart(3, "0")}`;
-      guest.queueNo = queueNo;
+      const record = {
+        ...queue,
+        queueNo: queue.queue_number,
+        guestName: name,
+        className,
+        phone,
+        school: schoolId,
+      };
 
-      // 生成該客人的專屬查單連結（掃碼後直接查看自己的單）
-      const trackingUrl = `${window.location.origin}?queue=${encodeURIComponent(queueNo)}`;
-      guest.recordUrl = trackingUrl;
+      const trackingUrl = `${window.location.origin}?school_id=${encodeURIComponent(schoolId)}&queue=${encodeURIComponent(record.queueNo)}`;
+      record.recordUrl = trackingUrl;
       generateQRCode(trackingUrl);
 
-      setSubmitted(guest);
-      onSubmit?.(guest);
+      setSubmitted(record);
+      onSubmit?.(record);
       setForm(emptyForm);
     } catch (err) {
       setError("登記失敗：" + (err.message || "未知錯誤"));
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const generateQRCode = (url) => {
-    try {
-      const qr = qrcodeGenerator(0, "M");
-      qr.addData(url);
-      qr.make();
-      setQrCode(qr.createDataURL(10));
-    } catch (error) {
-      console.error("QR Code 生成失敗:", error);
     }
   };
 
@@ -189,18 +206,19 @@ export default function CustomerCheckinPage({ onSubmit, school = "" }) {
       {submitted && (
         <div style={{ background: "#EAF7EF", border: "1px solid #B7E0C6", borderRadius: 12, padding: 16 }}>
           <div style={{ fontSize: 18, fontWeight: 700, color: "#21693C", marginBottom: 16, textAlign: "center" }}>✓ 登記成功</div>
-          
-          {/* 排隊號顯示 */}
+
           <div style={{ textAlign: "center", marginBottom: 20 }}>
             <div style={{ fontSize: 12, color: "#255F3D", marginBottom: 8 }}>您的排隊號</div>
-            <div style={{ 
-              fontSize: 48, 
-              fontWeight: "bold", 
-              color: "#10b981", 
-              letterSpacing: "4px",
-              marginBottom: 8,
-              fontFamily: "monospace"
-            }}>
+            <div
+              style={{
+                fontSize: 48,
+                fontWeight: "bold",
+                color: "#10b981",
+                letterSpacing: "4px",
+                marginBottom: 8,
+                fontFamily: "monospace",
+              }}
+            >
               {submitted.queueNo}
             </div>
             <div style={{ display: "flex", justifyContent: "center", gap: 8, flexWrap: "wrap" }}>
@@ -241,41 +259,24 @@ export default function CustomerCheckinPage({ onSubmit, school = "" }) {
             </div>
           </div>
 
-          {/* 專屬 QR CODE */}
           {qrCode && (
             <div style={{ textAlign: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 12, color: "#255F3D", marginBottom: 8 }}>專屬單據 QR CODE（可掃描查看該客人的單）</div>
-              <div style={{
-                background: "#f3f4f6",
-                borderRadius: "8px",
-                padding: "16px",
-                display: "inline-block",
-              }}>
+              <div style={{ fontSize: 12, color: "#255F3D", marginBottom: 8 }}>專屬單據 QR CODE</div>
+              <div
+                style={{
+                  background: "#f3f4f6",
+                  borderRadius: "8px",
+                  padding: "16px",
+                  display: "inline-block",
+                }}
+              >
                 <img src={qrCode} alt="Queue QR Code" style={{ width: "170px", height: "170px" }} />
               </div>
             </div>
           )}
-
-          {/* 說明 */}
-          <div style={{ fontSize: 13, color: "#255F3D", lineHeight: 1.6 }}>
-            <p>✓ 登記成功，請記住您的排隊號</p>
-            <p>✓ 掃描上方 QR 可直接查看該客人的單及排隊狀態</p>
-            <p>✓ 店員會根據排隊號叫號</p>
-            <p>✓ 請保持聯絡方式暢通</p>
-            <p>✓ 您可以刷新頁面重新登記新客人</p>
-          </div>
         </div>
       )}
     </div>
   );
 }
 
-const fieldStyle = {
-  width: "100%",
-  boxSizing: "border-box",
-  padding: "10px 12px",
-  borderRadius: 8,
-  border: "1px solid #D5DDE5",
-  fontSize: 14,
-  background: "#fff",
-};

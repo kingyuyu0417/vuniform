@@ -1,43 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import qrcodeGenerator from "qrcode-generator";
 import { Clock3, Copy, QrCode, Users } from "lucide-react";
-import { guestVisits } from "../services/customerFlowService";
-
-const STORAGE_KEY = "uniform_pos_guest_visits";
+import { queueOrderService, ORDER_STATUS, getCurrentQueuePosition } from "../services/queueOrderService";
 
 const statusLabel = {
-  waiting: "等待中",
-  assigned: "已分配",
-  fitting: "度身中",
-  selected: "已選款",
-  ready_for_pickup: "可取貨",
-  completed: "已完成",
-};
-
-const readQueueVisits = () => {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch (error) {
-    console.warn("讀取排隊資料失敗", error);
-    return [];
-  }
-};
-
-const getQueuePosition = (queueList, targetQueueNo) => {
-  if (!targetQueueNo || !queueList.length) return null;
-  const sorted = [...queueList]
-    .filter((item) => item.queueNo && item.status !== "completed")
-    .sort((a, b) => new Date(a.createdAt || a.created_at || 0) - new Date(b.createdAt || b.created_at || 0));
-
-  const targetIndex = sorted.findIndex((item) => item.queueNo === targetQueueNo);
-  if (targetIndex === -1) return null;
-
-  return {
-    current: targetIndex + 1,
-    before: Math.max(targetIndex, 0),
-  };
+  [ORDER_STATUS.PENDING]: "排隊中",
+  [ORDER_STATUS.PREPARING]: "待執貨",
+  [ORDER_STATUS.READY]: "已執好",
+  [ORDER_STATUS.COMPLETED]: "已完成",
+  [ORDER_STATUS.SKIPPED]: "已過號",
 };
 
 export default function GuestQueueStatusPage({ queueNo: queueNoProp, schoolName = "" }) {
@@ -48,31 +19,32 @@ export default function GuestQueueStatusPage({ queueNo: queueNoProp, schoolName 
   const [copied, setCopied] = useState(false);
 
   const refreshStatus = async () => {
-    try {
-      const visits = await guestVisits.listAll();
-      const effectiveVisits = Array.isArray(visits) && visits.length > 0 ? visits : readQueueVisits();
-      setQueueList(effectiveVisits);
-      const matched = effectiveVisits.find((visit) => (visit.queueNo || visit.queue_no) === queueNo);
-      setGuest(matched || null);
-    } catch (error) {
-      console.error("載入客人排隊狀態失敗", error);
-      const visits = readQueueVisits();
-      setQueueList(visits);
-      const matched = visits.find((visit) => (visit.queueNo || visit.queue_no) === queueNo);
-      setGuest(matched || null);
-    }
+    const schoolId = schoolName || new URLSearchParams(window.location.search).get("school_id") || new URLSearchParams(window.location.search).get("school") || "";
+    const rows = await queueOrderService.listOrders({ schoolId });
+    setQueueList(rows);
+    const matched = rows.find((item) => (item.queue_number || item.queueNumber) === queueNo);
+    setGuest(matched || null);
   };
 
   useEffect(() => {
     if (!queueNo) return;
     refreshStatus();
-    const timer = setInterval(refreshStatus, 5000);
-    return () => clearInterval(timer);
-  }, [queueNo]);
+    const schoolId = schoolName || new URLSearchParams(window.location.search).get("school_id") || new URLSearchParams(window.location.search).get("school") || "";
+    const unsub = queueOrderService.subscribe({
+      schoolId,
+      onChange: (rows) => {
+        setQueueList(rows);
+        const matched = rows.find((item) => (item.queue_number || item.queueNumber) === queueNo);
+        setGuest(matched || null);
+      },
+    });
+    return () => unsub.unsubscribe();
+  }, [queueNo, schoolName]);
 
   useEffect(() => {
     if (!queueNo) return;
-    const url = `${window.location.origin}?queue=${encodeURIComponent(queueNo)}`;
+    const schoolId = schoolName || new URLSearchParams(window.location.search).get("school_id") || new URLSearchParams(window.location.search).get("school") || "";
+    const url = `${window.location.origin}?school_id=${encodeURIComponent(schoolId)}&queue=${encodeURIComponent(queueNo)}`;
     try {
       const qr = qrcodeGenerator(0, "M");
       qr.addData(url);
@@ -81,9 +53,9 @@ export default function GuestQueueStatusPage({ queueNo: queueNoProp, schoolName 
     } catch (error) {
       console.error("客人專屬 QR 生成失敗:", error);
     }
-  }, [queueNo]);
+  }, [queueNo, schoolName]);
 
-  const queuePosition = useMemo(() => getQueuePosition(queueList, queueNo), [queueList, queueNo]);
+  const queuePosition = useMemo(() => getCurrentQueuePosition(queueList, queueNo), [queueList, queueNo]);
 
   const handleCopyQueue = async () => {
     if (!queueNo) return;
@@ -105,7 +77,7 @@ export default function GuestQueueStatusPage({ queueNo: queueNoProp, schoolName 
     );
   }
 
-  const statusText = guest?.status ? statusLabel[guest.status] || guest.status : "等待中";
+  const statusText = guest?.status ? statusLabel[guest.status] || guest.status : "排隊中";
 
   return (
     <div style={{ maxWidth: 720, margin: "32px auto", padding: 20, display: "grid", gap: 18 }}>
@@ -115,13 +87,7 @@ export default function GuestQueueStatusPage({ queueNo: queueNoProp, schoolName 
           <div style={{ fontSize: 42, fontWeight: 800, letterSpacing: 2, color: "#1F3A5F", fontFamily: "monospace" }}>
             {queueNo}
           </div>
-          <div style={{
-            background: guest?.status === "ready_for_pickup" ? "#dcfce7" : "#e0f2fe",
-            color: guest?.status === "ready_for_pickup" ? "#166534" : "#075985",
-            padding: "8px 12px",
-            borderRadius: 999,
-            fontWeight: 700,
-          }}>
+          <div style={{ background: guest?.status === ORDER_STATUS.READY ? "#dcfce7" : "#e0f2fe", color: guest?.status === ORDER_STATUS.READY ? "#166534" : "#075985", padding: "8px 12px", borderRadius: 999, fontWeight: 700 }}>
             {statusText}
           </div>
         </div>
@@ -139,18 +105,7 @@ export default function GuestQueueStatusPage({ queueNo: queueNoProp, schoolName 
         </div>
 
         <div style={{ marginTop: 18, display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button
-            onClick={handleCopyQueue}
-            style={{
-              background: "#1F3A5F",
-              color: "#fff",
-              border: "none",
-              borderRadius: 8,
-              padding: "10px 14px",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
+          <button onClick={handleCopyQueue} style={{ background: "#1F3A5F", color: "#fff", border: "none", borderRadius: 8, padding: "10px 14px", fontWeight: 700, cursor: "pointer" }}>
             <Copy size={16} style={{ marginRight: 6, verticalAlign: "middle" }} />
             {copied ? "已複製" : "複製排隊號"}
           </button>
@@ -175,11 +130,11 @@ export default function GuestQueueStatusPage({ queueNo: queueNoProp, schoolName 
         <div style={{ background: "#fff", borderRadius: 16, padding: 20, border: "1px solid #E2E8F0" }}>
           <div style={{ fontWeight: 700, color: "#1F3A5F", marginBottom: 14 }}>我的資料</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
-            <div><div style={{ fontSize: 12, color: "#6b7280" }}>姓名</div><div style={{ fontWeight: 700 }}>{guest.guestName || guest.guest_name || "-"}</div></div>
-            <div><div style={{ fontSize: 12, color: "#6b7280" }}>班級</div><div style={{ fontWeight: 700 }}>{guest.className || guest.class_name || "-"}</div></div>
-            <div><div style={{ fontSize: 12, color: "#6b7280" }}>身高</div><div style={{ fontWeight: 700 }}>{guest.heightCm || guest.height_cm || "-"}</div></div>
-            <div><div style={{ fontSize: 12, color: "#6b7280" }}>體重</div><div style={{ fontWeight: 700 }}>{guest.weightKg || guest.weight_kg || "-"}</div></div>
-            <div><div style={{ fontSize: 12, color: "#6b7280" }}>電話</div><div style={{ fontWeight: 700 }}>{guest.phone || "-"}</div></div>
+            <div><div style={{ fontSize: 12, color: "#6b7280" }}>姓名</div><div style={{ fontWeight: 700 }}>{guest.customer_info?.guestName || guest.guestName || "-"}</div></div>
+            <div><div style={{ fontSize: 12, color: "#6b7280" }}>班級</div><div style={{ fontWeight: 700 }}>{guest.customer_info?.className || guest.className || "-"}</div></div>
+            <div><div style={{ fontSize: 12, color: "#6b7280" }}>身高</div><div style={{ fontWeight: 700 }}>{guest.customer_info?.heightCm || guest.heightCm || "-"}</div></div>
+            <div><div style={{ fontSize: 12, color: "#6b7280" }}>體重</div><div style={{ fontWeight: 700 }}>{guest.customer_info?.weightKg || guest.weightKg || "-"}</div></div>
+            <div><div style={{ fontSize: 12, color: "#6b7280" }}>電話</div><div style={{ fontWeight: 700 }}>{guest.customer_info?.phone || guest.phone || "-"}</div></div>
           </div>
         </div>
       )}
@@ -190,3 +145,4 @@ export default function GuestQueueStatusPage({ queueNo: queueNoProp, schoolName 
     </div>
   );
 }
+

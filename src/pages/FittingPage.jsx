@@ -1,290 +1,705 @@
-import React, { useState } from "react";
-import { pickupTickets, guestVisits } from "../services/customerFlowService";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Camera,
+  Check,
+  Clock3,
+  QrCode,
+  SkipForward,
+  UserRound,
+  X,
+} from "lucide-react";
+import { queueOrderService, ORDER_STATUS } from "../services/queueOrderService";
 
-const displayProductName = (name) => name
-  .replace(/(?:【)?(?:男生|女生|男女生)(?:】)?\s*[-–—:：]?\s*/g, "")
-  .replace(/\b(?:Boy|Girl)[`'']s\b\s*[-–—:：]?\s*/gi, "")
-  .replace(/\s+/g, " ")
-  .replace(/校\s+褸/g, "校褸")
-  .trim();
+const STORAGE_DRAFT_KEY = "uniform-pos-fitting-drafts";
 
-const sampleProducts = [
-  {
-    id: "p1",
-    name: "白色恤衫（短袖）",
-    sizes: ["24", "26", "28", "30", "32", "34", "36", "38", "40"],
-  },
-  {
-    id: "p2",
-    name: "白色恤衫（長袖）",
-    sizes: ["24", "26", "28", "30", "32", "34", "36", "38", "40"],
-  },
-  {
-    id: "p3",
-    name: "藏青色短褲",
-    sizes: ["24", "26", "28", "30", "32", "34"],
-  },
-  {
-    id: "p4",
-    name: "校裙",
-    sizes: ["XS", "S", "M", "L", "XL"],
-  },
-  {
-    id: "p5",
-    name: "PE運動套裝",
-    sizes: ["XS", "S", "M", "L", "XL"],
-  },
-];
+const getSafeOrder = (order) => ({
+  ...order,
+  customer_info: order.customer_info || order.customerInfo || {},
+  tailor_info: order.tailor_info || order.tailorInfo || {},
+  queue_number: order.queue_number || order.queueNumber || "",
+  status: order.status || ORDER_STATUS.PENDING,
+});
 
-const emptyItem = {
-  productId: "",
-  size: "",
-  quantity: 1,
+const readDrafts = () => {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_DRAFT_KEY) || "{}");
+  } catch {
+    return {};
+  }
 };
 
-export default function FittingPage({ guest, products = sampleProducts, schoolName = "", onGenerateTicket }) {
-  const [items, setItems] = useState([{ ...emptyItem }]);
-  const [submitted, setSubmitted] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+const writeDrafts = (drafts) => {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(STORAGE_DRAFT_KEY, JSON.stringify(drafts));
+};
 
-  const visibleProducts = Array.isArray(products) ? products : sampleProducts;
+const defaultProducts = [
+  { id: "shirt-short", name: "白色短袖恤衫", sizes: ["24", "26", "28", "30", "32", "34", "36", "38", "40"] },
+  { id: "shirt-long", name: "白色長袖恤衫", sizes: ["24", "26", "28", "30", "32", "34", "36", "38", "40"] },
+  { id: "short-pants", name: "藏青色短褲", sizes: ["24", "26", "28", "30", "32", "34"] },
+  { id: "skirt", name: "校裙", sizes: ["XS", "S", "M", "L", "XL"] },
+  { id: "pe-set", name: "PE 運動套裝", sizes: ["XS", "S", "M", "L", "XL"] },
+  { id: "blazer", name: "校褸", sizes: ["S", "M", "L", "XL", "XXL"] },
+];
 
-  const handleItemChange = (index, field, value) => {
-    const newItems = [...items];
-    newItems[index] = { ...newItems[index], [field]: value };
-    setItems(newItems);
-  };
+const emptySelection = { productId: "", size: "", quantity: 1 };
 
-  const handleAddItem = () => {
-    setItems([...items, { ...emptyItem }]);
-  };
+export default function FittingPage({ currentSchoolId = "", products = defaultProducts, selectedOrderId = "", onStatusChange }) {
+  const [orders, setOrders] = useState([]);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [selection, setSelection] = useState([{ ...emptySelection }]);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanText, setScanText] = useState("");
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [notice, setNotice] = useState("");
 
-  const handleRemoveItem = (index) => {
-    if (items.length > 1) {
-      setItems(items.filter((_, i) => i !== index));
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+
+  const syncOrders = async () => {
+    const rows = await queueOrderService.listOrders({ schoolId: currentSchoolId });
+    const normalized = rows.map(getSafeOrder);
+    setOrders(normalized);
+    if (selectedOrderId) {
+      const match = normalized.find((o) => o.id === selectedOrderId);
+      if (match) setSelectedOrder(match);
+    } else if (normalized.length) {
+      const pending = normalized.find((o) => o.status === ORDER_STATUS.PENDING);
+      if (pending) setSelectedOrder(pending);
     }
   };
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    setError("");
+  useEffect(() => {
+    syncOrders();
+    const unsub = queueOrderService.subscribe({
+      schoolId: currentSchoolId,
+      onChange: (rows) => {
+        const normalized = (rows || []).map(getSafeOrder);
+        setOrders(normalized);
+        if (!selectedOrder && normalized.length) {
+          const pending = normalized.find((o) => o.status === ORDER_STATUS.PENDING);
+          if (pending) setSelectedOrder(pending);
+        }
+        if (selectedOrder) {
+          const next = normalized.find((o) => o.id === selectedOrder.id);
+          if (next) setSelectedOrder(next);
+        }
+      },
+    });
+    return () => unsub.unsubscribe();
+  }, [currentSchoolId]);
 
-    const validItems = items.filter((item) => item.productId && item.size && item.quantity > 0);
-    if (validItems.length === 0) {
-      setError("請至少選擇一件商品");
+  useEffect(() => {
+    const drafts = readDrafts();
+    const saved = currentSchoolId ? drafts[currentSchoolId]?.[selectedOrder?.id] : null;
+    if (saved && saved.items) {
+      setSelection(saved.items);
+    } else {
+      setSelection([{ ...emptySelection }]);
+    }
+  }, [selectedOrder, currentSchoolId]);
+
+  useEffect(() => () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+    }
+  }, []);
+
+  const ticketOptions = useMemo(() => {
+    return orders
+      .filter((o) => [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STATUS.READY].includes(o.status))
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  }, [orders]);
+
+  const activeOrder = selectedOrder || ticketOptions[0] || null;
+
+  const handleSelectOrder = (order) => {
+    setSelectedOrder(order);
+    setNotice("");
+    const drafts = readDrafts();
+    const saved = drafts[currentSchoolId]?.[order.id];
+    if (saved?.items) {
+      setSelection(saved.items);
+    } else {
+      setSelection([{ ...emptySelection }]);
+    }
+  };
+
+  const handleScanValue = async (rawValue) => {
+    const cleaned = String(rawValue || "").trim();
+    if (!cleaned) return;
+
+    const found = orders.find((o) => (o.queue_number || "").toUpperCase() === cleaned.toUpperCase());
+    if (found) {
+      setSelectedOrder(found);
+      setScanOpen(false);
+      setScanText("");
+      setCameraReady(false);
       return;
     }
 
-    if (!guest || !guest.id) {
-      setError("未選擇客人");
+    const rows = await queueOrderService.listOrders({ schoolId: currentSchoolId });
+    const fallback = rows.find((o) => (o.queue_number || o.queueNumber || "").toUpperCase() === cleaned.toUpperCase());
+    if (fallback) {
+      setSelectedOrder(getSafeOrder(fallback));
+      setScanOpen(false);
+      setScanText("");
+      setCameraReady(false);
       return;
     }
 
-    setIsLoading(true);
+    setNotice("找不到此排隊號，請確認學校或號碼正確");
+  };
+
+  const startCameraScan = async () => {
+    setScanOpen(true);
+    setCameraError("");
+    setCameraReady(false);
+
+    if (!("BarcodeDetector" in window) || !navigator.mediaDevices?.getUserMedia) {
+      setCameraError("目前瀏覽器不支援相機掃碼，請手動輸入排隊號");
+      return;
+    }
+
     try {
-      const ticket = await pickupTickets.create({
-        guestId: guest.id,
-        guestName: guest.guestName || guest.guest_name || "未知客人",
-        queueNo: guest.queueNo || guest.queue_no || "-",
-        items: validItems.map((item) => {
-          const product = products.find((p) => p.id === item.productId);
-          return {
-            productId: item.productId,
-            productName: product?.name || "未知產品",
-            size: item.size,
-            quantity: item.quantity,
-          };
-        }),
-        school: guest.school || "",
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
 
-      // 更新客人狀態為已選款
-      await guestVisits.updateStatus(guest.id, "selected");
+      const detector = new window.BarcodeDetector({ formats: ["qr_code", "code_128", "ean_13"] });
+      const tick = async () => {
+        if (!scanOpen || !videoRef.current || !streamRef.current) return;
+        try {
+          const barcodes = await detector.detect(videoRef.current);
+          if (barcodes && barcodes[0]?.rawValue) {
+            await handleScanValue(barcodes[0].rawValue);
+            return;
+          }
+        } catch {
+          // ignore camera detection errors here
+        }
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+      setCameraReady(true);
+    } catch (error) {
+      setCameraError("相機未開啟，請手動輸入排隊號");
+      console.error(error);
+    }
+  };
 
-      setSubmitted(ticket);
-      onGenerateTicket?.(ticket);
-      setItems([{ ...emptyItem }]);
-    } catch (err) {
-      setError("生成取貨單失敗：" + (err.message || "未知錯誤"));
+  const stopCameraScan = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setScanOpen(false);
+    setCameraReady(false);
+  };
+
+  const updateSelection = (index, patch) => {
+    setSelection((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], ...patch };
+      const drafts = readDrafts();
+      const base = drafts[currentSchoolId] || {};
+      base[selectedOrder?.id] = { items: next };
+      drafts[currentSchoolId] = base;
+      writeDrafts(drafts);
+      return next;
+    });
+  };
+
+  const addItem = () => setSelection((prev) => [...prev, { ...emptySelection }]);
+
+  const removeItem = (index) => {
+    setSelection((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      return next.length ? next : [{ ...emptySelection }];
+    });
+  };
+
+  const handleSubmit = async () => {
+    if (!activeOrder) {
+      setNotice("請先選擇客人");
+      return;
+    }
+
+    const items = selection
+      .filter((row) => row.productId && row.size)
+      .map((row) => ({
+        product_id: row.productId,
+        product_name: products.find((p) => p.id === row.productId)?.name || "未知產品",
+        size: row.size,
+        quantity: Number(row.quantity || 1),
+      }));
+
+    if (!items.length) {
+      setNotice("請至少選擇一個款式與尺碼");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        tailor_info: {
+          customer_name: activeOrder.customer_info?.guestName || "",
+          queue_number: activeOrder.queue_number,
+          items,
+          prepared_at: new Date().toISOString(),
+        },
+      };
+
+      const result = await queueOrderService.updateStatus(activeOrder.id, ORDER_STATUS.PREPARING, payload);
+      onStatusChange?.(result);
+      setNotice("已更新為 PREPARING，等待倉務執貨");
+
+      const drafts = readDrafts();
+      const schoolDrafts = drafts[currentSchoolId] || {};
+      delete schoolDrafts[activeOrder.id];
+      drafts[currentSchoolId] = schoolDrafts;
+      writeDrafts(drafts);
+
+      setSelection([{ ...emptySelection }]);
+      setSelectedOrder(getSafeOrder(result));
+    } catch (error) {
+      const drafts = readDrafts();
+      const schoolDrafts = drafts[currentSchoolId] || {};
+      schoolDrafts[activeOrder.id] = { items: selection };
+      drafts[currentSchoolId] = schoolDrafts;
+      writeDrafts(drafts);
+      setNotice("網絡異常已暫存到手機，恢復後會自動同步");
+      console.error("fitting submit failed", error);
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSkip = async () => {
+    if (!activeOrder) return;
+    try {
+      await queueOrderService.updateStatus(activeOrder.id, ORDER_STATUS.SKIPPED, {
+        tailor_info: {
+          ...(activeOrder.tailor_info || {}),
+          skipped_at: new Date().toISOString(),
+          skipped_reason: "未到場",
+        },
+      });
+      setNotice("已標記為 SKIPPED，隊伍已繼續");
+      onStatusChange?.({ id: activeOrder.id, status: ORDER_STATUS.SKIPPED });
+      const drafts = readDrafts();
+      const schoolDrafts = drafts[currentSchoolId] || {};
+      delete schoolDrafts[activeOrder.id];
+      drafts[currentSchoolId] = schoolDrafts;
+      writeDrafts(drafts);
+      setSelection([{ ...emptySelection }]);
+      setSelectedOrder(null);
+    } catch (error) {
+      setNotice("過號暫存成功，恢復後會自動同步");
     }
   };
 
   return (
-    <div style={{ display: "grid", gap: 16 }}>
-      <div style={{ background: "#F7F7F5", borderRadius: 12, padding: 16 }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "#1F3A5F", marginBottom: 4 }}>度身 / 選購</div>
-        <div style={{ fontSize: 13, color: "#66717D", marginBottom: 8 }}>
-          客人：<strong>{guest?.guestName || "未選擇客人"}</strong> · {guest?.queueNo || "-"}
+    <div style={styles.wrap}>
+      <div style={styles.header}>
+        <div>
+          <div style={styles.kicker}>同事 1 / 度身崗位</div>
+          <div style={styles.title}>Fitting Queue</div>
         </div>
-        {schoolName && (
-          <div style={{ fontSize: 12, color: "#3A5A8A", marginBottom: 16, fontWeight: 600 }}>
-            現在顯示：{schoolName} 的款式及尺碼
-          </div>
-        )}
+        <button style={styles.primaryButton} onClick={startCameraScan}>
+          <Camera size={16} />
+          掃碼
+        </button>
+      </div>
 
-        <form onSubmit={handleSubmit} style={{ display: "grid", gap: 12 }}>
-          {items.map((item, index) => {
-            const selectedProduct = visibleProducts.find((p) => p.id === item.productId);
+      {notice && <div style={styles.notice}>{notice}</div>}
+
+      <div style={styles.row}>
+        {ticketOptions.map((order) => (
+          <button
+            key={order.id}
+            onClick={() => handleSelectOrder(order)}
+            style={{
+              ...styles.queueChip,
+              background: activeOrder?.id === order.id ? "#1f3a5f" : "#fff",
+              color: activeOrder?.id === order.id ? "#fff" : "#1f3a5f",
+              borderColor: activeOrder?.id === order.id ? "#1f3a5f" : "#dfe7f1",
+            }}
+          >
+            {order.queue_number || "未分配"} · {order.customer_info?.guestName || "客人"}
+          </button>
+        ))}
+      </div>
+
+      {activeOrder ? (
+        <div style={styles.card}>
+          <div style={styles.cardHeader}>
+            <div>
+              <div style={styles.smallLabel}>顧客資料</div>
+              <div style={styles.valueText}>
+                {activeOrder.customer_info?.guestName || "顧客"} · {activeOrder.queue_number}
+              </div>
+            </div>
+            <button style={styles.warningButton} onClick={handleSkip}>
+              <SkipForward size={15} />
+              過號
+            </button>
+          </div>
+
+          <div style={styles.metaGrid}>
+            <div style={styles.metaBox}>
+              <UserRound size={14} />
+              {activeOrder.customer_info?.phone || "電話未填"}
+            </div>
+            <div style={styles.metaBox}>
+              <Clock3 size={14} />
+              {activeOrder.status}
+            </div>
+          </div>
+
+          {selection.map((item, index) => {
+            const selectedProduct = products.find((p) => p.id === item.productId);
             return (
-              <div key={index} style={{ background: "#fff", borderRadius: 10, border: "1px solid #E2E8F0", padding: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>項目 {index + 1}</div>
-                  {items.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveItem(index)}
-                      style={{
-                        background: "#FFE5E5",
-                        color: "#C53030",
-                        border: "none",
-                        borderRadius: 6,
-                        padding: "4px 8px",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                      }}
-                    >
-                      刪除
+              <div key={`${item.productId || "new"}-${index}`} style={styles.itemCard}>
+                <div style={styles.itemTop}>
+                  <span style={styles.itemIndex}>款式 {index + 1}</span>
+                  {selection.length > 1 && (
+                    <button style={styles.removeBtn} onClick={() => removeItem(index)}>
+                      <X size={13} />
                     </button>
                   )}
                 </div>
 
-                <div style={{ display: "grid", gap: 12 }}>
-                  {/* 產品按鈕網格 */}
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#45515F", marginBottom: 8 }}>產品</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                      {visibleProducts.map((p) => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => handleItemChange(index, "productId", item.productId === p.id ? "" : p.id)}
-                          style={{
-                            padding: "12px 10px",
-                            borderRadius: 10,
-                            background: item.productId === p.id ? "#D97757" : "#fff",
-                            color: item.productId === p.id ? "#fff" : "#222",
-                            border: "1px solid " + (item.productId === p.id ? "#D97757" : "#ddd"),
-                            fontSize: 14,
-                            fontWeight: 500,
-                            textAlign: "left",
-                            cursor: "pointer",
-                          }}
-                        >
-                          {displayProductName(p.name)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* 尺碼按鈕網格 */}
-                  {selectedProduct && (
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#45515F", marginBottom: 8 }}>尺碼</div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                        {selectedProduct.sizes.map((size) => (
-                          <button
-                            key={size.size || size}
-                            type="button"
-                            onClick={() => handleItemChange(index, "size", item.size === (size.size || size) ? "" : (size.size || size))}
-                            style={{
-                              minWidth: 76,
-                              padding: "10px 8px",
-                              borderRadius: 10,
-                              background: item.size === (size.size || size) ? "#1F3A5F" : "#fff",
-                              color: item.size === (size.size || size) ? "#fff" : "#222",
-                              border: "1px solid " + (item.size === (size.size || size) ? "#1F3A5F" : "#ddd"),
-                              fontSize: 13,
-                              fontWeight: 600,
-                              textAlign: "center",
-                              cursor: "pointer",
-                            }}
-                          >
-                            {size.size || size}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 數量輸入 */}
-                  <div style={{ display: "grid", gap: 6 }}>
-                    <label style={{ fontSize: 13, fontWeight: 600, color: "#45515F" }}>數量</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={item.quantity}
-                      onChange={(e) => handleItemChange(index, "quantity", parseInt(e.target.value) || 1)}
+                <div style={styles.productGrid}>
+                  {products.map((product) => (
+                    <button
+                      key={product.id}
+                      onClick={() => updateSelection(index, { productId: item.productId === product.id ? "" : product.id, size: "" })}
                       style={{
-                        width: "100%",
-                        boxSizing: "border-box",
-                        padding: "10px 12px",
-                        borderRadius: 8,
-                        border: "1px solid #D5DDE5",
-                        fontSize: 14,
+                        ...styles.productBtn,
+                        background: item.productId === product.id ? "#ff8a4c" : "#f8fafc",
+                        color: item.productId === product.id ? "#fff" : "#24364d",
+                        borderColor: item.productId === product.id ? "#ff8a4c" : "#dfe7f1",
                       }}
-                    />
+                    >
+                      {product.name}
+                    </button>
+                  ))}
+                </div>
+
+                {selectedProduct && (
+                  <div style={styles.sizeGrid}>
+                    {selectedProduct.sizes.map((size) => (
+                      <button
+                        key={size}
+                        onClick={() => updateSelection(index, { size: item.size === size ? "" : size })}
+                        style={{
+                          ...styles.sizeBtn,
+                          background: item.size === size ? "#1f3a5f" : "#fff",
+                          color: item.size === size ? "#fff" : "#24364d",
+                          borderColor: item.size === size ? "#1f3a5f" : "#dfe7f1",
+                        }}
+                      >
+                        {size}
+                      </button>
+                    ))}
                   </div>
+                )}
+
+                <div style={styles.qtyRow}>
+                  <label style={styles.label}>數量</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={item.quantity || 1}
+                    onChange={(e) => updateSelection(index, { quantity: Math.max(1, Number(e.target.value || 1)) })}
+                    style={styles.input}
+                  />
                 </div>
               </div>
             );
           })}
 
-          <button
-            type="button"
-            onClick={handleAddItem}
-            style={{
-              background: "#EEF1F5",
-              color: "#1F3A5F",
-              border: "1px dashed #9DB3C4",
-              borderRadius: 8,
-              padding: "10px 12px",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            + 新增項目
-          </button>
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            style={{
-              background: isLoading ? "#C0C8D0" : "#1F3A5F",
-              color: "#fff",
-              border: "none",
-              borderRadius: 10,
-              padding: "12px 16px",
-              fontSize: 15,
-              fontWeight: 700,
-              cursor: isLoading ? "not-allowed" : "pointer",
-            }}
-          >
-            {isLoading ? "生成中…" : "生成取貨單"}
-          </button>
-        </form>
-      </div>
-
-      {error && (
-        <div style={{ background: "#FFE5E5", border: "1px solid #EE5A6F", borderRadius: 12, padding: 16 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "#C53030", marginBottom: 6 }}>錯誤</div>
-          <div style={{ fontSize: 13, color: "#A60E0E" }}>{error}</div>
+          <div style={styles.footerActions}>
+            <button style={styles.secondaryButton} onClick={addItem}>
+              + 新增款式
+            </button>
+            <button
+              style={{
+                ...styles.primaryButton,
+                opacity: isSubmitting ? 0.7 : 1,
+              }}
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+            >
+              <Check size={16} />
+              {isSubmitting ? "提交中..." : "提交為 PREPARING"}
+            </button>
+          </div>
         </div>
+      ) : (
+        <div style={styles.empty}>目前沒有待處理客人</div>
       )}
 
-      {submitted && (
-        <div style={{ background: "#EAF7EF", border: "1px solid #B7E0C6", borderRadius: 12, padding: 16 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "#21693C", marginBottom: 8 }}>取貨單已生成</div>
-          <div style={{ fontSize: 13, color: "#255F3D" }}>
-            <div>單號：{submitted.id}</div>
-            <div style={{ marginTop: 4 }}>共 {submitted.items.length} 件商品</div>
+      {scanOpen && (
+        <div style={styles.modal}>
+          <div style={styles.modalCard}>
+            <div style={styles.modalHeader}>
+              <div style={styles.modalTitle}>掃描客人 QR</div>
+              <button style={styles.closeBtn} onClick={stopCameraScan}>
+                <X size={16} />
+              </button>
+            </div>
+
+            {!cameraReady && !cameraError && <div style={styles.cameraPlaceholder}>開啟相機中…</div>}
+            {cameraError && <div style={styles.errorBox}>{cameraError}</div>}
+
+            <video ref={videoRef} style={styles.camera} autoPlay playsInline muted />
+
+            <div style={styles.inlineInputWrap}>
+              <QrCode size={14} />
+              <input
+                value={scanText}
+                onChange={(e) => setScanText(e.target.value)}
+                placeholder="手動輸入排隊號，如 A-001"
+                style={styles.inlineInput}
+              />
+            </div>
+
+            <div style={styles.modalActions}>
+              <button style={styles.secondaryButton} onClick={() => handleScanValue(scanText)}>
+                立即查詢
+              </button>
+              <button style={styles.primaryButton} onClick={stopCameraScan}>
+                關閉
+              </button>
+            </div>
           </div>
         </div>
       )}
     </div>
   );
 }
+
+const styles = {
+  wrap: { display: "grid", gap: 16, padding: 8 },
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    background: "#f7f8fb",
+    border: "1px solid #e2e8f0",
+    borderRadius: 16,
+    padding: 16,
+  },
+  kicker: { fontSize: 12, color: "#64748b", textTransform: "uppercase", letterSpacing: 1.2 },
+  title: { fontSize: 26, fontWeight: 800, color: "#1f3a5f", marginTop: 4 },
+  primaryButton: {
+    background: "#1f3a5f",
+    color: "#fff",
+    border: "none",
+    borderRadius: 10,
+    padding: "10px 14px",
+    fontWeight: 700,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    cursor: "pointer",
+  },
+  warningButton: {
+    background: "#fee2e2",
+    color: "#b91c1c",
+    border: "none",
+    borderRadius: 10,
+    padding: "8px 12px",
+    fontWeight: 700,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    cursor: "pointer",
+  },
+  secondaryButton: {
+    background: "#edf2f7",
+    color: "#1f3a5f",
+    border: "none",
+    borderRadius: 10,
+    padding: "10px 14px",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  row: { display: "flex", flexWrap: "wrap", gap: 8 },
+  queueChip: {
+    border: "1px solid #dfe7f1",
+    borderRadius: 999,
+    padding: "8px 12px",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  card: {
+    background: "#fff",
+    border: "1px solid #e2e8f0",
+    borderRadius: 18,
+    padding: 16,
+    display: "grid",
+    gap: 14,
+  },
+  cardHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 },
+  smallLabel: { fontSize: 12, color: "#64748b", marginBottom: 4, fontWeight: 600 },
+  valueText: { fontSize: 20, fontWeight: 800, color: "#1f2937" },
+  metaGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8 },
+  metaBox: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 10,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    padding: "10px 12px",
+    color: "#334155",
+    fontSize: 13,
+    fontWeight: 600,
+  },
+  itemCard: {
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    borderRadius: 14,
+    padding: 12,
+    display: "grid",
+    gap: 12,
+  },
+  itemTop: { display: "flex", justifyContent: "space-between", alignItems: "center" },
+  itemIndex: { fontSize: 13, fontWeight: 700, color: "#1f3a5f" },
+  removeBtn: {
+    background: "#fff",
+    border: "1px solid #fecaca",
+    color: "#b91c1c",
+    borderRadius: 8,
+    width: 28,
+    height: 28,
+    display: "grid",
+    placeItems: "center",
+    cursor: "pointer",
+  },
+  productGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8 },
+  productBtn: {
+    border: "1px solid #dfe7f1",
+    borderRadius: 10,
+    padding: "10px 8px",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+    textAlign: "left",
+  },
+  sizeGrid: { display: "flex", flexWrap: "wrap", gap: 8 },
+  sizeBtn: {
+    border: "1px solid #dfe7f1",
+    borderRadius: 10,
+    padding: "8px 10px",
+    fontWeight: 700,
+    fontSize: 12,
+    cursor: "pointer",
+  },
+  qtyRow: { display: "grid", gap: 8, marginTop: 2 },
+  label: { fontSize: 12, fontWeight: 700, color: "#475569" },
+  input: {
+    width: "100%",
+    border: "1px solid #dfe7f1",
+    background: "#fff",
+    borderRadius: 10,
+    padding: "10px 12px",
+    fontSize: 14,
+    boxSizing: "border-box",
+  },
+  footerActions: { display: "flex", gap: 10 },
+  empty: {
+    background: "#f8fafc",
+    border: "1px solid #dfe7f1",
+    borderRadius: 16,
+    padding: 20,
+    color: "#475569",
+    textAlign: "center",
+    fontWeight: 700,
+  },
+  notice: {
+    background: "#ecfdf5",
+    color: "#065f46",
+    border: "1px solid #a7f3d0",
+    borderRadius: 10,
+    padding: "10px 12px",
+    fontSize: 13,
+    fontWeight: 700,
+  },
+  modal: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(15,23,42,0.6)",
+    display: "grid",
+    placeItems: "center",
+    zIndex: 50,
+    padding: 16,
+  },
+  modalCard: {
+    width: "min(520px, 92vw)",
+    background: "#fff",
+    borderRadius: 18,
+    padding: 16,
+    display: "grid",
+    gap: 12,
+  },
+  modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center" },
+  modalTitle: { fontSize: 18, fontWeight: 800, color: "#1f3a5f" },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    border: "1px solid #dfe7f1",
+    background: "#f8fafc",
+    cursor: "pointer",
+  },
+  cameraPlaceholder: {
+    height: 220,
+    display: "grid",
+    placeItems: "center",
+    border: "1px dashed #cbd5e1",
+    borderRadius: 14,
+    color: "#64748b",
+    background: "#f8fafc",
+    fontWeight: 700,
+  },
+  camera: {
+    width: "100%",
+    maxHeight: 260,
+    borderRadius: 14,
+    background: "#0f172a",
+    objectFit: "cover",
+    border: "1px solid #1e293b",
+  },
+  inlineInputWrap: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    border: "1px solid #dfe7f1",
+    background: "#f8fafc",
+    borderRadius: 10,
+    padding: "10px 12px",
+    color: "#64748b",
+  },
+  inlineInput: { border: "none", outline: "none", background: "transparent", width: "100%", fontSize: 14, color: "#0f172a" },
+  modalActions: { display: "flex", gap: 10, justifyContent: "flex-end" },
+  errorBox: {
+    background: "#fef2f2",
+    color: "#b91c1c",
+    border: "1px solid #fecaca",
+    borderRadius: 10,
+    padding: "10px 12px",
+    fontSize: 13,
+    fontWeight: 700,
+  },
+};

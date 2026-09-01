@@ -15,6 +15,34 @@ to anon
 using (true)
 with check (true);
 
+create type public.customer_order_status as enum ('PENDING', 'PREPARING', 'READY', 'COMPLETED', 'SKIPPED');
+
+create table if not exists public.customer_orders (
+  id text primary key,
+  school_id varchar not null,
+  created_at timestamptz not null default now(),
+  queue_number varchar not null,
+  customer_info jsonb not null default '{}'::jsonb,
+  tailor_info jsonb not null default '{}'::jsonb,
+  status public.customer_order_status not null default 'PENDING',
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists customer_orders_school_day_queue_unique
+  on public.customer_orders (school_id, created_at, queue_number);
+create index if not exists customer_orders_school_status_idx on public.customer_orders (school_id, status);
+create index if not exists customer_orders_queue_number_idx on public.customer_orders (queue_number);
+
+alter table public.customer_orders enable row level security;
+
+drop policy if exists "Allow customer order access" on public.customer_orders;
+create policy "Allow customer order access"
+on public.customer_orders
+for all
+to anon
+using (true)
+with check (true);
+
 create table if not exists public.guest_visits (
   id text primary key,
   queue_no text not null unique,
