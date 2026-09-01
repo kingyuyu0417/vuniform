@@ -1212,9 +1212,9 @@ export default function UniformPOS() {
   const handleGuestSubmit = (guest) => {
     setQueueVisits((prev) => [guest, ...prev]);
     setSelectedGuest(guest);
-    // 保持在客人登記頁，讓登記成功後直接看到自己的 QR CODE / 排隊號
-    setTab("guest");
-    navigate("/checkin");
+    // 登記成功後，先回到排隊單，讓員工確認排隊順序，再手動開始度身
+    setTab("queue");
+    navigate("/queue");
   };
 
   const handleAssignGuest = (guest) => {
@@ -1551,7 +1551,7 @@ export default function UniformPOS() {
         <Routes>
           <Route
             path="/checkin"
-            element={<CustomerCheckinPage school={publicRouteSchool} />}
+            element={<CustomerCheckinPage school={publicRouteSchool} onSubmit={handleGuestSubmit} />}
           />
           <Route
             path="/queue-status"
@@ -1679,7 +1679,7 @@ export default function UniformPOS() {
                   />
                 )}
                 {tab === "guest" && (
-                  <CustomerCheckinPage school={publicRouteSchool} />
+                  <CustomerCheckinPage school={publicRouteSchool} onSubmit={handleGuestSubmit} />
                 )}
                 {tab === "queue" && (
                   <QueuePage visits={queueVisits} onViewGuest={(guest) => setSelectedGuest(guest)} onAssign={handleAssignGuest} />
@@ -3185,7 +3185,7 @@ function PublicHomePage({ schools = [], onStaffLogin }) {
       <div style={{ maxWidth: 560, margin: "0 auto", display: "grid", gap: 18 }}>
         <div style={{ background: "#1F3A5F", color: "#fff", borderRadius: 18, padding: "28px 24px" }}>
           <div style={{ fontSize: 13, opacity: 0.78, marginBottom: 8 }}>Victoria Uniform 校服銷售系統</div>
-          <h1 style={{ margin: 0, fontSize: 26, lineHeight: 1.35 }}>香港中國婦女會馮堯敬紀念中學</h1>
+          <h1 style={{ margin: 0, fontSize: 26, lineHeight: 1.35 }}>歡迎使用</h1>
           <div style={{ marginTop: 10, fontSize: 14, opacity: 0.82 }}>請選擇你要使用的服務</div>
         </div>
 
