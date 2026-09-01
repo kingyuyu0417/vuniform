@@ -1,6 +1,6 @@
 import React, { useMemo, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { queueOrderService } from "../services/queueOrderService";
+import { ORDER_STATUS, queueOrderService } from "../services/queueOrderService";
 
 const statusLabel = {
   waiting: "待處理",
@@ -21,7 +21,7 @@ export default function QueuePage({ visits = [], onViewGuest, onAssign }) {
       setIsLoading(true);
       try {
         const data = await queueOrderService.listOrders();
-        const normalized = (data || []).map((item) => ({
+        const normalized = (data || []).filter((item) => item.status === ORDER_STATUS.PENDING).map((item) => ({
           id: item.id,
           queueNo: item.queue_number || item.queueNumber || "",
           guestName: item.customer_info?.guestName || item.guestName || "",
@@ -43,7 +43,10 @@ export default function QueuePage({ visits = [], onViewGuest, onAssign }) {
     loadVisits();
   }, []);
 
-  const rows = useMemo(() => visitsData, [visitsData]);
+  const rows = useMemo(
+    () => visitsData.filter((visit) => visit.status === ORDER_STATUS.PENDING),
+    [visitsData]
+  );
 
   return (
     <div style={{ display: "grid", gap: 12 }}>

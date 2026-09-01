@@ -1155,7 +1155,7 @@ export default function UniformPOS() {
         const data = await queueOrderService.listOrders();
         if (!isMounted || !Array.isArray(data)) return;
 
-        const normalized = data.map((visit) => ({
+        const normalized = data.filter((visit) => visit.status === "PENDING").map((visit) => ({
           id: visit.id,
           queueNo: visit.queue_number || visit.queueNumber || "",
           guestName: visit.customer_info?.guestName || visit.guestName || "",
@@ -1185,7 +1185,7 @@ export default function UniformPOS() {
       .on("postgres_changes", { event: "*", schema: "public", table: "customer_orders" }, async () => {
         if (!isMounted) return;
         const data = await queueOrderService.listOrders();
-        const normalized = (data || []).map((visit) => ({
+        const normalized = (data || []).filter((visit) => visit.status === "PENDING").map((visit) => ({
           id: visit.id,
           queueNo: visit.queue_number || visit.queueNumber || "",
           guestName: visit.customer_info?.guestName || visit.guestName || "",
@@ -1580,7 +1580,7 @@ export default function UniformPOS() {
           />
           <Route
             path="/cashier"
-            element={<CashierVerifyPage orders={paymentOrders} onConfirmPayment={handleConfirmPayment} />}
+            element={<CashierVerifyPage currentSchoolId={selectedSchool || publicRouteSchool} onConfirmPayment={handleConfirmPayment} />}
           />
           <Route
             path="/track"
@@ -1697,7 +1697,7 @@ export default function UniformPOS() {
                   <PickupPage tickets={pickupTickets} onMarkReady={handleMarkReady} onHandover={handleHandover} />
                 )}
                 {tab === "cashier" && (
-                  <CashierVerifyPage orders={paymentOrders} onConfirmPayment={handleConfirmPayment} />
+                  <CashierVerifyPage currentSchoolId={selectedSchool || publicRouteSchool} onConfirmPayment={handleConfirmPayment} />
                 )}
                 {tab === "track" && (
                   <StaffOrderTracking visits={queueVisits} onStatusUpdate={(id, status) => {

@@ -1,38 +1,5 @@
-import React, { useState } from "react";
-import { paymentOrders } from "../services/customerFlowService";
-
-const sampleOrders = [
-  {
-    id: "order-1",
-    ticketId: "ticket-1",
-    guestName: "陳小美",
-    queueNo: "FYM-001",
-    items: [
-      { productName: "白色恤衫（短袖）", size: "28", quantity: 1, price: 60 },
-      { productName: "藏青色短褲", size: "28", quantity: 1, price: 70 },
-    ],
-    totalPrice: 130,
-    status: "ready_for_payment",
-  },
-  {
-    id: "order-2",
-    ticketId: "ticket-2",
-    guestName: "李大明",
-    queueNo: "FYM-002",
-    items: [
-      { productName: "白色恤衫（長袖）", size: "32", quantity: 1, price: 80 },
-      { productName: "PE運動套裝", size: "M", quantity: 1, price: 115 },
-    ],
-    totalPrice: 195,
-    status: "ready_for_payment",
-  },
-];
-
-const statusLabel = {
-  ready_for_payment: "待支付",
-  paid: "已支付",
-  completed: "已完成",
-};
+import React, { useEffect, useMemo, useState } from "react";
+import { ORDER_STATUS, queueOrderService } from "../services/queueOrderService";
 
 const paymentMethods = [
   { id: "cash", label: "現金" },
@@ -40,13 +7,62 @@ const paymentMethods = [
   { id: "transfer", label: "轉帳" },
 ];
 
-export default function CashierVerifyPage({ orders = sampleOrders, onConfirmPayment }) {
-  const [selectedOrder, setSelectedOrder] = useState(orders[0] || null);
+export default function CashierVerifyPage({ currentSchoolId = "", onConfirmPayment }) {
+  const [orders, setOrders] = useState([]);
+  const [selectedOrder, setSelectedOrder] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState("");
   const [cashReceived, setCashReceived] = useState("");
   const [submitted, setSubmitted] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const normalizeOrder = (order) => ({
+    ...order,
+    queueNo: order.queue_number || order.queueNumber || "",
+    guestName: order.customer_info?.guestName || order.guestName || "顧客",
+    items: (order.tailor_info?.items || []).map((item) => ({
+      productName: item.product_name || item.productName || "未知產品",
+      size: item.size || "",
+      quantity: Number(item.quantity || 1),
+      price: Number(item.price || 0),
+    })),
+  });
+
+  const syncReadyOrders = async () => {
+    try {
+      const rows = await queueOrderService.listOrders({ schoolId: currentSchoolId });
+      const ready = (Array.isArray(rows) ? rows : [])
+        .filter((order) => order.status === ORDER_STATUS.READY)
+        .map(normalizeOrder);
+      setOrders(ready);
+      setSelectedOrder((current) => ready.find((order) => order.id === current?.id) || ready[0] || null);
+      return ready;
+    } catch (loadError) {
+      console.error("cashier ready orders sync failed", loadError);
+      setError("同步失敗，請重試");
+      return [];
+    }
+  };
+
+  useEffect(() => {
+    syncReadyOrders();
+    const subscription = queueOrderService.subscribe({
+      schoolId: currentSchoolId,
+      onChange: (rows) => {
+        const ready = (Array.isArray(rows) ? rows : [])
+          .filter((order) => order.status === ORDER_STATUS.READY)
+          .map(normalizeOrder);
+        setOrders(ready);
+        setSelectedOrder((current) => ready.find((order) => order.id === current?.id) || ready[0] || null);
+      },
+    });
+    return () => subscription?.unsubscribe?.();
+  }, [currentSchoolId]);
+
+  const selectedTotal = useMemo(
+    () => (selectedOrder?.items || []).reduce((total, item) => total + item.price * item.quantity, 0),
+    [selectedOrder]
+  );
 
   const handleConfirmPayment = async () => {
     if (!paymentMethod) {
@@ -63,30 +79,30 @@ export default function CashierVerifyPage({ orders = sampleOrders, onConfirmPaym
     setIsLoading(true);
 
     try {
-      const amount = parseInt(cashReceived) || selectedOrder.totalPrice;
-      const changeDue = Math.max(0, amount - selectedOrder.totalPrice);
+      const amount = parseInt(cashReceived) || selectedTotal;
+      const changeDue = Math.max(0, amount - selectedTotal);
 
       const payment = {
         orderId: selectedOrder.id,
         guestName: selectedOrder.guestName,
         queueNo: selectedOrder.queueNo,
-        totalPrice: selectedOrder.totalPrice,
+        totalPrice: selectedTotal,
         paymentMethod,
-        cashReceived: paymentMethod === "cash" ? amount : selectedOrder.totalPrice,
+        cashReceived: paymentMethod === "cash" ? amount : selectedTotal,
         changeDue,
         status: "paid",
         completedAt: new Date().toISOString(),
       };
 
-      // 記錄支付到 Supabase
-      if (selectedOrder.id) {
-        await paymentOrders.recordPayment(selectedOrder.id, payment);
-      }
+      await queueOrderService.updateStatus(selectedOrder.id, ORDER_STATUS.COMPLETED, {
+        tailor_info: { ...(selectedOrder.tailor_info || {}), paid_at: payment.completedAt, payment },
+      });
 
       setSubmitted(payment);
       onConfirmPayment?.(payment);
       setPaymentMethod("");
       setCashReceived("");
+      await syncReadyOrders();
     } catch (err) {
       setError("記錄支付失敗：" + (err.message || "未知錯誤"));
     } finally {
@@ -137,7 +153,7 @@ export default function CashierVerifyPage({ orders = sampleOrders, onConfirmPaym
           <div style={{ fontSize: 14, fontWeight: 700, color: "#1F3A5F", marginBottom: 8 }}>訂單詳情</div>
           <div style={{ fontSize: 13, color: "#334155" }}>
             <div>客人：<strong>{selectedOrder.guestName}</strong></div>
-            <div style={{ marginTop: 4 }}>待命單號：<strong>{selectedOrder.queueNo}</strong></div>
+              <div style={{ marginTop: 4 }}>待命單號：<strong>{selectedOrder.queueNo}</strong></div>
           </div>
 
           <div style={{ background: "#F7F7F5", borderRadius: 6, padding: "10px 12px", marginTop: 12 }}>
@@ -150,7 +166,7 @@ export default function CashierVerifyPage({ orders = sampleOrders, onConfirmPaym
             ))}
             <div style={{ borderTop: "1px solid #D5DDE5", marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700 }}>
               <span>總計</span>
-              <span>${selectedOrder.totalPrice}</span>
+              <span>${selectedTotal}</span>
             </div>
           </div>
         </div>
@@ -190,7 +206,7 @@ export default function CashierVerifyPage({ orders = sampleOrders, onConfirmPaym
                 type="number"
                 value={cashReceived}
                 onChange={(e) => setCashReceived(e.target.value)}
-                placeholder={String(selectedOrder.totalPrice)}
+                placeholder={String(selectedTotal)}
                 style={{
                   width: "100%",
                   boxSizing: "border-box",
@@ -203,7 +219,7 @@ export default function CashierVerifyPage({ orders = sampleOrders, onConfirmPaym
               />
               {cashReceived && (
                 <div style={{ fontSize: 12, color: "#21693C", background: "#EAF7EF", borderRadius: 6, padding: "8px 10px" }}>
-                  應找金額：${Math.max(0, parseInt(cashReceived) - selectedOrder.totalPrice)}
+                  應找金額：${Math.max(0, parseInt(cashReceived) - selectedTotal)}
                 </div>
               )}
             </div>
