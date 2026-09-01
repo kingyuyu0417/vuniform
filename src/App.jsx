@@ -1781,6 +1781,7 @@ export default function UniformPOS() {
         )}
       </div>
     </div>
+    </AppErrorBoundary>
   );
 }
 
