@@ -12,10 +12,38 @@ const statusLabel = {
   completed: "已完成",
 };
 
-export default function QueuePage({ visits = [], onViewGuest, onAssign }) {
+export default function QueuePage({ visits = [], currentSchoolId = "", onViewGuest, onAssign }) {
   const navigate = useNavigate();
+  const [syncedVisits, setSyncedVisits] = useState(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState(new Date());
   const previousDataRef = useRef(visits);
+
+  useEffect(() => {
+    let active = true;
+    const syncVisits = async () => {
+      try {
+        const orders = await queueOrderService.listOrders({ schoolId: currentSchoolId });
+        if (!active || !Array.isArray(orders)) return;
+        const normalized = orders
+          .filter((order) => order.status === ORDER_STATUS.PENDING)
+          .map((order) => ({
+            id: order.id,
+            queueNo: order.queue_number || order.queueNumber || "",
+            guestName: order.customer_info?.guestName || "",
+            className: order.customer_info?.className || "",
+            phone: order.customer_info?.phone || "",
+            status: order.status,
+          }));
+        setSyncedVisits(normalized);
+        setLastUpdatedAt(new Date());
+      } catch (syncError) {
+        console.warn("排隊資料同步失敗，使用現有資料", syncError);
+        if (active) setSyncedVisits(null);
+      }
+    };
+    syncVisits();
+    return () => { active = false; };
+  }, [currentSchoolId, visits]);
 
   useEffect(() => {
     // 更新 lastUpdatedAt 和 previousDataRef 當 visits 改變時
@@ -23,9 +51,10 @@ export default function QueuePage({ visits = [], onViewGuest, onAssign }) {
     previousDataRef.current = visits;
   }, [visits]);
 
+  const visibleVisits = syncedVisits ?? visits;
   const rows = useMemo(
-    () => visits.filter((visit) => visit.status === ORDER_STATUS.PENDING),
-    [visits]
+    () => visibleVisits.filter((visit) => visit.status === ORDER_STATUS.PENDING),
+    [visibleVisits]
   );
 
   return (

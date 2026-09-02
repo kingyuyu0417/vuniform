@@ -1920,7 +1920,7 @@ export default function UniformPOS() {
           />
           <Route
             path="/queue"
-            element={<QueuePage visits={queueVisits} onViewGuest={(guest) => setSelectedGuest(guest)} onAssign={handleAssignGuest} />}
+            element={<QueuePage visits={queueVisits} currentSchoolId={selectedSchool || publicRouteSchool} onViewGuest={(guest) => setSelectedGuest(guest)} onAssign={handleAssignGuest} />}
           />
           <Route
             path="/pickup"
@@ -2032,7 +2032,7 @@ export default function UniformPOS() {
                   <CustomerCheckinPage school={publicRouteSchool} onSubmit={handleGuestSubmit} />
                 )}
                 {tab === "queue" && (
-                  <QueuePage visits={queueVisits} onViewGuest={(guest) => setSelectedGuest(guest)} onAssign={handleAssignGuest} />
+                  <QueuePage visits={queueVisits} currentSchoolId={selectedSchool || publicRouteSchool} onViewGuest={(guest) => setSelectedGuest(guest)} onAssign={handleAssignGuest} />
                 )}
                 {tab === "fitting" && (
                   <FittingPage
