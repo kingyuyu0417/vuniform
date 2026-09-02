@@ -90,7 +90,11 @@ export default function QueuePage({ visits = [], onViewGuest, onAssign }) {
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                 <button
                   className="pos-btn"
-                  onClick={() => onViewGuest?.(visit)}
+                  onClick={() => {
+                    onViewGuest?.(visit);
+                    const visitId = visit.id || visit.queueNo || "";
+                    navigate(`/fitting?id=${encodeURIComponent(visitId)}`);
+                  }}
                   style={{ flex: 1, background: "#EEF1F5", color: "#1F3A5F", padding: "8px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600 }}
                 >
                   查看資料

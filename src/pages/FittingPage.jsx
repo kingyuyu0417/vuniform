@@ -304,20 +304,27 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       return;
     }
 
-    const nextItems = selection
-      .filter((row) => row && row.productId && row.size)
-      .map((row) => ({
+    const validRows = Array.isArray(selection)
+      ? selection.filter((row) => row && row.productId && row.size)
+      : [];
+
+    const nextItems = validRows.map((row) => {
+      const product = safeProducts.find((p) => p.id === row.productId);
+      const selectedSize = Array.isArray(product?.sizes) ? product.sizes.find((sizeOption) => {
+        const size = typeof sizeOption === "object" ? sizeOption.size : sizeOption;
+        const length = typeof sizeOption === "object" ? sizeOption.length || "" : "";
+        return String(size) === String(row.size) && length === (row.length || "");
+      }) : null;
+
+      return {
         product_id: row.productId,
-        product_name: safeProducts.find((p) => p.id === row.productId)?.name || "未知產品",
+        product_name: product?.name || "未知產品",
         size: row.size,
         length: row.length || "",
-        price: Number(safeProducts.find((p) => p.id === row.productId)?.sizes?.find((sizeOption) => {
-          const size = typeof sizeOption === "object" ? sizeOption.size : sizeOption;
-          const length = typeof sizeOption === "object" ? sizeOption.length || "" : "";
-          return String(size) === String(row.size) && length === (row.length || "");
-        })?.price || 0),
+        price: Number(selectedSize?.price || 0),
         quantity: Number(row.quantity || 1),
-      }));
+      };
+    }).filter((row) => row.product_id && row.size && Number(row.price || 0) >= 0);
 
     if (!nextItems.length) {
       setNotice("請至少選擇一個款式與尺碼");
@@ -350,7 +357,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       if (!data?.id) throw new Error("訂單未成功更新");
       const result = getSafeOrder(data);
       onStatusChange?.(result || current);
-      setOrders((prev) => prev.filter((order) => order.id !== current.id));
+      setOrders((prev) => (Array.isArray(prev) ? prev.filter((order) => order && order.id !== current.id) : []));
       setNotice("已更新為 PREPARING，等待倉務執貨");
 
       const drafts = readDrafts();
@@ -360,14 +367,14 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       writeDrafts(drafts);
 
       setSelection([{ ...emptySelection }]);
-      const remaining = orders.filter((order) => order.id !== current.id && order.status === ORDER_STATUS.PENDING);
+      const remaining = (Array.isArray(orders) ? orders : []).filter((order) => order && order.id !== current.id && order.status === ORDER_STATUS.PENDING);
       safeSetSelectedOrder(remaining[0] ? getSafeOrder(remaining[0]) : null);
     } catch (error) {
       console.error("FittingPage submit failed", error);
       try {
         const drafts = readDrafts();
         const schoolDrafts = drafts[currentSchoolId] || {};
-        schoolDrafts[current.id] = { items: selection };
+        schoolDrafts[current.id] = { items: Array.isArray(selection) ? selection : [{ ...emptySelection }] };
         drafts[currentSchoolId] = schoolDrafts;
         writeDrafts(drafts);
       } catch (draftError) {
