@@ -1277,7 +1277,7 @@ export default function UniformPOS() {
         if (!isMounted) return;
         const data = await queueOrderService.listOrders();
         const normalized = (data || [])
-          .filter((visit) => ["PENDING", "PREPARING", "READY"].includes(visit.status))
+          .filter((visit) => trackableStatuses.includes(visit.status))
           .map((visit) => ({
             id: visit.id,
             queueNo: visit.queue_number || visit.queueNumber || "",
@@ -1291,10 +1291,30 @@ export default function UniformPOS() {
             school: visit.school_id || visit.schoolId || "",
             createdAt: visit.created_at || visit.createdAt || new Date().toISOString(),
           }));
-        // listOrders 已經合併了 Supabase 和本地數據，直接使用結果
         setQueueVisits(normalized.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
       })
-      .subscribe();
+      .subscribe(async (status) => {
+        // 訂閱成功時立即載入初始數據
+        if (status === "SUBSCRIBED" && isMounted) {
+          const data = await queueOrderService.listOrders();
+          const normalized = (data || [])
+            .filter((visit) => trackableStatuses.includes(visit.status))
+            .map((visit) => ({
+              id: visit.id,
+              queueNo: visit.queue_number || visit.queueNumber || "",
+              guestName: visit.customer_info?.guestName || visit.guestName || "",
+              className: visit.customer_info?.className || visit.className || "",
+              heightCm: visit.customer_info?.heightCm || visit.heightCm || "",
+              weightKg: visit.customer_info?.weightKg || visit.weightKg || "",
+              phone: visit.customer_info?.phone || visit.phone || "",
+              notes: visit.customer_info?.notes || visit.notes || "",
+              status: visit.status || "waiting",
+              school: visit.school_id || visit.schoolId || "",
+              createdAt: visit.created_at || visit.createdAt || new Date().toISOString(),
+            }));
+          setQueueVisits(normalized.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
+        }
+      });
 
     return () => {
       isMounted = false;
