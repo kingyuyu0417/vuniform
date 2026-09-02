@@ -64,6 +64,7 @@ const StaffOrderTracking = ({ visits = [], currentSchoolId = "", onStatusUpdate 
             weightKg: order.customer_info?.weightKg || "",
             phone: order.customer_info?.phone || "",
             notes: order.customer_info?.notes || "",
+            school: order.school_id || order.schoolId || "",
             status: order.status,
             createdAt: order.created_at || order.createdAt || "",
           }));

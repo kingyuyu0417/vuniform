@@ -37,6 +37,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", onViewGue
             guestName: order.customer_info?.guestName || "",
             className: order.customer_info?.className || "",
             phone: order.customer_info?.phone || "",
+            school: order.school_id || order.schoolId || "",
             status: order.status,
           }));
         setSyncedVisits(normalized);
