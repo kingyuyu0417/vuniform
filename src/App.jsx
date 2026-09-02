@@ -1810,6 +1810,7 @@ export default function UniformPOS() {
                 setSelectedProduct={setSelectedProduct}
                 addToCart={addToCart}
                 cart={cart}
+                cartSourceMeta={cartSourceMeta}
                 changeQty={changeQty}
                 removeItem={removeItem}
                 cartTotal={cartTotal}
@@ -1835,6 +1836,7 @@ export default function UniformPOS() {
                     setSelectedProduct={setSelectedProduct}
                     addToCart={addToCart}
                     cart={cart}
+                    cartSourceMeta={cartSourceMeta}
                     changeQty={changeQty}
                     removeItem={removeItem}
                     cartTotal={cartTotal}
@@ -1958,7 +1960,25 @@ export default function UniformPOS() {
   );
 }
 
-function SaleTab({ products, selectedProduct, setSelectedProduct, addToCart, cart, changeQty, removeItem, cartTotal, cartCount, checkout, selectedSchool, storageError, cashReceived, setCashReceived, changeDue, cashAmount }) {
+function SaleTab({
+  products,
+  selectedProduct,
+  setSelectedProduct,
+  addToCart,
+  cart,
+  cartSourceMeta,
+  changeQty,
+  removeItem,
+  cartTotal,
+  cartCount,
+  checkout,
+  selectedSchool,
+  storageError,
+  cashReceived,
+  setCashReceived,
+  changeDue,
+  cashAmount,
+}) {
   const [genderFilter, setGenderFilter] = useState("全部");
   const [selectedLength, setSelectedLength] = useState("");
   const schools = listSchools(products);
