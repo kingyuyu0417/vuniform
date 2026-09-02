@@ -792,7 +792,10 @@ export default function UniformPOS() {
     (async () => {
       try {
         const saved = await window.storage.get("last-school", false).catch(() => null);
-        if (saved && saved.value) setSelectedSchool(DESIGNATED_SCHOOL);
+        if (saved && saved.value) {
+          const previousSchool = String(saved.value || "").trim();
+          if (previousSchool) setSelectedSchool(previousSchool);
+        }
       } catch (e) {
         console.error("讀取上次學校選擇失敗", e);
       }
@@ -820,7 +823,7 @@ export default function UniformPOS() {
 
     if (schoolFromUrl) {
       setSession({ id: "guest-session", name: "遊客", role: ROLES.GUEST });
-      setSelectedSchool(DESIGNATED_SCHOOL);
+      setSelectedSchool(schoolFromUrl);
       setTab("guest");
       console.log("檢測到 QR CODE 訪問，校名:", schoolFromUrl);
     }
@@ -906,10 +909,10 @@ export default function UniformPOS() {
   };
 
   useEffect(() => {
-    if (selectedSchool !== DESIGNATED_SCHOOL) {
-      setSelectedSchool(DESIGNATED_SCHOOL);
+    if (!selectedSchool || !schools.includes(selectedSchool)) {
+      setSelectedSchool((prev) => prev || DESIGNATED_SCHOOL);
     }
-  }, [products]);
+  }, [schools, selectedSchool]);
 
   useEffect(() => {
     if (!products.some((product) => product.id === selectedProduct)) {
@@ -918,10 +921,11 @@ export default function UniformPOS() {
   }, [products, selectedProduct]);
 
   const pickSchool = (sc) => {
-    setSelectedSchool(DESIGNATED_SCHOOL);
+    const nextSchool = sc || DESIGNATED_SCHOOL;
+    setSelectedSchool(nextSchool);
     setSelectedProduct(null);
     setSchoolPanelOpen(false);
-    window.storage.set("last-school", DESIGNATED_SCHOOL, false).catch((e) => console.error("記住學校選擇失敗", e));
+    window.storage.set("last-school", nextSchool, false).catch((e) => console.error("記住學校選擇失敗", e));
   };
 
   // 由雲端（共用儲存）攞返最新一份 products / sales-log
