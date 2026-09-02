@@ -61,7 +61,6 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
           event: "*",
           schema: "public",
           table: "customer_orders",
-          filter: "status=eq.READY",
         },
         () => { syncReadyOrders(); }
       )

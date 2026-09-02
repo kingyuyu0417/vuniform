@@ -43,6 +43,22 @@ to anon
 using (true)
 with check (true);
 
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'customer_orders'
+  ) then
+    alter publication supabase_realtime add table public.customer_orders;
+  end if;
+end
+$$;
+
+alter table public.customer_orders replica identity full;
+
 create table if not exists public.guest_visits (
   id text primary key,
   queue_no text not null unique,

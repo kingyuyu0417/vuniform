@@ -162,30 +162,9 @@ export const queueOrderService = {
       if (error) throw error;
       
       const supabaseRows = (data || []).map(normalizeOrderRow).filter((row) => !schoolFilter || safeSchoolId(row.school_id) === schoolFilter);
-      const localRows = readQueueCache().filter((row) => !schoolFilter || safeSchoolId(row.school_id) === schoolFilter);
-      
-      // MERGE with state protection: Only protect PENDING→PREPARING transitions
-      // For terminal states (SKIPPED, COMPLETED) or other transitions, always trust Supabase
-      const mergedRows = supabaseRows.map((supabaseRow) => {
-        const localMatch = localRows.find((local) => local.id === supabaseRow.id);
-        if (!localMatch) return supabaseRow; // No local version, use Supabase
-        
-        // Only protect this specific transition: local PENDING → Supabase PREPARING
-        // This brief window prevents UI flicker during async updates
-        if (localMatch.status === ORDER_STATUS.PENDING && supabaseRow.status === "PREPARING") {
-          return localMatch; // Keep local PENDING temporarily
-        }
-        
-        // For all other cases, trust Supabase (including SKIPPED, COMPLETED, etc.)
-        return supabaseRow;
-      });
-      
-      // Preserve local items not in Supabase
-      const supabaseIds = new Set(supabaseRows.map((row) => row.id));
-      const localOnly = localRows.filter((row) => !supabaseIds.has(row.id));
-      const finalRows = [...mergedRows, ...localOnly];
-      
-      // Write merged result back to cache
+      // A successful Supabase read is authoritative. Local-only rows are only
+      // valid in offline mode and must not reappear after a cloud sync.
+      const finalRows = supabaseRows;
       writeQueueCache(finalRows);
       
       // Filter by status AFTER merging
