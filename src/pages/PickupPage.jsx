@@ -30,7 +30,11 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
     setNotice("");
     try {
       if (!isSupabaseConfigured || !supabase) throw new Error("Supabase 未設定");
-      let query = supabase.from("customer_orders").select("*").eq("status", "READY").order("created_at", { ascending: true });
+      let query = supabase
+        .from("customer_orders")
+        .select("*")
+        .in("status", [ORDER_STATUS.PREPARING, ORDER_STATUS.READY])
+        .order("created_at", { ascending: true });
       if (currentSchoolId) query = query.eq("school_id", currentSchoolId);
       const { data, error } = await query;
       if (error) throw error;
@@ -50,14 +54,13 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
     syncOrders();
     if (!isSupabaseConfigured || !supabase) return undefined;
     const channel = supabase
-      .channel(`pickup-ready-orders-${currentSchoolId || "all"}`)
+      .channel(`pickup-preparing-ready-orders-${currentSchoolId || "all"}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "customer_orders",
-          filter: "status=eq.READY",
         },
         () => { syncOrders(); }
       )
@@ -65,13 +68,13 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
     return () => { supabase.removeChannel(channel); };
   }, [currentSchoolId]);
 
-  const readyOrders = useMemo(
-    () => orders.filter((o) => o.status === ORDER_STATUS.READY),
+  const displayOrders = useMemo(
+    () => orders.filter((o) => o.status === ORDER_STATUS.PREPARING || o.status === ORDER_STATUS.READY),
     [orders]
   );
 
   const batchSummary = useMemo(() => {
-    return readyOrders.reduce((acc, order) => {
+    return displayOrders.reduce((acc, order) => {
       const items = Array.isArray(order.tailor_info?.items) ? order.tailor_info.items : [];
       items.forEach((item) => {
         const key = `${item.product_name || "未知產品"}::${item.size || ""}`;
@@ -84,9 +87,52 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
       });
       return acc;
     }, {});
-  }, [readyOrders]);
+  }, [displayOrders]);
 
   const summaryRows = useMemo(() => Object.values(batchSummary), [batchSummary]);
+
+  const markReady = async (orderId) => {
+    if (updatingId) return;
+    if (!orderId) {
+      setNotice("同步失敗，請重試");
+      return;
+    }
+
+    setUpdatingId(orderId);
+    setNotice("");
+    try {
+      const order = orders.find((o) => o.id === orderId);
+      if (!order) {
+        throw new Error("找不到此訂單");
+      }
+
+      if (!isSupabaseConfigured || !supabase) throw new Error("Supabase 未設定");
+      const { data: updated, error } = await supabase
+        .from("customer_orders")
+        .update({ status: ORDER_STATUS.READY })
+        .eq("id", orderId)
+        .select()
+        .single();
+      if (error) throw error;
+      if (!updated?.id) throw new Error("找不到要更新的訂單");
+
+      if (typeof onReadyForSale === "function") {
+        onReadyForSale(updated);
+        return;
+      }
+
+      const nextOrders = await syncOrders();
+      const nextPreparingOrder = nextOrders.find((item) => item.status === ORDER_STATUS.PREPARING);
+      setNotice(nextPreparingOrder
+        ? `${order.queue_number || "此訂單"} 已執好，已載入下一張待執貨單。`
+        : `${order.queue_number || "此訂單"} 已執好，目前沒有需要執貨的訂單。`);
+    } catch (error) {
+      console.error("mark ready failed", error);
+      setNotice("同步失敗，請重試");
+    } finally {
+      setUpdatingId("");
+    }
+  };
 
   const goToSale = async (order) => {
     if (!order) {
@@ -135,9 +181,9 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
 
       <div style={styles.list}>
         {loading && <div style={styles.loading}>載入中...</div>}
-        {readyOrders.length === 0 && !loading && <div style={styles.empty}>暫無已執好貨的單</div>}
+        {displayOrders.length === 0 && !loading && <div style={styles.empty}>暫無待執貨或已執好貨的單</div>}
 
-        {readyOrders.map((order) => (
+        {displayOrders.map((order) => (
           <div key={order.id} style={styles.card}>
             <div style={styles.cardTop}>
               <div>
@@ -157,14 +203,25 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
               ))}
             </div>
 
-            <button
-              style={{ ...styles.readyButton, opacity: updatingId === order.id ? 0.65 : 1 }}
-              onClick={() => goToSale(order)}
-              disabled={Boolean(updatingId)}
-            >
-              <PackageCheck size={16} />
-              進行銷售
-            </button>
+            {order.status === ORDER_STATUS.PREPARING ? (
+              <button
+                style={{ ...styles.readyButton, opacity: updatingId === order.id ? 0.65 : 1 }}
+                onClick={() => markReady(order.id)}
+                disabled={Boolean(updatingId)}
+              >
+                <PackageCheck size={16} />
+                {updatingId === order.id ? "更新中..." : "執好 / 準備結帳"}
+              </button>
+            ) : (
+              <button
+                style={{ ...styles.readyButton, opacity: updatingId === order.id ? 0.65 : 1 }}
+                onClick={() => goToSale(order)}
+                disabled={Boolean(updatingId)}
+              >
+                <PackageCheck size={16} />
+                進行銷售
+              </button>
+            )}
           </div>
         ))}
       </div>
