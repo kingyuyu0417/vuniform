@@ -167,16 +167,20 @@ export const queueOrderService = {
       const supabaseRows = (data || []).map(normalizeOrderRow).filter((row) => !schoolFilter || safeSchoolId(row.school_id) === schoolFilter);
       const localRows = readQueueCache().filter((row) => !schoolFilter || safeSchoolId(row.school_id) === schoolFilter);
       
-      // MERGE with state protection: Prefer local PENDING orders over Supabase PREPARING
-      // This prevents orders from disappearing during status transitions
+      // MERGE with state protection: Only protect PENDING→PREPARING transitions
+      // For terminal states (SKIPPED, COMPLETED) or other transitions, always trust Supabase
       const mergedRows = supabaseRows.map((supabaseRow) => {
         const localMatch = localRows.find((local) => local.id === supabaseRow.id);
-        // If local has PENDING and Supabase has PREPARING, keep local PENDING
-        // This gives time for the UI to transition smoothly
-        if (localMatch && localMatch.status === ORDER_STATUS.PENDING && supabaseRow.status !== ORDER_STATUS.PENDING) {
-          return localMatch; // Keep the local PENDING version
+        if (!localMatch) return supabaseRow; // No local version, use Supabase
+        
+        // Only protect this specific transition: local PENDING → Supabase PREPARING
+        // This brief window prevents UI flicker during async updates
+        if (localMatch.status === ORDER_STATUS.PENDING && supabaseRow.status === "PREPARING") {
+          return localMatch; // Keep local PENDING temporarily
         }
-        return supabaseRow; // Use Supabase version otherwise
+        
+        // For all other cases, trust Supabase (including SKIPPED, COMPLETED, etc.)
+        return supabaseRow;
       });
       
       // Preserve local items not in Supabase
@@ -203,16 +207,17 @@ export const queueOrderService = {
       ...patch,
     };
 
-    // 立即更新本地快取，確保狀態一致
-    const rows = readQueueCache();
-    const updated = rows.map((row) => (row.id === id ? { ...row, ...nextPatch, status } : row));
-    writeQueueCache(updated);
-
     if (!isSupabaseConfigured || !supabase) {
+      // Offline mode: update local cache only
+      const rows = readQueueCache();
+      const updated = rows.map((row) => (row.id === id ? { ...row, ...nextPatch, status } : row));
+      writeQueueCache(updated);
       return updated.find((row) => row.id === id) || { id, status };
     }
 
     try {
+      // IMPORTANT: Update Supabase FIRST, before local cache
+      // This prevents merge conflicts during postgres_changes events
       const { data, error } = await supabase
         .from("customer_orders")
         .update(nextPatch)
@@ -221,16 +226,23 @@ export const queueOrderService = {
 
       if (error) throw error;
       const saved = data && data[0];
-      if (!saved) throw new Error("找不到要更新的訂單");
+      if (!saved) throw new Error("訂單未成功更新");
+      
       const normalized = normalizeOrderRow(saved);
-      // 用 Supabase 的結果更新本地快取
+      
+      // Now update local cache with Supabase result (source of truth)
       const latestRows = readQueueCache();
       const finalUpdated = latestRows.map((row) => (row.id === id ? { ...row, ...normalized, status: normalized.status } : row));
       writeQueueCache(finalUpdated);
+      
       return normalized;
     } catch (error) {
-      console.error("updateStatus failed; Supabase status was not changed", error);
-      // 保持本地快取的更新，即使 Supabase 失敗
+      console.error("updateStatus failed", error);
+      // If Supabase fails, at least update local cache as fallback
+      // so the UI reflects the attempted change
+      const rows = readQueueCache();
+      const updated = rows.map((row) => (row.id === id ? { ...row, ...nextPatch, status } : row));
+      writeQueueCache(updated);
       throw error;
     }
   },
