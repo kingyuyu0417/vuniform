@@ -1291,16 +1291,8 @@ export default function UniformPOS() {
             school: visit.school_id || visit.schoolId || "",
             createdAt: visit.created_at || visit.createdAt || new Date().toISOString(),
           }));
-        // 合併策略：如果 Supabase 返回空或很少數據，保留本地數據
-        setQueueVisits((prevVisits) => {
-          if (!normalized || normalized.length === 0) {
-            return prevVisits; // 保留現有數據，不替換為空
-          }
-          // 合併：優先使用新數據，但保留本地不在新數據中的訂單
-          const newIds = new Set(normalized.map((v) => v.id));
-          const localOnly = prevVisits.filter((v) => !newIds.has(v.id));
-          return [...normalized, ...localOnly].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-        });
+        // listOrders 已經合併了 Supabase 和本地數據，直接使用結果
+        setQueueVisits(normalized.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
       })
       .subscribe();
 

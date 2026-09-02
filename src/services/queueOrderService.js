@@ -160,15 +160,24 @@ export const queueOrderService = {
     try {
       let query = supabase.from("customer_orders").select("*").order("created_at", { ascending: false });
       if (schoolFilter) query = query.eq("school_id", schoolFilter);
-      if (status) query = query.eq("status", status);
+      // Do NOT filter by status in the Supabase query - fetch all and merge locally
 
       const { data, error } = await query;
       if (error) throw error;
-      const rows = (data || []).map(normalizeOrderRow);
-      const fallbackRows = readQueueCache().filter((row) => !schoolFilter || safeSchoolId(row.school_id) === schoolFilter);
-      const finalRows = rows.length ? rows : fallbackRows;
-      writeQueueCache(finalRows);
-      return finalRows.filter((row) => !status || row.status === status).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      
+      const supabaseRows = (data || []).map(normalizeOrderRow).filter((row) => !schoolFilter || safeSchoolId(row.school_id) === schoolFilter);
+      const localRows = readQueueCache().filter((row) => !schoolFilter || safeSchoolId(row.school_id) === schoolFilter);
+      
+      // MERGE: Supabase takes precedence, but preserve local items that are not in Supabase
+      const supabaseIds = new Set(supabaseRows.map((row) => row.id));
+      const localOnly = localRows.filter((row) => !supabaseIds.has(row.id));
+      const mergedRows = [...supabaseRows, ...localOnly];
+      
+      // Write merged result back to cache
+      writeQueueCache(mergedRows);
+      
+      // Filter by status AFTER merging
+      return mergedRows.filter((row) => !status || row.status === status).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     } catch (error) {
       console.warn("listOrders fallback to local cache", error);
       const rows = readQueueCache().filter((row) => !schoolFilter || safeSchoolId(row.school_id) === schoolFilter);
