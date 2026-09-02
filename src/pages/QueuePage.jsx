@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useState } from "react";
+import React, { useMemo, useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Zap } from "lucide-react";
 import { ORDER_STATUS, queueOrderService } from "../services/queueOrderService";
@@ -17,6 +17,7 @@ export default function QueuePage({ visits = [], onViewGuest, onAssign }) {
   const [visitsData, setVisitsData] = useState(visits);
   const [isLoading, setIsLoading] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState(new Date());
+  const previousDataRef = useRef(visits);
 
   useEffect(() => {
     const normalize = (data = []) =>
@@ -36,6 +37,7 @@ export default function QueuePage({ visits = [], onViewGuest, onAssign }) {
         const data = await queueOrderService.listOrders();
         const normalized = normalize(data);
         setVisitsData(normalized);
+        previousDataRef.current = normalized;
         setLastUpdatedAt(new Date());
       } catch (err) {
         console.error("加載待命單失敗", err);
@@ -50,9 +52,25 @@ export default function QueuePage({ visits = [], onViewGuest, onAssign }) {
 
     const unsub = queueOrderService.subscribe({
       onChange: (rows) => {
-        // listOrders 已經做了合併，直接使用返回的數據
         const normalized = normalize(rows);
-        setVisitsData(normalized);
+        setVisitsData((prevVisits) => {
+          // 防護：如果新數據明顯少於舊數據（可能是狀態改變導致的過濾）
+          // 先檢查是否真的有訂單消失，或只是狀態改變了
+          if (normalized.length < prevVisits.length) {
+            // 檢查是否所有剩餘訂單的 ID 都在前一個列表中
+            const normalizedIds = new Set(normalized.map((item) => item.id));
+            const disappeared = prevVisits.filter((item) => !normalizedIds.has(item.id));
+            
+            // 如果有訂單消失，但總數不是 0，則可能是有些訂單進入了度身
+            // 這是正常的，直接使用新數據
+            if (disappeared.length > 0) {
+              console.log(`訂單進入度身: ${disappeared.map((d) => d.queueNo).join(", ")}`);
+            }
+          }
+          
+          // 直接使用新數據（listOrders 已經做了狀態保護）
+          return normalized;
+        });
         setLastUpdatedAt(new Date());
       },
     });

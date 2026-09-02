@@ -160,7 +160,6 @@ export const queueOrderService = {
     try {
       let query = supabase.from("customer_orders").select("*").order("created_at", { ascending: false });
       if (schoolFilter) query = query.eq("school_id", schoolFilter);
-      // Do NOT filter by status in the Supabase query - fetch all and merge locally
 
       const { data, error } = await query;
       if (error) throw error;
@@ -168,16 +167,28 @@ export const queueOrderService = {
       const supabaseRows = (data || []).map(normalizeOrderRow).filter((row) => !schoolFilter || safeSchoolId(row.school_id) === schoolFilter);
       const localRows = readQueueCache().filter((row) => !schoolFilter || safeSchoolId(row.school_id) === schoolFilter);
       
-      // MERGE: Supabase takes precedence, but preserve local items that are not in Supabase
+      // MERGE with state protection: Prefer local PENDING orders over Supabase PREPARING
+      // This prevents orders from disappearing during status transitions
+      const mergedRows = supabaseRows.map((supabaseRow) => {
+        const localMatch = localRows.find((local) => local.id === supabaseRow.id);
+        // If local has PENDING and Supabase has PREPARING, keep local PENDING
+        // This gives time for the UI to transition smoothly
+        if (localMatch && localMatch.status === ORDER_STATUS.PENDING && supabaseRow.status !== ORDER_STATUS.PENDING) {
+          return localMatch; // Keep the local PENDING version
+        }
+        return supabaseRow; // Use Supabase version otherwise
+      });
+      
+      // Preserve local items not in Supabase
       const supabaseIds = new Set(supabaseRows.map((row) => row.id));
       const localOnly = localRows.filter((row) => !supabaseIds.has(row.id));
-      const mergedRows = [...supabaseRows, ...localOnly];
+      const finalRows = [...mergedRows, ...localOnly];
       
       // Write merged result back to cache
-      writeQueueCache(mergedRows);
+      writeQueueCache(finalRows);
       
       // Filter by status AFTER merging
-      return mergedRows.filter((row) => !status || row.status === status).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      return finalRows.filter((row) => !status || row.status === status).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     } catch (error) {
       console.warn("listOrders fallback to local cache", error);
       const rows = readQueueCache().filter((row) => !schoolFilter || safeSchoolId(row.school_id) === schoolFilter);
@@ -192,10 +203,12 @@ export const queueOrderService = {
       ...patch,
     };
 
+    // 立即更新本地快取，確保狀態一致
+    const rows = readQueueCache();
+    const updated = rows.map((row) => (row.id === id ? { ...row, ...nextPatch, status } : row));
+    writeQueueCache(updated);
+
     if (!isSupabaseConfigured || !supabase) {
-      const rows = readQueueCache();
-      const updated = rows.map((row) => (row.id === id ? { ...row, ...nextPatch, status } : row));
-      writeQueueCache(updated);
       return updated.find((row) => row.id === id) || { id, status };
     }
 
@@ -210,12 +223,14 @@ export const queueOrderService = {
       const saved = data && data[0];
       if (!saved) throw new Error("找不到要更新的訂單");
       const normalized = normalizeOrderRow(saved);
-      const rows = readQueueCache();
-      const updated = rows.map((row) => (row.id === id ? { ...row, ...normalized, status: normalized.status } : row));
-      writeQueueCache(updated);
+      // 用 Supabase 的結果更新本地快取
+      const latestRows = readQueueCache();
+      const finalUpdated = latestRows.map((row) => (row.id === id ? { ...row, ...normalized, status: normalized.status } : row));
+      writeQueueCache(finalUpdated);
       return normalized;
     } catch (error) {
       console.error("updateStatus failed; Supabase status was not changed", error);
+      // 保持本地快取的更新，即使 Supabase 失敗
       throw error;
     }
   },
