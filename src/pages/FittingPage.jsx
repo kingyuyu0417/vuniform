@@ -127,8 +127,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       if (selectedOrderId) {
         // 先在學校過濾的訂單中查找（包括所有狀態）
         const directMatch = schoolFiltered.find(matchByTarget);
-        // 如果沒找到，在所有訂單中查找
-        const fallbackMatch = directMatch || normalizedAll.find(matchByTarget);
+        const fallbackMatch = directMatch;
 
         if (fallbackMatch) {
           // 只有 PENDING 狀態的訂單才能在 Fitting 頁面操作
@@ -440,7 +439,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
 
       const result = getSafeOrder(await queueOrderService.updateStatus(current.id, "PREPARING", {
         tailor_info: payload.tailor_info,
-      }));
+      }, currentSchoolId));
       if (!result?.id) throw new Error("訂單未成功更新");
       onStatusChange?.(result || current);
       setOrders((prev) => (Array.isArray(prev) ? prev.filter((order) => order && order.id !== current.id) : []));
@@ -486,7 +485,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
           skipped_at: new Date().toISOString(),
           skipped_reason: "未到場",
         },
-      });
+      }, currentSchoolId);
       setNotice("已標記為 SKIPPED，隊伍已繼續");
       onStatusChange?.({ id: activeOrder.id, status: ORDER_STATUS.SKIPPED });
       setOrders((prev) => prev.filter((order) => order.id !== activeOrder.id));

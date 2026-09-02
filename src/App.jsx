@@ -716,6 +716,7 @@ export default function UniformPOS() {
   const [cashReceived, setCashReceived] = useState("");
   const [btStatus, setBtStatus] = useState({ state: "idle", msg: "" });
   const printAreaRef = useRef(null);
+  const checkoutSubmittingRef = useRef(false);
 
   const [importResult, setImportResult] = useState(null); // { summary, errors } | null
   const [lastSync, setLastSync] = useState(null);
@@ -749,7 +750,7 @@ export default function UniformPOS() {
   // 員工帳號（共用，ADMIN可管理）同目前呢部裝置嘅登入狀態（個人，唔跨裝置）
   const [accounts, setAccounts] = useState(DEFAULT_ACCOUNTS);
   const [session, setSession] = useState(null); // { id, name, role } | null
-  const [authReady, setAuthReady] = useState(true); // Always ready for offline mode
+  const [authReady, setAuthReady] = useState(!isSupabaseAuthEnabled); // Wait for auth before loading protected data
   const [passwordSetupRequired, setPasswordSetupRequired] = useState(false);
   const perms = session ? PERMISSIONS[session.role] : null;
 
@@ -870,6 +871,7 @@ export default function UniformPOS() {
       return { error: "帳戶尚未設定員工角色，請聯絡管理員。" };
     }
     setSession({ id: profile.id, name: profile.display_name, role: profile.role });
+    await refreshFromCloud({ skipProductsWhileEditing: false });
     if (profile.role === ROLES.ADMIN) {
       const { data: migrationResult, error: migrationError } = await supabase.rpc("migrate_legacy_data");
       if (!migrationError) {
@@ -1601,7 +1603,8 @@ export default function UniformPOS() {
   const changeDue = cashAmount - cartTotal;
 
   const checkout = async () => {
-    if (cart.length === 0) return;
+    if (cart.length === 0 || checkoutSubmittingRef.current) return;
+    checkoutSubmittingRef.current = true;
     const now = new Date();
     const received = cashReceived === "" ? cartTotal : Number(cashReceived || 0);
     const sourceMeta = cart.find((item) => item.sourceQueueNo || item.sourceGuestName) || {};
@@ -1646,6 +1649,7 @@ export default function UniformPOS() {
       } catch (error) {
         console.error("同步已支付客戶訂單失敗，保留購物車", error);
         setStorageError("來源訂單未能同步完成，交易尚未完成；請檢查網絡後再試。 ");
+        checkoutSubmittingRef.current = false;
         return;
       }
     }
@@ -1655,6 +1659,7 @@ export default function UniformPOS() {
       if (sourceOrderIds.length > 0 && isSupabaseConfigured && supabase) {
         await Promise.all(sourceOrderIds.map((sourceOrderId) => supabase.from("customer_orders").update({ status: "READY" }).eq("id", sourceOrderId).eq("school_id", order.school)));
       }
+      checkoutSubmittingRef.current = false;
       return;
     }
 
@@ -1665,6 +1670,7 @@ export default function UniformPOS() {
     setReceipt(savedOrder);
     setCart([]);
     setSelectedProduct(null);
+    checkoutSubmittingRef.current = false;
   };
 
   const printBrowser = () => {

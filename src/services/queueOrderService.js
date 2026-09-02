@@ -176,7 +176,7 @@ export const queueOrderService = {
     }
   },
 
-  async updateStatus(id, status, patch = {}) {
+  async updateStatus(id, status, patch = {}, schoolId = "") {
     const nextPatch = {
       status,
       updated_at: new Date().toISOString(),
@@ -194,11 +194,12 @@ export const queueOrderService = {
     try {
       // IMPORTANT: Update Supabase FIRST, before local cache
       // This prevents merge conflicts during postgres_changes events
-      const { data, error } = await supabase
+      let updateQuery = supabase
         .from("customer_orders")
         .update(nextPatch)
-        .eq("id", id)
-        .select();
+        .eq("id", id);
+      if (schoolId) updateQuery = updateQuery.eq("school_id", safeSchoolId(schoolId));
+      const { data, error } = await updateQuery.select();
 
       if (error) throw error;
       const saved = data && data[0];

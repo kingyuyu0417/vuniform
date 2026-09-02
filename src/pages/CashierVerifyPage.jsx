@@ -156,6 +156,7 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
             tailor_info: { ...(selectedOrder.tailor_info || {}), paid_at: payment.completedAt, payment },
           })
           .eq("id", selectedOrder.id)
+          .eq("school_id", selectedOrder.school_id)
           .select()
           .single();
         
@@ -170,6 +171,7 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
         }
       } catch (error) {
         console.error("更新訂單狀態異常", error);
+        throw error;
       }
 
       // 嘗試保存銷售記錄（不成功也不應停止流程）
