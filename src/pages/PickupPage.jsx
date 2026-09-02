@@ -112,6 +112,7 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
         .update({ status: ORDER_STATUS.READY })
         .eq("id", orderId);
       if (currentSchoolId) updateQuery = updateQuery.eq("school_id", currentSchoolId);
+      updateQuery = updateQuery.eq("status", ORDER_STATUS.PREPARING);
       const { data: updated, error } = await updateQuery.select().single();
       if (error) throw error;
       if (!updated?.id) throw new Error("找不到要更新的訂單");

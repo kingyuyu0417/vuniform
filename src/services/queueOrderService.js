@@ -9,7 +9,10 @@ export const ORDER_STATUS = {
 };
 
 const STORAGE_KEY = "uniform-pos-customer-flow-cache";
-const DAY_PREFIX = () => new Date().toISOString().slice(0, 10).replace(/-/g, "");
+const hongKongDate = (value = new Date()) => new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Hong_Kong",
+}).format(new Date(value));
+const DAY_PREFIX = () => hongKongDate().replace(/-/g, "");
 
 const safeSchoolId = (schoolId = "") => String(schoolId || "").trim() || "default-school";
 const toRecord = (value) => (value && typeof value === "object" ? value : {});
@@ -66,8 +69,8 @@ export const generateQueueNumber = async (schoolId) => {
       .from("customer_orders")
       .select("queue_number")
       .eq("school_id", normalizedSchoolId)
-      .gte("created_at", `${today.slice(0, 4)}-${today.slice(4, 6)}-${today.slice(6, 8)}T00:00:00.000Z`)
-      .lt("created_at", `${today.slice(0, 4)}-${today.slice(4, 6)}-${today.slice(6, 8)}T23:59:59.999Z`)
+      .gte("created_at", `${today.slice(0, 4)}-${today.slice(4, 6)}-${today.slice(6, 8)}T00:00:00+08:00`)
+      .lt("created_at", `${today.slice(0, 4)}-${today.slice(4, 6)}-${today.slice(6, 8)}T23:59:59.999+08:00`)
       .order("created_at", { ascending: false })
       .limit(1);
 
@@ -78,7 +81,7 @@ export const generateQueueNumber = async (schoolId) => {
     }
   }
 
-  const existing = localRows.filter((row) => safeSchoolId(row.school_id) === normalizedSchoolId && row.created_at?.slice(0, 10) === new Date().toISOString().slice(0, 10));
+  const existing = localRows.filter((row) => safeSchoolId(row.school_id) === normalizedSchoolId && hongKongDate(row.created_at) === hongKongDate());
   if (existing.length) {
     const maxNumber = existing.reduce((max, row) => {
       const match = String(row.queue_number || row.queueNumber || "").match(/-(\d+)$/);
@@ -93,7 +96,7 @@ export const generateQueueNumber = async (schoolId) => {
 export const queueOrderService = {
   async createOrder(payload) {
     const schoolId = safeSchoolId(payload.school_id || payload.schoolId || payload.school);
-    const queueNumber = payload.queue_number || payload.queueNumber || (await generateQueueNumber(schoolId));
+    const queueNumber = payload.queue_number || payload.queueNumber || "";
     const createdAt = payload.created_at || payload.createdAt || new Date().toISOString();
     const customerInfo = payload.customer_info || payload.customerInfo || {};
     const tailorInfo = payload.tailor_info || payload.tailorInfo || {};
@@ -120,13 +123,31 @@ export const queueOrderService = {
     }
 
     try {
+      const rpcResult = await supabase.rpc("create_customer_order", {
+        order_data: {
+          id: record.id,
+          school_id: record.school_id,
+          queue_number: record.queue_number,
+          customer_info: record.customer_info,
+          tailor_info: record.tailor_info,
+          created_at: record.created_at,
+        },
+      });
+      if (!rpcResult.error) {
+        const normalized = normalizeOrderRow(rpcResult.data);
+        writeQueueCache([normalized, ...readQueueCache().filter((row) => row.id !== normalized.id)]);
+        return normalized;
+      }
+      if (rpcResult.error.code && rpcResult.error.code !== "42883") throw rpcResult.error;
+
+      const fallbackQueue = record.queue_number || await generateQueueNumber(schoolId);
       const { data, error } = await supabase
         .from("customer_orders")
         .insert([
           {
             id: record.id,
             school_id: record.school_id,
-            queue_number: record.queue_number,
+            queue_number: fallbackQueue,
             customer_info: record.customer_info,
             tailor_info: record.tailor_info,
             status: record.status,
@@ -136,7 +157,7 @@ export const queueOrderService = {
         .select();
 
       if (error) throw error;
-      const saved = (data && data[0]) || record;
+      const saved = (data && data[0]) || { ...record, queue_number: fallbackQueue };
       const normalized = normalizeOrderRow(saved);
       const localRows = readQueueCache();
       writeQueueCache([normalized, ...localRows.filter((row) => row.id !== normalized.id)]);
@@ -176,7 +197,7 @@ export const queueOrderService = {
     }
   },
 
-  async updateStatus(id, status, patch = {}, schoolId = "") {
+  async updateStatus(id, status, patch = {}, schoolId = "", expectedStatus = "") {
     const nextPatch = {
       status,
       updated_at: new Date().toISOString(),
@@ -199,6 +220,7 @@ export const queueOrderService = {
         .update(nextPatch)
         .eq("id", id);
       if (schoolId) updateQuery = updateQuery.eq("school_id", safeSchoolId(schoolId));
+      if (expectedStatus) updateQuery = updateQuery.eq("status", expectedStatus);
       const { data, error } = await updateQuery.select();
 
       if (error) throw error;

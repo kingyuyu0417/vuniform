@@ -439,7 +439,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
 
       const result = getSafeOrder(await queueOrderService.updateStatus(current.id, "PREPARING", {
         tailor_info: payload.tailor_info,
-      }, currentSchoolId));
+      }, currentSchoolId, ORDER_STATUS.PENDING));
       if (!result?.id) throw new Error("訂單未成功更新");
       onStatusChange?.(result || current);
       setOrders((prev) => (Array.isArray(prev) ? prev.filter((order) => order && order.id !== current.id) : []));
@@ -485,7 +485,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
           skipped_at: new Date().toISOString(),
           skipped_reason: "未到場",
         },
-      }, currentSchoolId);
+      }, currentSchoolId, ORDER_STATUS.PENDING);
       setNotice("已標記為 SKIPPED，隊伍已繼續");
       onStatusChange?.({ id: activeOrder.id, status: ORDER_STATUS.SKIPPED });
       setOrders((prev) => prev.filter((order) => order.id !== activeOrder.id));

@@ -157,6 +157,7 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
           })
           .eq("id", selectedOrder.id)
           .eq("school_id", selectedOrder.school_id)
+          .eq("status", ORDER_STATUS.READY)
           .select()
           .single();
         

@@ -1643,8 +1643,11 @@ export default function UniformPOS() {
               tailor_info: { paid_at: new Date().toISOString(), source_sale_id: sourceSaleId, payment: { method: "cash", cashReceived: received, changeDue: Math.max(received - cartTotal, 0) } },
             })
             .eq("id", sourceOrderId)
-            .eq("school_id", order.school);
+            .eq("school_id", order.school)
+            .eq("status", "READY")
+            .select("id, status");
           if (error) throw error;
+          if (!data?.[0] || data[0].status !== "COMPLETED") throw new Error("來源訂單未成功完成");
         }));
       } catch (error) {
         console.error("同步已支付客戶訂單失敗，保留購物車", error);
