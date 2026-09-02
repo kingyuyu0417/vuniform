@@ -1207,6 +1207,8 @@ export default function UniformPOS() {
   useEffect(() => {
     let isMounted = true;
 
+    const trackableStatuses = ["PENDING", "PREPARING", "READY"];
+
     const syncQueueVisitsFromSupabase = async () => {
       if (!isSupabaseConfigured || !supabase) {
         setQueueVisits([]);
@@ -1217,19 +1219,21 @@ export default function UniformPOS() {
         const data = await queueOrderService.listOrders();
         if (!isMounted || !Array.isArray(data)) return;
 
-        const normalized = data.filter((visit) => visit.status === "PENDING").map((visit) => ({
-          id: visit.id,
-          queueNo: visit.queue_number || visit.queueNumber || "",
-          guestName: visit.customer_info?.guestName || visit.guestName || "",
-          className: visit.customer_info?.className || visit.className || "",
-          heightCm: visit.customer_info?.heightCm || visit.heightCm || "",
-          weightKg: visit.customer_info?.weightKg || visit.weightKg || "",
-          phone: visit.customer_info?.phone || visit.phone || "",
-          notes: visit.customer_info?.notes || visit.notes || "",
-          status: visit.status || "waiting",
-          school: visit.school_id || visit.schoolId || "",
-          createdAt: visit.created_at || visit.createdAt || new Date().toISOString(),
-        }));
+        const normalized = data
+          .filter((visit) => trackableStatuses.includes(visit.status))
+          .map((visit) => ({
+            id: visit.id,
+            queueNo: visit.queue_number || visit.queueNumber || "",
+            guestName: visit.customer_info?.guestName || visit.guestName || "",
+            className: visit.customer_info?.className || visit.className || "",
+            heightCm: visit.customer_info?.heightCm || visit.heightCm || "",
+            weightKg: visit.customer_info?.weightKg || visit.weightKg || "",
+            phone: visit.customer_info?.phone || visit.phone || "",
+            notes: visit.customer_info?.notes || visit.notes || "",
+            status: visit.status || "waiting",
+            school: visit.school_id || visit.schoolId || "",
+            createdAt: visit.created_at || visit.createdAt || new Date().toISOString(),
+          }));
 
         setQueueVisits(normalized.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
       } catch (error) {
@@ -1247,19 +1251,21 @@ export default function UniformPOS() {
       .on("postgres_changes", { event: "*", schema: "public", table: "customer_orders" }, async () => {
         if (!isMounted) return;
         const data = await queueOrderService.listOrders();
-        const normalized = (data || []).filter((visit) => visit.status === "PENDING").map((visit) => ({
-          id: visit.id,
-          queueNo: visit.queue_number || visit.queueNumber || "",
-          guestName: visit.customer_info?.guestName || visit.guestName || "",
-          className: visit.customer_info?.className || visit.className || "",
-          heightCm: visit.customer_info?.heightCm || visit.heightCm || "",
-          weightKg: visit.customer_info?.weightKg || visit.weightKg || "",
-          phone: visit.customer_info?.phone || visit.phone || "",
-          notes: visit.customer_info?.notes || visit.notes || "",
-          status: visit.status || "waiting",
-          school: visit.school_id || visit.schoolId || "",
-          createdAt: visit.created_at || visit.createdAt || new Date().toISOString(),
-        }));
+        const normalized = (data || [])
+          .filter((visit) => ["PENDING", "PREPARING", "READY"].includes(visit.status))
+          .map((visit) => ({
+            id: visit.id,
+            queueNo: visit.queue_number || visit.queueNumber || "",
+            guestName: visit.customer_info?.guestName || visit.guestName || "",
+            className: visit.customer_info?.className || visit.className || "",
+            heightCm: visit.customer_info?.heightCm || visit.heightCm || "",
+            weightKg: visit.customer_info?.weightKg || visit.weightKg || "",
+            phone: visit.customer_info?.phone || visit.phone || "",
+            notes: visit.customer_info?.notes || visit.notes || "",
+            status: visit.status || "waiting",
+            school: visit.school_id || visit.schoolId || "",
+            createdAt: visit.created_at || visit.createdAt || new Date().toISOString(),
+          }));
         setQueueVisits(normalized.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
       })
       .subscribe();
@@ -1279,7 +1285,37 @@ export default function UniformPOS() {
 
   const handleFittingStatusChange = (updatedOrder) => {
     if (!updatedOrder?.id) return;
-    setQueueVisits((prev) => prev.filter((item) => item.id !== updatedOrder.id));
+    setQueueVisits((prev) => {
+      const existing = prev.find((item) => item.id === updatedOrder.id);
+      if (existing) {
+        return prev.map((item) => item.id === updatedOrder.id ? {
+          ...item,
+          queueNo: updatedOrder.queue_number || updatedOrder.queueNumber || item.queueNo || "",
+          guestName: updatedOrder.customer_info?.guestName || updatedOrder.guestName || item.guestName || "",
+          className: updatedOrder.customer_info?.className || updatedOrder.className || item.className || "",
+          phone: updatedOrder.customer_info?.phone || updatedOrder.phone || item.phone || "",
+          status: updatedOrder.status || item.status,
+          school: updatedOrder.school_id || updatedOrder.schoolId || item.school || "",
+          createdAt: updatedOrder.created_at || updatedOrder.createdAt || item.createdAt || new Date().toISOString(),
+        } : item);
+      }
+      return [
+        {
+          id: updatedOrder.id,
+          queueNo: updatedOrder.queue_number || updatedOrder.queueNumber || "",
+          guestName: updatedOrder.customer_info?.guestName || updatedOrder.guestName || "",
+          className: updatedOrder.customer_info?.className || updatedOrder.className || "",
+          heightCm: updatedOrder.customer_info?.heightCm || updatedOrder.heightCm || "",
+          weightKg: updatedOrder.customer_info?.weightKg || updatedOrder.weightKg || "",
+          phone: updatedOrder.customer_info?.phone || updatedOrder.phone || "",
+          notes: updatedOrder.customer_info?.notes || updatedOrder.notes || "",
+          status: updatedOrder.status || "PENDING",
+          school: updatedOrder.school_id || updatedOrder.schoolId || "",
+          createdAt: updatedOrder.created_at || updatedOrder.createdAt || new Date().toISOString(),
+        },
+        ...prev,
+      ].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    });
     setSelectedGuest((prev) => (prev && prev.id === updatedOrder.id ? null : prev));
   };
 
@@ -1581,7 +1617,7 @@ export default function UniformPOS() {
   }
 
   if (location.pathname === "/" || location.pathname === "") {
-    return <PublicHomePage schools={[DESIGNATED_SCHOOL, ...schools]} onStaffLogin={() => navigate("/staff")} />;
+    return <PublicHomePage schools={schools} schoolMeta={schoolMeta} onStaffLogin={() => navigate("/staff")} />;
   }
 
   if (!session) {
@@ -3373,10 +3409,47 @@ function SchoolSwitcher({ schools, schoolMeta, selectedSchool, onPick }) {
           {typedSchools.length > 6 && searchInput}
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginBottom: 6 }}>第三步：揀學校</div>
  */
-function PublicHomePage({ schools = [], onStaffLogin }) {
+function PublicHomePage({ schools = [], schoolMeta = {}, onStaffLogin }) {
   const navigate = useNavigate();
+  const [selectedLevel, setSelectedLevel] = useState(null);
+  const [selectedRegion, setSelectedRegion] = useState(null);
   const [selectedSchoolForRegistration, setSelectedSchoolForRegistration] = useState("");
-  const schoolOptions = [...new Set(schools.filter(Boolean))];
+
+  const schoolOptions = [...new Set(schools.filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-Hant"));
+
+  const levelOptions = SCHOOL_LEVELS.map((level) => ({
+    level,
+    count: schoolOptions.filter((school) => {
+      const meta = metaOf(schoolMeta, school);
+      const schoolLevel = meta.level || "其他";
+      return level === "其他" ? !["幼稚園", "小學", "中學"].includes(schoolLevel) : schoolLevel === level;
+    }).length,
+  }));
+
+  const levelFilteredSchools = selectedLevel
+    ? schoolOptions.filter((school) => {
+        const meta = metaOf(schoolMeta, school);
+        const schoolLevel = meta.level || "其他";
+        return selectedLevel === "其他" ? !["幼稚園", "小學", "中學"].includes(schoolLevel) : schoolLevel === selectedLevel;
+      })
+    : schoolOptions;
+
+  const regionOptions = [...new Set(levelFilteredSchools.map((school) => metaOf(schoolMeta, school).region).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-Hant"));
+
+  const regionFilteredSchools = selectedRegion
+    ? levelFilteredSchools.filter((school) => (metaOf(schoolMeta, school).region || "其他") === selectedRegion)
+    : levelFilteredSchools;
+
+  const handleLevelSelect = (level) => {
+    setSelectedLevel(level);
+    setSelectedRegion(null);
+    setSelectedSchoolForRegistration("");
+  };
+
+  const handleRegionSelect = (region) => {
+    setSelectedRegion(region);
+    setSelectedSchoolForRegistration("");
+  };
 
   return (
     <div style={{ minHeight: "100vh", background: "#F4F7FB", padding: "32px 16px", boxSizing: "border-box", fontFamily: "system-ui, -apple-system, sans-serif" }}>
@@ -3389,20 +3462,104 @@ function PublicHomePage({ schools = [], onStaffLogin }) {
 
         <div style={{ border: "1px solid #D5DDE5", borderRadius: 14, background: "#fff", padding: 22 }}>
           <div style={{ fontSize: 18, fontWeight: 800, color: "#1F3A5F" }}>登記學校</div>
-          <div style={{ marginTop: 6, fontSize: 13, color: "#66717D" }}>請先選擇學校，再進行客人登記</div>
-          <select
-            value={selectedSchoolForRegistration}
-            onChange={(event) => setSelectedSchoolForRegistration(event.target.value)}
-            style={{ width: "100%", marginTop: 14, padding: "11px 12px", border: "1px solid #D5DDE5", borderRadius: 8, fontSize: 14, background: "#fff" }}
-          >
-            <option value="">請選擇學校</option>
-            {schoolOptions.map((school) => <option key={school} value={school}>{school}</option>)}
-          </select>
+          <div style={{ marginTop: 6, fontSize: 13, color: "#66717D" }}>請按步驟選擇學校，再進行客人登記</div>
+
+          <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8, fontWeight: 700 }}>第一步：選擇學校類別</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {levelOptions.map(({ level, count }) => (
+                  <button
+                    key={level}
+                    type="button"
+                    className="pos-btn"
+                    onClick={() => handleLevelSelect(level)}
+                    style={{
+                      padding: "9px 12px",
+                      borderRadius: 10,
+                      background: selectedLevel === level ? "#1F3A5F" : "#F3F6FA",
+                      color: selectedLevel === level ? "#fff" : "#1F3A5F",
+                      border: "1px solid " + (selectedLevel === level ? "#1F3A5F" : "#D5DDE5"),
+                      fontSize: 13,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {level} ({count})
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {selectedLevel && (
+              <div>
+                <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8, fontWeight: 700 }}>第二步：選擇地區</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {regionOptions.length > 0 ? (
+                    regionOptions.map((region) => (
+                      <button
+                        key={region}
+                        type="button"
+                        className="pos-btn"
+                        onClick={() => handleRegionSelect(region)}
+                        style={{
+                          padding: "9px 12px",
+                          borderRadius: 10,
+                          background: selectedRegion === region ? "#D97757" : "#F3F6FA",
+                          color: selectedRegion === region ? "#fff" : "#1F3A5F",
+                          border: "1px solid " + (selectedRegion === region ? "#D97757" : "#D5DDE5"),
+                          fontSize: 13,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {region}
+                      </button>
+                    ))
+                  ) : (
+                    <div style={{ fontSize: 12, color: "#66717D" }}>此類別暫無地區資料</div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {selectedRegion && (
+              <div>
+                <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8, fontWeight: 700 }}>第三步：選擇學校</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 240, overflowY: "auto", paddingRight: 4 }}>
+                  {regionFilteredSchools.length > 0 ? (
+                    regionFilteredSchools.map((school) => (
+                      <button
+                        key={school}
+                        type="button"
+                        className="pos-btn"
+                        onClick={() => setSelectedSchoolForRegistration(school)}
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          padding: "10px 12px",
+                          borderRadius: 10,
+                          background: selectedSchoolForRegistration === school ? "#EAF4FF" : "#fff",
+                          border: "1px solid " + (selectedSchoolForRegistration === school ? "#9BC3EC" : "#D5DDE5"),
+                          color: "#1F3A5F",
+                          fontSize: 14,
+                          fontWeight: selectedSchoolForRegistration === school ? 700 : 500,
+                        }}
+                      >
+                        {school}
+                      </button>
+                    ))
+                  ) : (
+                    <div style={{ fontSize: 12, color: "#66717D" }}>此區域暫無學校資料</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           <button
             type="button"
             disabled={!selectedSchoolForRegistration}
             onClick={() => navigate(`/checkin?school_id=${encodeURIComponent(selectedSchoolForRegistration)}`)}
-            style={{ width: "100%", marginTop: 12, border: "none", borderRadius: 10, background: selectedSchoolForRegistration ? "#1F3A5F" : "#C7D0DA", color: "#fff", padding: "12px 16px", fontWeight: 800, cursor: selectedSchoolForRegistration ? "pointer" : "not-allowed" }}
+            style={{ width: "100%", marginTop: 18, border: "none", borderRadius: 10, background: selectedSchoolForRegistration ? "#1F3A5F" : "#C7D0DA", color: "#fff", padding: "12px 16px", fontWeight: 800, cursor: selectedSchoolForRegistration ? "pointer" : "not-allowed" }}
           >
             開始登記
           </button>
