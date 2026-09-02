@@ -82,26 +82,44 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
     }
 
     try {
-          const rows = await queueOrderService.listOrders({ schoolId: currentSchoolId });
-          let normalized = Array.isArray(rows) ? rows.filter(Boolean).map(getSafeOrder) : [];
-      setOrders(normalized);
+      const allRows = await queueOrderService.listOrders();
+      const normalizedAll = Array.isArray(allRows) ? allRows.filter(Boolean).map(getSafeOrder) : [];
+      const schoolKey = String(currentSchoolId || "").trim();
+      const filteredRows = schoolKey
+        ? normalizedAll.filter((row) => {
+            const rowSchool = String(row.school_id || row.schoolId || "").trim();
+            return rowSchool === schoolKey;
+          })
+        : normalizedAll;
+
+      setOrders(filteredRows);
+
+      const matchByTarget = (row) => {
+        const target = String(selectedOrderId || "").trim();
+        if (!target) return false;
+        return (
+          row.id === selectedOrderId ||
+          row.id === target ||
+          row.queue_number === target ||
+          row.queueNumber === target ||
+          String(row.queue_number || row.queueNumber || "").toUpperCase() === target.toUpperCase()
+        );
+      };
 
       if (selectedOrderId) {
-            let match = normalized.find((o) => o.id === selectedOrderId || o.queue_number === selectedOrderId || o.queueNumber === selectedOrderId);
-            if (!match && currentSchoolId) {
-              const allRows = await queueOrderService.listOrders();
-              normalized = Array.isArray(allRows) ? allRows.filter(Boolean).map(getSafeOrder) : normalized;
-              setOrders(normalized);
-              match = normalized.find((o) => o.id === selectedOrderId || o.queue_number === selectedOrderId || o.queueNumber === selectedOrderId);
-            }
-        if (match) {
-          safeSetSelectedOrder(match);
+        const directMatch = filteredRows.find(matchByTarget);
+        const fallbackMatch = directMatch || normalizedAll.find(matchByTarget);
+
+        if (fallbackMatch) {
+          safeSetSelectedOrder(fallbackMatch);
           return;
         }
+
         setNotice("找不到此訂單，請返回排隊頁重新選擇客人。");
+        return;
       }
 
-      const nextSelected = normalized.find((o) => o.status === ORDER_STATUS.PENDING) || null;
+      const nextSelected = filteredRows.find((o) => o.status === ORDER_STATUS.PENDING) || null;
       safeSetSelectedOrder(nextSelected);
     } catch (error) {
       console.error("FittingPage syncOrders failed", error);

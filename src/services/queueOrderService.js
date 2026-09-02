@@ -165,8 +165,10 @@ export const queueOrderService = {
       const { data, error } = await query;
       if (error) throw error;
       const rows = (data || []).map(normalizeOrderRow);
-      writeQueueCache(rows);
-      return rows;
+      const fallbackRows = readQueueCache().filter((row) => !schoolFilter || safeSchoolId(row.school_id) === schoolFilter);
+      const finalRows = rows.length ? rows : fallbackRows;
+      writeQueueCache(finalRows);
+      return finalRows.filter((row) => !status || row.status === status).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     } catch (error) {
       console.warn("listOrders fallback to local cache", error);
       const rows = readQueueCache().filter((row) => !schoolFilter || safeSchoolId(row.school_id) === schoolFilter);
