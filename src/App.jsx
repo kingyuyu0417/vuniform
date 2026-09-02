@@ -1,15 +1,14 @@
 ﻿import React, { useState, useEffect, useRef } from "react";
 import Papa from "papaparse";
 import qrcode from "qrcode-generator";
-import { useLocation, useNavigate, Routes, Route } from "react-router-dom";
-import { Plus, Minus, Trash2, Printer, Bluetooth, ChevronDown, ChevronUp, ChevronLeft, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown, X, ShoppingCart, Settings, ClipboardList, Check, AlertCircle, QrCode, Upload, Download, School, Users, Eye, EyeOff, MapPin, GraduationCap, Search } from "lucide-react";
+import { useLocation, useNavigate, Routes, Route, Navigate } from "react-router-dom";
+import { Plus, Minus, Trash2, Printer, Bluetooth, ChevronDown, ChevronUp, ChevronLeft, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown, X, ShoppingCart, Settings, ClipboardList, Check, AlertCircle, Upload, Download, School, Users, Eye, EyeOff, MapPin, GraduationCap, Search } from "lucide-react";
 import { isSupabaseConfigured, isSupabaseAuthEnabled, supabase } from "./supabaseClient";
 import CustomerCheckinPage from "./pages/CustomerCheckinPage";
 import QueuePage from "./pages/QueuePage";
 import FittingPage from "./pages/FittingPage";
 import PickupPage from "./pages/PickupPage";
 import CashierVerifyPage from "./pages/CashierVerifyPage";
-import SchoolQRCodePage from "./pages/SchoolQRCodePage";
 import GuestPortalPage from "./pages/GuestPortalPage";
 import GuestQueueStatusPage from "./pages/GuestQueueStatusPage";
 import StaffOrderTracking from "./pages/StaffOrderTracking";
@@ -364,6 +363,19 @@ const SCHOOL_CATEGORIES = Array.from(new Set(Object.values(schoolCatalog).map((e
 // 學校分類資料表：{ 學校名稱: { level, region, district } }
 // 冇分類嘅學校（例如舊資料、CSV匯入未指定）一律歸入「未分類」，唔會令佢消失
 const metaOf = (schoolMeta, name) => ({ ...(schoolCatalog[name] || {}), ...(schoolMeta[name] || {}) });
+const normalizeSchoolLevel = (schoolName, schoolMeta = {}) => {
+  const meta = metaOf(schoolMeta, schoolName);
+  const explicitLevel = String(meta.level || "").trim();
+  if (["幼稚園", "小學", "中學", "其他"].includes(explicitLevel)) return explicitLevel;
+
+  const category = String(meta.category || "").trim();
+  const name = String(schoolName || "").trim();
+  if (/中學/.test(category) || /中學/.test(name)) return "中學";
+  if (/小學/.test(category) || /小學/.test(name)) return "小學";
+  if (/幼稚園/.test(category) || /幼稚園/.test(name)) return "幼稚園";
+
+  return "其他";
+};
 
 // 將學校名單按 階段 → 地區 → 18區 分組成樹狀結構，方便逐層渲染
 const groupSchoolsByCategory = (schools, schoolMeta) => {
@@ -1582,7 +1594,6 @@ export default function UniformPOS() {
       cashier: "/cashier",
       sale: "/sale",
       track: "/track",
-      qrcode: "/qrcode",
       products: "/products",
       records: "/records",
       staff: "/staff",
@@ -1716,12 +1727,11 @@ export default function UniformPOS() {
           { id: "fitting", label: "度身", icon: Users },
           { id: "pickup", label: "取貨", icon: ClipboardList },
           { id: "cashier", label: "收銀", icon: ShoppingCart },
-          { id: "qrcode", label: "QR碼", icon: QrCode },
           { id: "products", label: "商品", icon: Settings },
           { id: "records", label: "記錄", icon: ClipboardList },
           { id: "staff", label: "員工", icon: Users },
         ]
-          .filter((t) => (perms?.tabs?.includes(t.id)) || ["guest", "queue", "fitting", "pickup", "cashier", "qrcode", "track"].includes(t.id))
+          .filter((t) => (perms?.tabs?.includes(t.id)) || ["guest", "queue", "fitting", "pickup", "cashier", "track"].includes(t.id))
           .map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -1802,7 +1812,7 @@ export default function UniformPOS() {
           />
           <Route
             path="/qrcode"
-            element={<SchoolQRCodePage schoolName="香港中國婦女會馮堯敬紀念中學" onSchoolChange={setSelectedSchool} />}
+            element={<Navigate to="/sale" replace />}
           />
           <Route
             path="/products"
@@ -1916,9 +1926,6 @@ export default function UniformPOS() {
                   <StaffOrderTracking visits={queueVisits} onStatusUpdate={(id, status) => {
                     setQueueVisits(queueVisits.map(v => v.id === id ? {...v, status} : v));
                   }} />
-                )}
-                {tab === "qrcode" && (
-                  <SchoolQRCodePage schoolName="香港中國婦女會馮堯敬紀念中學" onSchoolChange={setSelectedSchool} />
                 )}
                 {tab === "products" && (
                   <ProductsTab
@@ -3424,17 +3431,15 @@ function PublicHomePage({ schools = [], schoolMeta = {}, onStaffLogin }) {
   const levelOptions = SCHOOL_LEVELS.map((level) => ({
     level,
     count: schoolOptions.filter((school) => {
-      const meta = metaOf(schoolMeta, school);
-      const schoolLevel = meta.level || "其他";
-      return level === "其他" ? !["幼稚園", "小學", "中學"].includes(schoolLevel) : schoolLevel === level;
+      const schoolLevel = normalizeSchoolLevel(school, schoolMeta);
+      return level === "其他" ? schoolLevel === "其他" : schoolLevel === level;
     }).length,
   }));
 
   const levelFilteredSchools = selectedLevel
     ? schoolOptions.filter((school) => {
-        const meta = metaOf(schoolMeta, school);
-        const schoolLevel = meta.level || "其他";
-        return selectedLevel === "其他" ? !["幼稚園", "小學", "中學"].includes(schoolLevel) : schoolLevel === selectedLevel;
+        const schoolLevel = normalizeSchoolLevel(school, schoolMeta);
+        return selectedLevel === "其他" ? schoolLevel === "其他" : schoolLevel === selectedLevel;
       })
     : schoolOptions;
 

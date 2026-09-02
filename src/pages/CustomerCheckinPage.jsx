@@ -32,6 +32,20 @@ const metaOf = (schoolMeta, name) => {
   return { ...base, ...(schoolMeta?.[name] || {}) };
 };
 
+const normalizeSchoolLevel = (schoolName, schoolMeta = {}) => {
+  const meta = metaOf(schoolMeta, schoolName);
+  const explicitLevel = String(meta.level || "").trim();
+  if (["幼稚園", "小學", "中學", "其他"].includes(explicitLevel)) return explicitLevel;
+
+  const category = String(meta.category || "").trim();
+  const name = String(schoolName || "").trim();
+  if (/中學/.test(category) || /中學/.test(name)) return "中學";
+  if (/小學/.test(category) || /小學/.test(name)) return "小學";
+  if (/幼稚園/.test(category) || /幼稚園/.test(name)) return "幼稚園";
+
+  return "其他";
+};
+
 export default function CustomerCheckinPage({ onSubmit, school = "", schools = [], schoolMeta = {} }) {
   const navigate = useNavigate();
   const [form, setForm] = useState(emptyForm);
@@ -58,15 +72,15 @@ export default function CustomerCheckinPage({ onSubmit, school = "", schools = [
   const levelOptions = SCHOOL_LEVELS.map((level) => ({
     level,
     count: schoolOptions.filter((schoolName) => {
-      const schoolLevel = metaOf(schoolMeta, schoolName).level || "其他";
-      return level === "其他" ? !["幼稚園", "小學", "中學"].includes(schoolLevel) : schoolLevel === level;
+      const schoolLevel = normalizeSchoolLevel(schoolName, schoolMeta);
+      return level === "其他" ? schoolLevel === "其他" : schoolLevel === level;
     }).length,
   }));
 
   const levelFilteredSchools = selectedLevel
     ? schoolOptions.filter((schoolName) => {
-        const schoolLevel = metaOf(schoolMeta, schoolName).level || "其他";
-        return selectedLevel === "其他" ? !["幼稚園", "小學", "中學"].includes(schoolLevel) : schoolLevel === selectedLevel;
+        const schoolLevel = normalizeSchoolLevel(schoolName, schoolMeta);
+        return selectedLevel === "其他" ? schoolLevel === "其他" : schoolLevel === selectedLevel;
       })
     : schoolOptions;
 

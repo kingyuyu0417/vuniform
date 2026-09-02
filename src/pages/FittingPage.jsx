@@ -7,6 +7,7 @@ import {
   SkipForward,
   UserRound,
   X,
+  Zap,
 } from "lucide-react";
 import { queueOrderService, ORDER_STATUS } from "../services/queueOrderService";
 import { supabase, isSupabaseConfigured } from "../supabaseClient";
@@ -58,6 +59,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notice, setNotice] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(new Date());
 
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -93,6 +95,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
         : normalizedAll;
 
       setOrders(filteredRows);
+      setLastUpdatedAt(new Date());
 
       const matchByTarget = (row) => {
         const target = String(selectedOrderId || "").trim();
@@ -141,14 +144,19 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
         schoolId: currentSchoolId,
         onChange: (rows) => {
           try {
-            const normalized = (Array.isArray(rows) ? rows : []).filter((order) => order.status === ORDER_STATUS.PENDING).map(getSafeOrder);
-            setOrders(normalized);
+            const normalized = (Array.isArray(rows) ? rows : []).map(getSafeOrder);
+            const schoolKey = String(currentSchoolId || "").trim();
+            const filtered = schoolKey
+              ? normalized.filter((order) => String(order.school_id || order.schoolId || "").trim() === schoolKey)
+              : normalized;
+            setOrders(filtered);
+            setLastUpdatedAt(new Date());
 
             if (selectedOrder) {
-              const next = normalized.find((o) => o.id === selectedOrder.id);
+              const next = filtered.find((o) => o.id === selectedOrder.id);
               safeSetSelectedOrder(next || null);
-            } else if (normalized.length) {
-              safeSetSelectedOrder(normalized[0]);
+            } else if (filtered.length) {
+              safeSetSelectedOrder(filtered[0]);
             }
           } catch (innerError) {
             console.error("FittingPage subscription update failed", innerError);

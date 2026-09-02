@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Search, Check, AlertCircle, Camera, QrCode } from "lucide-react";
+import { Search, Check, AlertCircle, Camera, QrCode, Zap } from "lucide-react";
 
 const getQueueProgress = (visitsList, targetQueue) => {
   const activeVisits = [...visitsList]
@@ -22,6 +22,7 @@ const StaffOrderTracking = ({ visits = [], onStatusUpdate }) => {
   const [selectedVisit, setSelectedVisit] = useState(null);
   const [error, setError] = useState("");
   const [scanning, setScanning] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(new Date());
   const videoRef = useRef(null);
   const streamRef = useRef(null);
 
@@ -37,8 +38,17 @@ const StaffOrderTracking = ({ visits = [], onStatusUpdate }) => {
   };
 
   useEffect(() => {
+    setLastUpdatedAt(new Date());
+    if (selectedVisit) {
+      const liveMatch = visits.find((visit) => (visit.queueNo || "").toUpperCase() === (selectedVisit.queueNo || "").toUpperCase());
+      if (liveMatch) {
+        setSelectedVisit(liveMatch);
+      } else if (!visits.some((visit) => (visit.queueNo || "").toUpperCase() === (selectedVisit.queueNo || "").toUpperCase())) {
+        setSelectedVisit(null);
+      }
+    }
     return () => stopCamera();
-  }, []);
+  }, [visits]);
 
   const normalizeQueue = (value) => {
     const text = (value || "").trim();
@@ -140,8 +150,17 @@ const StaffOrderTracking = ({ visits = [], onStatusUpdate }) => {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <h2 style={styles.title}>店員查單系統</h2>
-        <p style={styles.subtitle}>輸入或掃描排隊號查看客人詳情</p>
+        <div>
+          <h2 style={styles.title}>店員查單系統</h2>
+          <p style={styles.subtitle}>輸入或掃描排隊號查看客人詳情</p>
+        </div>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#dcfce7", color: "#166534", padding: "8px 12px", borderRadius: 999, fontWeight: 800, fontSize: 12 }}>
+          <Zap size={14} />
+          即時更新
+        </div>
+      </div>
+      <div style={{ fontSize: 11, color: "#64748b", marginBottom: 12, textAlign: "right" }}>
+        最後更新：{lastUpdatedAt.toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
       </div>
 
       {/* 搜尋框 */}

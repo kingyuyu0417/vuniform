@@ -1,5 +1,6 @@
 import React, { useMemo, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Zap } from "lucide-react";
 import { ORDER_STATUS, queueOrderService } from "../services/queueOrderService";
 
 const statusLabel = {
@@ -15,24 +16,27 @@ export default function QueuePage({ visits = [], onViewGuest, onAssign }) {
   const navigate = useNavigate();
   const [visitsData, setVisitsData] = useState(visits);
   const [isLoading, setIsLoading] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(new Date());
 
   useEffect(() => {
+    const normalize = (data = []) =>
+      (data || []).filter((item) => item.status === ORDER_STATUS.PENDING).map((item) => ({
+        id: item.id,
+        queueNo: item.queue_number || item.queueNumber || "",
+        guestName: item.customer_info?.guestName || item.guestName || "",
+        className: item.customer_info?.className || item.className || "",
+        phone: item.customer_info?.phone || item.phone || "",
+        status: item.status || "waiting",
+        createdAt: item.created_at || item.createdAt || new Date().toISOString(),
+      }));
+
     const loadVisits = async () => {
       setIsLoading(true);
       try {
         const data = await queueOrderService.listOrders();
-        const normalized = (data || []).filter((item) => item.status === ORDER_STATUS.PENDING).map((item) => ({
-          id: item.id,
-          queueNo: item.queue_number || item.queueNumber || "",
-          guestName: item.customer_info?.guestName || item.guestName || "",
-          className: item.customer_info?.className || item.className || "",
-          phone: item.customer_info?.phone || item.phone || "",
-          status: item.status || "waiting",
-          createdAt: item.created_at || item.createdAt || new Date().toISOString(),
-        }));
-        if (normalized.length > 0) {
-          setVisitsData(normalized);
-        }
+        const normalized = normalize(data);
+        setVisitsData(normalized);
+        setLastUpdatedAt(new Date());
       } catch (err) {
         console.error("加載待命單失敗", err);
       } finally {
@@ -41,6 +45,20 @@ export default function QueuePage({ visits = [], onViewGuest, onAssign }) {
     };
 
     loadVisits();
+
+    if (!queueOrderService || typeof queueOrderService.subscribe !== "function") return undefined;
+
+    const unsub = queueOrderService.subscribe({
+      onChange: (rows) => {
+        const normalized = normalize(rows);
+        setVisitsData(normalized);
+        setLastUpdatedAt(new Date());
+      },
+    });
+
+    return () => {
+      if (unsub && typeof unsub.unsubscribe === "function") unsub.unsubscribe();
+    };
   }, []);
 
   const rows = useMemo(
@@ -53,7 +71,17 @@ export default function QueuePage({ visits = [], onViewGuest, onAssign }) {
       <div style={{ background: "#F7F7F5", borderRadius: 12, padding: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <div style={{ fontSize: 18, fontWeight: 700, color: "#1F3A5F" }}>待命單 / 排隊管理</div>
-          <div style={{ fontSize: 12, color: "#66717D" }}>{rows.length} 位客人</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ fontSize: 12, color: "#66717D" }}>{rows.length} 位客人</div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#dcfce7", color: "#166534", padding: "6px 10px", borderRadius: 999, fontWeight: 800, fontSize: 11 }}>
+              <Zap size={12} />
+              即時更新
+            </div>
+          </div>
+        </div>
+
+        <div style={{ fontSize: 11, color: "#64748b", marginBottom: 12 }}>
+          最後更新：{lastUpdatedAt.toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
         </div>
 
         {rows.length === 0 ? (
