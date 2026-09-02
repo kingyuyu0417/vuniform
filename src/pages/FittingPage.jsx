@@ -149,11 +149,23 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
             const filtered = schoolKey
               ? normalized.filter((order) => String(order.school_id || order.schoolId || "").trim() === schoolKey)
               : normalized;
-            setOrders(filtered);
+            
+            // 合併策略：防止 Supabase 返回空數據導致訂單消失
+            setOrders((prevOrders) => {
+              // 如果新數據為空或很少，保留本地數據
+              if (!filtered || filtered.length === 0) {
+                return prevOrders;
+              }
+              // 合併：優先使用新數據，但保留本地不在新數據中的條目
+              const newIds = new Set(filtered.map((o) => o.id));
+              const localOnly = prevOrders.filter((o) => !newIds.has(o.id));
+              return [...filtered, ...localOnly];
+            });
             setLastUpdatedAt(new Date());
 
             if (selectedOrder) {
-              const next = filtered.find((o) => o.id === selectedOrder.id);
+              const next = filtered.find((o) => o.id === selectedOrder.id) || 
+                          orders.find((o) => o.id === selectedOrder.id); // 回退到本地
               safeSetSelectedOrder(next || null);
             } else if (filtered.length) {
               safeSetSelectedOrder(filtered[0]);

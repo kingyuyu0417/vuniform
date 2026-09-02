@@ -50,8 +50,18 @@ export default function QueuePage({ visits = [], onViewGuest, onAssign }) {
 
     const unsub = queueOrderService.subscribe({
       onChange: (rows) => {
+        // 合併 Supabase 返回的數據和本地快取，防止數據丟失
         const normalized = normalize(rows);
-        setVisitsData(normalized);
+        setVisitsData((prev) => {
+          // 如果 Supabase 返回空或非常少的數據，但本地有更多數據，保留本地數據
+          if (!normalized || normalized.length === 0) {
+            return prev; // 保留現有數據，不替換為空
+          }
+          // 合併：優先使用 Supabase 的新數據，但保留本地快取中不在 Supabase 的條目
+          const supabaseIds = new Set(normalized.map((item) => item.id));
+          const localOnly = prev.filter((item) => !supabaseIds.has(item.id));
+          return [...normalized, ...localOnly];
+        });
         setLastUpdatedAt(new Date());
       },
     });
