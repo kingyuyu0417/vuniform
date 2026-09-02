@@ -229,6 +229,8 @@ export const queueOrderService = {
     }
 
     const schoolFilter = safeSchoolId(schoolId);
+    let isInitialized = false;
+
     const channel = supabase
       .channel(`customer-orders-${schoolFilter || "all"}`)
       .on(
@@ -244,7 +246,14 @@ export const queueOrderService = {
           onChange?.(nextRows);
         }
       )
-      .subscribe();
+      .subscribe(async (status) => {
+        // 訂閱成功後立即載入初始數據
+        if (status === "SUBSCRIBED" && !isInitialized) {
+          isInitialized = true;
+          const initialRows = await this.listOrders({ schoolId: schoolFilter });
+          onChange?.(initialRows);
+        }
+      });
 
     return {
       unsubscribe() {
