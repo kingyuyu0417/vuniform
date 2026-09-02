@@ -55,7 +55,7 @@ export default function CustomerCheckinPage({ onSubmit, school = "", schools = [
   const [qrCode, setQrCode] = useState(null);
   const [copied, setCopied] = useState(false);
   const [selectedLevel, setSelectedLevel] = useState(null);
-  const [selectedRegion, setSelectedRegion] = useState(null);
+  const [selectedDistrict, setSelectedDistrict] = useState(null);
   const [selectedSchoolId, setSelectedSchoolId] = useState(school || "");
 
   const schoolOptions = useMemo(
@@ -84,29 +84,29 @@ export default function CustomerCheckinPage({ onSubmit, school = "", schools = [
       })
     : schoolOptions;
 
-  const regionOptions = [...new Set(levelFilteredSchools.map((schoolName) => metaOf(schoolMeta, schoolName).region).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-Hant"));
+  const districtOptions = [...new Set(levelFilteredSchools.map((schoolName) => (metaOf(schoolMeta, schoolName).district || "其他")).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-Hant"));
 
-  const regionFilteredSchools = selectedRegion
-    ? levelFilteredSchools.filter((schoolName) => (metaOf(schoolMeta, schoolName).region || "其他") === selectedRegion)
+  const districtFilteredSchools = selectedDistrict
+    ? levelFilteredSchools.filter((schoolName) => (metaOf(schoolMeta, schoolName).district || "其他") === selectedDistrict)
     : levelFilteredSchools;
 
   const effectiveSchool = selectedSchoolId || school || "";
 
   const handleLevelSelect = (level) => {
     setSelectedLevel(level);
-    setSelectedRegion(null);
+    setSelectedDistrict(null);
     setSelectedSchoolId("");
   };
 
-  const handleRegionSelect = (region) => {
-    setSelectedRegion(region);
+  const handleDistrictSelect = (district) => {
+    setSelectedDistrict(district);
     setSelectedSchoolId("");
   };
 
   const handleSchoolPick = (schoolName) => {
     const nextSchool = schoolName || DESIGNATED_SCHOOL;
     setSelectedSchoolId(nextSchool);
-    setSelectedRegion(null);
+    setSelectedDistrict(null);
     setSelectedLevel(null);
     navigate(`/checkin?school_id=${encodeURIComponent(nextSchool)}`, { replace: true });
   };
@@ -232,26 +232,26 @@ export default function CustomerCheckinPage({ onSubmit, school = "", schools = [
 
             {selectedLevel && (
               <div>
-                <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8, fontWeight: 700 }}>第二步：選擇地區</div>
+                <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8, fontWeight: 700 }}>第二步：選擇地區（18區）</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {regionOptions.length > 0 ? (
-                    regionOptions.map((region) => (
+                  {districtOptions.length > 0 ? (
+                    districtOptions.map((district) => (
                       <button
-                        key={region}
+                        key={district}
                         type="button"
                         className="pos-btn"
-                        onClick={() => handleRegionSelect(region)}
+                        onClick={() => handleDistrictSelect(district)}
                         style={{
                           padding: "9px 12px",
                           borderRadius: 10,
-                          background: selectedRegion === region ? "#D97757" : "#F3F6FA",
-                          color: selectedRegion === region ? "#fff" : "#1F3A5F",
-                          border: "1px solid " + (selectedRegion === region ? "#D97757" : "#D5DDE5"),
+                          background: selectedDistrict === district ? "#D97757" : "#F3F6FA",
+                          color: selectedDistrict === district ? "#fff" : "#1F3A5F",
+                          border: "1px solid " + (selectedDistrict === district ? "#D97757" : "#D5DDE5"),
                           fontSize: 13,
                           fontWeight: 700,
                         }}
                       >
-                        {region}
+                        {district}
                       </button>
                     ))
                   ) : (
@@ -261,12 +261,12 @@ export default function CustomerCheckinPage({ onSubmit, school = "", schools = [
               </div>
             )}
 
-            {selectedRegion && (
+            {selectedDistrict && (
               <div>
                 <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8, fontWeight: 700 }}>第三步：選擇學校</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 240, overflowY: "auto", paddingRight: 4 }}>
-                  {regionFilteredSchools.length > 0 ? (
-                    regionFilteredSchools.map((schoolName) => (
+                  {districtFilteredSchools.length > 0 ? (
+                    districtFilteredSchools.map((schoolName) => (
                       <button
                         key={schoolName}
                         type="button"
@@ -306,7 +306,7 @@ export default function CustomerCheckinPage({ onSubmit, school = "", schools = [
             className="pos-btn"
             onClick={() => {
               setSelectedLevel(null);
-              setSelectedRegion(null);
+              setSelectedDistrict(null);
               setSelectedSchoolId("");
               navigate("/checkin", { replace: true });
             }}

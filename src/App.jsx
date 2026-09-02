@@ -332,6 +332,7 @@ const HK_DISTRICTS = {
   "九龍區": ["油尖旺區", "深水埗區", "九龍城區", "黃大仙區", "觀塘區"],
   "新界區": ["葵青區", "荃灣區", "屯門區", "元朗區", "北區", "大埔區", "沙田區", "西貢區", "離島區"],
 };
+const HK_DISTRICT_OPTIONS = Array.from(new Set(Object.values(HK_DISTRICTS).flat())).sort((a, b) => a.localeCompare(b, "zh-Hant"));
 
 const OUTLETS = [
   { name: "上環分店", address: "上環文咸東街79-85號文咸中心8樓全層（近上環港鐵站A2出口）", phone: "2815 2673", region: "港島區", districts: ["中西區"] },
@@ -374,6 +375,14 @@ const normalizeSchoolLevel = (schoolName, schoolMeta = {}) => {
   if (/小學/.test(category) || /小學/.test(name)) return "小學";
   if (/幼稚園/.test(category) || /幼稚園/.test(name)) return "幼稚園";
 
+  return "其他";
+};
+const normalizeSchoolDistrict = (schoolName, schoolMeta = {}) => {
+  const meta = metaOf(schoolMeta, schoolName);
+  const district = String(meta.district || "").trim();
+  if (district) return district;
+  const region = String(meta.region || "").trim();
+  if (region && HK_DISTRICTS[region]?.length) return HK_DISTRICTS[region][0];
   return "其他";
 };
 
@@ -3423,7 +3432,7 @@ function SchoolSwitcher({ schools, schoolMeta, selectedSchool, onPick }) {
 function PublicHomePage({ schools = [], schoolMeta = {}, onStaffLogin }) {
   const navigate = useNavigate();
   const [selectedLevel, setSelectedLevel] = useState(null);
-  const [selectedRegion, setSelectedRegion] = useState(null);
+  const [selectedDistrict, setSelectedDistrict] = useState(null);
   const [selectedSchoolForRegistration, setSelectedSchoolForRegistration] = useState("");
 
   const schoolOptions = [...new Set(schools.filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-Hant"));
@@ -3443,20 +3452,20 @@ function PublicHomePage({ schools = [], schoolMeta = {}, onStaffLogin }) {
       })
     : schoolOptions;
 
-  const regionOptions = [...new Set(levelFilteredSchools.map((school) => metaOf(schoolMeta, school).region).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-Hant"));
+  const districtOptions = [...new Set(levelFilteredSchools.map((school) => normalizeSchoolDistrict(school, schoolMeta)).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-Hant"));
 
-  const regionFilteredSchools = selectedRegion
-    ? levelFilteredSchools.filter((school) => (metaOf(schoolMeta, school).region || "其他") === selectedRegion)
+  const districtFilteredSchools = selectedDistrict
+    ? levelFilteredSchools.filter((school) => normalizeSchoolDistrict(school, schoolMeta) === selectedDistrict)
     : levelFilteredSchools;
 
   const handleLevelSelect = (level) => {
     setSelectedLevel(level);
-    setSelectedRegion(null);
+    setSelectedDistrict(null);
     setSelectedSchoolForRegistration("");
   };
 
-  const handleRegionSelect = (region) => {
-    setSelectedRegion(region);
+  const handleDistrictSelect = (district) => {
+    setSelectedDistrict(district);
     setSelectedSchoolForRegistration("");
   };
 
@@ -3501,26 +3510,26 @@ function PublicHomePage({ schools = [], schoolMeta = {}, onStaffLogin }) {
 
             {selectedLevel && (
               <div>
-                <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8, fontWeight: 700 }}>第二步：選擇地區</div>
+                <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8, fontWeight: 700 }}>第二步：選擇地區（18區）</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {regionOptions.length > 0 ? (
-                    regionOptions.map((region) => (
+                  {districtOptions.length > 0 ? (
+                    districtOptions.map((district) => (
                       <button
-                        key={region}
+                        key={district}
                         type="button"
                         className="pos-btn"
-                        onClick={() => handleRegionSelect(region)}
+                        onClick={() => handleDistrictSelect(district)}
                         style={{
                           padding: "9px 12px",
                           borderRadius: 10,
-                          background: selectedRegion === region ? "#D97757" : "#F3F6FA",
-                          color: selectedRegion === region ? "#fff" : "#1F3A5F",
-                          border: "1px solid " + (selectedRegion === region ? "#D97757" : "#D5DDE5"),
+                          background: selectedDistrict === district ? "#D97757" : "#F3F6FA",
+                          color: selectedDistrict === district ? "#fff" : "#1F3A5F",
+                          border: "1px solid " + (selectedDistrict === district ? "#D97757" : "#D5DDE5"),
                           fontSize: 13,
                           fontWeight: 700,
                         }}
                       >
-                        {region}
+                        {district}
                       </button>
                     ))
                   ) : (
@@ -3530,12 +3539,12 @@ function PublicHomePage({ schools = [], schoolMeta = {}, onStaffLogin }) {
               </div>
             )}
 
-            {selectedRegion && (
+            {selectedDistrict && (
               <div>
                 <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8, fontWeight: 700 }}>第三步：選擇學校</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 240, overflowY: "auto", paddingRight: 4 }}>
-                  {regionFilteredSchools.length > 0 ? (
-                    regionFilteredSchools.map((school) => (
+                  {districtFilteredSchools.length > 0 ? (
+                    districtFilteredSchools.map((school) => (
                       <button
                         key={school}
                         type="button"
