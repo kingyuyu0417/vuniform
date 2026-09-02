@@ -1366,9 +1366,27 @@ export default function UniformPOS() {
   };
 
   const handleAssignGuest = (guest) => {
+    if (!guest) return;
+    
     setSelectedGuest(guest);
     setTab("fitting");
+    
+    // 使用 guest.id 優先（Supabase 的 UUID），次序為 queueNo
     const guestId = guest?.id || guest?.queueNo || "";
+    
+    if (!guestId) {
+      console.warn("handleAssignGuest: guest 缺少 ID 或 queueNo", guest);
+      alert("無法進入度身頁面：訂單資訊缺失，請重新選擇");
+      return;
+    }
+    
+    console.log("handleAssignGuest: navigating to fitting", {
+      guestId,
+      guestName: guest?.guestName,
+      queueNo: guest?.queueNo,
+      selectedSchool,
+    });
+    
     navigate(`/fitting?id=${encodeURIComponent(guestId)}`);
   };
 

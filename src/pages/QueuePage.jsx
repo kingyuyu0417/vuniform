@@ -94,6 +94,17 @@ export default function QueuePage({ visits = [], onViewGuest, onAssign }) {
                   onClick={() => {
                     onAssign?.(visit);
                     const visitId = visit.id || visit.queueNo || "";
+                    if (!visitId) {
+                      console.warn("QueuePage: visit 缺少 ID 或 queueNo", visit);
+                      alert("訂單資訊不完整，無法進入度身頁面");
+                      return;
+                    }
+                    console.log("QueuePage: opening fitting for", {
+                      visitId,
+                      queueNo: visit.queueNo,
+                      guestName: visit.guestName,
+                      id: visit.id,
+                    });
                     navigate(`/fitting?id=${encodeURIComponent(visitId)}`);
                   }}
                   style={{ flex: 1, background: "#1F3A5F", color: "#fff", padding: "8px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600 }}

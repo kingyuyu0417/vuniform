@@ -129,6 +129,17 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
           return;
         }
 
+        // 診斷信息：提供更多細節幫助排查
+        console.warn("FittingPage: selectedOrderId not found", {
+          selectedOrderId,
+          currentSchoolId,
+          schoolKey,
+          totalOrders: normalizedAll.length,
+          schoolFilteredOrders: schoolFiltered.length,
+          pendingOrders: pendingRows.length,
+          allOrderIds: normalizedAll.map(o => ({ id: o.id, queueNo: o.queue_number, status: o.status, school: o.school_id })),
+        });
+
         setNotice("找不到此訂單，請返回排隊頁重新選擇客人。");
         return;
       }
@@ -188,6 +199,18 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       return undefined;
     }
   }, [currentSchoolId]);
+
+  // 當 selectedOrderId 改變時重新嘗試查找（處理異步加載延遲）
+  useEffect(() => {
+    if (!selectedOrderId || selectedOrder) return;
+
+    // 延遲重試，確保訂單數據已被加載
+    const timer = setTimeout(() => {
+      syncOrders();
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [selectedOrderId]);
 
   useEffect(() => {
     const drafts = readDrafts();
