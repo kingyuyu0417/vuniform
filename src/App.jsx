@@ -1933,7 +1933,7 @@ export default function UniformPOS() {
           <Route
             path="/track"
             element={
-              <StaffOrderTracking visits={queueVisits} onStatusUpdate={(id, status) => {
+              <StaffOrderTracking visits={queueVisits} currentSchoolId={selectedSchool || publicRouteSchool} onStatusUpdate={(id, status) => {
                 setQueueVisits((prev) => prev.map(v => v.id === id ? {...v, status} : v));
               }} />
             }
@@ -2051,7 +2051,7 @@ export default function UniformPOS() {
                   <CashierVerifyPage currentSchoolId={selectedSchool || publicRouteSchool} products={products} onConfirmPayment={handleConfirmPayment} />
                 )}
                 {tab === "track" && (
-                  <StaffOrderTracking visits={queueVisits} onStatusUpdate={(id, status) => {
+                  <StaffOrderTracking visits={queueVisits} currentSchoolId={selectedSchool || publicRouteSchool} onStatusUpdate={(id, status) => {
                     setQueueVisits((prev) => prev.map(v => v.id === id ? {...v, status} : v));
                   }} />
                 )}

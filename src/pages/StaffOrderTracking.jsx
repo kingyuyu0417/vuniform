@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { Search, Check, AlertCircle, Camera, QrCode, Zap } from "lucide-react";
+import { queueOrderService } from "../services/queueOrderService";
 
 const statusLabel = {
   PENDING: "排隊中",
@@ -29,14 +30,48 @@ const getQueueProgress = (visitsList, targetQueue) => {
   };
 };
 
-const StaffOrderTracking = ({ visits = [], onStatusUpdate }) => {
+const StaffOrderTracking = ({ visits = [], currentSchoolId = "", onStatusUpdate }) => {
   const [searchQueue, setSearchQueue] = useState("");
   const [selectedVisit, setSelectedVisit] = useState(null);
+  const [syncedVisits, setSyncedVisits] = useState(visits);
   const [error, setError] = useState("");
   const [scanning, setScanning] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState(new Date());
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+  const visibleVisits = useMemo(
+    () => (syncedVisits.length > 0 ? syncedVisits : visits),
+    [syncedVisits, visits]
+  );
+
+  useEffect(() => {
+    let active = true;
+    const syncVisits = async () => {
+      try {
+        const orders = await queueOrderService.listOrders({ schoolId: currentSchoolId });
+        if (!active || !Array.isArray(orders)) return;
+        const normalized = orders
+          .filter((order) => ["PENDING", "PREPARING", "READY"].includes(order.status))
+          .map((order) => ({
+            id: order.id,
+            queueNo: order.queue_number || order.queueNumber || "",
+            guestName: order.customer_info?.guestName || "",
+            className: order.customer_info?.className || "",
+            heightCm: order.customer_info?.heightCm || "",
+            weightKg: order.customer_info?.weightKg || "",
+            phone: order.customer_info?.phone || "",
+            notes: order.customer_info?.notes || "",
+            status: order.status,
+            createdAt: order.created_at || order.createdAt || "",
+          }));
+        setSyncedVisits(normalized);
+      } catch (syncError) {
+        console.warn("查單資料同步失敗，使用現有資料", syncError);
+      }
+    };
+    syncVisits();
+    return () => { active = false; };
+  }, [currentSchoolId, visits]);
 
   const stopCamera = () => {
     if (streamRef.current) {
@@ -52,15 +87,15 @@ const StaffOrderTracking = ({ visits = [], onStatusUpdate }) => {
   useEffect(() => {
     setLastUpdatedAt(new Date());
     if (selectedVisit) {
-      const liveMatch = visits.find((visit) => (visit.queueNo || "").toUpperCase() === (selectedVisit.queueNo || "").toUpperCase());
+      const liveMatch = visibleVisits.find((visit) => (visit.queueNo || "").toUpperCase() === (selectedVisit.queueNo || "").toUpperCase());
       if (liveMatch) {
         setSelectedVisit(liveMatch);
-      } else if (!visits.some((visit) => (visit.queueNo || "").toUpperCase() === (selectedVisit.queueNo || "").toUpperCase())) {
+      } else if (!visibleVisits.some((visit) => (visit.queueNo || "").toUpperCase() === (selectedVisit.queueNo || "").toUpperCase())) {
         setSelectedVisit(null);
       }
     }
     return () => stopCamera();
-  }, [visits]);
+  }, [visibleVisits, selectedVisit]);
 
   const normalizeQueue = (value) => {
     const text = (value || "").trim();
@@ -86,7 +121,7 @@ const StaffOrderTracking = ({ visits = [], onStatusUpdate }) => {
     }
 
     setSearchQueue(queue);
-    const found = visits.find((v) => (v.queueNo || "").toUpperCase() === queue.toUpperCase());
+    const found = visibleVisits.find((v) => (v.queueNo || "").toUpperCase() === queue.toUpperCase());
     if (!found) {
       setError(`找不到排隊號：${queue}`);
       setSelectedVisit(null);
@@ -157,7 +192,7 @@ const StaffOrderTracking = ({ visits = [], onStatusUpdate }) => {
     }
   };
 
-  const queueProgress = selectedVisit ? getQueueProgress(visits, selectedVisit.queueNo) : null;
+  const queueProgress = selectedVisit ? getQueueProgress(visibleVisits, selectedVisit.queueNo) : null;
 
   return (
     <div style={styles.container}>
@@ -303,11 +338,11 @@ const StaffOrderTracking = ({ visits = [], onStatusUpdate }) => {
       )}
 
       {/* 待命客人列表 */}
-      {!selectedVisit && visits.length > 0 && (
+      {!selectedVisit && visibleVisits.length > 0 && (
         <div style={styles.listSection}>
           <div style={styles.listTitle}>待命客人列表</div>
           <div style={styles.visitsList}>
-            {visits.map((visit) => (
+            {visibleVisits.map((visit) => (
               <div
                 key={visit.id}
                 onClick={() => setSelectedVisit(visit)}
