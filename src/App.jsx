@@ -1636,7 +1636,7 @@ export default function UniformPOS() {
     if (sourceOrderIds.length > 0 && isSupabaseConfigured && supabase) {
       try {
         await Promise.all(sourceOrderIds.map(async (sourceOrderId) => {
-          const { error } = await supabase
+          const { data, error } = await supabase
             .from("customer_orders")
             .update({
               status: "COMPLETED",
