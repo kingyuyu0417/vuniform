@@ -1330,6 +1330,35 @@ export default function UniformPOS() {
     setTab("cashier");
   };
 
+  const handleReadyForSale = (order) => {
+    if (!order) return;
+    const readyItems = (order.tailor_info?.items || []).map((item, index) => {
+      const productName = item.product_name || item.productName || "未知產品";
+      const product = products.find((p) => p.name === productName) || null;
+      const size = item.size || "";
+      const length = item.length || "";
+      const matchedSize = product?.sizes?.find((s) => String(s.size) === String(size) && String(s.length || "") === String(length));
+      const price = Number(item.price || matchedSize?.price || 0);
+      const qty = Number(item.quantity || item.qty || 1);
+      return {
+        key: `${order.id || "ready-order"}-${index}`,
+        productId: product?.id || `ready-${index}`,
+        name: productName,
+        size,
+        length,
+        price,
+        qty,
+      };
+    });
+
+    if (!readyItems.length) return;
+    setCart(readyItems);
+    setCashReceived("");
+    setSelectedProduct(null);
+    setTab("sale");
+    navigate("/sale", { replace: true });
+  };
+
   const handleConfirmPayment = async (payment) => {
     const paidOrder = paymentOrders.find((order) => order.id === payment.orderId) || null;
     const localRecord = paidOrder
@@ -1686,7 +1715,7 @@ export default function UniformPOS() {
           />
           <Route
             path="/pickup"
-            element={<PickupPage tickets={pickupTickets} onMarkReady={handleMarkReady} onHandover={handleHandover} />}
+            element={<PickupPage currentSchoolId={selectedSchool || publicRouteSchool} onReadyForSale={handleReadyForSale} />}
           />
           <Route
             path="/cashier"
@@ -1805,7 +1834,7 @@ export default function UniformPOS() {
                   />
                 )}
                 {tab === "pickup" && (
-                  <PickupPage tickets={pickupTickets} onMarkReady={handleMarkReady} onHandover={handleHandover} />
+                  <PickupPage currentSchoolId={selectedSchool || publicRouteSchool} onReadyForSale={handleReadyForSale} />
                 )}
                 {tab === "cashier" && (
                   <CashierVerifyPage currentSchoolId={selectedSchool || publicRouteSchool} products={products} onConfirmPayment={handleConfirmPayment} />

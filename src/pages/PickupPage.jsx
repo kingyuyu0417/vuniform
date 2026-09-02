@@ -19,7 +19,7 @@ const getSafeOrder = (row) => ({
   status: row.status || ORDER_STATUS.PENDING,
 });
 
-export default function PickupPage({ currentSchoolId = "" }) {
+export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [updatingId, setUpdatingId] = useState("");
@@ -112,6 +112,10 @@ export default function PickupPage({ currentSchoolId = "" }) {
       if (error) throw error;
       if (!updated?.id) throw new Error("找不到要更新的訂單");
       setOrders((current) => current.filter((item) => item.id !== orderId));
+      if (typeof onReadyForSale === "function") {
+        onReadyForSale(updated);
+        return;
+      }
       const nextOrders = await syncOrders();
       const nextPreparingOrder = nextOrders.find((item) => item.status === ORDER_STATUS.PREPARING);
       setNotice(nextPreparingOrder
