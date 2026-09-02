@@ -8,9 +8,14 @@ const statusLabel = {
   assigned: "已分配",
   fitting: "度身中",
   selected: "已選款",
+  PENDING: "排隊中",
+  PREPARING: "待執貨",
+  READY: "已執好",
   ready_for_pickup: "待取貨",
   completed: "已完成",
 };
+
+const activeStatuses = [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STATUS.READY];
 
 export default function QueuePage({ visits = [], currentSchoolId = "", onViewGuest, onAssign }) {
   const navigate = useNavigate();
@@ -25,7 +30,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", onViewGue
         const orders = await queueOrderService.listOrders({ schoolId: currentSchoolId });
         if (!active || !Array.isArray(orders)) return;
         const normalized = orders
-          .filter((order) => order.status === ORDER_STATUS.PENDING)
+          .filter((order) => activeStatuses.includes(order.status))
           .map((order) => ({
             id: order.id,
             queueNo: order.queue_number || order.queueNumber || "",
@@ -53,7 +58,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", onViewGue
 
   const visibleVisits = syncedVisits ?? visits;
   const rows = useMemo(
-    () => visibleVisits.filter((visit) => visit.status === ORDER_STATUS.PENDING),
+    () => visibleVisits.filter((visit) => activeStatuses.includes(visit.status)),
     [visibleVisits]
   );
 
@@ -118,28 +123,34 @@ export default function QueuePage({ visits = [], currentSchoolId = "", onViewGue
                 >
                   查看資料
                 </button>
-                <button
-                  className="pos-btn"
-                  onClick={() => {
-                    onAssign?.(visit);
-                    const visitId = visit.id || visit.queueNo || "";
-                    if (!visitId) {
-                      console.warn("QueuePage: visit 缺少 ID 或 queueNo", visit);
-                      alert("訂單資訊不完整，無法進入度身頁面");
-                      return;
-                    }
-                    console.log("QueuePage: opening fitting for", {
-                      visitId,
-                      queueNo: visit.queueNo,
-                      guestName: visit.guestName,
-                      id: visit.id,
-                    });
-                    navigate(`/fitting?id=${encodeURIComponent(visitId)}`);
-                  }}
-                  style={{ flex: 1, background: "#1F3A5F", color: "#fff", padding: "8px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600 }}
-                >
-                  開始度身
-                </button>
+                {visit.status === ORDER_STATUS.PENDING ? (
+                  <button
+                    className="pos-btn"
+                    onClick={() => {
+                      onAssign?.(visit);
+                      const visitId = visit.id || visit.queueNo || "";
+                      if (!visitId) {
+                        console.warn("QueuePage: visit 缺少 ID 或 queueNo", visit);
+                        alert("訂單資訊不完整，無法進入度身頁面");
+                        return;
+                      }
+                      console.log("QueuePage: opening fitting for", {
+                        visitId,
+                        queueNo: visit.queueNo,
+                        guestName: visit.guestName,
+                        id: visit.id,
+                      });
+                      navigate(`/fitting?id=${encodeURIComponent(visitId)}`);
+                    }}
+                    style={{ flex: 1, background: "#1F3A5F", color: "#fff", padding: "8px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600 }}
+                  >
+                    開始度身
+                  </button>
+                ) : (
+                  <div style={{ flex: 1, background: "#F1F5F9", color: "#64748B", padding: "8px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600, textAlign: "center" }}>
+                    {statusLabel[visit.status] || "處理中"}
+                  </div>
+                )}
               </div>
             </div>
           ))}
