@@ -275,7 +275,15 @@ const seasonOf = (product) => {
   return "全年";
 };
 const listSchools = (products) => {
-  const set = new Set([...products.map(schoolOf), ...Object.keys(workbookSchoolCatalog)].filter((school) => !deletedSchoolsRuntime.has(school)));
+  const knownSchoolNames = typeof schoolCatalog !== "undefined"
+    ? Object.keys(schoolCatalog)
+    : [...Object.keys(baseSchoolCatalog), ...Object.keys(workbookSchoolCatalog)];
+
+  const set = new Set([
+    ...products.map(schoolOf),
+    ...knownSchoolNames,
+  ].filter((school) => school && !deletedSchoolsRuntime.has(school)));
+
   return Array.from(set).sort((a, b) => a.localeCompare(b, "zh-Hant"));
 };
 
