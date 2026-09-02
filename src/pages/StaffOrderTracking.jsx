@@ -1,6 +1,18 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Search, Check, AlertCircle, Camera, QrCode, Zap } from "lucide-react";
 
+const statusLabel = {
+  PENDING: "排隊中",
+  PREPARING: "待執貨",
+  READY: "已執好",
+  COMPLETED: "已完成",
+  SKIPPED: "已過號",
+  ready_for_pickup: "已完成",
+  completed: "已完成",
+};
+
+const getStatusLabel = (status) => statusLabel[status] || "進行中";
+
 const getQueueProgress = (visitsList, targetQueue) => {
   const activeVisits = [...visitsList]
     .filter((item) => item.queueNo && item.status !== "ready_for_pickup" && item.status !== "completed")
@@ -229,7 +241,7 @@ const StaffOrderTracking = ({ visits = [], onStatusUpdate }) => {
               <div style={styles.queueNo}>{selectedVisit.queueNo}</div>
               <div style={styles.detailsTitle}>{selectedVisit.guestName}</div>
             </div>
-            <div style={styles.status}>{selectedVisit.status === "ready_for_pickup" ? "✓ 已完成" : "進行中"}</div>
+            <div style={styles.status}>{getStatusLabel(selectedVisit.status)}</div>
           </div>
 
           {queueProgress && (
@@ -267,7 +279,7 @@ const StaffOrderTracking = ({ visits = [], onStatusUpdate }) => {
           </div>
 
           {/* 執單按鈕 */}
-          {selectedVisit.status !== "ready_for_pickup" && (
+          {!(["READY", "COMPLETED", "SKIPPED", "ready_for_pickup", "completed"].includes(selectedVisit.status)) && (
             <button
               onClick={handleMarkReady}
               style={styles.executeButton}
@@ -276,7 +288,7 @@ const StaffOrderTracking = ({ visits = [], onStatusUpdate }) => {
               標記已完成
             </button>
           )}
-          {selectedVisit.status === "ready_for_pickup" && (
+          {(["READY", "COMPLETED", "SKIPPED", "ready_for_pickup", "completed"].includes(selectedVisit.status)) && (
             <div style={{
               ...styles.messageBox,
               backgroundColor: "#ecfdf5",
@@ -301,8 +313,8 @@ const StaffOrderTracking = ({ visits = [], onStatusUpdate }) => {
                 onClick={() => setSelectedVisit(visit)}
                 style={{
                   ...styles.visitItem,
-                  backgroundColor: visit.status === "ready_for_pickup" ? "#f0fdf4" : "#fff",
-                  borderColor: visit.status === "ready_for_pickup" ? "#86efac" : "#e5e7eb",
+                  backgroundColor: ["READY", "COMPLETED", "ready_for_pickup", "completed"].includes(visit.status) ? "#f0fdf4" : "#fff",
+                  borderColor: ["READY", "COMPLETED", "ready_for_pickup", "completed"].includes(visit.status) ? "#86efac" : "#e5e7eb",
                   cursor: "pointer",
                 }}
               >
@@ -314,12 +326,12 @@ const StaffOrderTracking = ({ visits = [], onStatusUpdate }) => {
                 <div style={{
                   padding: "4px 8px",
                   borderRadius: "4px",
-                  backgroundColor: visit.status === "ready_for_pickup" ? "#10b981" : "#f3f4f6",
-                  color: visit.status === "ready_for_pickup" ? "white" : "#374151",
+                  backgroundColor: ["READY", "COMPLETED", "ready_for_pickup", "completed"].includes(visit.status) ? "#10b981" : "#f3f4f6",
+                  color: ["READY", "COMPLETED", "ready_for_pickup", "completed"].includes(visit.status) ? "white" : "#374151",
                   fontSize: "12px",
                   fontWeight: "600",
                 }}>
-                  {visit.status === "ready_for_pickup" ? "已完成" : "進行中"}
+                  {getStatusLabel(visit.status)}
                 </div>
               </div>
             ))}
