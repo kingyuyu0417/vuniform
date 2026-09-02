@@ -123,6 +123,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
           // 只有 PENDING 狀態的訂單才能在 Fitting 頁面操作
           if (fallbackMatch.status === ORDER_STATUS.PENDING) {
             safeSetSelectedOrder(fallbackMatch);
+            setNotice("");
           } else {
             setNotice(`此訂單狀態為 ${fallbackMatch.status}，無法在度身頁面編輯`);
           }
@@ -146,6 +147,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
 
       // 自動選擇第一個 PENDING 訂單
       safeSetSelectedOrder(pendingRows[0] ? getSafeOrder(pendingRows[0]) : null);
+      if (pendingRows[0]) setNotice("");
     } catch (error) {
       console.error("FittingPage syncOrders failed", error);
       setOrders([]);
