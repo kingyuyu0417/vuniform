@@ -1348,6 +1348,9 @@ export default function UniformPOS() {
         length,
         price,
         qty,
+        sourceOrderId: order.id || "",
+        sourceQueueNo: order.queue_number || order.queueNo || "",
+        sourceGuestName: order.customer_info?.guestName || order.guestName || "",
       };
     });
 
@@ -1409,6 +1412,7 @@ export default function UniformPOS() {
 
   const cartTotal = cart.reduce((sum, c) => sum + c.price * c.qty, 0);
   const cartCount = cart.reduce((sum, c) => sum + c.qty, 0);
+  const cartSourceMeta = cart.find((item) => item.sourceQueueNo || item.sourceGuestName) || {};
   const cashAmount = cashReceived === "" ? cartTotal : Number(cashReceived || 0);
   const changeDue = cashAmount - cartTotal;
 
@@ -1416,6 +1420,7 @@ export default function UniformPOS() {
     if (cart.length === 0) return;
     const now = new Date();
     const received = cashReceived === "" ? cartTotal : Number(cashReceived || 0);
+    const sourceMeta = cart.find((item) => item.sourceQueueNo || item.sourceGuestName) || {};
     const order = {
       id: "",
       date: todayStr(),
@@ -1428,6 +1433,8 @@ export default function UniformPOS() {
       cashierId: session ? session.id : null,
       cashierName: session ? session.name : "",
       school: selectedSchool || "",
+      queueNo: sourceMeta.sourceQueueNo || "",
+      guestName: sourceMeta.sourceGuestName || "",
     };
     const outlet = outletForSchool(order.school, schoolMeta);
     if (outlet) {
@@ -1435,8 +1442,32 @@ export default function UniformPOS() {
       order.outletAddress = outlet.address;
       order.outletPhone = outlet.phone;
     }
+
+    const sourceOrderIds = [...new Set(cart.filter((item) => item.sourceOrderId).map((item) => item.sourceOrderId))];
     const savedOrder = await saveSalesLog([order, ...salesLog]);
     if (!savedOrder) return;
+
+    if (sourceOrderIds.length > 0 && isSupabaseConfigured && supabase) {
+      await Promise.all(sourceOrderIds.map(async (sourceOrderId) => {
+        try {
+          const { error } = await supabase
+            .from("customer_orders")
+            .update({
+              status: "COMPLETED",
+              tailor_info: { paid_at: new Date().toISOString(), source_sale_id: savedOrder.id, payment: { method: "cash", cashReceived: received, changeDue: Math.max(received - cartTotal, 0) } },
+            })
+            .eq("id", sourceOrderId);
+          if (error) {
+            console.error("同步已支付客戶訂單失敗", error);
+          } else {
+            window.dispatchEvent(new CustomEvent("customer-order-paid", { detail: { orderId: sourceOrderId } }));
+          }
+        } catch (error) {
+          console.error("同步已支付客戶訂單執行失敗", error);
+        }
+      }));
+    }
+
     setReceipt(savedOrder);
     setCart([]);
     setSelectedProduct(null);
@@ -1951,6 +1982,13 @@ function SaleTab({ products, selectedProduct, setSelectedProduct, addToCart, car
 
   return (
     <div>
+      {(cartSourceMeta.sourceQueueNo || cartSourceMeta.sourceGuestName) && (
+        <div style={{ background: "#EAF4FF", border: "1px solid #CFE0F9", borderRadius: 10, padding: "10px 12px", marginBottom: 12, fontSize: 13, color: "#1F3A5F" }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>轉入單據</div>
+          <div>單號：{cartSourceMeta.sourceQueueNo || "未分配"}</div>
+          <div>客人：{cartSourceMeta.sourceGuestName || "未填寫"}</div>
+        </div>
+      )}
       {schools.length > 1 && (
         <div style={{ fontSize: 12, color: "#999", marginBottom: 10 }}>
           㩒返上面標題「{selectedSchool || "校服銷售"}」可以切換學校

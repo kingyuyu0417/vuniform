@@ -65,7 +65,25 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
         () => { syncReadyOrders(); }
       )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+
+    const handlePaidOrder = (event) => {
+      const { orderId } = event.detail || {};
+      if (!orderId) return;
+      setOrders((current) => {
+        const remaining = current.filter((order) => order.id !== orderId);
+        setSelectedOrder((previous) => {
+          if (!previous || previous.id !== orderId) return previous;
+          return remaining[0] || null;
+        });
+        return remaining;
+      });
+    };
+
+    window.addEventListener("customer-order-paid", handlePaidOrder);
+    return () => {
+      window.removeEventListener("customer-order-paid", handlePaidOrder);
+      supabase.removeChannel(channel);
+    };
   }, [currentSchoolId]);
 
   const selectedTotal = useMemo(
