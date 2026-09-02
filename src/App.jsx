@@ -1593,7 +1593,7 @@ export default function UniformPOS() {
   };
 
   if (location.pathname === "/checkin") {
-    return <CustomerCheckinPage school={publicRouteSchool} onSubmit={handleGuestSubmit} />;
+    return <CustomerCheckinPage school={publicRouteSchool} schools={schools} schoolMeta={schoolMeta} onSubmit={handleGuestSubmit} />;
   }
 
   if (location.pathname === "/queue-status") {
@@ -1760,7 +1760,7 @@ export default function UniformPOS() {
         <Routes>
           <Route
             path="/checkin"
-            element={<CustomerCheckinPage school={publicRouteSchool} onSubmit={handleGuestSubmit} />}
+            element={<CustomerCheckinPage school={publicRouteSchool} schools={schools} schoolMeta={schoolMeta} onSubmit={handleGuestSubmit} />}
           />
           <Route
             path="/queue-status"
