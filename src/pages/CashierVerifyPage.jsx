@@ -34,7 +34,8 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
   const syncReadyOrders = async () => {
     try {
       if (!isSupabaseConfigured || !supabase) throw new Error("Supabase 未設定");
-      const query = supabase.from("customer_orders").select("*").eq("status", "READY").order("created_at", { ascending: true });
+      let query = supabase.from("customer_orders").select("*").eq("status", "READY").order("created_at", { ascending: true });
+      if (currentSchoolId) query = query.eq("school_id", currentSchoolId);
       const { data, error: queryError } = await query;
       if (queryError) throw queryError;
       const ready = (Array.isArray(data) ? data : [])
@@ -161,8 +162,12 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
         
         if (completionError) {
           console.error("更新訂單狀態失敗", completionError);
+          throw completionError;
         } else {
           completedOrder = data;
+        }
+        if (!completedOrder?.id || completedOrder.status !== "COMPLETED") {
+          throw new Error("訂單狀態未成功更新為 COMPLETED");
         }
       } catch (error) {
         console.error("更新訂單狀態異常", error);

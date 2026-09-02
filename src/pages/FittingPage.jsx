@@ -412,15 +412,10 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
         },
       };
 
-      const { data, error } = await supabase
-        .from("customer_orders")
-        .update({ status: "PREPARING", tailor_info: payload.tailor_info })
-        .eq("id", current.id)
-        .select()
-        .single();
-      if (error) throw error;
-      if (!data?.id) throw new Error("訂單未成功更新");
-      const result = getSafeOrder(data);
+      const result = getSafeOrder(await queueOrderService.updateStatus(current.id, "PREPARING", {
+        tailor_info: payload.tailor_info,
+      }));
+      if (!result?.id) throw new Error("訂單未成功更新");
       onStatusChange?.(result || current);
       setOrders((prev) => (Array.isArray(prev) ? prev.filter((order) => order && order.id !== current.id) : []));
       setNotice("已更新為 PREPARING，等待倉務執貨");

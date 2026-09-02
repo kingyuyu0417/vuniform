@@ -142,16 +142,13 @@ export const queueOrderService = {
       writeQueueCache([normalized, ...localRows.filter((row) => row.id !== normalized.id)]);
       return normalized;
     } catch (error) {
-      console.warn("createOrder fallback to local cache", error);
-      const localRows = readQueueCache();
-      const nextRows = [record, ...localRows.filter((row) => row.id !== record.id)];
-      writeQueueCache(nextRows);
-      return record;
+      console.error("createOrder failed to sync with Supabase", error);
+      throw error;
     }
   },
 
   async listOrders({ schoolId = "", status = null } = {}) {
-    const schoolFilter = safeSchoolId(schoolId);
+    const schoolFilter = schoolId ? safeSchoolId(schoolId) : "";
     if (!isSupabaseConfigured || !supabase) {
       const rows = readQueueCache().filter((row) => !schoolFilter || safeSchoolId(row.school_id) === schoolFilter);
       return rows.filter((row) => !status || row.status === status).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -238,11 +235,6 @@ export const queueOrderService = {
       return normalized;
     } catch (error) {
       console.error("updateStatus failed", error);
-      // If Supabase fails, at least update local cache as fallback
-      // so the UI reflects the attempted change
-      const rows = readQueueCache();
-      const updated = rows.map((row) => (row.id === id ? { ...row, ...nextPatch, status } : row));
-      writeQueueCache(updated);
       throw error;
     }
   },
@@ -255,7 +247,7 @@ export const queueOrderService = {
       return { unsubscribe() {} };
     }
 
-    const schoolFilter = safeSchoolId(schoolId);
+    const schoolFilter = schoolId ? safeSchoolId(schoolId) : "";
     let isInitialized = false;
 
     const channel = supabase
@@ -269,16 +261,24 @@ export const queueOrderService = {
           filter: schoolFilter ? `school_id=eq.${schoolFilter}` : undefined,
         },
         async () => {
-          const nextRows = await this.listOrders({ schoolId: schoolFilter });
-          onChange?.(nextRows);
+          try {
+            const nextRows = await this.listOrders({ schoolId: schoolFilter });
+            onChange?.(nextRows);
+          } catch (error) {
+            console.error("customer orders realtime sync failed", error);
+          }
         }
       )
       .subscribe(async (status) => {
         // 訂閱成功後立即載入初始數據
         if (status === "SUBSCRIBED" && !isInitialized) {
           isInitialized = true;
-          const initialRows = await this.listOrders({ schoolId: schoolFilter });
-          onChange?.(initialRows);
+          try {
+            const initialRows = await this.listOrders({ schoolId: schoolFilter });
+            onChange?.(initialRows);
+          } catch (error) {
+            console.error("customer orders initial sync failed", error);
+          }
         }
       });
 

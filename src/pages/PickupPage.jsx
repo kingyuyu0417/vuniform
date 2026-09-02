@@ -107,12 +107,12 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
       }
 
       if (!isSupabaseConfigured || !supabase) throw new Error("Supabase 未設定");
-      const { data: updated, error } = await supabase
+      let updateQuery = supabase
         .from("customer_orders")
         .update({ status: ORDER_STATUS.READY })
-        .eq("id", orderId)
-        .select()
-        .single();
+        .eq("id", orderId);
+      if (currentSchoolId) updateQuery = updateQuery.eq("school_id", currentSchoolId);
+      const { data: updated, error } = await updateQuery.select().single();
       if (error) throw error;
       if (!updated?.id) throw new Error("找不到要更新的訂單");
 

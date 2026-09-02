@@ -1624,29 +1624,39 @@ export default function UniformPOS() {
     }
 
     const sourceOrderIds = [...new Set(cart.filter((item) => item.sourceOrderId).map((item) => item.sourceOrderId))];
-    const savedOrder = await saveSalesLog([order, ...salesLog]);
-    if (!savedOrder) return;
+    const sourceSaleId = localReceiptId(salesLog);
 
     if (sourceOrderIds.length > 0 && isSupabaseConfigured && supabase) {
-      await Promise.all(sourceOrderIds.map(async (sourceOrderId) => {
-        try {
+      try {
+        await Promise.all(sourceOrderIds.map(async (sourceOrderId) => {
           const { error } = await supabase
             .from("customer_orders")
             .update({
               status: "COMPLETED",
-              tailor_info: { paid_at: new Date().toISOString(), source_sale_id: savedOrder.id, payment: { method: "cash", cashReceived: received, changeDue: Math.max(received - cartTotal, 0) } },
+              tailor_info: { paid_at: new Date().toISOString(), source_sale_id: sourceSaleId, payment: { method: "cash", cashReceived: received, changeDue: Math.max(received - cartTotal, 0) } },
             })
-            .eq("id", sourceOrderId);
-          if (error) {
-            console.error("同步已支付客戶訂單失敗", error);
-          } else {
-            window.dispatchEvent(new CustomEvent("customer-order-paid", { detail: { orderId: sourceOrderId } }));
-          }
-        } catch (error) {
-          console.error("同步已支付客戶訂單執行失敗", error);
-        }
-      }));
+            .eq("id", sourceOrderId)
+            .eq("school_id", order.school);
+          if (error) throw error;
+        }));
+      } catch (error) {
+        console.error("同步已支付客戶訂單失敗，保留購物車", error);
+        setStorageError("來源訂單未能同步完成，交易尚未完成；請檢查網絡後再試。 ");
+        return;
+      }
     }
+
+    const savedOrder = await saveSalesLog([order, ...salesLog]);
+    if (!savedOrder) {
+      if (sourceOrderIds.length > 0 && isSupabaseConfigured && supabase) {
+        await Promise.all(sourceOrderIds.map((sourceOrderId) => supabase.from("customer_orders").update({ status: "READY" }).eq("id", sourceOrderId).eq("school_id", order.school)));
+      }
+      return;
+    }
+
+    sourceOrderIds.forEach((sourceOrderId) => {
+      window.dispatchEvent(new CustomEvent("customer-order-paid", { detail: { orderId: sourceOrderId } }));
+    });
 
     setReceipt(savedOrder);
     setCart([]);
