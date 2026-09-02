@@ -1332,7 +1332,8 @@ export default function UniformPOS() {
 
   const handleConfirmPayment = (payment) => {
     setPaymentOrders((prev) => prev.map((order) => order.id === payment.orderId ? { ...order, status: "paid" } : order));
-    setTab("sale");
+    setTab("records");
+    navigate("/records", { replace: true });
   };
 
   const cartTotal = cart.reduce((sum, c) => sum + c.price * c.qty, 0);
