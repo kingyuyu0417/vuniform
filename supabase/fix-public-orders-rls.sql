@@ -1,6 +1,14 @@
 -- Fix public POS write access for the cashier payment flow.
 -- This enables the anonymous/public app key to insert/update/select sales records.
 
+alter table public.orders add column if not exists cashier_id uuid;
+alter table public.orders add column if not exists cashier_name text;
+alter table public.orders add column if not exists outlet_name text;
+alter table public.orders add column if not exists outlet_address text;
+alter table public.orders add column if not exists outlet_phone text;
+alter table public.orders add column if not exists total numeric default 0;
+alter table public.orders add column if not exists item_count integer default 0;
+
 -- The public app is anonymous and has no auth user id, so cashier_id must be nullable.
 alter table public.orders alter column cashier_id drop not null;
 

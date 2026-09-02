@@ -113,17 +113,45 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
         price: item.price,
         qty: item.quantity,
       }));
-      const { error: saleError } = await supabase.from("orders").insert({
+      const orderPayload = {
         id: receiptId,
         school: selectedOrder.school_id || "香港中國婦女會馮堯敬紀念中學",
-        cashier_id: null,
-        cashier_name: "收銀員",
         total: selectedTotal,
         item_count: saleItems.reduce((count, item) => count + item.qty, 0),
-      });
-      if (saleError && saleError.code !== "23505") throw saleError;
-      const { error: itemError } = await supabase.from("order_items").insert(saleItems);
-      if (itemError) throw itemError;
+        created_at: new Date().toISOString(),
+      };
+
+      if (selectedOrder.cashier_id !== undefined || selectedOrder.cashierId !== undefined) {
+        orderPayload.cashier_id = selectedOrder.cashier_id ?? selectedOrder.cashierId ?? null;
+      }
+      if (selectedOrder.cashier_name || selectedOrder.cashierName) {
+        orderPayload.cashier_name = selectedOrder.cashier_name || selectedOrder.cashierName || "收銀員";
+      }
+
+      const { error: saleError } = await supabase.from("orders").insert(orderPayload);
+      if (saleError && saleError.code !== "23505") {
+        const message = String(saleError.message || "");
+        const hasMissingColumn = /column .* does not exist|42703/i.test(message);
+        if (hasMissingColumn) {
+          const fallbackPayload = Object.fromEntries(
+            Object.entries(orderPayload).filter(([key]) => !["cashier_id", "cashier_name"].includes(key))
+          );
+          const { error: fallbackError } = await supabase.from("orders").insert(fallbackPayload);
+          if (fallbackError && fallbackError.code !== "23505") throw fallbackError;
+        } else {
+          throw saleError;
+        }
+      }
+
+      const safeSaleItems = saleItems.map(({ length, ...item }) => ({ ...item, ...(length ? { length } : {}) }));
+      const { error: itemError } = await supabase.from("order_items").insert(safeSaleItems);
+      if (itemError && /column .*length.* does not exist|42703/i.test(String(itemError.message || ""))) {
+        const fallbackItems = safeSaleItems.map(({ length, ...item }) => item);
+        const { error: fallbackItemError } = await supabase.from("order_items").insert(fallbackItems);
+        if (fallbackItemError) throw fallbackItemError;
+      } else if (itemError) {
+        throw itemError;
+      }
 
       const { data: completedOrder, error: completionError } = await supabase
         .from("customer_orders")

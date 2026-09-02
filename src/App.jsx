@@ -121,6 +121,84 @@ const localReceiptId = (salesLog) => {
   return `${prefix}${String(nextNumber).padStart(4, "0")}`;
 };
 
+const buildOrderInsertPayload = (order, receiptId) => {
+  const payload = {
+    id: receiptId,
+    school: order.school || "",
+    total: Number(order.total || 0),
+    item_count: Number(order.itemCount || 0),
+    created_at: new Date().toISOString(),
+  };
+
+  if (order.outletName) payload.outlet_name = order.outletName;
+  if (order.outletAddress) payload.outlet_address = order.outletAddress;
+  if (order.outletPhone) payload.outlet_phone = order.outletPhone;
+  if (order.cashierId !== undefined) payload.cashier_id = order.cashierId || null;
+  if (order.cashierName) payload.cashier_name = order.cashierName;
+
+  return payload;
+};
+
+const buildOrderItemInsertPayload = (orderId, item) => {
+  const payload = {
+    order_id: orderId,
+    name: item.name,
+    size: item.size || "",
+    price: Number(item.price || 0),
+    qty: Number(item.qty || 1),
+  };
+
+  if (item.length) payload.length = item.length;
+  return payload;
+};
+
+const insertSalesOrderRecord = async (order, salesLog) => {
+  if (!isSupabaseAuthEnabled || !supabase) {
+    return { savedOrder: { ...order, id: localReceiptId(salesLog) } };
+  }
+
+  const requestedReceiptId = localReceiptId(salesLog);
+  const orderPayload = buildOrderInsertPayload(order, requestedReceiptId);
+  const itemPayload = (order.items || []).map((item) => buildOrderItemInsertPayload(requestedReceiptId, item));
+
+  try {
+    const { error } = await supabase.from("orders").insert(orderPayload);
+    if (error) {
+      const message = String(error.message || "");
+      const missingColumn = /column .* does not exist|42703/i.test(message);
+      if (missingColumn) {
+        const fallbackPayload = Object.fromEntries(
+          Object.entries(orderPayload).filter(([key]) => !["cashier_id", "cashier_name", "outlet_name", "outlet_address", "outlet_phone"].includes(key))
+        );
+        const { error: fallbackError } = await supabase.from("orders").insert(fallbackPayload);
+        if (fallbackError) throw fallbackError;
+      } else {
+        throw error;
+      }
+    }
+
+    const { error: itemError } = await supabase.from("order_items").insert(itemPayload);
+    if (itemError) {
+      const message = String(itemError.message || "");
+      const missingLengthColumn = /column .*length.* does not exist|42703/i.test(message);
+      if (missingLengthColumn) {
+        const fallbackItems = itemPayload.map(({ length, ...item }) => item);
+        const { error: fallbackItemsError } = await supabase.from("order_items").insert(fallbackItems);
+        if (fallbackItemsError) throw fallbackItemsError;
+      } else {
+        throw itemError;
+      }
+    }
+
+    return { savedOrder: { ...order, id: requestedReceiptId } };
+  } catch (error) {
+    if (error?.message && /row-level security policy|policy/i.test(error.message)) {
+      throw new Error("Supabase public sales policy/schema 未同步，請先執行 supabase/fix-public-orders-rls.sql");
+    }
+    throw error;
+  }
+};
+
 // 攞晒目前所有學校名（去重、排序），未有分類嘅商品歸類做「未分類」
 const UNASSIGNED = "（未分類）";
 let deletedSchoolsRuntime = new Set();
@@ -1058,6 +1136,7 @@ export default function UniformPOS() {
     try {
       const order = next[0];
       let savedOrder = order;
+
       if (isSupabaseAuthEnabled && supabase) {
         const requestedReceiptId = localReceiptId(salesLog);
         const { data: receiptId, error } = await supabase.rpc("create_order_with_items", {
@@ -1073,41 +1152,23 @@ export default function UniformPOS() {
             created_at: new Date().toISOString(),
           },
         });
+
         if (!error) {
           savedOrder = { ...order, id: receiptId || requestedReceiptId };
         } else if (error.code === "42702" || error.code === "23505") {
           const fallbackOrder = { ...order, id: `${requestedReceiptId}-${uid()}` };
-          const { error: orderError } = await supabase.from("orders").insert({
-            id: fallbackOrder.id,
-            school: fallbackOrder.school || "",
-            outlet_name: fallbackOrder.outletName || null,
-            outlet_address: fallbackOrder.outletAddress || null,
-            outlet_phone: fallbackOrder.outletPhone || null,
-            cashier_id: fallbackOrder.cashierId || null,
-            cashier_name: fallbackOrder.cashierName || "",
-            total: fallbackOrder.total,
-            item_count: fallbackOrder.itemCount,
-            created_at: new Date().toISOString(),
-          });
-          if (orderError) throw orderError;
-          const { error: itemsError } = await supabase.from("order_items").insert(
-            fallbackOrder.items.map((item) => ({
-              order_id: fallbackOrder.id,
-              name: item.name,
-              size: item.size,
-              length: item.length || null,
-              price: item.price,
-              qty: item.qty,
-            }))
-          );
-          if (itemsError) throw itemsError;
-          savedOrder = fallbackOrder;
+          const fallbackResult = await insertSalesOrderRecord(fallbackOrder, salesLog);
+          savedOrder = fallbackResult.savedOrder;
+        } else if (error.message && /row-level security policy|policy|cashier_id|column .* does not exist/i.test(error.message)) {
+          const fallbackResult = await insertSalesOrderRecord(order, salesLog);
+          savedOrder = fallbackResult.savedOrder;
         } else {
           throw error;
         }
       } else {
         savedOrder = { ...order, id: localReceiptId(salesLog) };
       }
+
       const savedLog = [savedOrder, ...salesLog];
       if (!isSupabaseAuthEnabled || !supabase) await window.storage.set("sales-log", JSON.stringify(savedLog), true);
       setSalesLog(savedLog);
