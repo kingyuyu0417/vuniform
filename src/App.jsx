@@ -1647,7 +1647,19 @@ export default function UniformPOS() {
             .eq("status", "READY")
             .select("id, status");
           if (error) throw error;
-          if (!data?.[0] || data[0].status !== "COMPLETED") throw new Error("來源訂單未成功完成");
+          if (!data?.[0]) {
+            const { data: existing } = await supabase
+              .from("customer_orders")
+              .select("id, status, tailor_info")
+              .eq("id", sourceOrderId)
+              .eq("school_id", order.school)
+              .maybeSingle();
+            if (existing?.status !== "COMPLETED" || existing.tailor_info?.source_sale_id !== sourceSaleId) {
+              throw new Error("來源訂單未成功完成");
+            }
+          } else if (data[0].status !== "COMPLETED") {
+            throw new Error("來源訂單未成功完成");
+          }
         }));
       } catch (error) {
         console.error("同步已支付客戶訂單失敗，保留購物車", error);
