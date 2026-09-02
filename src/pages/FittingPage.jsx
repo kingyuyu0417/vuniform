@@ -438,7 +438,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
           <div style={styles.kicker}>同事 1 / 度身崗位</div>
           <div style={styles.title}>Fitting Queue</div>
         </div>
-        <button style={styles.primaryButton} onClick={startCameraScan}>
+        <button className="pos-btn" style={styles.primaryButton} onClick={startCameraScan}>
           <Camera size={16} />
           掃碼
         </button>
@@ -472,7 +472,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
                 {activeOrder.customer_info?.guestName || "顧客"} · {activeOrder.queue_number}
               </div>
             </div>
-            <button style={styles.warningButton} onClick={handleSkip}>
+            <button className="pos-btn" style={styles.warningButton} onClick={handleSkip}>
               <SkipForward size={15} />
               過號
             </button>
@@ -506,12 +506,13 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
                   {safeProducts.map((product) => (
                     <button
                       key={product.id}
+                      className="pos-btn"
                       onClick={() => updateSelection(index, { productId: item.productId === product.id ? "" : product.id, size: "" })}
                       style={{
                         ...styles.productBtn,
-                        background: item.productId === product.id ? "#ff8a4c" : "#f8fafc",
+                        background: item.productId === product.id ? "#1F3A5F" : "#f8fafc",
                         color: item.productId === product.id ? "#fff" : "#24364d",
-                        borderColor: item.productId === product.id ? "#ff8a4c" : "#dfe7f1",
+                        borderColor: item.productId === product.id ? "#1F3A5F" : "#dfe7f1",
                       }}
                     >
                       {product.name}
@@ -527,6 +528,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
                       return (
                       <button
                         key={size}
+                        className="pos-btn"
                         onClick={() => updateSelection(index, { size: item.size === size ? "" : size })}
                         style={{
                           ...styles.sizeBtn,
@@ -557,10 +559,11 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
           })}
 
           <div style={styles.footerActions}>
-            <button style={styles.secondaryButton} onClick={addItem}>
+            <button className="pos-btn" style={styles.secondaryButton} onClick={addItem}>
               + 新增款式
             </button>
             <button
+              className="pos-btn"
               style={{
                 ...styles.primaryButton,
                 opacity: isSubmitting ? 0.7 : 1,
@@ -603,10 +606,10 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
             </div>
 
             <div style={styles.modalActions}>
-              <button style={styles.secondaryButton} onClick={() => handleScanValue(scanText)}>
+              <button className="pos-btn" style={styles.secondaryButton} onClick={() => handleScanValue(scanText)}>
                 立即查詢
               </button>
-              <button style={styles.primaryButton} onClick={stopCameraScan}>
+              <button className="pos-btn" style={styles.primaryButton} onClick={stopCameraScan}>
                 關閉
               </button>
             </div>
@@ -631,37 +634,44 @@ const styles = {
   kicker: { fontSize: 12, color: "#64748b", textTransform: "uppercase", letterSpacing: 1.2 },
   title: { fontSize: 26, fontWeight: 800, color: "#1f3a5f", marginTop: 4 },
   primaryButton: {
-    background: "#1f3a5f",
+    background: "#1F3A5F",
     color: "#fff",
-    border: "none",
+    border: "1px solid #1F3A5F",
     borderRadius: 10,
     padding: "10px 14px",
     fontWeight: 700,
     display: "inline-flex",
     alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     cursor: "pointer",
+    boxShadow: "none",
   },
   warningButton: {
-    background: "#fee2e2",
-    color: "#b91c1c",
-    border: "none",
+    background: "#FEE2E2",
+    color: "#B91C1C",
+    border: "1px solid #F8C7C7",
     borderRadius: 10,
     padding: "8px 12px",
     fontWeight: 700,
     display: "inline-flex",
     alignItems: "center",
+    justifyContent: "center",
     gap: 6,
     cursor: "pointer",
   },
   secondaryButton: {
-    background: "#edf2f7",
-    color: "#1f3a5f",
-    border: "none",
+    background: "#EDF2F7",
+    color: "#1F3A5F",
+    border: "1px solid #D9E3F0",
     borderRadius: 10,
     padding: "10px 14px",
     fontWeight: 700,
     cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
   },
   row: { display: "flex", flexWrap: "wrap", gap: 8 },
   queueChip: {
