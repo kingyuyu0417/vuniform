@@ -1450,7 +1450,7 @@ export default function UniformPOS() {
   };
 
   if (location.pathname === "/checkin") {
-    return <CustomerCheckinPage school={publicRouteSchool} />;
+    return <CustomerCheckinPage school={publicRouteSchool} onSubmit={handleGuestSubmit} />;
   }
 
   if (location.pathname === "/queue-status") {
