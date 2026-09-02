@@ -1330,10 +1330,15 @@ export default function UniformPOS() {
     setTab("cashier");
   };
 
-  const handleConfirmPayment = (payment) => {
+  const handleConfirmPayment = async (payment) => {
     setPaymentOrders((prev) => prev.map((order) => order.id === payment.orderId ? { ...order, status: "paid" } : order));
     setTab("records");
     navigate("/records", { replace: true });
+    try {
+      await refreshFromCloud({ skipProductsWhileEditing: false });
+    } catch (error) {
+      console.error("同步支付後記錄失敗", error);
+    }
   };
 
   const cartTotal = cart.reduce((sum, c) => sum + c.price * c.qty, 0);
