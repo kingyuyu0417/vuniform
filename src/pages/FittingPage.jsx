@@ -87,14 +87,18 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       const allRows = await queueOrderService.listOrders();
       const normalizedAll = Array.isArray(allRows) ? allRows.filter(Boolean).map(getSafeOrder) : [];
       const schoolKey = String(currentSchoolId || "").trim();
-      const filteredRows = schoolKey
+      
+      // 先按學校過濾（不過濾狀態）
+      const schoolFiltered = schoolKey
         ? normalizedAll.filter((row) => {
             const rowSchool = String(row.school_id || row.schoolId || "").trim();
             return rowSchool === schoolKey;
           })
         : normalizedAll;
 
-      setOrders(filteredRows);
+      // 只在 orders state 中保留 PENDING 訂單
+      const pendingRows = schoolFiltered.filter((row) => row.status === ORDER_STATUS.PENDING);
+      setOrders(pendingRows);
       setLastUpdatedAt(new Date());
 
       const matchByTarget = (row) => {
@@ -110,11 +114,18 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       };
 
       if (selectedOrderId) {
-        const directMatch = filteredRows.find(matchByTarget);
+        // 先在學校過濾的訂單中查找（包括所有狀態）
+        const directMatch = schoolFiltered.find(matchByTarget);
+        // 如果沒找到，在所有訂單中查找
         const fallbackMatch = directMatch || normalizedAll.find(matchByTarget);
 
         if (fallbackMatch) {
-          safeSetSelectedOrder(fallbackMatch);
+          // 只有 PENDING 狀態的訂單才能在 Fitting 頁面操作
+          if (fallbackMatch.status === ORDER_STATUS.PENDING) {
+            safeSetSelectedOrder(fallbackMatch);
+          } else {
+            setNotice(`此訂單狀態為 ${fallbackMatch.status}，無法在度身頁面編輯`);
+          }
           return;
         }
 
@@ -122,8 +133,8 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
         return;
       }
 
-      const nextSelected = filteredRows.find((o) => o.status === ORDER_STATUS.PENDING) || null;
-      safeSetSelectedOrder(nextSelected);
+      // 自動選擇第一個 PENDING 訂單
+      safeSetSelectedOrder(pendingRows[0] ? getSafeOrder(pendingRows[0]) : null);
     } catch (error) {
       console.error("FittingPage syncOrders failed", error);
       setOrders([]);
@@ -149,14 +160,17 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
             const filtered = schoolKey
               ? normalized.filter((order) => String(order.school_id || order.schoolId || "").trim() === schoolKey)
               : normalized;
-            setOrders(filtered);
+            
+            // 只保留 PENDING 訂單（其他狀態應該由其他頁面處理）
+            const pendingOnly = filtered.filter((order) => order.status === ORDER_STATUS.PENDING);
+            setOrders(pendingOnly);
             setLastUpdatedAt(new Date());
 
             if (selectedOrder) {
-              const next = filtered.find((o) => o.id === selectedOrder.id);
+              const next = pendingOnly.find((o) => o.id === selectedOrder.id);
               safeSetSelectedOrder(next || null);
-            } else if (filtered.length) {
-              safeSetSelectedOrder(filtered[0]);
+            } else if (pendingOnly.length) {
+              safeSetSelectedOrder(pendingOnly[0]);
             }
           } catch (innerError) {
             console.error("FittingPage subscription update failed", innerError);
