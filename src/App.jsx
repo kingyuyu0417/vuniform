@@ -1331,6 +1331,43 @@ export default function UniformPOS() {
   };
 
   const handleConfirmPayment = async (payment) => {
+    const paidOrder = paymentOrders.find((order) => order.id === payment.orderId) || null;
+    const localRecord = paidOrder
+      ? {
+          id: payment.orderId || `receipt-${Date.now()}`,
+          date: todayStr(),
+          time: new Date().toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit" }),
+          items: (paidOrder.items || []).map((item) => ({
+            name: item.productName,
+            size: item.size,
+            length: item.length || "",
+            price: Number(item.price || 0),
+            qty: Number(item.quantity || item.qty || 1),
+          })),
+          total: Number(payment.totalPrice || paidOrder.totalPrice || 0),
+          cashReceived: Number(payment.cashReceived || payment.totalPrice || 0),
+          changeDue: Number(payment.changeDue || 0),
+          itemCount: (paidOrder.items || []).reduce((sum, item) => sum + Number(item.quantity || item.qty || 1), 0),
+          cashierId: session ? session.id : null,
+          cashierName: session ? session.name : "",
+          school: paidOrder.school || selectedSchool || "",
+          outletName: paidOrder.outletName || outletNameForSchool(paidOrder.school || selectedSchool || "", schoolMeta),
+          outletAddress: paidOrder.outletAddress || "",
+          outletPhone: paidOrder.outletPhone || "",
+        }
+      : null;
+
+    if (localRecord) {
+      setSalesLog((prev) => [localRecord, ...prev]);
+      if (!isSupabaseConfigured || !supabase) {
+        try {
+          await window.storage.set("sales-log", JSON.stringify([localRecord, ...salesLog]), true);
+        } catch (error) {
+          console.error("保存本地付款記錄失敗", error);
+        }
+      }
+    }
+
     setPaymentOrders((prev) => prev.map((order) => order.id === payment.orderId ? { ...order, status: "paid" } : order));
     setTab("records");
     navigate("/records", { replace: true });
