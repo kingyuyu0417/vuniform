@@ -73,6 +73,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
 
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+  const nextItemRef = useRef(null);
 
   const safeSetSelectedOrder = (order) => {
     if (!order || typeof order !== "object") {
@@ -269,6 +270,12 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       setSelection((prev) => [...prev, { ...emptySelection }]);
     }
   };
+
+  useEffect(() => {
+    if (selection.length > 1 && !selection[selection.length - 1]?.productId) {
+      nextItemRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [selection.length]);
 
   const handleScanValue = async (rawValue) => {
     const cleaned = String(rawValue || "").trim();
@@ -570,11 +577,38 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
 
           {selection.map((item, index) => {
             const selectedProduct = products.find((p) => p.id === item.productId);
+            const selectedSize = selectedProduct?.sizes?.find((sizeOption) =>
+              String(typeof sizeOption === "object" ? sizeOption.size : sizeOption) === String(item.size)
+              && String(typeof sizeOption === "object" ? sizeOption.length || "" : "") === String(item.length || "")
+            );
+            if (item.productId && item.size) {
+              return (
+                <div key={`${item.productId}-${item.length || ""}-${item.size}-${index}`} style={styles.cartRow}>
+                  <div style={styles.cartRowInfo}>
+                    <div style={styles.cartRowName}>{displayProductName(selectedProduct?.name || "未知款式")}</div>
+                    <div style={styles.cartRowMeta}>
+                      {item.length ? `長度 ${item.length} · ` : ""}碼數 {item.size}
+                      {selectedSize?.price != null ? ` · $${Number(selectedSize.price).toLocaleString("en-HK")}` : ""}
+                    </div>
+                  </div>
+                  <input
+                    type="number"
+                    min={1}
+                    value={item.quantity || 1}
+                    onChange={(e) => updateSelection(index, { quantity: Math.max(1, Number(e.target.value || 1)) })}
+                    style={styles.cartQty}
+                  />
+                  <button style={styles.removeBtn} onClick={() => removeItem(index)} aria-label="移除款式">
+                    <X size={13} />
+                  </button>
+                </div>
+              );
+            }
             return (
-              <div key={`${item.productId || "new"}-${index}`} style={styles.itemCard}>
+              <div ref={index === selection.length - 1 ? nextItemRef : null} key={`${item.productId || "new"}-${index}`} style={styles.itemCard}>
                 <div style={styles.itemTop}>
                   <span style={styles.itemIndex}>款式 {index + 1}</span>
-                  {selection.length > 1 && (
+                  {selection.length > 1 && index !== selection.length - 1 && (
                     <button style={styles.removeBtn} onClick={() => removeItem(index)}>
                       <X size={13} />
                     </button>
@@ -814,6 +848,27 @@ const styles = {
   },
   itemTop: { display: "flex", justifyContent: "space-between", alignItems: "center" },
   itemIndex: { fontSize: 13, fontWeight: 700, color: "#1f3a5f" },
+  cartRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    background: "#f7fbfa",
+    border: "1px solid #cfe3df",
+    borderRadius: 12,
+    padding: "10px 12px",
+  },
+  cartRowInfo: { flex: 1, minWidth: 0 },
+  cartRowName: { color: "#1f3a5f", fontSize: 13, fontWeight: 800 },
+  cartRowMeta: { color: "#64748b", fontSize: 12, marginTop: 3 },
+  cartQty: {
+    width: 54,
+    border: "1px solid #cbd5e1",
+    borderRadius: 8,
+    padding: "7px 5px",
+    fontSize: 13,
+    textAlign: "center",
+    background: "#fff",
+  },
   removeBtn: {
     background: "#fff",
     border: "1px solid #fecaca",
