@@ -149,7 +149,6 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
             const filtered = schoolKey
               ? normalized.filter((order) => String(order.school_id || order.schoolId || "").trim() === schoolKey)
               : normalized;
-            // listOrders 已經做了合併，直接使用返回的數據
             setOrders(filtered);
             setLastUpdatedAt(new Date());
 

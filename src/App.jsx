@@ -1836,7 +1836,7 @@ export default function UniformPOS() {
             path="/track"
             element={
               <StaffOrderTracking visits={queueVisits} onStatusUpdate={(id, status) => {
-                setQueueVisits(queueVisits.map(v => v.id === id ? {...v, status} : v));
+                setQueueVisits((prev) => prev.map(v => v.id === id ? {...v, status} : v));
               }} />
             }
           />
@@ -1954,7 +1954,7 @@ export default function UniformPOS() {
                 )}
                 {tab === "track" && (
                   <StaffOrderTracking visits={queueVisits} onStatusUpdate={(id, status) => {
-                    setQueueVisits(queueVisits.map(v => v.id === id ? {...v, status} : v));
+                    setQueueVisits((prev) => prev.map(v => v.id === id ? {...v, status} : v));
                   }} />
                 )}
                 {tab === "products" && (

@@ -14,75 +14,18 @@ const statusLabel = {
 
 export default function QueuePage({ visits = [], onViewGuest, onAssign }) {
   const navigate = useNavigate();
-  const [visitsData, setVisitsData] = useState(visits);
-  const [isLoading, setIsLoading] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState(new Date());
   const previousDataRef = useRef(visits);
 
   useEffect(() => {
-    const normalize = (data = []) =>
-      (data || []).filter((item) => item.status === ORDER_STATUS.PENDING).map((item) => ({
-        id: item.id,
-        queueNo: item.queue_number || item.queueNumber || "",
-        guestName: item.customer_info?.guestName || item.guestName || "",
-        className: item.customer_info?.className || item.className || "",
-        phone: item.customer_info?.phone || item.phone || "",
-        status: item.status || "waiting",
-        createdAt: item.created_at || item.createdAt || new Date().toISOString(),
-      }));
-
-    const loadVisits = async () => {
-      setIsLoading(true);
-      try {
-        const data = await queueOrderService.listOrders();
-        const normalized = normalize(data);
-        setVisitsData(normalized);
-        previousDataRef.current = normalized;
-        setLastUpdatedAt(new Date());
-      } catch (err) {
-        console.error("加載待命單失敗", err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadVisits();
-
-    if (!queueOrderService || typeof queueOrderService.subscribe !== "function") return undefined;
-
-    const unsub = queueOrderService.subscribe({
-      onChange: (rows) => {
-        const normalized = normalize(rows);
-        setVisitsData((prevVisits) => {
-          // 防護：如果新數據明顯少於舊數據（可能是狀態改變導致的過濾）
-          // 先檢查是否真的有訂單消失，或只是狀態改變了
-          if (normalized.length < prevVisits.length) {
-            // 檢查是否所有剩餘訂單的 ID 都在前一個列表中
-            const normalizedIds = new Set(normalized.map((item) => item.id));
-            const disappeared = prevVisits.filter((item) => !normalizedIds.has(item.id));
-            
-            // 如果有訂單消失，但總數不是 0，則可能是有些訂單進入了度身
-            // 這是正常的，直接使用新數據
-            if (disappeared.length > 0) {
-              console.log(`訂單進入度身: ${disappeared.map((d) => d.queueNo).join(", ")}`);
-            }
-          }
-          
-          // 直接使用新數據（listOrders 已經做了狀態保護）
-          return normalized;
-        });
-        setLastUpdatedAt(new Date());
-      },
-    });
-
-    return () => {
-      if (unsub && typeof unsub.unsubscribe === "function") unsub.unsubscribe();
-    };
-  }, []);
+    // 更新 lastUpdatedAt 和 previousDataRef 當 visits 改變時
+    setLastUpdatedAt(new Date());
+    previousDataRef.current = visits;
+  }, [visits]);
 
   const rows = useMemo(
-    () => visitsData.filter((visit) => visit.status === ORDER_STATUS.PENDING),
-    [visitsData]
+    () => visits.filter((visit) => visit.status === ORDER_STATUS.PENDING),
+    [visits]
   );
 
   return (
