@@ -166,6 +166,11 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
       if (!completedOrder?.id) throw new Error("訂單未成功完成");
 
       setSubmitted(payment);
+      setOrders((current) => {
+        const remaining = current.filter((order) => order.id !== selectedOrder.id);
+        setSelectedOrder((remaining[0] && remaining[0].id !== selectedOrder.id) ? remaining[0] : null);
+        return remaining;
+      });
       onConfirmPayment?.(payment);
       setPaymentMethod("");
       setCashReceived("");
