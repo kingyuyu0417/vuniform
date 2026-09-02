@@ -40,8 +40,11 @@ const StaffOrderTracking = ({ visits = [], currentSchoolId = "", onStatusUpdate 
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const visibleVisits = useMemo(
-    () => (syncedVisits.length > 0 ? syncedVisits : visits),
-    [syncedVisits, visits]
+    () => (syncedVisits.length > 0 ? syncedVisits : visits).filter((visit) => {
+      if (!currentSchoolId) return true;
+      return String(visit.school || visit.school_id || visit.schoolId || "").trim() === String(currentSchoolId).trim();
+    }),
+    [syncedVisits, visits, currentSchoolId]
   );
 
   useEffect(() => {

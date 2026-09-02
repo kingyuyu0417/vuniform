@@ -56,7 +56,10 @@ export default function QueuePage({ visits = [], currentSchoolId = "", onViewGue
     previousDataRef.current = visits;
   }, [visits]);
 
-  const visibleVisits = syncedVisits ?? visits;
+  const visibleVisits = (syncedVisits ?? visits).filter((visit) => {
+    if (!currentSchoolId) return true;
+    return String(visit.school || visit.school_id || visit.schoolId || "").trim() === String(currentSchoolId).trim();
+  });
   const rows = useMemo(
     () => visibleVisits.filter((visit) => activeStatuses.includes(visit.status)),
     [visibleVisits]

@@ -945,6 +945,10 @@ export default function UniformPOS() {
     const nextSchool = sc || DESIGNATED_SCHOOL;
     setSelectedSchool(nextSchool);
     setSelectedProduct(null);
+    setCart([]);
+    setCashReceived("");
+    setReceipt(null);
+    setStorageError("");
     setSchoolPanelOpen(false);
     window.storage.set("last-school", nextSchool, false).catch((e) => console.error("記住學校選擇失敗", e));
   };
@@ -1938,7 +1942,7 @@ export default function UniformPOS() {
           />
           <Route
             path="/cashier"
-            element={<CashierVerifyPage currentSchoolId={selectedSchool || publicRouteSchool} products={products} onConfirmPayment={handleConfirmPayment} />}
+            element={<CashierVerifyPage currentSchoolId={selectedSchool || publicRouteSchool} products={products.filter((p) => schoolOf(p) === (selectedSchool || publicRouteSchool))} onConfirmPayment={handleConfirmPayment} />}
           />
           <Route
             path="/track"
@@ -1978,6 +1982,7 @@ export default function UniformPOS() {
             element={
               <RecordsTab
                 salesLog={salesLog}
+                selectedSchool={selectedSchool || publicRouteSchool}
                 onReprint={(o) => setReceipt(o)}
                 canViewAllDates={perms.canViewAllDates}
                 canExportSales={perms.canExportSales}
@@ -2058,7 +2063,7 @@ export default function UniformPOS() {
                   <PickupPage currentSchoolId={selectedSchool || publicRouteSchool} onReadyForSale={handleReadyForSale} />
                 )}
                 {tab === "cashier" && (
-                  <CashierVerifyPage currentSchoolId={selectedSchool || publicRouteSchool} products={products} onConfirmPayment={handleConfirmPayment} />
+                  <CashierVerifyPage currentSchoolId={selectedSchool || publicRouteSchool} products={products.filter((p) => schoolOf(p) === (selectedSchool || publicRouteSchool))} onConfirmPayment={handleConfirmPayment} />
                 )}
                 {tab === "track" && (
                   <StaffOrderTracking visits={queueVisits} currentSchoolId={selectedSchool || publicRouteSchool} onStatusUpdate={(id, status) => {
@@ -2086,6 +2091,7 @@ export default function UniformPOS() {
                 {tab === "records" && (
                   <RecordsTab
                     salesLog={salesLog}
+                    selectedSchool={selectedSchool || publicRouteSchool}
                     onReprint={(o) => setReceipt(o)}
                     canViewAllDates={perms.canViewAllDates}
                     canExportSales={perms.canExportSales}
@@ -3070,12 +3076,12 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   );
 }
 
-function RecordsTab({ salesLog, onReprint, canViewAllDates, canExportSales, schoolMeta = {} }) {
+function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates, canExportSales, schoolMeta = {} }) {
   const [date, setDate] = useState(todayStr());
   const [outletFilter, setOutletFilter] = useState("");
   const [schoolFilter, setSchoolFilter] = useState("");
   const effectiveDate = canViewAllDates ? date : todayStr();
-  const dateOrders = salesLog.filter((o) => o.date === effectiveDate);
+  const dateOrders = salesLog.filter((o) => o.date === effectiveDate && (!selectedSchool || o.school === selectedSchool));
   const schoolNames = Array.from(new Set(dateOrders.map((o) => o.school).filter(Boolean))).sort((a, b) => a.localeCompare(b, "zh-Hant"));
   const outletForOrder = (order) => order.outletName || outletNameForSchool(order.school, schoolMeta);
   const availableSchools = schoolNames.filter((school) => !outletFilter || outletForOrder({ school }) === outletFilter);
@@ -3106,7 +3112,7 @@ function RecordsTab({ salesLog, onReprint, canViewAllDates, canExportSales, scho
 
   const handleExportCSV = () => {
     const rows = [["日期", "時間", "單號", "開單員工", "學校", "件數", "總計", "明細"]];
-    salesLog.forEach((o) => {
+    dateOrders.forEach((o) => {
       rows.push([
         o.date,
         o.time,
