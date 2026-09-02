@@ -261,6 +261,15 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
     }
   };
 
+  const selectSize = (index, size) => {
+    const currentItem = selection[index];
+    const nextSize = currentItem?.size === size ? "" : size;
+    updateSelection(index, { size: nextSize });
+    if (nextSize && index === selection.length - 1) {
+      setSelection((prev) => [...prev, { ...emptySelection }]);
+    }
+  };
+
   const handleScanValue = async (rawValue) => {
     const cleaned = String(rawValue || "").trim();
     if (!cleaned) return;
@@ -620,7 +629,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
                               <button
                                 key={`${selectedProduct.id}-${item.length || "all"}-${size}`}
                                 className="pos-btn"
-                                onClick={() => updateSelection(index, { size: item.size === size ? "" : size })}
+                                onClick={() => selectSize(index, size)}
                                 style={{ ...styles.sizeBtn, background: item.size === size ? "#1f3a5f" : "#fff", color: item.size === size ? "#fff" : "#24364d", borderColor: item.size === size ? "#1f3a5f" : "#dfe7f1" }}
                               >
                                 <div>{typeof sizeOption === "object" ? sizeOption.size : size}</div>
