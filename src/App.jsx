@@ -1272,9 +1272,9 @@ export default function UniformPOS() {
 
   const handleGuestSubmit = (guest) => {
     setQueueVisits((prev) => [guest, ...prev]);
-    setSelectedGuest(guest);
+    setSelectedGuest(null);
     setTab("queue");
-    navigate("/queue");
+    navigate("/queue", { replace: true });
   };
 
   const handleFittingStatusChange = (updatedOrder) => {

@@ -93,8 +93,8 @@ export default function CustomerCheckinPage({ onSubmit, school = "" }) {
       setSubmitted(record);
       onSubmit?.(record);
       setForm(emptyForm);
-      // 登記成功後先返回排隊單，讓員工確認順序，再手動進入度身頁
-      navigate("/queue");
+      // 登記成功後必須留在排隊頁，避免自動進入度身流程
+      navigate("/queue", { replace: true });
     } catch (err) {
       setError("登記失敗：" + (err.message || "未知錯誤"));
     } finally {
