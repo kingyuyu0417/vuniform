@@ -45,7 +45,17 @@ const defaultProducts = [
   { id: "blazer", name: "校褸", sizes: ["S", "M", "L", "XL", "XXL"] },
 ];
 
-const emptySelection = { productId: "", size: "", quantity: 1 };
+const emptySelection = { productId: "", size: "", length: "", quantity: 1 };
+
+const displayProductName = (name = "") => name
+  .replace(/(?:【)?(?:男生|女生|男女生)(?:】)?\s*[-–—:：]?\s*/g, "")
+  .replace(/\b(?:Boy|Girl)[`'’]s\b\s*[-–—:：]?\s*/gi, "")
+  .replace(/\s+/g, " ")
+  .replace(/校\s+褸/g, "校褸")
+  .trim();
+
+const hasLengthOptions = (product) => (product?.sizes || []).some((size) => typeof size === "object" && size.length);
+const naturalSizeSort = (first, second) => String(first).localeCompare(String(second), "zh-Hant", { numeric: true });
 
 export default function FittingPage({ currentSchoolId = "", products = defaultProducts, selectedOrderId = "", onStatusChange }) {
   const safeProducts = Array.isArray(products) ? products.filter(Boolean) : [];
@@ -570,37 +580,56 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
                       onClick={() => updateSelection(index, { productId: item.productId === product.id ? "" : product.id, size: "" })}
                       style={{
                         ...styles.productBtn,
-                        background: item.productId === product.id ? "#1F3A5F" : "#f8fafc",
+                        background: item.productId === product.id ? "#D97757" : "#f8fafc",
                         color: item.productId === product.id ? "#fff" : "#24364d",
-                        borderColor: item.productId === product.id ? "#1F3A5F" : "#dfe7f1",
+                        borderColor: item.productId === product.id ? "#D97757" : "#dfe7f1",
                       }}
                     >
-                      {product.name}
+                      {displayProductName(product.name)}
                     </button>
                   ))}
                 </div>
 
                 {selectedProduct && (
-                  <div style={styles.sizeGrid}>
-                    {(Array.isArray(selectedProduct.sizes) ? selectedProduct.sizes : []).map((sizeOption) => {
-                      const size = typeof sizeOption === "object" ? sizeOption.size : sizeOption;
-                      if (!size) return null;
-                      return (
-                      <button
-                        key={size}
-                        className="pos-btn"
-                        onClick={() => updateSelection(index, { size: item.size === size ? "" : size })}
-                        style={{
-                          ...styles.sizeBtn,
-                          background: item.size === size ? "#1f3a5f" : "#fff",
-                          color: item.size === size ? "#fff" : "#24364d",
-                          borderColor: item.size === size ? "#1f3a5f" : "#dfe7f1",
-                        }}
-                      >
-                        {size}
-                      </button>
-                      );
-                    })}
+                  <div>
+                    {hasLengthOptions(selectedProduct) && (
+                      <div style={styles.sizeGrid}>
+                        {[...new Set(selectedProduct.sizes.map((size) => size.length).filter(Boolean))]
+                          .sort(naturalSizeSort)
+                          .map((length) => (
+                            <button
+                              key={`${selectedProduct.id}-length-${length}`}
+                              className="pos-btn"
+                              onClick={() => updateSelection(index, { length: item.length === length ? "" : length, size: "" })}
+                              style={{ ...styles.sizeBtn, background: item.length === length ? "#1F3A5F" : "#fff", color: item.length === length ? "#fff" : "#24364d", borderColor: item.length === length ? "#1F3A5F" : "#dfe7f1" }}
+                            >
+                              長度 {length}
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                    {(!hasLengthOptions(selectedProduct) || item.length) && (
+                      <div style={styles.sizeGrid}>
+                        {(Array.isArray(selectedProduct.sizes) ? selectedProduct.sizes : [])
+                          .filter((sizeOption) => !hasLengthOptions(selectedProduct) || sizeOption.length === item.length)
+                          .sort((first, second) => naturalSizeSort(first.size, second.size))
+                          .map((sizeOption) => {
+                            const size = typeof sizeOption === "object" ? sizeOption.size : sizeOption;
+                            if (!size) return null;
+                            return (
+                              <button
+                                key={`${selectedProduct.id}-${item.length || "all"}-${size}`}
+                                className="pos-btn"
+                                onClick={() => updateSelection(index, { size: item.size === size ? "" : size })}
+                                style={{ ...styles.sizeBtn, background: item.size === size ? "#1f3a5f" : "#fff", color: item.size === size ? "#fff" : "#24364d", borderColor: item.size === size ? "#1f3a5f" : "#dfe7f1" }}
+                              >
+                                <div>{typeof sizeOption === "object" ? sizeOption.size : size}</div>
+                                {typeof sizeOption === "object" && sizeOption.price != null && <div style={styles.sizePrice}>${Number(sizeOption.price).toLocaleString("en-HK")}</div>}
+                              </button>
+                            );
+                          })}
+                      </div>
+                    )}
                   </div>
                 )}
 
