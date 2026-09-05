@@ -8,6 +8,33 @@ const paymentMethods = [
   { id: "transfer", label: "轉帳" },
 ];
 
+const asRecord = (value) => {
+  if (value && typeof value === "object") return value;
+  if (typeof value !== "string") return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const getOrderItems = (order) => {
+  const tailorInfo = asRecord(order?.tailor_info || order?.tailorInfo);
+  const candidates = [
+    tailorInfo.items,
+    tailorInfo.selected_items,
+    tailorInfo.selectedItems,
+    tailorInfo.products,
+    order?.items,
+    order?.customer_info?.items,
+  ];
+  const items = candidates.find((value) => Array.isArray(value));
+  if (items) return items;
+  const objectItems = candidates.find((value) => value && typeof value === "object" && !Array.isArray(value));
+  return objectItems ? Object.values(objectItems) : [];
+};
+
 export default function CashierVerifyPage({ currentSchoolId = "", products = [], onConfirmPayment, onReadyForSale }) {
   const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -21,8 +48,8 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
     ...order,
     queueNo: order.queue_number || order.queueNumber || "",
     guestName: order.customer_info?.guestName || order.guestName || "顧客",
-    items: (order.tailor_info?.items || []).map((item) => ({
-      productName: item.product_name || item.productName || "未知產品",
+    items: getOrderItems(order).map((item) => ({
+      productName: item.product_name || item.productName || item.name || "未知產品",
       size: item.size || "",
       quantity: Number(item.quantity || 1),
       price: Number(item.price || products
@@ -38,9 +65,14 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
       if (currentSchoolId) query = query.eq("school_id", currentSchoolId);
       const { data, error: queryError } = await query;
       if (queryError) throw queryError;
-      const ready = (Array.isArray(data) ? data : [])
+      const normalizedOrders = (Array.isArray(data) ? data : []).map(normalizeOrder);
+      const invalidOrders = normalizedOrders.filter((order) => !order.items.length);
+      const ready = normalizedOrders
         .filter((order) => order.status === ORDER_STATUS.READY || (!order.tailor_info?.payment && !order.tailor_info?.paid_at))
-        .map(normalizeOrder);
+        .filter((order) => order.items.length > 0);
+      if (!ready.length && invalidOrders.length) {
+        setError("有訂單缺少商品資料，請返回度身頁重新選擇商品後再執貨。");
+      }
       setOrders(ready);
       const requestedOrderId = new URLSearchParams(window.location.search).get("order_id");
       setSelectedOrder((current) => ready.find((order) => order.id === requestedOrderId) || ready.find((order) => order.id === current?.id) || ready[0] || null);
@@ -260,7 +292,10 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
 
   const handleProceedToSale = () => {
     if (!selectedOrder) return;
-    onReadyForSale?.(selectedOrder);
+    const movedToSale = onReadyForSale?.(selectedOrder);
+    if (movedToSale === false) {
+      setError("訂單商品資料未能載入，請重新整理後再試。");
+    }
   };
 
   if (!selectedOrder) {

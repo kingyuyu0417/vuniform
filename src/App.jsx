@@ -1517,10 +1517,32 @@ export default function UniformPOS() {
   };
 
   const handleReadyForSale = (order) => {
-    if (!order) return;
-    const readyItems = (order.tailor_info?.items || []).map((item, index) => {
-      const productName = item.product_name || item.productName || "未知產品";
-      const product = products.find((p) => p.name === productName) || null;
+    if (!order) return false;
+    const parseRecord = (value) => {
+      if (value && typeof value === "object") return value;
+      if (typeof value !== "string") return {};
+      try {
+        const parsed = JSON.parse(value);
+        return parsed && typeof parsed === "object" ? parsed : {};
+      } catch {
+        return {};
+      }
+    };
+    const tailorInfo = parseRecord(order.tailor_info || order.tailorInfo);
+    const itemCandidates = [
+      tailorInfo.items,
+      tailorInfo.selected_items,
+      tailorInfo.selectedItems,
+      tailorInfo.products,
+      order.items,
+      order.customer_info?.items,
+    ];
+    const sourceItems = itemCandidates.find((value) => Array.isArray(value))
+      || Object.values(itemCandidates.find((value) => value && typeof value === "object") || {});
+    const readyItems = sourceItems.map((item, index) => {
+      const productName = item.product_name || item.productName || item.name || "未知產品";
+      const productId = item.product_id || item.productId || "";
+      const product = products.find((p) => p.id === productId || p.name === productName) || null;
       const size = item.size || "";
       const length = item.length || "";
       const matchedSize = product?.sizes?.find((s) => String(s.size) === String(size) && String(s.length || "") === String(length));
@@ -1540,12 +1562,16 @@ export default function UniformPOS() {
       };
     });
 
-    if (!readyItems.length) return;
+    if (!readyItems.length) {
+      setStorageError("此訂單沒有可銷售商品，請返回取貨頁重新載入訂單。");
+      return false;
+    }
     setCart(readyItems);
     setCashReceived("");
     setSelectedProduct(null);
     setTab("sale");
     navigate("/sale", { replace: true });
+    return true;
   };
 
   const handleConfirmPayment = async (payment) => {

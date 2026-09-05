@@ -121,18 +121,13 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     setCalling(true);
     setCallError("");
     try {
-      await queueOrderService.markPickupCalled(counter.current_order_id, currentSchoolId);
+      const markedOrder = await queueOrderService.markPickupCalled(counter.current_order_id, currentSchoolId);
+      if (!markedOrder?.id) throw new Error("取貨訂單未成功更新，請重新整理後再試");
       await queueOrderService.clearQueueCounter({ schoolId: currentSchoolId, outletName, counterName, serviceType });
       setCounter(null);
       navigate(`/cashier?order_id=${encodeURIComponent(counter.current_order_id)}`);
     } catch (error) {
-      try {
-        await queueOrderService.clearQueueCounter({ schoolId: currentSchoolId, outletName, counterName, serviceType });
-        setCounter(null);
-        navigate(`/cashier?order_id=${encodeURIComponent(counter.current_order_id)}`);
-      } catch (clearError) {
-        setCallError(clearError.message || error.message || "取貨流程更新失敗");
-      }
+      setCallError(error.message || "取貨流程更新失敗");
       setCalling(false);
     }
   };

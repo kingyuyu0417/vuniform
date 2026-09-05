@@ -255,13 +255,14 @@ export const queueOrderService = {
       const { data, error } = await updateQuery.select();
 
       if (error) throw error;
-      const saved = data && data[0];
+      const saved = Array.isArray(data) ? data[0] : data;
       if (!saved && expectedStatus) {
-        const { data: current, error: currentError } = await supabase
+        let currentQuery = supabase
           .from("customer_orders")
           .select("*")
-          .eq("id", id)
-          .maybeSingle();
+          .eq("id", id);
+        if (schoolId) currentQuery = currentQuery.eq("school_id", safeSchoolId(schoolId));
+        const { data: current, error: currentError } = await currentQuery.maybeSingle();
         if (currentError) throw currentError;
         if (current?.status === status) {
           const normalized = normalizeOrderRow(current);
@@ -301,7 +302,7 @@ export const queueOrderService = {
     if (schoolId) lookup = lookup.eq("school_id", safeSchoolId(schoolId));
     const { data: current, error: lookupError } = await lookup.maybeSingle();
     if (lookupError) throw lookupError;
-    if (!current) return null;
+    if (!current) throw new Error("找不到此取貨訂單，請重新整理後再試");
 
     let query = supabase
       .from("customer_orders")
@@ -310,7 +311,12 @@ export const queueOrderService = {
     if (schoolId) query = query.eq("school_id", safeSchoolId(schoolId));
     const { data, error } = await query.select().maybeSingle();
     if (error) throw error;
-    return data ? normalizeOrderRow(data) : null;
+    if (data) return normalizeOrderRow(data);
+
+    const { data: verified, error: verifyError } = await lookup.maybeSingle();
+    if (verifyError) throw verifyError;
+    if (verified?.tailor_info?.pickup_called_at) return normalizeOrderRow(verified);
+    throw new Error("取貨訂單未成功更新，請重新整理後再試");
   },
 
   async getQueueCounter({ schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING } = {}) {
