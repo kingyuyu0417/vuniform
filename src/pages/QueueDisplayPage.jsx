@@ -4,6 +4,13 @@ import qrcodeGenerator from "qrcode-generator";
 import { ORDER_STATUS, QUEUE_SERVICE, queueOrderService } from "../services/queueOrderService";
 
 const activeStatuses = [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STATUS.READY];
+let announcementChain = Promise.resolve();
+const enqueueAnnouncement = (announcement) => {
+  announcementChain = announcementChain.then(announcement).catch((error) => {
+    console.warn("排隊語音播放失敗", error);
+  });
+  return announcementChain;
+};
 
 function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING, embedded = false, showHeader = true }) {
   const laneCounterName = serviceType === QUEUE_SERVICE.PICKUP ? "pickup" : "fitting";
@@ -40,6 +47,7 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
       serviceType,
       onChange: (next) => {
         if (!active) return;
+        if (next?.service_type !== serviceType || next?.counter_name !== laneCounterName) return;
         setCounter((previous) => {
           if (next?.current_queue_number && (next.current_queue_number !== previous?.current_queue_number || next.updated_at !== previous?.updated_at)) {
             setIsCalling(true);
@@ -62,7 +70,7 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
       hasLoadedCounterRef.current = true;
       return;
     }
-    announce(counter);
+    enqueueAnnouncement(() => announce(counter));
   }, [counter]);
 
   useEffect(() => {
@@ -98,10 +106,8 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
 
   const announce = async (counterToAnnounce = counter) => {
     if (!counterToAnnounce?.current_queue_number) return;
-    window.speechSynthesis?.cancel();
     await playChime();
     if (!window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
     const destination = serviceType === QUEUE_SERVICE.PICKUP ? "隔離房間取貨" : "度身房間度身";
     const utterance = new SpeechSynthesisUtterance(`請排隊號碼 ${counterToAnnounce.current_queue_number}，請到${destination}。`);
     utterance.lang = "zh-HK";
@@ -117,7 +123,7 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
   };
 
   const enableAutomaticAudio = () => {
-    announce();
+    enqueueAnnouncement(() => announce());
   };
 
   return (
