@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { QrCode, Users, Volume2 } from "lucide-react";
 import qrcodeGenerator from "qrcode-generator";
 import { ORDER_STATUS, queueOrderService } from "../services/queueOrderService";
@@ -10,6 +10,7 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
   const [waitingCount, setWaitingCount] = useState(0);
   const [qrCode, setQrCode] = useState("");
   const [isCalling, setIsCalling] = useState(false);
+  const hasLoadedCounterRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -40,6 +41,15 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
       counterSubscription.unsubscribe();
     };
   }, [schoolName, outletName, counterName]);
+
+  useEffect(() => {
+    if (!counter?.current_queue_number) return;
+    if (!hasLoadedCounterRef.current) {
+      hasLoadedCounterRef.current = true;
+      return;
+    }
+    announce(counter);
+  }, [counter]);
 
   useEffect(() => {
     const url = `${window.location.origin}/checkin?school_id=${encodeURIComponent(schoolName)}`;
@@ -80,11 +90,11 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
     window.setTimeout(() => audioContext.close().catch(() => {}), 800);
   };
 
-  const announce = () => {
-    if (!counter?.current_queue_number || !window.speechSynthesis) return;
+  const announce = (counterToAnnounce = counter) => {
+    if (!counterToAnnounce?.current_queue_number || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     playChime();
-    const utterance = new SpeechSynthesisUtterance(`請排隊號碼 ${counter.current_queue_number}，請到隔離房間取貨。`);
+    const utterance = new SpeechSynthesisUtterance(`請排隊號碼 ${counterToAnnounce.current_queue_number}，請到隔離房間取貨。`);
     utterance.lang = "zh-HK";
     const voices = window.speechSynthesis.getVoices();
     utterance.voice = voices.find((voice) => voice.lang.toLowerCase() === "zh-hk")
@@ -95,6 +105,10 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
     utterance.rate = 0.9;
     utterance.pitch = 1;
     window.speechSynthesis.speak(utterance);
+  };
+
+  const enableAutomaticAudio = () => {
+    announce();
   };
 
   return (
@@ -114,8 +128,8 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
           {counter?.current_queue_number || "--"}
         </div>
         <div style={{ ...styles.counter, ...(isCalling ? styles.counterCalling : {}) }}>{isCalling ? "請到隔離房間取貨" : "請留意叫號"}</div>
-        <button type="button" onClick={announce} style={styles.announceButton} title="播放叫號提示">
-          <Volume2 size={18} /> 叮噹＋廣東話提示
+        <button type="button" onClick={enableAutomaticAudio} style={styles.announceButton} title="啟用自動叫號提示">
+          <Volume2 size={18} /> 啟用自動提示
         </button>
       </section>
       <section style={styles.footer}>
