@@ -57,6 +57,7 @@ export default function CustomerCheckinPage({ onSubmit, school = "", schools = [
   const [selectedLevel, setSelectedLevel] = useState(null);
   const [selectedDistrict, setSelectedDistrict] = useState(null);
   const [selectedSchoolId, setSelectedSchoolId] = useState(school || "");
+  const isSchoolLocked = Boolean(String(school || "").trim());
 
   const schoolOptions = useMemo(
     () => [...new Set((schools || []).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-Hant")),
@@ -301,27 +302,29 @@ export default function CustomerCheckinPage({ onSubmit, school = "", schools = [
           <div style={{ fontSize: 14, fontWeight: 700, color: "#52627A", marginBottom: 14 }}>
             {effectiveSchool}
           </div>
-          <button
-            type="button"
-            className="pos-btn"
-            onClick={() => {
-              setSelectedLevel(null);
-              setSelectedDistrict(null);
-              setSelectedSchoolId("");
-              navigate("/checkin", { replace: true });
-            }}
-            style={{
-              padding: "8px 12px",
-              borderRadius: 8,
-              background: "#EEF2F7",
-              color: "#1F3A5F",
-              border: "1px solid #D5DDE5",
-              fontWeight: 700,
-              marginBottom: 12,
-            }}
-          >
-            更改學校
-          </button>
+          {!isSchoolLocked && (
+            <button
+              type="button"
+              className="pos-btn"
+              onClick={() => {
+                setSelectedLevel(null);
+                setSelectedDistrict(null);
+                setSelectedSchoolId("");
+                navigate("/checkin", { replace: true });
+              }}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 8,
+                background: "#EEF2F7",
+                color: "#1F3A5F",
+                border: "1px solid #D5DDE5",
+                fontWeight: 700,
+                marginBottom: 12,
+              }}
+            >
+              更改學校
+            </button>
+          )}
           <form onSubmit={handleSubmit} style={{ display: "grid", gap: 12 }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label style={{ fontSize: 13, fontWeight: 600, color: "#45515F" }}>姓名</label>
