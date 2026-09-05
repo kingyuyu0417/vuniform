@@ -120,7 +120,13 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     setCalling(true);
     setCallError("");
     try {
-      await queueOrderService.updateStatus(counter.current_order_id, ORDER_STATUS.COMPLETED, { completed_at: new Date().toISOString() }, currentSchoolId, ORDER_STATUS.READY);
+      const currentOrder = visibleVisits.find((visit) => visit.id === counter.current_order_id);
+      await queueOrderService.updateStatus(counter.current_order_id, ORDER_STATUS.COMPLETED, {
+        tailor_info: {
+          ...(currentOrder?.tailor_info || {}),
+          pickup_completed_at: new Date().toISOString(),
+        },
+      }, currentSchoolId, ORDER_STATUS.READY);
       await clearCurrentCall();
     } catch (error) {
       setCallError(error.message || "取貨完成更新失敗");
