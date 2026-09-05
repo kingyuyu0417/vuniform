@@ -370,7 +370,7 @@ export const queueOrderService = {
     return { unsubscribe() { supabase.removeChannel(channel); } };
   },
 
-  subscribe({ schoolId, onChange }) {
+  subscribe({ schoolId, serviceType = "all", onChange }) {
     if (!isSupabaseConfigured || !supabase) {
       const cache = readQueueCache();
       const filtered = (schoolId ? cache.filter((row) => safeSchoolId(row.school_id) === safeSchoolId(schoolId)) : cache);
@@ -382,7 +382,7 @@ export const queueOrderService = {
     let isInitialized = false;
 
     const channel = supabase
-      .channel(`customer-orders-${schoolFilter || "all"}`)
+      .channel(`customer-orders-${schoolFilter || "all"}-${serviceType}`)
       .on(
         "postgres_changes",
         {

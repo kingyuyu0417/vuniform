@@ -31,7 +31,7 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
       setWaitingCount((orders || []).filter((order) => order.status === waitingStatus).length);
     };
     queueOrderService.listOrders({ schoolId: schoolName }).then(updateOrders).catch(() => {});
-    const ordersSubscription = queueOrderService.subscribe({ schoolId: schoolName, onChange: updateOrders });
+    const ordersSubscription = queueOrderService.subscribe({ schoolId: schoolName, serviceType, onChange: updateOrders });
     const counterSubscription = queueOrderService.subscribeQueueCounter({
       schoolId: schoolName,
       outletName,
