@@ -11,6 +11,17 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
   const [qrCode, setQrCode] = useState("");
   const [isCalling, setIsCalling] = useState(false);
   const hasLoadedCounterRef = useRef(false);
+  const chimeAudioRef = useRef(null);
+
+  useEffect(() => {
+    const audio = new Audio("/audio/queue-chime.mpeg");
+    audio.preload = "auto";
+    chimeAudioRef.current = audio;
+    return () => {
+      audio.pause();
+      chimeAudioRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -64,36 +75,17 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
   }, [schoolName]);
 
   const playChime = () => {
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextClass) return;
-    const audioContext = new AudioContextClass();
-    const startAt = audioContext.currentTime;
-    const notes = [
-      { frequency: 880, start: 0, duration: 0.22 },
-      { frequency: 660, start: 0.2, duration: 0.32 },
-    ];
-
-    notes.forEach(({ frequency, start, duration }) => {
-      const oscillator = audioContext.createOscillator();
-      const gain = audioContext.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(frequency, startAt + start);
-      gain.gain.setValueAtTime(0.001, startAt + start);
-      gain.gain.exponentialRampToValueAtTime(0.18, startAt + start + 0.025);
-      gain.gain.exponentialRampToValueAtTime(0.001, startAt + start + duration);
-      oscillator.connect(gain);
-      gain.connect(audioContext.destination);
-      oscillator.start(startAt + start);
-      oscillator.stop(startAt + start + duration);
-    });
-
-    window.setTimeout(() => audioContext.close().catch(() => {}), 800);
+    const audio = chimeAudioRef.current;
+    if (!audio) return;
+    audio.currentTime = 0;
+    audio.play().catch((error) => console.warn("叫號提示音播放被瀏覽器阻擋", error));
   };
 
   const announce = (counterToAnnounce = counter) => {
-    if (!counterToAnnounce?.current_queue_number || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
+    if (!counterToAnnounce?.current_queue_number) return;
     playChime();
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(`請排隊號碼 ${counterToAnnounce.current_queue_number}，請到隔離房間取貨。`);
     utterance.lang = "zh-HK";
     const voices = window.speechSynthesis.getVoices();
