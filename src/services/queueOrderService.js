@@ -256,6 +256,20 @@ export const queueOrderService = {
 
       if (error) throw error;
       const saved = data && data[0];
+      if (!saved && expectedStatus) {
+        const { data: current, error: currentError } = await supabase
+          .from("customer_orders")
+          .select("*")
+          .eq("id", id)
+          .maybeSingle();
+        if (currentError) throw currentError;
+        if (current?.status === status) {
+          const normalized = normalizeOrderRow(current);
+          const latestRows = readQueueCache();
+          writeQueueCache(latestRows.map((row) => (row.id === id ? { ...row, ...normalized } : row)));
+          return normalized;
+        }
+      }
       if (!saved) throw new Error("訂單未成功更新");
       
       const normalized = normalizeOrderRow(saved);
