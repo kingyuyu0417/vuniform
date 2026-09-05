@@ -56,8 +56,7 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
   const announce = () => {
     if (!counter?.current_queue_number || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
-    const counterLabel = counterName === "main" ? "主櫃台" : `${counterName}櫃台`;
-    const utterance = new SpeechSynthesisUtterance(`請排隊號碼 ${counter.current_queue_number}，到${counterLabel}。`);
+    const utterance = new SpeechSynthesisUtterance(`請排隊號碼 ${counter.current_queue_number}，請到隔離房間取貨。`);
     utterance.lang = "zh-HK";
     const voices = window.speechSynthesis.getVoices();
     utterance.voice = voices.find((voice) => voice.lang.toLowerCase() === "zh-hk")
@@ -83,7 +82,7 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
         <div key={`${counter?.current_queue_number || "empty"}-${counter?.updated_at || ""}`} style={{ ...styles.queueNumber, ...(isCalling ? styles.queueNumberCalling : {}) }}>
           {counter?.current_queue_number || "--"}
         </div>
-        <div style={{ ...styles.counter, ...(isCalling ? styles.counterCalling : {}) }}>{counterName} · {isCalling ? "請留意閃動號碼" : "請留意叫號"}</div>
+        <div style={{ ...styles.counter, ...(isCalling ? styles.counterCalling : {}) }}>{isCalling ? "請到隔離房間取貨" : "請留意叫號"}</div>
         <button type="button" onClick={announce} style={styles.announceButton} title="播放叫號提示">
           <Volume2 size={18} /> 播放廣東話提示
         </button>
