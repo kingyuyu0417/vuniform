@@ -286,6 +286,33 @@ export const queueOrderService = {
     }
   },
 
+  async markPickupCalled(id, schoolId = "") {
+    const calledAt = new Date().toISOString();
+    if (!isSupabaseConfigured || !supabase) {
+      const rows = readQueueCache();
+      const updated = rows.map((row) => row.id === id
+        ? { ...row, tailor_info: { ...(row.tailor_info || {}), pickup_called_at: calledAt } }
+        : row);
+      writeQueueCache(updated);
+      return updated.find((row) => row.id === id) || null;
+    }
+
+    let lookup = supabase.from("customer_orders").select("*").eq("id", id);
+    if (schoolId) lookup = lookup.eq("school_id", safeSchoolId(schoolId));
+    const { data: current, error: lookupError } = await lookup.maybeSingle();
+    if (lookupError) throw lookupError;
+    if (!current) return null;
+
+    let query = supabase
+      .from("customer_orders")
+      .update({ tailor_info: { ...(current.tailor_info || {}), pickup_called_at: calledAt } })
+      .eq("id", id);
+    if (schoolId) query = query.eq("school_id", safeSchoolId(schoolId));
+    const { data, error } = await query.select().maybeSingle();
+    if (error) throw error;
+    return data ? normalizeOrderRow(data) : null;
+  },
+
   async getQueueCounter({ schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING } = {}) {
     const key = counterKey(schoolId, outletName, counterName, serviceType);
     if (!isSupabaseConfigured || !supabase) return readCounterCache()[key] || normalizeCounter({ school_id: schoolId, outlet_name: outletName, counter_name: counterName, service_type: serviceType });
