@@ -5,6 +5,20 @@ import { ORDER_STATUS, QUEUE_SERVICE, queueOrderService } from "../services/queu
 
 const activeStatuses = [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STATUS.READY];
 let announcementChain = Promise.resolve();
+const announcerId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const announcerStorageKey = "uniform-pos-active-queue-announcer";
+const canAnnounce = () => {
+  if (typeof document !== "undefined" && document.visibilityState !== "visible") return false;
+  try {
+    const now = Date.now();
+    const current = JSON.parse(window.localStorage.getItem(announcerStorageKey) || "null");
+    if (current?.id && current.id !== announcerId && now - Number(current.updatedAt || 0) < 10000) return false;
+    window.localStorage.setItem(announcerStorageKey, JSON.stringify({ id: announcerId, updatedAt: now }));
+    return true;
+  } catch {
+    return true;
+  }
+};
 const enqueueAnnouncement = (announcement) => {
   announcementChain = announcementChain.then(announcement).catch((error) => {
     console.warn("排隊語音播放失敗", error);
@@ -106,6 +120,7 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
 
   const announce = async (counterToAnnounce = counter) => {
     if (!counterToAnnounce?.current_queue_number) return;
+    if (!canAnnounce()) return;
     await playChime();
     if (!window.speechSynthesis) return;
     const destination = serviceType === QUEUE_SERVICE.PICKUP ? "隔離房間取貨" : "度身房間度身";
