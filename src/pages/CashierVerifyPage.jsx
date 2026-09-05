@@ -34,11 +34,12 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
   const syncReadyOrders = async () => {
     try {
       if (!isSupabaseConfigured || !supabase) throw new Error("Supabase 未設定");
-      let query = supabase.from("customer_orders").select("*").eq("status", "READY").order("created_at", { ascending: true });
+      let query = supabase.from("customer_orders").select("*").in("status", ["READY", "COMPLETED"]).order("created_at", { ascending: true });
       if (currentSchoolId) query = query.eq("school_id", currentSchoolId);
       const { data, error: queryError } = await query;
       if (queryError) throw queryError;
       const ready = (Array.isArray(data) ? data : [])
+        .filter((order) => order.status === ORDER_STATUS.READY || (!order.tailor_info?.payment && !order.tailor_info?.paid_at))
         .map(normalizeOrder);
       setOrders(ready);
       const requestedOrderId = new URLSearchParams(window.location.search).get("order_id");
@@ -158,7 +159,7 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
           })
           .eq("id", selectedOrder.id)
           .eq("school_id", selectedOrder.school_id)
-          .eq("status", ORDER_STATUS.READY)
+          .in("status", [ORDER_STATUS.READY, ORDER_STATUS.COMPLETED])
           .select()
           .single();
         
