@@ -53,9 +53,37 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
     }
   }, [schoolName]);
 
+  const playChime = () => {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    const audioContext = new AudioContextClass();
+    const startAt = audioContext.currentTime;
+    const notes = [
+      { frequency: 880, start: 0, duration: 0.22 },
+      { frequency: 660, start: 0.2, duration: 0.32 },
+    ];
+
+    notes.forEach(({ frequency, start, duration }) => {
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(frequency, startAt + start);
+      gain.gain.setValueAtTime(0.001, startAt + start);
+      gain.gain.exponentialRampToValueAtTime(0.18, startAt + start + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.001, startAt + start + duration);
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
+      oscillator.start(startAt + start);
+      oscillator.stop(startAt + start + duration);
+    });
+
+    window.setTimeout(() => audioContext.close().catch(() => {}), 800);
+  };
+
   const announce = () => {
     if (!counter?.current_queue_number || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
+    playChime();
     const utterance = new SpeechSynthesisUtterance(`請排隊號碼 ${counter.current_queue_number}，請到隔離房間取貨。`);
     utterance.lang = "zh-HK";
     const voices = window.speechSynthesis.getVoices();
@@ -87,7 +115,7 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
         </div>
         <div style={{ ...styles.counter, ...(isCalling ? styles.counterCalling : {}) }}>{isCalling ? "請到隔離房間取貨" : "請留意叫號"}</div>
         <button type="button" onClick={announce} style={styles.announceButton} title="播放叫號提示">
-          <Volume2 size={18} /> 播放廣東話提示
+          <Volume2 size={18} /> 叮噹＋廣東話提示
         </button>
       </section>
       <section style={styles.footer}>
