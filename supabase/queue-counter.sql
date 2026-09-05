@@ -51,6 +51,7 @@ declare
   next_order public.customer_orders%rowtype;
   result public.queue_counters;
 begin
+    perform pg_advisory_xact_lock(hashtextextended(p_school_id || '::' || coalesce(p_outlet_name, '') || '::' || coalesce(p_service_type, 'FITTING'), 0));
   select * into next_order
   from public.customer_orders
   where school_id = p_school_id and status = case when p_service_type = 'PICKUP' then 'READY' else 'PENDING' end
@@ -84,6 +85,7 @@ set search_path = public
 as $$
 declare result public.queue_counters;
 begin
+    perform pg_advisory_xact_lock(hashtextextended(p_school_id || '::' || coalesce(p_outlet_name, '') || '::' || coalesce(p_service_type, 'FITTING'), 0));
   insert into public.queue_counters (school_id, outlet_name, counter_name, service_type, current_order_id, current_queue_number, updated_at)
   values (p_school_id, coalesce(p_outlet_name, ''), coalesce(p_counter_name, 'main'), coalesce(p_service_type, 'FITTING'), null, null, now())
   on conflict (school_id, outlet_name, counter_name, service_type) do update set
@@ -95,6 +97,9 @@ begin
 end;
 $$;
 
+drop function if exists public.call_next_fitting_customer(varchar, varchar, varchar, uuid);
+drop function if exists public.call_next_pickup_customer(varchar, varchar, varchar, uuid);
+
 create or replace function public.call_next_fitting_customer(
   p_school_id varchar,
   p_outlet_name varchar default '',
@@ -102,7 +107,7 @@ create or replace function public.call_next_fitting_customer(
   p_called_by uuid default null
 )
 returns public.queue_counters
-language sql
+language plpgsql
 security definer
 set search_path = public
 as $$
@@ -110,6 +115,7 @@ declare
   next_order public.customer_orders%rowtype;
   result public.queue_counters;
 begin
+    perform pg_advisory_xact_lock(hashtextextended(p_school_id || '::' || coalesce(p_outlet_name, '') || '::FITTING', 0));
   select * into next_order from public.customer_orders
   where school_id = p_school_id and status = 'PENDING'
   order by created_at asc for update skip locked limit 1;
@@ -128,7 +134,7 @@ create or replace function public.call_next_pickup_customer(
   p_called_by uuid default null
 )
 returns public.queue_counters
-language sql
+language plpgsql
 security definer
 set search_path = public
 as $$
@@ -136,6 +142,7 @@ declare
   next_order public.customer_orders%rowtype;
   result public.queue_counters;
 begin
+    perform pg_advisory_xact_lock(hashtextextended(p_school_id || '::' || coalesce(p_outlet_name, '') || '::PICKUP', 0));
   select * into next_order from public.customer_orders
   where school_id = p_school_id and status = 'READY'
   order by created_at asc for update skip locked limit 1;
