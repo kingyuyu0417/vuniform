@@ -361,7 +361,9 @@ export const queueOrderService = {
         .select("school_id, outlet_name, counter_name, service_type, current_order_id, current_queue_number, updated_at")
         .single();
       if (error) throw error;
-      return normalizeCounter(data);
+      const normalized = normalizeCounter(data);
+      if (normalized.service_type !== serviceType || normalized.counter_name !== counterName) throw new Error("重叫 counter 服務類型不一致");
+      return normalized;
     }
     const key = counterKey(schoolId, outletName, counterName, serviceType);
     writeCounterCache({ ...readCounterCache(), [key]: refreshed });

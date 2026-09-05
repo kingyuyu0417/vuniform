@@ -106,7 +106,19 @@ language sql
 security definer
 set search_path = public
 as $$
-  select public.call_next_customer(p_school_id, p_outlet_name, p_counter_name, 'FITTING', p_called_by);
+declare
+  next_order public.customer_orders%rowtype;
+  result public.queue_counters;
+begin
+  select * into next_order from public.customer_orders
+  where school_id = p_school_id and status = 'PENDING'
+  order by created_at asc for update skip locked limit 1;
+  insert into public.queue_counters (school_id, outlet_name, counter_name, service_type, current_order_id, current_queue_number, updated_at, updated_by)
+  values (p_school_id, coalesce(p_outlet_name, ''), 'fitting', 'FITTING', next_order.id, next_order.queue_number, now(), p_called_by)
+  on conflict (school_id, outlet_name, counter_name, service_type) do update set current_order_id = excluded.current_order_id, current_queue_number = excluded.current_queue_number, updated_at = excluded.updated_at, updated_by = excluded.updated_by
+  returning * into result;
+  return result;
+end;
 $$;
 
 create or replace function public.call_next_pickup_customer(
@@ -120,5 +132,17 @@ language sql
 security definer
 set search_path = public
 as $$
-  select public.call_next_customer(p_school_id, p_outlet_name, p_counter_name, 'PICKUP', p_called_by);
+declare
+  next_order public.customer_orders%rowtype;
+  result public.queue_counters;
+begin
+  select * into next_order from public.customer_orders
+  where school_id = p_school_id and status = 'READY'
+  order by created_at asc for update skip locked limit 1;
+  insert into public.queue_counters (school_id, outlet_name, counter_name, service_type, current_order_id, current_queue_number, updated_at, updated_by)
+  values (p_school_id, coalesce(p_outlet_name, ''), 'pickup', 'PICKUP', next_order.id, next_order.queue_number, now(), p_called_by)
+  on conflict (school_id, outlet_name, counter_name, service_type) do update set current_order_id = excluded.current_order_id, current_queue_number = excluded.current_queue_number, updated_at = excluded.updated_at, updated_by = excluded.updated_by
+  returning * into result;
+  return result;
+end;
 $$;
