@@ -53,7 +53,7 @@ declare
 begin
   select * into next_order
   from public.customer_orders
-  where school_id = p_school_id and status = case when p_service_type = 'PICKUP' then 'READY'::customer_order_status else 'PENDING'::customer_order_status end
+  where school_id = p_school_id and status = case when p_service_type = 'PICKUP' then 'READY' else 'PENDING' end
   order by created_at asc
   for update skip locked
   limit 1;
