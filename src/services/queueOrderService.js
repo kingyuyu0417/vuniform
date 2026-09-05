@@ -274,12 +274,12 @@ export const queueOrderService = {
 
   async getQueueCounter({ schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING } = {}) {
     const key = counterKey(schoolId, outletName, counterName, serviceType);
-    if (!isSupabaseConfigured || !supabase) return readCounterCache()[key] || normalizeCounter({ school_id: schoolId, outlet_name: outletName, counter_name: counterName });
+    if (!isSupabaseConfigured || !supabase) return readCounterCache()[key] || normalizeCounter({ school_id: schoolId, outlet_name: outletName, counter_name: counterName, service_type: serviceType });
 
     try {
       const { data, error } = await supabase
         .from("queue_counters")
-        .select("school_id, outlet_name, counter_name, current_order_id, current_queue_number, updated_at")
+        .select("school_id, outlet_name, counter_name, service_type, current_order_id, current_queue_number, updated_at")
         .eq("school_id", safeSchoolId(schoolId))
         .eq("outlet_name", outletName || "")
         .eq("counter_name", counterName || "main")
@@ -298,15 +298,16 @@ export const queueOrderService = {
   async callNext({ schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING, calledBy = "" } = {}) {
     const key = counterKey(schoolId, outletName, counterName, serviceType);
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.rpc("call_next_customer", {
+      const rpcName = serviceType === QUEUE_SERVICE.PICKUP ? "call_next_pickup_customer" : "call_next_fitting_customer";
+      const { data, error } = await supabase.rpc(rpcName, {
         p_school_id: safeSchoolId(schoolId),
         p_outlet_name: outletName || "",
         p_counter_name: counterName || "main",
-        p_service_type: serviceType,
         p_called_by: calledBy || null,
       });
       if (error) throw error;
       const normalized = normalizeCounter(data);
+      if (normalized.service_type !== serviceType) throw new Error("叫號服務類型不一致，請重新執行 queue-counter.sql");
       writeCounterCache({ ...readCounterCache(), [key]: normalized });
       return normalized;
     }
@@ -348,7 +349,7 @@ export const queueOrderService = {
         .eq("outlet_name", outletName || "")
         .eq("counter_name", counterName || "main")
         .eq("service_type", serviceType)
-        .select("school_id, outlet_name, counter_name, current_order_id, current_queue_number, updated_at")
+        .select("school_id, outlet_name, counter_name, service_type, current_order_id, current_queue_number, updated_at")
         .single();
       if (error) throw error;
       return normalizeCounter(data);

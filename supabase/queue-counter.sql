@@ -94,3 +94,31 @@ begin
   return result;
 end;
 $$;
+
+create or replace function public.call_next_fitting_customer(
+  p_school_id varchar,
+  p_outlet_name varchar default '',
+  p_counter_name varchar default 'main',
+  p_called_by uuid default null
+)
+returns public.queue_counters
+language sql
+security definer
+set search_path = public
+as $$
+  select public.call_next_customer(p_school_id, p_outlet_name, p_counter_name, 'FITTING', p_called_by);
+$$;
+
+create or replace function public.call_next_pickup_customer(
+  p_school_id varchar,
+  p_outlet_name varchar default '',
+  p_counter_name varchar default 'main',
+  p_called_by uuid default null
+)
+returns public.queue_counters
+language sql
+security definer
+set search_path = public
+as $$
+  select public.call_next_customer(p_school_id, p_outlet_name, p_counter_name, 'PICKUP', p_called_by);
+$$;
