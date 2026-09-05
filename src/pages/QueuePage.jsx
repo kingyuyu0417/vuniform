@@ -1,6 +1,6 @@
 import React, { useMemo, useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Zap } from "lucide-react";
+import { Zap, Bell, RotateCcw, Check } from "lucide-react";
 import { ORDER_STATUS, queueOrderService } from "../services/queueOrderService";
 
 const statusLabel = {
@@ -17,10 +17,13 @@ const statusLabel = {
 
 const activeStatuses = [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STATUS.READY];
 
-export default function QueuePage({ visits = [], currentSchoolId = "", onViewGuest, onAssign }) {
+export default function QueuePage({ visits = [], currentSchoolId = "", outletName = "", calledBy = "", onViewGuest, onAssign }) {
   const navigate = useNavigate();
   const [syncedVisits, setSyncedVisits] = useState(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState(new Date());
+  const [counter, setCounter] = useState(null);
+  const [calling, setCalling] = useState(false);
+  const [callError, setCallError] = useState("");
   const previousDataRef = useRef(visits);
 
   useEffect(() => {
@@ -57,6 +60,65 @@ export default function QueuePage({ visits = [], currentSchoolId = "", onViewGue
     previousDataRef.current = visits;
   }, [visits]);
 
+  useEffect(() => {
+    let active = true;
+    const subscription = queueOrderService.subscribeQueueCounter({
+      schoolId: currentSchoolId,
+      outletName,
+      onChange: (next) => active && setCounter(next),
+    });
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [currentSchoolId, outletName]);
+
+  const callNext = async () => {
+    setCalling(true);
+    setCallError("");
+    try {
+      const next = await queueOrderService.callNext({ schoolId: currentSchoolId, outletName, calledBy });
+      setCounter(next);
+    } catch (error) {
+      setCallError(error.message || "叫號失敗，請先執行 queue-counter.sql");
+    } finally {
+      setCalling(false);
+    }
+  };
+
+  const clearCurrentCall = async () => {
+    setCalling(true);
+    setCallError("");
+    try {
+      const next = await queueOrderService.clearQueueCounter({ schoolId: currentSchoolId, outletName });
+      setCounter(next);
+    } catch (error) {
+      setCallError(error.message || "清除叫號失敗");
+    } finally {
+      setCalling(false);
+    }
+  };
+
+  const startCurrentFitting = async () => {
+    if (!counter?.current_order_id) return;
+    await clearCurrentCall();
+    onAssign?.(visibleVisits.find((visit) => visit.id === counter.current_order_id));
+    navigate(`/fitting?id=${encodeURIComponent(counter.current_order_id)}`);
+  };
+
+  const recallCurrentCall = async () => {
+    setCalling(true);
+    setCallError("");
+    try {
+      const next = await queueOrderService.recallQueueCounter({ schoolId: currentSchoolId, outletName });
+      setCounter(next);
+    } catch (error) {
+      setCallError(error.message || "重叫失敗");
+    } finally {
+      setCalling(false);
+    }
+  };
+
   const visibleVisits = (syncedVisits ?? visits).filter((visit) => {
     if (!currentSchoolId) return true;
     return String(visit.school || visit.school_id || visit.schoolId || "").trim() === String(currentSchoolId).trim();
@@ -82,6 +144,23 @@ export default function QueuePage({ visits = [], currentSchoolId = "", onViewGue
 
         <div style={{ fontSize: 11, color: "#64748b", marginBottom: 12 }}>
           最後更新：{lastUpdatedAt.toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+        </div>
+
+        <div style={{ background: "#1F3A5F", color: "#fff", borderRadius: 12, padding: 14, marginBottom: 12 }}>
+          <div style={{ fontSize: 11, opacity: 0.75 }}>目前叫號{outletName ? ` · ${outletName}` : ""}</div>
+          <div style={{ fontSize: 34, fontWeight: 900, letterSpacing: 2, margin: "2px 0 10px" }}>{counter?.current_queue_number || "未叫號"}</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="pos-btn" onClick={callNext} disabled={calling || Boolean(counter?.current_order_id)} style={{ flex: 1, padding: "10px 8px", borderRadius: 8, background: "#D97757", color: "#fff", fontWeight: 800 }}>
+              <Bell size={15} style={{ verticalAlign: "middle", marginRight: 5 }} />{calling ? "處理中…" : "叫下一位"}
+            </button>
+            <button className="pos-btn" onClick={recallCurrentCall} disabled={calling || !counter?.current_queue_number} style={{ padding: "10px 9px", borderRadius: 8, background: "rgba(255,255,255,0.16)", color: "#fff", fontWeight: 700 }} title="重新叫號">
+              <RotateCcw size={16} />
+            </button>
+            <button className="pos-btn" onClick={startCurrentFitting} disabled={calling || !counter?.current_order_id} style={{ padding: "10px 9px", borderRadius: 8, background: "rgba(255,255,255,0.16)", color: "#fff", fontWeight: 700 }} title="開始目前客人度身">
+              <Check size={16} />
+            </button>
+          </div>
+          {callError && <div style={{ marginTop: 8, color: "#fecaca", fontSize: 12 }}>{callError}</div>}
         </div>
 
         {rows.length === 0 ? (
