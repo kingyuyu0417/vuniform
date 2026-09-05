@@ -13,7 +13,7 @@ import GuestPortalPage from "./pages/GuestPortalPage";
 import GuestQueueStatusPage from "./pages/GuestQueueStatusPage";
 import StaffOrderTracking from "./pages/StaffOrderTracking";
 import QueueDisplayPage from "./pages/QueueDisplayPage";
-import { queueOrderService } from "./services/queueOrderService";
+import { QUEUE_SERVICE, queueOrderService } from "./services/queueOrderService";
 import baseSchoolCatalog from "./schoolCatalog.json";
 import workbookSchoolCatalog from "./workbookSchoolCatalog.json";
 import workbookSchoolOutlets from "./workbookSchoolOutlets.json";
@@ -1749,6 +1749,7 @@ export default function UniformPOS() {
   const publicQueueParam = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("queue") : null;
   const publicRouteSchool = new URLSearchParams(location.search).get("school_id") || new URLSearchParams(location.search).get("school") || "";
   const publicRouteOutlet = new URLSearchParams(location.search).get("outlet") || "";
+  const publicQueueService = (new URLSearchParams(location.search).get("service") || "").toUpperCase();
   const routeId = new URLSearchParams(location.search).get("id");
 
   useEffect(() => {
@@ -1785,7 +1786,7 @@ export default function UniformPOS() {
   }
 
   if (location.pathname === "/queue-display") {
-    return <QueueDisplayPage schoolName={publicRouteSchool} outletName={publicRouteOutlet} />;
+    return <QueueDisplayPage schoolName={publicRouteSchool} outletName={publicRouteOutlet} serviceType={publicQueueService} />;
   }
 
   if (!loaded) {
@@ -1969,7 +1970,7 @@ export default function UniformPOS() {
           />
           <Route
             path="/queue"
-            element={<QueuePage visits={queueVisits} currentSchoolId={selectedSchool || publicRouteSchool} outletName={outletNameForSchool(selectedSchool || publicRouteSchool, schoolMeta)} calledBy={isSupabaseAuthEnabled ? session?.id || "" : ""} onViewGuest={(guest) => setSelectedGuest(guest)} onAssign={handleAssignGuest} />}
+            element={<div style={{ display: "grid", gap: 16 }}><QueuePage serviceType={QUEUE_SERVICE.FITTING} visits={queueVisits} currentSchoolId={selectedSchool || publicRouteSchool} outletName={outletNameForSchool(selectedSchool || publicRouteSchool, schoolMeta)} calledBy={isSupabaseAuthEnabled ? session?.id || "" : ""} onViewGuest={(guest) => setSelectedGuest(guest)} onAssign={handleAssignGuest} /><QueuePage serviceType={QUEUE_SERVICE.PICKUP} visits={queueVisits} currentSchoolId={selectedSchool || publicRouteSchool} outletName={outletNameForSchool(selectedSchool || publicRouteSchool, schoolMeta)} calledBy={isSupabaseAuthEnabled ? session?.id || "" : ""} /></div>}
           />
           <Route
             path="/pickup"
@@ -2082,7 +2083,7 @@ export default function UniformPOS() {
                   <CustomerCheckinPage school={publicRouteSchool} onSubmit={handleGuestSubmit} />
                 )}
                 {tab === "queue" && (
-                  <QueuePage visits={queueVisits} currentSchoolId={selectedSchool || publicRouteSchool} outletName={outletNameForSchool(selectedSchool || publicRouteSchool, schoolMeta)} calledBy={isSupabaseAuthEnabled ? session?.id || "" : ""} onViewGuest={(guest) => setSelectedGuest(guest)} onAssign={handleAssignGuest} />
+                  <div style={{ display: "grid", gap: 16 }}><QueuePage serviceType={QUEUE_SERVICE.FITTING} visits={queueVisits} currentSchoolId={selectedSchool || publicRouteSchool} outletName={outletNameForSchool(selectedSchool || publicRouteSchool, schoolMeta)} calledBy={isSupabaseAuthEnabled ? session?.id || "" : ""} onViewGuest={(guest) => setSelectedGuest(guest)} onAssign={handleAssignGuest} /><QueuePage serviceType={QUEUE_SERVICE.PICKUP} visits={queueVisits} currentSchoolId={selectedSchool || publicRouteSchool} outletName={outletNameForSchool(selectedSchool || publicRouteSchool, schoolMeta)} calledBy={isSupabaseAuthEnabled ? session?.id || "" : ""} /></div>
                 )}
                 {tab === "fitting" && (
                   <FittingPage

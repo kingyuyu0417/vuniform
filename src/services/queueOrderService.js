@@ -7,6 +7,7 @@ export const ORDER_STATUS = {
   COMPLETED: "COMPLETED",
   SKIPPED: "SKIPPED",
 };
+export const QUEUE_SERVICE = { FITTING: "FITTING", PICKUP: "PICKUP" };
 
 const STORAGE_KEY = "uniform-pos-customer-flow-cache";
 const COUNTER_STORAGE_KEY = "uniform-pos-queue-counter-cache";
@@ -44,7 +45,7 @@ const writeQueueCache = (rows) => {
   }
 };
 
-const counterKey = (schoolId = "", outletName = "", counterName = "main") => `${safeSchoolId(schoolId)}::${outletName || "default-outlet"}::${counterName || "main"}`;
+const counterKey = (schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING) => `${safeSchoolId(schoolId)}::${outletName || "default-outlet"}::${counterName || "main"}::${serviceType}`;
 const readCounterCache = () => {
   if (typeof window === "undefined") return {};
   try {
@@ -67,6 +68,7 @@ const normalizeCounter = (row = {}) => ({
   school_id: safeSchoolId(row.school_id),
   outlet_name: row.outlet_name || "",
   counter_name: row.counter_name || "main",
+  service_type: row.service_type || QUEUE_SERVICE.FITTING,
   current_order_id: row.current_order_id || "",
   current_queue_number: row.current_queue_number || "",
   updated_at: row.updated_at || new Date().toISOString(),
@@ -270,8 +272,8 @@ export const queueOrderService = {
     }
   },
 
-  async getQueueCounter({ schoolId = "", outletName = "", counterName = "main" } = {}) {
-    const key = counterKey(schoolId, outletName, counterName);
+  async getQueueCounter({ schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING } = {}) {
+    const key = counterKey(schoolId, outletName, counterName, serviceType);
     if (!isSupabaseConfigured || !supabase) return readCounterCache()[key] || normalizeCounter({ school_id: schoolId, outlet_name: outletName, counter_name: counterName });
 
     try {
@@ -281,24 +283,26 @@ export const queueOrderService = {
         .eq("school_id", safeSchoolId(schoolId))
         .eq("outlet_name", outletName || "")
         .eq("counter_name", counterName || "main")
+        .eq("service_type", serviceType)
         .maybeSingle();
       if (error) throw error;
-      const normalized = normalizeCounter(data || { school_id: schoolId, outlet_name: outletName, counter_name: counterName });
+      const normalized = normalizeCounter(data || { school_id: schoolId, outlet_name: outletName, counter_name: counterName, service_type: serviceType });
       writeCounterCache({ ...readCounterCache(), [key]: normalized });
       return normalized;
     } catch (error) {
       console.warn("queue counter read failed; using local cache", error);
-      return readCounterCache()[key] || normalizeCounter({ school_id: schoolId, outlet_name: outletName, counter_name: counterName });
+      return readCounterCache()[key] || normalizeCounter({ school_id: schoolId, outlet_name: outletName, counter_name: counterName, service_type: serviceType });
     }
   },
 
-  async callNext({ schoolId = "", outletName = "", counterName = "main", calledBy = "" } = {}) {
-    const key = counterKey(schoolId, outletName, counterName);
+  async callNext({ schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING, calledBy = "" } = {}) {
+    const key = counterKey(schoolId, outletName, counterName, serviceType);
     if (isSupabaseConfigured && supabase) {
       const { data, error } = await supabase.rpc("call_next_customer", {
         p_school_id: safeSchoolId(schoolId),
         p_outlet_name: outletName || "",
         p_counter_name: counterName || "main",
+        p_service_type: serviceType,
         p_called_by: calledBy || null,
       });
       if (error) throw error;
@@ -307,33 +311,34 @@ export const queueOrderService = {
       return normalized;
     }
 
-    const orders = await this.listOrders({ schoolId, status: ORDER_STATUS.PENDING });
+    const orders = await this.listOrders({ schoolId, status: serviceType === QUEUE_SERVICE.PICKUP ? ORDER_STATUS.READY : ORDER_STATUS.PENDING });
     const next = orders.sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0];
-    const current = normalizeCounter({ school_id: schoolId, outlet_name: outletName, counter_name: counterName, current_order_id: next?.id, current_queue_number: next?.queue_number });
+    const current = normalizeCounter({ school_id: schoolId, outlet_name: outletName, counter_name: counterName, service_type: serviceType, current_order_id: next?.id, current_queue_number: next?.queue_number });
     writeCounterCache({ ...readCounterCache(), [key]: current });
     return current;
   },
 
-  async clearQueueCounter({ schoolId = "", outletName = "", counterName = "main" } = {}) {
-    const key = counterKey(schoolId, outletName, counterName);
+  async clearQueueCounter({ schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING } = {}) {
+    const key = counterKey(schoolId, outletName, counterName, serviceType);
     if (isSupabaseConfigured && supabase) {
       const { data, error } = await supabase.rpc("clear_queue_counter", {
         p_school_id: safeSchoolId(schoolId),
         p_outlet_name: outletName || "",
         p_counter_name: counterName || "main",
+        p_service_type: serviceType,
       });
       if (error) throw error;
       const normalized = normalizeCounter(data);
       writeCounterCache({ ...readCounterCache(), [key]: normalized });
       return normalized;
     }
-    const current = normalizeCounter({ school_id: schoolId, outlet_name: outletName, counter_name: counterName });
+    const current = normalizeCounter({ school_id: schoolId, outlet_name: outletName, counter_name: counterName, service_type: serviceType });
     writeCounterCache({ ...readCounterCache(), [key]: current });
     return current;
   },
 
-  async recallQueueCounter({ schoolId = "", outletName = "", counterName = "main" } = {}) {
-    const current = await this.getQueueCounter({ schoolId, outletName, counterName });
+  async recallQueueCounter({ schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING } = {}) {
+    const current = await this.getQueueCounter({ schoolId, outletName, counterName, serviceType });
     const refreshed = { ...current, updated_at: new Date().toISOString() };
     if (isSupabaseConfigured && supabase && current.current_queue_number) {
       const { data, error } = await supabase
@@ -342,23 +347,24 @@ export const queueOrderService = {
         .eq("school_id", safeSchoolId(schoolId))
         .eq("outlet_name", outletName || "")
         .eq("counter_name", counterName || "main")
+        .eq("service_type", serviceType)
         .select("school_id, outlet_name, counter_name, current_order_id, current_queue_number, updated_at")
         .single();
       if (error) throw error;
       return normalizeCounter(data);
     }
-    const key = counterKey(schoolId, outletName, counterName);
+    const key = counterKey(schoolId, outletName, counterName, serviceType);
     writeCounterCache({ ...readCounterCache(), [key]: refreshed });
     return refreshed;
   },
 
-  subscribeQueueCounter({ schoolId = "", outletName = "", counterName = "main", onChange }) {
-    this.getQueueCounter({ schoolId, outletName, counterName }).then((counter) => onChange?.(counter));
+  subscribeQueueCounter({ schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING, onChange }) {
+    this.getQueueCounter({ schoolId, outletName, counterName, serviceType }).then((counter) => onChange?.(counter));
     if (!isSupabaseConfigured || !supabase) return { unsubscribe() {} };
     const channel = supabase
-      .channel(`queue-counter-${counterKey(schoolId, outletName, counterName)}`)
+      .channel(`queue-counter-${counterKey(schoolId, outletName, counterName, serviceType)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "queue_counters", filter: `school_id=eq.${safeSchoolId(schoolId)}` }, () => {
-        this.getQueueCounter({ schoolId, outletName, counterName }).then((counter) => onChange?.(counter));
+        this.getQueueCounter({ schoolId, outletName, counterName, serviceType }).then((counter) => onChange?.(counter));
       })
       .subscribe();
     return { unsubscribe() { supabase.removeChannel(channel); } };

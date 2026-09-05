@@ -1,7 +1,7 @@
 import React, { useMemo, useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Zap, Bell, RotateCcw, Check } from "lucide-react";
-import { ORDER_STATUS, queueOrderService } from "../services/queueOrderService";
+import { ORDER_STATUS, QUEUE_SERVICE, queueOrderService } from "../services/queueOrderService";
 
 const statusLabel = {
   waiting: "待處理",
@@ -17,7 +17,7 @@ const statusLabel = {
 
 const activeStatuses = [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STATUS.READY];
 
-export default function QueuePage({ visits = [], currentSchoolId = "", outletName = "", calledBy = "", onViewGuest, onAssign }) {
+export default function QueuePage({ visits = [], currentSchoolId = "", outletName = "", calledBy = "", serviceType = QUEUE_SERVICE.FITTING, onViewGuest, onAssign }) {
   const navigate = useNavigate();
   const [syncedVisits, setSyncedVisits] = useState(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState(new Date());
@@ -32,8 +32,9 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
       try {
         const orders = await queueOrderService.listOrders({ schoolId: currentSchoolId });
         if (!active || !Array.isArray(orders)) return;
+        const targetStatus = serviceType === QUEUE_SERVICE.PICKUP ? ORDER_STATUS.READY : ORDER_STATUS.PENDING;
         const normalized = orders
-          .filter((order) => activeStatuses.includes(order.status))
+          .filter((order) => order.status === targetStatus)
           .map((order) => ({
             id: order.id,
             queueNo: order.queue_number || order.queueNumber || "",
@@ -52,7 +53,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     };
     syncVisits();
     return () => { active = false; };
-  }, [currentSchoolId, visits]);
+  }, [currentSchoolId, visits, serviceType]);
 
   useEffect(() => {
     // 更新 lastUpdatedAt 和 previousDataRef 當 visits 改變時
@@ -65,19 +66,20 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     const subscription = queueOrderService.subscribeQueueCounter({
       schoolId: currentSchoolId,
       outletName,
+      serviceType,
       onChange: (next) => active && setCounter(next),
     });
     return () => {
       active = false;
       subscription.unsubscribe();
     };
-  }, [currentSchoolId, outletName]);
+  }, [currentSchoolId, outletName, serviceType]);
 
   const callNext = async () => {
     setCalling(true);
     setCallError("");
     try {
-      const next = await queueOrderService.callNext({ schoolId: currentSchoolId, outletName, calledBy });
+      const next = await queueOrderService.callNext({ schoolId: currentSchoolId, outletName, serviceType, calledBy });
       setCounter(next);
     } catch (error) {
       setCallError(error.message || "叫號失敗，請先執行 queue-counter.sql");
@@ -90,7 +92,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     setCalling(true);
     setCallError("");
     try {
-      const next = await queueOrderService.clearQueueCounter({ schoolId: currentSchoolId, outletName });
+        const next = await queueOrderService.clearQueueCounter({ schoolId: currentSchoolId, outletName, serviceType });
       setCounter(next);
     } catch (error) {
       setCallError(error.message || "清除叫號失敗");
@@ -106,11 +108,24 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     navigate(`/fitting?id=${encodeURIComponent(counter.current_order_id)}`);
   };
 
+  const completeCurrentPickup = async () => {
+    if (!counter?.current_order_id) return;
+    setCalling(true);
+    setCallError("");
+    try {
+      await queueOrderService.updateStatus(counter.current_order_id, ORDER_STATUS.COMPLETED, { completed_at: new Date().toISOString() }, currentSchoolId, ORDER_STATUS.READY);
+      await clearCurrentCall();
+    } catch (error) {
+      setCallError(error.message || "取貨完成更新失敗");
+      setCalling(false);
+    }
+  };
+
   const recallCurrentCall = async () => {
     setCalling(true);
     setCallError("");
     try {
-      const next = await queueOrderService.recallQueueCounter({ schoolId: currentSchoolId, outletName });
+      const next = await queueOrderService.recallQueueCounter({ schoolId: currentSchoolId, outletName, serviceType });
       setCounter(next);
     } catch (error) {
       setCallError(error.message || "重叫失敗");
@@ -123,16 +138,15 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     if (!currentSchoolId) return true;
     return String(visit.school || visit.school_id || visit.schoolId || "").trim() === String(currentSchoolId).trim();
   });
-  const rows = useMemo(
-    () => visibleVisits.filter((visit) => activeStatuses.includes(visit.status)),
-    [visibleVisits]
-  );
+  const targetStatus = serviceType === QUEUE_SERVICE.PICKUP ? ORDER_STATUS.READY : ORDER_STATUS.PENDING;
+  const serviceLabel = serviceType === QUEUE_SERVICE.PICKUP ? "取貨排隊管理" : "度身排隊管理";
+  const rows = useMemo(() => visibleVisits.filter((visit) => visit.status === targetStatus), [visibleVisits, targetStatus]);
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <div style={{ background: "#F7F7F5", borderRadius: 12, padding: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#1F3A5F" }}>待命單 / 排隊管理</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#1F3A5F" }}>{serviceLabel}</div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ fontSize: 12, color: "#66717D" }}>{rows.length} 位客人</div>
             <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#dcfce7", color: "#166534", padding: "6px 10px", borderRadius: 999, fontWeight: 800, fontSize: 11 }}>
@@ -156,7 +170,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
             <button className="pos-btn" onClick={recallCurrentCall} disabled={calling || !counter?.current_queue_number} style={{ padding: "10px 9px", borderRadius: 8, background: "rgba(255,255,255,0.16)", color: "#fff", fontWeight: 700 }} title="重新叫號">
               <RotateCcw size={16} />
             </button>
-            <button className="pos-btn" onClick={startCurrentFitting} disabled={calling || !counter?.current_order_id} style={{ padding: "10px 9px", borderRadius: 8, background: "rgba(255,255,255,0.16)", color: "#fff", fontWeight: 700 }} title="開始目前客人度身">
+            <button className="pos-btn" onClick={serviceType === QUEUE_SERVICE.PICKUP ? completeCurrentPickup : startCurrentFitting} disabled={calling || !counter?.current_order_id} style={{ padding: "10px 9px", borderRadius: 8, background: "rgba(255,255,255,0.16)", color: "#fff", fontWeight: 700 }} title={serviceType === QUEUE_SERVICE.PICKUP ? "完成目前取貨" : "開始目前客人度身"}>
               <Check size={16} />
             </button>
           </div>
@@ -206,7 +220,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
                 >
                   查看資料
                 </button>
-                {visit.status === ORDER_STATUS.PENDING ? (
+                {serviceType === QUEUE_SERVICE.FITTING && visit.status === ORDER_STATUS.PENDING ? (
                   <button
                     className="pos-btn"
                     onClick={() => {
@@ -231,7 +245,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
                   </button>
                 ) : (
                   <div style={{ flex: 1, background: "#F1F5F9", color: "#64748B", padding: "8px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600, textAlign: "center" }}>
-                    {statusLabel[visit.status] || "處理中"}
+                    {serviceType === QUEUE_SERVICE.PICKUP ? "前往取貨頁" : (statusLabel[visit.status] || "處理中")}
                   </div>
                 )}
               </div>

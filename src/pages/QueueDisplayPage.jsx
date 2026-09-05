@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import { QrCode, Users, Volume2 } from "lucide-react";
 import qrcodeGenerator from "qrcode-generator";
-import { ORDER_STATUS, queueOrderService } from "../services/queueOrderService";
+import { ORDER_STATUS, QUEUE_SERVICE, queueOrderService } from "../services/queueOrderService";
 
 const activeStatuses = [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STATUS.READY];
 
-export default function QueueDisplayPage({ schoolName = "", outletName = "", counterName = "main" }) {
+function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING, embedded = false }) {
   const [counter, setCounter] = useState(null);
   const [waitingCount, setWaitingCount] = useState(0);
   const [qrCode, setQrCode] = useState("");
@@ -27,7 +27,8 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
     let active = true;
     const updateOrders = (orders) => {
       if (!active) return;
-      setWaitingCount((orders || []).filter((order) => activeStatuses.includes(order.status)).length);
+      const waitingStatus = serviceType === QUEUE_SERVICE.PICKUP ? ORDER_STATUS.READY : ORDER_STATUS.PENDING;
+      setWaitingCount((orders || []).filter((order) => order.status === waitingStatus).length);
     };
     queueOrderService.listOrders({ schoolId: schoolName }).then(updateOrders).catch(() => {});
     const ordersSubscription = queueOrderService.subscribe({ schoolId: schoolName, onChange: updateOrders });
@@ -35,6 +36,7 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
       schoolId: schoolName,
       outletName,
       counterName,
+      serviceType,
       onChange: (next) => {
         if (!active) return;
         setCounter((previous) => {
@@ -51,7 +53,7 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
       ordersSubscription.unsubscribe();
       counterSubscription.unsubscribe();
     };
-  }, [schoolName, outletName, counterName]);
+  }, [schoolName, outletName, counterName, serviceType]);
 
   useEffect(() => {
     if (!counter?.current_queue_number) return;
@@ -99,7 +101,8 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
     await playChime();
     if (!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(`請排隊號碼 ${counterToAnnounce.current_queue_number}，請到隔離房間取貨。`);
+    const destination = serviceType === QUEUE_SERVICE.PICKUP ? "隔離房間取貨" : "度身房間度身";
+    const utterance = new SpeechSynthesisUtterance(`請排隊號碼 ${counterToAnnounce.current_queue_number}，請到${destination}。`);
     utterance.lang = "zh-HK";
     const voices = window.speechSynthesis.getVoices();
     utterance.voice = voices.find((voice) => voice.lang.toLowerCase() === "zh-hk")
@@ -117,22 +120,22 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
   };
 
   return (
-    <main style={styles.page}>
-      <style>{`@keyframes queue-call-flash { 0%, 49% { opacity: 1; } 50%, 100% { opacity: .18; } } @keyframes queue-call-pop { from { transform: scale(1); } to { transform: scale(1.06); } }`}</style>
+    <main style={{ ...styles.page, ...(embedded ? styles.embeddedPage : {}) }}>
+      <style>{`@keyframes queue-call-flash { 0%, 49% { opacity: 1; } 50%, 100% { opacity: .18; } } @keyframes queue-call-pop { from { transform: scale(1); } to { transform: scale(1.06); } } @media (max-width: 760px) { .queue-display-grid { grid-template-columns: 1fr !important; } }`}</style>
       <div style={styles.header}>
         <div style={styles.headerText}>
-          <div style={styles.eyebrow}>雲端排隊系統 · NOW SERVING</div>
+          <div style={styles.eyebrow}>雲端排隊系統 · {serviceType === QUEUE_SERVICE.PICKUP ? "PICKUP" : "FITTING"}</div>
           <h1 style={styles.school}>{schoolName || "校服服務中心"}</h1>
           <div style={styles.outlet}>{outletName || counterName}</div>
         </div>
         {qrCode && <div style={styles.headerQr}><img src={qrCode} alt="客人登記 QR code" style={styles.headerQrImage} /><div><QrCode size={13} /> 登記／查詢</div></div>}
       </div>
       <section style={styles.hero} aria-live="polite">
-        <div style={styles.label}>{isCalling ? "請立即到櫃台" : "現正服務"}</div>
+        <div style={styles.label}>{isCalling ? (serviceType === QUEUE_SERVICE.PICKUP ? "請立即到隔離房間取貨" : "請立即到度身房間") : (serviceType === QUEUE_SERVICE.PICKUP ? "現正取貨" : "現正度身")}</div>
         <div key={`${counter?.current_queue_number || "empty"}-${counter?.updated_at || ""}`} style={{ ...styles.queueNumber, ...(isCalling ? styles.queueNumberCalling : {}) }}>
           {counter?.current_queue_number || "--"}
         </div>
-        <div style={{ ...styles.counter, ...(isCalling ? styles.counterCalling : {}) }}>{isCalling ? "請到隔離房間取貨" : "請留意叫號"}</div>
+        <div style={{ ...styles.counter, ...(isCalling ? styles.counterCalling : {}) }}>{isCalling ? (serviceType === QUEUE_SERVICE.PICKUP ? "請到隔離房間取貨" : "請到度身房間") : "請留意叫號"}</div>
         <button type="button" onClick={enableAutomaticAudio} style={styles.announceButton} title="啟用自動叫號提示">
           <Volume2 size={18} /> 啟用自動提示
         </button>
@@ -144,7 +147,30 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
   );
 }
 
+export default function QueueDisplayPage({ schoolName = "", outletName = "", counterName = "main", serviceType = "" }) {
+  const lanes = serviceType === QUEUE_SERVICE.FITTING || serviceType === QUEUE_SERVICE.PICKUP
+    ? [serviceType]
+    : [QUEUE_SERVICE.FITTING, QUEUE_SERVICE.PICKUP];
+
+  return (
+    <div className="queue-display-grid" style={styles.displayGrid}>
+      {lanes.map((lane) => (
+        <QueueDisplayLane
+          key={lane}
+          schoolName={schoolName}
+          outletName={outletName}
+          counterName={counterName}
+          serviceType={lane}
+          embedded={lanes.length > 1}
+        />
+      ))}
+    </div>
+  );
+}
+
 const styles = {
+  displayGrid: { minHeight: "100vh", display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", background: "#071426", gap: 2 },
+  embeddedPage: { minHeight: "100vh", padding: "3vh 3vw", gap: 18 },
   page: { minHeight: "100vh", boxSizing: "border-box", padding: "5vh 6vw", background: "#071426", color: "#fff", fontFamily: "system-ui, sans-serif", display: "grid", gridTemplateRows: "auto 1fr auto", gap: 28 },
   header: { display: "flex", justifyContent: "center", alignItems: "center", gap: 22, textAlign: "center", flexWrap: "wrap" },
   headerText: { minWidth: 0 },
