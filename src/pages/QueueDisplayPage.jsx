@@ -9,6 +9,7 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
   const [counter, setCounter] = useState(null);
   const [waitingCount, setWaitingCount] = useState(0);
   const [qrCode, setQrCode] = useState("");
+  const [isCalling, setIsCalling] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -22,7 +23,16 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
       schoolId: schoolName,
       outletName,
       counterName,
-      onChange: (next) => active && setCounter(next),
+      onChange: (next) => {
+        if (!active) return;
+        setCounter((previous) => {
+          if (next?.current_queue_number && (next.current_queue_number !== previous?.current_queue_number || next.updated_at !== previous?.updated_at)) {
+            setIsCalling(true);
+            window.setTimeout(() => active && setIsCalling(false), 6000);
+          }
+          return next;
+        });
+      },
     });
     return () => {
       active = false;
@@ -51,15 +61,18 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
 
   return (
     <main style={styles.page}>
+      <style>{`@keyframes queue-call-flash { 0%, 49% { opacity: 1; } 50%, 100% { opacity: .18; } } @keyframes queue-call-pop { from { transform: scale(1); } to { transform: scale(1.06); } }`}</style>
       <div style={styles.header}>
         <div style={styles.eyebrow}>雲端排隊系統 · NOW SERVING</div>
         <h1 style={styles.school}>{schoolName || "校服服務中心"}</h1>
         <div style={styles.outlet}>{outletName || counterName}</div>
       </div>
       <section style={styles.hero} aria-live="polite">
-        <div style={styles.label}>現正服務</div>
-        <div style={styles.queueNumber}>{counter?.current_queue_number || "--"}</div>
-        <div style={styles.counter}>{counterName} · 請留意叫號</div>
+        <div style={styles.label}>{isCalling ? "請立即到櫃台" : "現正服務"}</div>
+        <div key={`${counter?.current_queue_number || "empty"}-${counter?.updated_at || ""}`} style={{ ...styles.queueNumber, ...(isCalling ? styles.queueNumberCalling : {}) }}>
+          {counter?.current_queue_number || "--"}
+        </div>
+        <div style={{ ...styles.counter, ...(isCalling ? styles.counterCalling : {}) }}>{counterName} · {isCalling ? "請留意閃動號碼" : "請留意叫號"}</div>
         <button type="button" onClick={announce} style={styles.announceButton} title="播放叫號提示">
           <Volume2 size={18} /> 播放提示
         </button>
@@ -81,7 +94,9 @@ const styles = {
   hero: { alignSelf: "center", textAlign: "center", padding: "5vh 4vw", border: "1px solid #1e5a85", borderRadius: 18, background: "#0b2038", boxShadow: "0 0 50px rgba(14,165,233,.18)" },
   label: { color: "#bae6fd", fontSize: "clamp(18px, 3vw, 32px)", fontWeight: 700 },
   queueNumber: { margin: "10px 0", fontSize: "clamp(92px, 20vw, 260px)", lineHeight: .9, fontWeight: 950, letterSpacing: 8, color: "#fff" },
+  queueNumberCalling: { animation: "queue-call-flash 0.8s steps(2, end) infinite, queue-call-pop 0.8s ease-in-out infinite alternate", color: "#fef08a", textShadow: "0 0 18px #facc15, 0 0 42px #f59e0b" },
   counter: { color: "#a8b8cc", fontSize: "clamp(16px, 2vw, 25px)" },
+  counterCalling: { color: "#fde68a", fontWeight: 900 },
   announceButton: { marginTop: 22, display: "inline-flex", alignItems: "center", gap: 8, border: "1px solid #38bdf8", borderRadius: 8, padding: "10px 16px", background: "transparent", color: "#bae6fd", fontWeight: 800, cursor: "pointer" },
   footer: { display: "flex", justifyContent: "space-between", alignItems: "end", gap: 24, flexWrap: "wrap" },
   waiting: { display: "flex", alignItems: "center", gap: 10, color: "#bae6fd", fontSize: "clamp(16px, 2vw, 25px)" },
