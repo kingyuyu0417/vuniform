@@ -383,7 +383,10 @@ export const queueOrderService = {
     if (!isSupabaseConfigured || !supabase) return { unsubscribe() {} };
     const channel = supabase
       .channel(`queue-counter-${counterKey(schoolId, outletName, counterName, serviceType)}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "queue_counters", filter: `school_id=eq.${safeSchoolId(schoolId)}` }, () => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "queue_counters", filter: `school_id=eq.${safeSchoolId(schoolId)}` }, (payload) => {
+        const changed = payload?.new || payload?.old || {};
+        if (changed.service_type && changed.service_type !== serviceType) return;
+        if (changed.counter_name && changed.counter_name !== counterName) return;
         this.getQueueCounter({ schoolId, outletName, counterName, serviceType }).then((counter) => onChange?.(counter));
       })
       .subscribe();

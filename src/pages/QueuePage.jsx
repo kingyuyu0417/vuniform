@@ -69,7 +69,10 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
       outletName,
       counterName,
       serviceType,
-      onChange: (next) => active && setCounter(next),
+      onChange: (next) => {
+        if (!active || next?.service_type !== serviceType || next?.counter_name !== counterName) return;
+        setCounter(next);
+      },
     });
     return () => {
       active = false;

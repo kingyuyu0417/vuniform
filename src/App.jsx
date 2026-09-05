@@ -1970,7 +1970,7 @@ export default function UniformPOS() {
           />
           <Route
             path="/queue"
-            element={<div style={{ display: "grid", gap: 16 }}><QueuePage serviceType={QUEUE_SERVICE.FITTING} visits={queueVisits} currentSchoolId={selectedSchool || publicRouteSchool} outletName={outletNameForSchool(selectedSchool || publicRouteSchool, schoolMeta)} calledBy={isSupabaseAuthEnabled ? session?.id || "" : ""} onViewGuest={(guest) => setSelectedGuest(guest)} onAssign={handleAssignGuest} /><QueuePage serviceType={QUEUE_SERVICE.PICKUP} visits={queueVisits} currentSchoolId={selectedSchool || publicRouteSchool} outletName={outletNameForSchool(selectedSchool || publicRouteSchool, schoolMeta)} calledBy={isSupabaseAuthEnabled ? session?.id || "" : ""} /></div>}
+            element={<div style={{ display: "grid", gap: 16 }}><QueuePage key="fitting-queue" serviceType={QUEUE_SERVICE.FITTING} visits={queueVisits} currentSchoolId={selectedSchool || publicRouteSchool} outletName={outletNameForSchool(selectedSchool || publicRouteSchool, schoolMeta)} calledBy={isSupabaseAuthEnabled ? session?.id || "" : ""} onViewGuest={(guest) => setSelectedGuest(guest)} onAssign={handleAssignGuest} /><QueuePage key="pickup-queue" serviceType={QUEUE_SERVICE.PICKUP} visits={queueVisits} currentSchoolId={selectedSchool || publicRouteSchool} outletName={outletNameForSchool(selectedSchool || publicRouteSchool, schoolMeta)} calledBy={isSupabaseAuthEnabled ? session?.id || "" : ""} /></div>}
           />
           <Route
             path="/pickup"
@@ -2083,7 +2083,7 @@ export default function UniformPOS() {
                   <CustomerCheckinPage school={publicRouteSchool} onSubmit={handleGuestSubmit} />
                 )}
                 {tab === "queue" && (
-                  <div style={{ display: "grid", gap: 16 }}><QueuePage serviceType={QUEUE_SERVICE.FITTING} visits={queueVisits} currentSchoolId={selectedSchool || publicRouteSchool} outletName={outletNameForSchool(selectedSchool || publicRouteSchool, schoolMeta)} calledBy={isSupabaseAuthEnabled ? session?.id || "" : ""} onViewGuest={(guest) => setSelectedGuest(guest)} onAssign={handleAssignGuest} /><QueuePage serviceType={QUEUE_SERVICE.PICKUP} visits={queueVisits} currentSchoolId={selectedSchool || publicRouteSchool} outletName={outletNameForSchool(selectedSchool || publicRouteSchool, schoolMeta)} calledBy={isSupabaseAuthEnabled ? session?.id || "" : ""} /></div>
+                  <div style={{ display: "grid", gap: 16 }}><QueuePage key="fitting-queue" serviceType={QUEUE_SERVICE.FITTING} visits={queueVisits} currentSchoolId={selectedSchool || publicRouteSchool} outletName={outletNameForSchool(selectedSchool || publicRouteSchool, schoolMeta)} calledBy={isSupabaseAuthEnabled ? session?.id || "" : ""} onViewGuest={(guest) => setSelectedGuest(guest)} onAssign={handleAssignGuest} /><QueuePage key="pickup-queue" serviceType={QUEUE_SERVICE.PICKUP} visits={queueVisits} currentSchoolId={selectedSchool || publicRouteSchool} outletName={outletNameForSchool(selectedSchool || publicRouteSchool, schoolMeta)} calledBy={isSupabaseAuthEnabled ? session?.id || "" : ""} /></div>
                 )}
                 {tab === "fitting" && (
                   <FittingPage
