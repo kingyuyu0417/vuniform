@@ -287,6 +287,7 @@ export const queueOrderService = {
         .maybeSingle();
       if (error) throw error;
       const normalized = normalizeCounter(data || { school_id: schoolId, outlet_name: outletName, counter_name: counterName, service_type: serviceType });
+      if (normalized.service_type !== serviceType) throw new Error("叫號 counter 服務類型不一致");
       writeCounterCache({ ...readCounterCache(), [key]: normalized });
       return normalized;
     } catch (error) {
@@ -317,6 +318,14 @@ export const queueOrderService = {
     const current = normalizeCounter({ school_id: schoolId, outlet_name: outletName, counter_name: counterName, service_type: serviceType, current_order_id: next?.id, current_queue_number: next?.queue_number });
     writeCounterCache({ ...readCounterCache(), [key]: current });
     return current;
+  },
+
+  callNextFitting(options = {}) {
+    return this.callNext({ ...options, counterName: "fitting", serviceType: QUEUE_SERVICE.FITTING });
+  },
+
+  callNextPickup(options = {}) {
+    return this.callNext({ ...options, counterName: "pickup", serviceType: QUEUE_SERVICE.PICKUP });
   },
 
   async clearQueueCounter({ schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING } = {}) {
@@ -357,6 +366,14 @@ export const queueOrderService = {
     const key = counterKey(schoolId, outletName, counterName, serviceType);
     writeCounterCache({ ...readCounterCache(), [key]: refreshed });
     return refreshed;
+  },
+
+  recallFitting(options = {}) {
+    return this.recallQueueCounter({ ...options, counterName: "fitting", serviceType: QUEUE_SERVICE.FITTING });
+  },
+
+  recallPickup(options = {}) {
+    return this.recallQueueCounter({ ...options, counterName: "pickup", serviceType: QUEUE_SERVICE.PICKUP });
   },
 
   subscribeQueueCounter({ schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING, onChange }) {

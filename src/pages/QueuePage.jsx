@@ -81,7 +81,9 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     setCalling(true);
     setCallError("");
     try {
-      const next = await queueOrderService.callNext({ schoolId: currentSchoolId, outletName, counterName, serviceType, calledBy });
+      const next = serviceType === QUEUE_SERVICE.PICKUP
+        ? await queueOrderService.callNextPickup({ schoolId: currentSchoolId, outletName, calledBy })
+        : await queueOrderService.callNextFitting({ schoolId: currentSchoolId, outletName, calledBy });
       setCounter(next);
     } catch (error) {
       setCallError(error.message || "叫號失敗，請先執行 queue-counter.sql");
@@ -127,7 +129,9 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     setCalling(true);
     setCallError("");
     try {
-        const next = await queueOrderService.recallQueueCounter({ schoolId: currentSchoolId, outletName, counterName, serviceType });
+        const next = serviceType === QUEUE_SERVICE.PICKUP
+          ? await queueOrderService.recallPickup({ schoolId: currentSchoolId, outletName })
+          : await queueOrderService.recallFitting({ schoolId: currentSchoolId, outletName });
       setCounter(next);
     } catch (error) {
       setCallError(error.message || "重叫失敗");
