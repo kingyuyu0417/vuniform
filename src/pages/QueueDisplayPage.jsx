@@ -5,7 +5,7 @@ import { ORDER_STATUS, QUEUE_SERVICE, queueOrderService } from "../services/queu
 
 const activeStatuses = [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STATUS.READY];
 
-function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING, embedded = false }) {
+function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING, embedded = false, showHeader = true }) {
   const [counter, setCounter] = useState(null);
   const [waitingCount, setWaitingCount] = useState(0);
   const [qrCode, setQrCode] = useState("");
@@ -122,17 +122,17 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
   return (
     <main style={{ ...styles.page, ...(embedded ? styles.embeddedPage : {}) }}>
       <style>{`@keyframes queue-call-flash { 0%, 49% { opacity: 1; } 50%, 100% { opacity: .18; } } @keyframes queue-call-pop { from { transform: scale(1); } to { transform: scale(1.06); } } @media (max-width: 760px) { .queue-display-grid { grid-template-columns: 1fr !important; } }`}</style>
-      <div style={styles.header}>
+      {showHeader && <div style={styles.header}>
         <div style={styles.headerText}>
           <div style={styles.eyebrow}>雲端排隊系統 · {serviceType === QUEUE_SERVICE.PICKUP ? "PICKUP" : "FITTING"}</div>
           <h1 style={styles.school}>{schoolName || "校服服務中心"}</h1>
           <div style={styles.outlet}>{outletName || counterName}</div>
         </div>
         {qrCode && <div style={styles.headerQr}><img src={qrCode} alt="客人登記 QR code" style={styles.headerQrImage} /><div><QrCode size={13} /> 登記／查詢</div></div>}
-      </div>
+      </div>}
       <section style={styles.hero} aria-live="polite">
         <div style={styles.label}>{isCalling ? (serviceType === QUEUE_SERVICE.PICKUP ? "請立即到隔離房間取貨" : "請立即到度身房間") : (serviceType === QUEUE_SERVICE.PICKUP ? "現正取貨" : "現正度身")}</div>
-        <div key={`${counter?.current_queue_number || "empty"}-${counter?.updated_at || ""}`} style={{ ...styles.queueNumber, ...(isCalling ? styles.queueNumberCalling : {}) }}>
+        <div key={`${counter?.current_queue_number || "empty"}-${counter?.updated_at || ""}`} style={{ ...styles.queueNumber, ...(embedded ? styles.embeddedQueueNumber : {}), ...(isCalling ? styles.queueNumberCalling : {}) }}>
           {counter?.current_queue_number || "--"}
         </div>
         <div style={{ ...styles.counter, ...(isCalling ? styles.counterCalling : {}) }}>{isCalling ? (serviceType === QUEUE_SERVICE.PICKUP ? "請到隔離房間取貨" : "請到度身房間") : "請留意叫號"}</div>
@@ -151,9 +151,32 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
   const lanes = serviceType === QUEUE_SERVICE.FITTING || serviceType === QUEUE_SERVICE.PICKUP
     ? [serviceType]
     : [QUEUE_SERVICE.FITTING, QUEUE_SERVICE.PICKUP];
+  const isDualDisplay = lanes.length > 1;
+  const [qrCode, setQrCode] = useState("");
+
+  useEffect(() => {
+    if (!isDualDisplay) return;
+    const url = `${window.location.origin}/checkin?school_id=${encodeURIComponent(schoolName)}`;
+    try {
+      const qr = qrcodeGenerator(0, "M");
+      qr.addData(url);
+      qr.make();
+      setQrCode(qr.createDataURL(8));
+    } catch (error) {
+      console.error("叫號頁 QR 生成失敗", error);
+    }
+  }, [isDualDisplay, schoolName]);
 
   return (
     <div className="queue-display-grid" style={styles.displayGrid}>
+      {isDualDisplay && <div style={styles.sharedHeader}>
+        <div style={styles.sharedHeaderText}>
+          <div style={styles.eyebrow}>雲端排隊系統 · NOW SERVING</div>
+          <h1 style={styles.school}>{schoolName || "校服服務中心"}</h1>
+          <div style={styles.outlet}>{outletName || counterName}</div>
+        </div>
+        {qrCode && <div style={styles.headerQr}><img src={qrCode} alt="客人登記 QR code" style={styles.headerQrImage} /><div><QrCode size={13} /> 登記／查詢</div></div>}
+      </div>}
       {lanes.map((lane) => (
         <QueueDisplayLane
           key={lane}
@@ -161,7 +184,8 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
           outletName={outletName}
           counterName={counterName}
           serviceType={lane}
-          embedded={lanes.length > 1}
+          embedded={isDualDisplay}
+          showHeader={!isDualDisplay}
         />
       ))}
     </div>
@@ -170,7 +194,9 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
 
 const styles = {
   displayGrid: { minHeight: "100vh", display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", background: "#071426", gap: 2 },
-  embeddedPage: { minHeight: "100vh", padding: "3vh 3vw", gap: 18 },
+  embeddedPage: { minHeight: 0, padding: "3vh 3vw", gap: 18, border: "1px solid #1e5a85", borderRadius: 16, overflow: "hidden" },
+  sharedHeader: { gridColumn: "1 / -1", display: "flex", justifyContent: "center", alignItems: "center", gap: 22, padding: "3vh 4vw 1vh", textAlign: "center", flexWrap: "wrap" },
+  sharedHeaderText: { minWidth: 0 },
   page: { minHeight: "100vh", boxSizing: "border-box", padding: "5vh 6vw", background: "#071426", color: "#fff", fontFamily: "system-ui, sans-serif", display: "grid", gridTemplateRows: "auto 1fr auto", gap: 28 },
   header: { display: "flex", justifyContent: "center", alignItems: "center", gap: 22, textAlign: "center", flexWrap: "wrap" },
   headerText: { minWidth: 0 },
@@ -182,6 +208,7 @@ const styles = {
   hero: { alignSelf: "center", textAlign: "center", padding: "5vh 4vw", border: "1px solid #1e5a85", borderRadius: 18, background: "#0b2038", boxShadow: "0 0 50px rgba(14,165,233,.18)" },
   label: { color: "#bae6fd", fontSize: "clamp(18px, 3vw, 32px)", fontWeight: 700 },
   queueNumber: { margin: "10px 0", fontSize: "clamp(92px, 20vw, 260px)", lineHeight: .9, fontWeight: 950, letterSpacing: 8, color: "#fff" },
+  embeddedQueueNumber: { fontSize: "clamp(72px, 10vw, 180px)", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   queueNumberCalling: { animation: "queue-call-flash 0.8s steps(2, end) infinite, queue-call-pop 0.8s ease-in-out infinite alternate", color: "#fef08a", textShadow: "0 0 18px #facc15, 0 0 42px #f59e0b" },
   counter: { color: "#a8b8cc", fontSize: "clamp(16px, 2vw, 25px)" },
   counterCalling: { color: "#fde68a", fontWeight: 900 },
