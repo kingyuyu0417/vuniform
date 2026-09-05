@@ -1978,7 +1978,7 @@ export default function UniformPOS() {
           />
           <Route
             path="/cashier"
-            element={<CashierVerifyPage currentSchoolId={selectedSchool || publicRouteSchool} products={products.filter((p) => schoolOf(p) === (selectedSchool || publicRouteSchool))} onConfirmPayment={handleConfirmPayment} />}
+            element={<CashierVerifyPage currentSchoolId={selectedSchool || publicRouteSchool} products={products.filter((p) => schoolOf(p) === (selectedSchool || publicRouteSchool))} onConfirmPayment={handleConfirmPayment} onReadyForSale={handleReadyForSale} />}
           />
           <Route
             path="/track"
@@ -2099,7 +2099,7 @@ export default function UniformPOS() {
                   <PickupPage currentSchoolId={selectedSchool || publicRouteSchool} onReadyForSale={handleReadyForSale} />
                 )}
                 {tab === "cashier" && (
-                  <CashierVerifyPage currentSchoolId={selectedSchool || publicRouteSchool} products={products.filter((p) => schoolOf(p) === (selectedSchool || publicRouteSchool))} onConfirmPayment={handleConfirmPayment} />
+                  <CashierVerifyPage currentSchoolId={selectedSchool || publicRouteSchool} products={products.filter((p) => schoolOf(p) === (selectedSchool || publicRouteSchool))} onConfirmPayment={handleConfirmPayment} onReadyForSale={handleReadyForSale} />
                 )}
                 {tab === "track" && (
                   <StaffOrderTracking visits={queueVisits} currentSchoolId={selectedSchool || publicRouteSchool} onStatusUpdate={(id, status) => {

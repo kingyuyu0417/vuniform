@@ -8,7 +8,7 @@ const paymentMethods = [
   { id: "transfer", label: "轉帳" },
 ];
 
-export default function CashierVerifyPage({ currentSchoolId = "", products = [], onConfirmPayment }) {
+export default function CashierVerifyPage({ currentSchoolId = "", products = [], onConfirmPayment, onReadyForSale }) {
   const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState("");
@@ -258,6 +258,11 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
     }
   };
 
+  const handleProceedToSale = () => {
+    if (!selectedOrder) return;
+    onReadyForSale?.(selectedOrder);
+  };
+
   if (!selectedOrder) {
     return (
       <div style={{ display: "grid", gap: 12 }}>
@@ -380,20 +385,20 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
           )}
 
           <button
-            onClick={handleConfirmPayment}
-            disabled={!paymentMethod || (paymentMethod === "cash" && !cashReceived) || isLoading}
+            onClick={handleProceedToSale}
+            disabled={isLoading}
             style={{
-              background: !paymentMethod || (paymentMethod === "cash" && !cashReceived) || isLoading ? "#C0C8D0" : "#1F3A5F",
+              background: isLoading ? "#C0C8D0" : "#1F3A5F",
               color: "#fff",
               border: "none",
               borderRadius: 10,
               padding: "12px 16px",
               fontSize: 15,
               fontWeight: 700,
-              cursor: !paymentMethod || (paymentMethod === "cash" && !cashReceived) || isLoading ? "not-allowed" : "pointer",
+              cursor: isLoading ? "not-allowed" : "pointer",
             }}
           >
-            {isLoading ? "確認中…" : "確認支付"}
+            {isLoading ? "處理中…" : "確認支付並進行銷售"}
           </button>
         </div>
       </div>
