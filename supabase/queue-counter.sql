@@ -145,6 +145,7 @@ begin
     perform pg_advisory_xact_lock(hashtextextended(p_school_id || '::' || coalesce(p_outlet_name, '') || '::PICKUP', 0));
   select * into next_order from public.customer_orders
   where school_id = p_school_id and status = 'READY'
+    and not (tailor_info ? 'pickup_called_at')
   order by created_at asc for update skip locked limit 1;
   insert into public.queue_counters (school_id, outlet_name, counter_name, service_type, current_order_id, current_queue_number, updated_at, updated_by)
   values (p_school_id, coalesce(p_outlet_name, ''), 'pickup', 'PICKUP', next_order.id, next_order.queue_number, now(), p_called_by)

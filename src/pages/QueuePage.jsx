@@ -35,13 +35,14 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
         if (!active || !Array.isArray(orders)) return;
         const targetStatus = serviceType === QUEUE_SERVICE.PICKUP ? ORDER_STATUS.READY : ORDER_STATUS.PENDING;
         const normalized = orders
-          .filter((order) => order.status === targetStatus)
+          .filter((order) => order.status === targetStatus && (serviceType !== QUEUE_SERVICE.PICKUP || !order.tailor_info?.pickup_called_at))
           .map((order) => ({
             id: order.id,
             queueNo: order.queue_number || order.queueNumber || "",
             guestName: order.customer_info?.guestName || "",
             className: order.customer_info?.className || "",
             phone: order.customer_info?.phone || "",
+            tailor_info: order.tailor_info || {},
             school: order.school_id || order.schoolId || "",
             status: order.status,
           }));
@@ -121,13 +122,14 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     setCallError("");
     try {
       const currentOrder = visibleVisits.find((visit) => visit.id === counter.current_order_id);
-      await queueOrderService.updateStatus(counter.current_order_id, ORDER_STATUS.COMPLETED, {
+      await queueOrderService.updateStatus(counter.current_order_id, ORDER_STATUS.READY, {
         tailor_info: {
           ...(currentOrder?.tailor_info || {}),
-          pickup_completed_at: new Date().toISOString(),
+          pickup_called_at: new Date().toISOString(),
         },
       }, currentSchoolId, ORDER_STATUS.READY);
       await clearCurrentCall();
+      navigate(`/cashier?order_id=${encodeURIComponent(counter.current_order_id)}`);
     } catch (error) {
       setCallError(error.message || "取貨完成更新失敗");
       setCalling(false);
@@ -155,7 +157,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
   });
   const targetStatus = serviceType === QUEUE_SERVICE.PICKUP ? ORDER_STATUS.READY : ORDER_STATUS.PENDING;
   const serviceLabel = serviceType === QUEUE_SERVICE.PICKUP ? "取貨排隊管理" : "度身排隊管理";
-  const rows = useMemo(() => visibleVisits.filter((visit) => visit.status === targetStatus), [visibleVisits, targetStatus]);
+  const rows = useMemo(() => visibleVisits.filter((visit) => visit.status === targetStatus && (serviceType !== QUEUE_SERVICE.PICKUP || !visit.tailor_info?.pickup_called_at)), [visibleVisits, targetStatus, serviceType]);
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
@@ -185,7 +187,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
             <button className="pos-btn" onClick={recallCurrentCall} disabled={calling || !counter?.current_queue_number} style={{ padding: "10px 9px", borderRadius: 8, background: "rgba(255,255,255,0.16)", color: "#fff", fontWeight: 700 }} title="重新叫號">
               <RotateCcw size={16} />
             </button>
-            <button className="pos-btn" onClick={serviceType === QUEUE_SERVICE.PICKUP ? completeCurrentPickup : startCurrentFitting} disabled={calling || !counter?.current_order_id} style={{ padding: "10px 9px", borderRadius: 8, background: "rgba(255,255,255,0.16)", color: "#fff", fontWeight: 700 }} title={serviceType === QUEUE_SERVICE.PICKUP ? "完成目前取貨" : "開始目前客人度身"}>
+            <button className="pos-btn" onClick={serviceType === QUEUE_SERVICE.PICKUP ? completeCurrentPickup : startCurrentFitting} disabled={calling || !counter?.current_order_id} style={{ padding: "10px 9px", borderRadius: 8, background: "rgba(255,255,255,0.16)", color: "#fff", fontWeight: 700 }} title={serviceType === QUEUE_SERVICE.PICKUP ? "前往收銀" : "開始目前客人度身"}>
               <Check size={16} />
             </button>
           </div>

@@ -41,7 +41,8 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
       const ready = (Array.isArray(data) ? data : [])
         .map(normalizeOrder);
       setOrders(ready);
-      setSelectedOrder((current) => ready.find((order) => order.id === current?.id) || ready[0] || null);
+      const requestedOrderId = new URLSearchParams(window.location.search).get("order_id");
+      setSelectedOrder((current) => ready.find((order) => order.id === requestedOrderId) || ready.find((order) => order.id === current?.id) || ready[0] || null);
       return ready;
     } catch (loadError) {
       console.error("cashier ready orders sync failed", loadError);
