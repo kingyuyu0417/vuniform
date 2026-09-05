@@ -76,14 +76,27 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
 
   const playChime = () => {
     const audio = chimeAudioRef.current;
-    if (!audio) return;
+    if (!audio) return Promise.resolve();
     audio.currentTime = 0;
-    audio.play().catch((error) => console.warn("叫號提示音播放被瀏覽器阻擋", error));
+    return new Promise((resolve) => {
+      const finish = () => {
+        audio.removeEventListener("ended", finish);
+        audio.removeEventListener("error", finish);
+        resolve();
+      };
+      audio.addEventListener("ended", finish, { once: true });
+      audio.addEventListener("error", finish, { once: true });
+      audio.play().catch((error) => {
+        console.warn("叫號提示音播放被瀏覽器阻擋", error);
+        finish();
+      });
+    });
   };
 
-  const announce = (counterToAnnounce = counter) => {
+  const announce = async (counterToAnnounce = counter) => {
     if (!counterToAnnounce?.current_queue_number) return;
-    playChime();
+    window.speechSynthesis?.cancel();
+    await playChime();
     if (!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(`請排隊號碼 ${counterToAnnounce.current_queue_number}，請到隔離房間取貨。`);
