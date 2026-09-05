@@ -6,6 +6,7 @@ import { ORDER_STATUS, QUEUE_SERVICE, queueOrderService } from "../services/queu
 const activeStatuses = [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STATUS.READY];
 
 function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING, embedded = false, showHeader = true }) {
+  const laneCounterName = serviceType === QUEUE_SERVICE.PICKUP ? "pickup" : "fitting";
   const [counter, setCounter] = useState(null);
   const [waitingCount, setWaitingCount] = useState(0);
   const [qrCode, setQrCode] = useState("");
@@ -35,7 +36,7 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
     const counterSubscription = queueOrderService.subscribeQueueCounter({
       schoolId: schoolName,
       outletName,
-      counterName,
+      counterName: laneCounterName,
       serviceType,
       onChange: (next) => {
         if (!active) return;
@@ -53,7 +54,7 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
       ordersSubscription.unsubscribe();
       counterSubscription.unsubscribe();
     };
-  }, [schoolName, outletName, counterName, serviceType]);
+  }, [schoolName, outletName, laneCounterName, serviceType]);
 
   useEffect(() => {
     if (!counter?.current_queue_number) return;

@@ -19,6 +19,7 @@ const activeStatuses = [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STAT
 
 export default function QueuePage({ visits = [], currentSchoolId = "", outletName = "", calledBy = "", serviceType = QUEUE_SERVICE.FITTING, onViewGuest, onAssign }) {
   const navigate = useNavigate();
+  const counterName = serviceType === QUEUE_SERVICE.PICKUP ? "pickup" : "fitting";
   const [syncedVisits, setSyncedVisits] = useState(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState(new Date());
   const [counter, setCounter] = useState(null);
@@ -66,6 +67,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     const subscription = queueOrderService.subscribeQueueCounter({
       schoolId: currentSchoolId,
       outletName,
+      counterName,
       serviceType,
       onChange: (next) => active && setCounter(next),
     });
@@ -73,13 +75,13 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
       active = false;
       subscription.unsubscribe();
     };
-  }, [currentSchoolId, outletName, serviceType]);
+  }, [currentSchoolId, outletName, counterName, serviceType]);
 
   const callNext = async () => {
     setCalling(true);
     setCallError("");
     try {
-      const next = await queueOrderService.callNext({ schoolId: currentSchoolId, outletName, serviceType, calledBy });
+      const next = await queueOrderService.callNext({ schoolId: currentSchoolId, outletName, counterName, serviceType, calledBy });
       setCounter(next);
     } catch (error) {
       setCallError(error.message || "叫號失敗，請先執行 queue-counter.sql");
@@ -92,7 +94,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     setCalling(true);
     setCallError("");
     try {
-        const next = await queueOrderService.clearQueueCounter({ schoolId: currentSchoolId, outletName, serviceType });
+      const next = await queueOrderService.clearQueueCounter({ schoolId: currentSchoolId, outletName, counterName, serviceType });
       setCounter(next);
     } catch (error) {
       setCallError(error.message || "清除叫號失敗");
@@ -125,7 +127,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     setCalling(true);
     setCallError("");
     try {
-      const next = await queueOrderService.recallQueueCounter({ schoolId: currentSchoolId, outletName, serviceType });
+        const next = await queueOrderService.recallQueueCounter({ schoolId: currentSchoolId, outletName, counterName, serviceType });
       setCounter(next);
     } catch (error) {
       setCallError(error.message || "重叫失敗");
