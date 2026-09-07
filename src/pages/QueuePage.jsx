@@ -26,6 +26,24 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
   const [calling, setCalling] = useState(false);
   const [callError, setCallError] = useState("");
   const previousDataRef = useRef(visits);
+  const chimeAudioRef = useRef(null);
+
+  useEffect(() => {
+    const audio = new Audio("/audio/queue-chime.mpeg");
+    audio.preload = "auto";
+    chimeAudioRef.current = audio;
+    return () => {
+      audio.pause();
+      chimeAudioRef.current = null;
+    };
+  }, []);
+
+  const playCallChime = () => {
+    const audio = chimeAudioRef.current;
+    if (!audio) return;
+    audio.currentTime = 0;
+    audio.play().catch((error) => console.warn("queue call chime could not play", error));
+  };
 
   useEffect(() => {
     let active = true;
@@ -89,6 +107,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
         ? await queueOrderService.callNextPickup({ schoolId: currentSchoolId, outletName, calledBy })
         : await queueOrderService.callNextFitting({ schoolId: currentSchoolId, outletName, calledBy });
       setCounter(next);
+      if (next?.current_queue_number) playCallChime();
     } catch (error) {
       setCallError(error.message || "叫號失敗，請先執行 queue-counter.sql");
     } finally {
@@ -140,6 +159,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
           ? await queueOrderService.recallPickup({ schoolId: currentSchoolId, outletName })
           : await queueOrderService.recallFitting({ schoolId: currentSchoolId, outletName });
       setCounter(next);
+      if (next?.current_queue_number) playCallChime();
     } catch (error) {
       setCallError(error.message || "重叫失敗");
     } finally {
