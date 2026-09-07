@@ -271,7 +271,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
                     onClick={() => onReadyForSale?.(visit)}
                     style={{ flex: 1, background: "#1F3A5F", color: "#fff", padding: "8px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600 }}
                   >
-                    前往取貨頁
+                    進行銷售
                   </button>
                 ) : (
                   <div style={{ flex: 1, background: "#F1F5F9", color: "#64748B", padding: "8px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600, textAlign: "center" }}>
