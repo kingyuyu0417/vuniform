@@ -144,7 +144,7 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
     await playChime();
     if (!window.speechSynthesis) return;
     const destination = serviceType === QUEUE_SERVICE.PICKUP ? "取貨區取貨付款" : "度身區度身";
-    const utterance = new SpeechSynthesisUtterance(`唔該 ${queueNumberForSpeech(counterToAnnounce.current_queue_number)} 號嘅同學，請立即到${destination}。`);
+    const utterance = new SpeechSynthesisUtterance(`籌號 ${queueNumberForSpeech(counterToAnnounce.current_queue_number)} 號嘅同學，請立即到${destination}。`);
     const voices = window.speechSynthesis.getVoices();
     const cantoneseVoice = voices.find((voice) => /^yue(?:[-_]hk)?$/i.test(voice.lang))
       || voices.find((voice) => /^yue[-_]/i.test(voice.lang))
