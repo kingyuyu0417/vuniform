@@ -265,9 +265,17 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
                   >
                     開始度身
                   </button>
+                ) : serviceType === QUEUE_SERVICE.PICKUP ? (
+                  <button
+                    className="pos-btn"
+                    onClick={() => navigate("/pickup")}
+                    style={{ flex: 1, background: "#1F3A5F", color: "#fff", padding: "8px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600 }}
+                  >
+                    前往取貨頁
+                  </button>
                 ) : (
                   <div style={{ flex: 1, background: "#F1F5F9", color: "#64748B", padding: "8px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600, textAlign: "center" }}>
-                    {serviceType === QUEUE_SERVICE.PICKUP ? "前往取貨頁" : (statusLabel[visit.status] || "處理中")}
+                    {statusLabel[visit.status] || "處理中"}
                   </div>
                 )}
               </div>
