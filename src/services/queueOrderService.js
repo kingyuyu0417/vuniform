@@ -440,7 +440,8 @@ export const queueOrderService = {
   },
 
   async recallQueueCounter({ schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING } = {}) {
-    const current = await this.getQueueCounter({ schoolId, outletName, counterName, serviceType });
+    const key = counterKey(schoolId, outletName, counterName, serviceType);
+    const current = readCounterCache()[key] || await this.getQueueCounter({ schoolId, outletName, counterName, serviceType });
     const refreshed = { ...current, updated_at: new Date().toISOString() };
     if (isSupabaseConfigured && supabase && current.current_queue_number) {
       const { data, error } = await supabase
@@ -457,7 +458,6 @@ export const queueOrderService = {
       if (normalized.service_type !== serviceType || normalized.counter_name !== counterName) throw new Error("重叫 counter 服務類型不一致");
       return normalized;
     }
-    const key = counterKey(schoolId, outletName, counterName, serviceType);
     writeCounterCache({ ...readCounterCache(), [key]: refreshed });
     return refreshed;
   },
