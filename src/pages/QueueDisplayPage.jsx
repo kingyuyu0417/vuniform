@@ -44,6 +44,7 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
   const [qrCode, setQrCode] = useState("");
   const [isCalling, setIsCalling] = useState(false);
   const hasLoadedCounterRef = useRef(false);
+  const lastAnnouncedCallRef = useRef("");
   const chimeAudioRef = useRef(null);
 
   useEffect(() => {
@@ -89,10 +90,14 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
 
   useEffect(() => {
     if (!counter?.current_queue_number) return;
+    const callKey = `${counter.current_queue_number}::${counter.updated_at || ""}`;
     if (!hasLoadedCounterRef.current) {
       hasLoadedCounterRef.current = true;
+      lastAnnouncedCallRef.current = callKey;
       return;
     }
+    if (lastAnnouncedCallRef.current === callKey) return;
+    lastAnnouncedCallRef.current = callKey;
     enqueueAnnouncement(() => announce(counter));
   }, [counter]);
 
