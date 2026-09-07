@@ -7,7 +7,9 @@ const isValidSupabaseUrl = /^https:\/\/[^\s/]+\.supabase\.co\/?$/.test(supabaseU
 const isPlaceholderKey = /your|你的|publishable_key|project_url/i.test(supabaseAnonKey || "");
 
 export const isSupabaseConfigured = Boolean(isValidSupabaseUrl && supabaseAnonKey && !isPlaceholderKey);
-export const isSupabaseAuthEnabled = isSupabaseConfigured && import.meta.env.VITE_USE_SUPABASE_AUTH === "true";
+// Authentication is secure-by-default in deployed builds. Set this explicitly
+// to "false" only for a local, isolated PIN-mode test environment.
+export const isSupabaseAuthEnabled = isSupabaseConfigured && import.meta.env.VITE_USE_SUPABASE_AUTH !== "false";
 
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey, {

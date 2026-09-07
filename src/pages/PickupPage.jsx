@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { CheckCheck, Clock3, PackageCheck, Zap } from "lucide-react";
 import { ORDER_STATUS } from "../services/queueOrderService";
-import { supabase, isSupabaseConfigured } from "../supabaseClient";
+import { supabase, isSupabaseAuthEnabled, isSupabaseConfigured } from "../supabaseClient";
 
 const statusLabel = {
   [ORDER_STATUS.PENDING]: "排隊中",
@@ -30,6 +30,7 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
     setNotice("");
     try {
       if (!isSupabaseConfigured || !supabase) throw new Error("Supabase 未設定");
+      if (!isSupabaseAuthEnabled) throw new Error("請以員工帳戶登入後使用取貨頁面");
       let query = supabase
         .from("customer_orders")
         .select("*")
@@ -43,7 +44,7 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
       return nextOrders;
     } catch (error) {
       console.error("pickup orders sync failed", error);
-      setNotice("同步失敗，請重試");
+      setNotice(error?.message || "同步失敗，請重試");
       return [];
     } finally {
       setLoading(false);
@@ -107,6 +108,7 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
       }
 
       if (!isSupabaseConfigured || !supabase) throw new Error("Supabase 未設定");
+      if (!isSupabaseAuthEnabled) throw new Error("請以員工帳戶登入後使用取貨頁面");
       let updateQuery = supabase
         .from("customer_orders")
         .update({ status: ORDER_STATUS.READY })
@@ -129,7 +131,7 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
         : `${order.queue_number || "此訂單"} 已執好，目前沒有需要執貨的訂單。`);
     } catch (error) {
       console.error("mark ready failed", error);
-      setNotice("同步失敗，請重試");
+      setNotice(error?.message || "同步失敗，請重試");
     } finally {
       setUpdatingId("");
     }
