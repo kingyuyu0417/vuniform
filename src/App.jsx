@@ -135,6 +135,10 @@ const buildOrderInsertPayload = (order, receiptId) => {
   if (order.outletName) payload.outlet_name = order.outletName;
   if (order.outletAddress) payload.outlet_address = order.outletAddress;
   if (order.outletPhone) payload.outlet_phone = order.outletPhone;
+  if (order.customerName || order.customerPhone) {
+    payload.customer_surname = customerSurname(order.customerName);
+    payload.customer_phone_last4 = customerPhoneLast4(order.customerPhone);
+  }
   if (order.cashierId !== undefined) payload.cashier_id = order.cashierId || null;
   if (order.cashierName) payload.cashier_name = order.cashierName;
 
@@ -170,7 +174,7 @@ const insertSalesOrderRecord = async (order, salesLog) => {
       const missingColumn = /column .* does not exist|42703/i.test(message);
       if (missingColumn) {
         const fallbackPayload = Object.fromEntries(
-          Object.entries(orderPayload).filter(([key]) => !["cashier_id", "cashier_name", "outlet_name", "outlet_address", "outlet_phone"].includes(key))
+          Object.entries(orderPayload).filter(([key]) => !["cashier_id", "cashier_name", "outlet_name", "outlet_address", "outlet_phone", "customer_surname", "customer_phone_last4"].includes(key))
         );
         const { error: fallbackError } = await supabase.from("orders").insert(fallbackPayload);
         if (fallbackError) throw fallbackError;
@@ -1063,7 +1067,7 @@ export default function UniformPOS() {
     try {
       let { data, error } = await supabase
         .from("orders")
-        .select("id, school, outlet_name, outlet_address, outlet_phone, cashier_id, cashier_name, total, item_count, created_at, order_items(name, size, length, price, qty)")
+        .select("id, school, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, cashier_id, cashier_name, total, item_count, created_at, order_items(name, size, length, price, qty)")
         .order("created_at", { ascending: false });
       
       if (error?.code === "42703") {
@@ -1096,6 +1100,8 @@ export default function UniformPOS() {
             outletName: order.outlet_name,
             outletAddress: order.outlet_address,
             outletPhone: order.outlet_phone,
+            customerName: order.customer_surname || "",
+            customerPhone: order.customer_phone_last4 || "",
           };
         } catch (mapError) {
           console.error("轉換訂單數據失敗", mapError, order);
@@ -1269,6 +1275,8 @@ export default function UniformPOS() {
             outlet_name: order.outletName,
             outlet_address: order.outletAddress,
             outlet_phone: order.outletPhone,
+            customer_surname: customerSurname(order.customerName),
+            customer_phone_last4: customerPhoneLast4(order.customerPhone),
             created_at: new Date().toISOString(),
           },
         });
