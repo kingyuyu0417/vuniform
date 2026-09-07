@@ -17,7 +17,7 @@ const statusLabel = {
 
 const activeStatuses = [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STATUS.READY];
 
-export default function QueuePage({ visits = [], currentSchoolId = "", outletName = "", calledBy = "", serviceType = QUEUE_SERVICE.FITTING, onViewGuest, onAssign }) {
+export default function QueuePage({ visits = [], currentSchoolId = "", outletName = "", calledBy = "", serviceType = QUEUE_SERVICE.FITTING, onViewGuest, onAssign, onReadyForSale }) {
   const navigate = useNavigate();
   const counterName = serviceType === QUEUE_SERVICE.PICKUP ? "pickup" : "fitting";
   const [syncedVisits, setSyncedVisits] = useState(null);
@@ -268,7 +268,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
                 ) : serviceType === QUEUE_SERVICE.PICKUP ? (
                   <button
                     className="pos-btn"
-                    onClick={() => navigate("/pickup")}
+                    onClick={() => onReadyForSale?.(visit)}
                     style={{ flex: 1, background: "#1F3A5F", color: "#fff", padding: "8px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600 }}
                   >
                     前往取貨頁
