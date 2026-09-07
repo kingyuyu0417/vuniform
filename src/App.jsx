@@ -3182,8 +3182,12 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
   const [date, setDate] = useState(todayStr());
   const [outletFilter, setOutletFilter] = useState("");
   const [schoolFilter, setSchoolFilter] = useState("");
+  const [phoneSearch, setPhoneSearch] = useState("");
   const effectiveDate = canViewAllDates ? date : todayStr();
-  const dateOrders = salesLog.filter((o) => o.date === effectiveDate);
+  const normalizedPhoneSearch = phoneSearch.replace(/\D/g, "").slice(-4);
+  const dateOrders = normalizedPhoneSearch.length === 4
+    ? salesLog.filter((o) => customerPhoneLast4(o.customerPhone || o.phone) === normalizedPhoneSearch)
+    : salesLog.filter((o) => o.date === effectiveDate);
   const schoolNames = Array.from(new Set(dateOrders.map((o) => o.school).filter(Boolean))).sort((a, b) => a.localeCompare(b, "zh-Hant"));
   const outletForOrder = (order) => order.outletName || outletNameForSchool(order.school, schoolMeta);
   const availableSchools = schoolNames.filter((school) => !outletFilter || outletForOrder({ school }) === outletFilter);
@@ -3241,6 +3245,15 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+        <input
+          value={phoneSearch}
+          onChange={(e) => setPhoneSearch(e.target.value.replace(/\D/g, "").slice(-4))}
+          inputMode="numeric"
+          maxLength={4}
+          placeholder="電話尾4位搜尋全部記錄"
+          aria-label="電話最後4位搜尋"
+          style={{ padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 14, width: 170 }}
+        />
         {canViewAllDates ? (
           <input
             type="date"
@@ -3250,7 +3263,7 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
           />
         ) : (
           <div style={{ fontSize: 13, background: "#EEF1F5", padding: "8px 12px", borderRadius: 8, color: "#1F3A5F", fontWeight: 500 }}>
-            即時銷售紀錄（{todayStr()}）
+            {normalizedPhoneSearch.length === 4 ? "搜尋全部歷史記錄" : `即時銷售紀錄（${todayStr()}）`}
           </div>
         )}
         <select value={outletFilter} onChange={(e) => { setOutletFilter(e.target.value); setSchoolFilter(""); }} style={{ padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 14, maxWidth: "100%" }}>
