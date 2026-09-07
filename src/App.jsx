@@ -4,6 +4,9 @@ import qrcode from "qrcode-generator";
 import { useLocation, useNavigate, Routes, Route, Navigate } from "react-router-dom";
 import { Plus, Minus, Trash2, Printer, Bluetooth, ChevronDown, ChevronUp, ChevronLeft, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown, X, ShoppingCart, Settings, ClipboardList, Check, AlertCircle, Upload, Download, School, Users, Eye, EyeOff, MapPin, GraduationCap, Search, QrCode } from "lucide-react";
 import { isSupabaseConfigured, isSupabaseAuthEnabled, supabase } from "./supabaseClient";
+import { logStartupCheck, getStartupErrorUI } from "./config/envValidation";
+import { getUserFriendlyError } from "./config/errorHandler";
+import { Alert } from "./components/common";
 import CustomerCheckinPage from "./pages/CustomerCheckinPage";
 import QueuePage from "./pages/QueuePage";
 import FittingPage from "./pages/FittingPage";
@@ -18,6 +21,11 @@ import baseSchoolCatalog from "./schoolCatalog.json";
 import workbookSchoolCatalog from "./workbookSchoolCatalog.json";
 import workbookSchoolOutlets from "./workbookSchoolOutlets.json";
 import { loadProducts, saveProducts as saveProductsToStore } from "./data/productsStore";
+
+// 应用启动时进行环境检查
+if (typeof window !== 'undefined') {
+  logStartupCheck();
+}
 
 const DEFAULT_SCHOOL = "示範學校（可刪除）";
 const DESIGNATED_SCHOOL = "香港中國婦女會馮堯敬紀念中學";
@@ -744,6 +752,7 @@ export default function UniformPOS() {
   const [productsSaveError, setProductsSaveError] = useState("");
   const [productsSaveState, setProductsSaveState] = useState("saved");
   const [sourceIntegrityWarning, setSourceIntegrityWarning] = useState("");
+  const [envError, setEnvError] = useState(null); // 环境变量验证错误
   const productsSaveTimerRef = useRef(null);
   const productsPersistQueueRef = useRef(Promise.resolve());
   const productsSavePendingRef = useRef(false);
@@ -777,6 +786,16 @@ export default function UniformPOS() {
   const perms = session ? PERMISSIONS[session.role] : null;
 
   const isPasswordSetupLink = () => /(?:^|&)type=(?:invite|recovery)(?:&|$)/.test(window.location.hash.slice(1));
+
+  // 环境变量检查 - 应用启动时验证关键配置
+  useEffect(() => {
+    const { errors: envErrors } = require("./config/envValidation").validateAllEnvVars();
+    if (envErrors && envErrors.length > 0) {
+      const errorUI = getStartupErrorUI(envErrors);
+      setEnvError(errorUI);
+      console.error("❌ 环境配置错误:", envErrors);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isSupabaseAuthEnabled || !supabase) return undefined;
@@ -1879,7 +1898,27 @@ export default function UniformPOS() {
         .pos-btn:active { transform: scale(0.97); }
       `}</style>
 
-      <div style={{ background: "#1F3A5F", color: "#fff", padding: "16px 20px", borderRadius: schoolPanelOpen ? "0" : "0 0 16px 16px", position: "relative" }}>
+        {envError && (
+          <div style={{ padding: "12px 16px" }}>
+            <Alert
+              type="error"
+              title={envError.title}
+              message={envError.message}
+              onClose={() => setEnvError(null)}
+            >
+              <ul style={{ marginTop: 8, paddingLeft: 20 }}>
+                {envError.errors?.map((err, idx) => (
+                  <li key={idx} style={{ fontSize: 12, marginTop: 4 }}>
+                    <strong>{err.message}</strong>
+                    <div style={{ opacity: 0.8, marginTop: 2 }}>{err.suggestion}</div>
+                  </li>
+                ))}
+              </ul>
+            </Alert>
+          </div>
+        )}
+
+        <div style={{ background: "#1F3A5F", color: "#fff", padding: "16px 20px", borderRadius: schoolPanelOpen ? "0" : "0 0 16px 16px", position: "relative" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           {session.role === ROLES.GUEST ? (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

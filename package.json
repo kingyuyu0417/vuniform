@@ -12,7 +12,9 @@
     "verify:supabase": "node scripts/setup-supabase.js",
     "verify:products": "node scripts/verify-authoritative-products.js",
     "verify:schools": "node scripts/verify-all-schools.js",
-    "verify:report": "node scripts/verify-all-schools.js"
+    "verify:report": "node scripts/verify-all-schools.js",
+    "migrate:data": "node scripts/migrate-data-to-supabase.js",
+    "optimize": "npm run build && echo '✅ 优化完成！你可以现在部署应用了。'"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
