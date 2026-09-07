@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { QrCode, Users, Volume2 } from "lucide-react";
 import qrcodeGenerator from "qrcode-generator";
-import { ORDER_STATUS, QUEUE_SERVICE, queueOrderService, isQueueOrderToday } from "../services/queueOrderService";
-import { isSupabaseAuthEnabled } from "../supabaseClient";
+import { ORDER_STATUS, QUEUE_SERVICE, queueOrderService } from "../services/queueOrderService";
 
 const activeStatuses = [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STATUS.READY];
 let announcementChain = Promise.resolve();
@@ -59,63 +58,32 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
 
   useEffect(() => {
     let active = true;
-    if (!isSupabaseAuthEnabled) {
-      const refreshPublicDisplay = async () => {
-        try {
-          const next = await queueOrderService.getPublicQueueDisplay({
-            schoolId: schoolName,
-            outletName,
-            counterName: laneCounterName,
-            serviceType,
-          });
-          if (!active || !next) return;
-          setWaitingCount(Number(next.waiting_count || 0));
-          setCounter((previous) => {
-            if (next.current_queue_number && (next.current_queue_number !== previous?.current_queue_number || next.updated_at !== previous?.updated_at)) {
-              setIsCalling(true);
-              window.setTimeout(() => active && setIsCalling(false), 6000);
-            }
-            return next;
-          });
-        } catch (error) {
-          console.warn("public queue display refresh failed", error);
-        }
-      };
-      refreshPublicDisplay();
-      const timer = window.setInterval(refreshPublicDisplay, 5000);
-      return () => {
-        active = false;
-        window.clearInterval(timer);
-      };
-    }
-    const updateOrders = (orders) => {
-      if (!active) return;
-      const waitingStatus = serviceType === QUEUE_SERVICE.PICKUP ? ORDER_STATUS.READY : ORDER_STATUS.PENDING;
-      setWaitingCount((orders || []).filter((order) => isQueueOrderToday(order.created_at) && order.status === waitingStatus).length);
-    };
-    queueOrderService.listOrders({ schoolId: schoolName }).then(updateOrders).catch(() => {});
-    const ordersSubscription = queueOrderService.subscribe({ schoolId: schoolName, serviceType, onChange: updateOrders });
-    const counterSubscription = queueOrderService.subscribeQueueCounter({
-      schoolId: schoolName,
-      outletName,
-      counterName: laneCounterName,
-      serviceType,
-      onChange: (next) => {
-        if (!active) return;
-        if (next?.service_type !== serviceType || next?.counter_name !== laneCounterName) return;
+    const refreshPublicDisplay = async () => {
+      try {
+        const next = await queueOrderService.getPublicQueueDisplay({
+          schoolId: schoolName,
+          outletName,
+          counterName: laneCounterName,
+          serviceType,
+        });
+        if (!active || !next) return;
+        setWaitingCount(Number(next.waiting_count || 0));
         setCounter((previous) => {
-          if (next?.current_queue_number && (next.current_queue_number !== previous?.current_queue_number || next.updated_at !== previous?.updated_at)) {
+          if (next.current_queue_number && (next.current_queue_number !== previous?.current_queue_number || next.updated_at !== previous?.updated_at)) {
             setIsCalling(true);
             window.setTimeout(() => active && setIsCalling(false), 6000);
           }
           return next;
         });
-      },
-    });
+      } catch (error) {
+        console.warn("public queue display refresh failed", error);
+      }
+    };
+    refreshPublicDisplay();
+    const timer = window.setInterval(refreshPublicDisplay, 5000);
     return () => {
       active = false;
-      ordersSubscription.unsubscribe();
-      counterSubscription.unsubscribe();
+      window.clearInterval(timer);
     };
   }, [schoolName, outletName, laneCounterName, serviceType]);
 
