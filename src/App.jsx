@@ -3205,18 +3205,27 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
   });
 
   const handleExportCSV = () => {
-    const rows = [["日期", "時間", "單號", "開單員工", "學校", "件數", "總計", "明細"]];
+    const rows = [["日期", "時間", "單號", "開單員工", "學校", "門店", "單據件數", "單據總額", "款式", "尺碼", "長度", "數量", "單價", "款式小計"]];
     dateOrders.forEach((o) => {
-      rows.push([
-        o.date,
-        o.time,
-        o.id,
-        o.cashierName || "",
-        o.school || "",
-        o.itemCount,
-        o.total,
-        o.items.map((it) => `${it.name}(${sizeLabel({ size: it.size, length: it.length })})x${it.qty}`).join("；"),
-      ]);
+      const items = Array.isArray(o.items) ? o.items : [];
+      items.forEach((item) => {
+        rows.push([
+          o.date,
+          o.time,
+          o.id,
+          o.cashierName || "",
+          o.school || "",
+          o.outletName || outletNameForSchool(o.school, schoolMeta),
+          o.itemCount,
+          o.total,
+          item.name || "",
+          item.size || "",
+          item.length || "",
+          item.qty,
+          item.price,
+          Number(item.price || 0) * Number(item.qty || 0),
+        ]);
+      });
     });
     downloadCSV(Papa.unparse(rows), `銷售紀錄_${todayStr()}.csv`);
   };
