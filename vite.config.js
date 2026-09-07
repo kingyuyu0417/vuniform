@@ -11,13 +11,25 @@ export default defineConfig({
     // 启用代码分割：分离 vendor、pages、核心库
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor': ['react', 'react-dom', 'react-router-dom'],
-          'supabase': ['@supabase/supabase-js'],
-          'utils': ['papaparse', 'qrcode-generator', 'lucide-react'],
-          'pages-checkout': ['./src/pages/PickupPage.jsx', './src/pages/CashierVerifyPage.jsx'],
-          'pages-queue': ['./src/pages/QueuePage.jsx', './src/pages/QueueDisplayPage.jsx', './src/pages/CustomerCheckinPage.jsx'],
-          'pages-guest': ['./src/pages/GuestPortalPage.jsx', './src/pages/GuestQueueStatusPage.jsx'],
+        manualChunks(id) {
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('node_modules/react-router-dom')) {
+            return 'vendor';
+          }
+          if (id.includes('node_modules/@supabase')) {
+            return 'supabase';
+          }
+          if (id.includes('node_modules/papaparse') || id.includes('node_modules/qrcode-generator') || id.includes('node_modules/lucide-react')) {
+            return 'utils';
+          }
+          if (id.includes('/src/pages/PickupPage.') || id.includes('/src/pages/CashierVerifyPage.')) {
+            return 'pages-checkout';
+          }
+          if (id.includes('/src/pages/QueuePage.') || id.includes('/src/pages/QueueDisplayPage.') || id.includes('/src/pages/CustomerCheckinPage.')) {
+            return 'pages-queue';
+          }
+          if (id.includes('/src/pages/GuestPortalPage.') || id.includes('/src/pages/GuestQueueStatusPage.')) {
+            return 'pages-guest';
+          }
         },
       },
     },

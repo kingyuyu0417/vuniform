@@ -28,6 +28,7 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.0",
     "supabase": "^2.115.0",
+    "terser": "^5.51.2",
     "vite": "^8.2.2"
   }
 }
