@@ -1,7 +1,7 @@
 import React, { useMemo, useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Zap, Bell, RotateCcw, Check } from "lucide-react";
-import { ORDER_STATUS, QUEUE_SERVICE, queueOrderService } from "../services/queueOrderService";
+import { ORDER_STATUS, QUEUE_SERVICE, queueOrderService, isQueueOrderToday } from "../services/queueOrderService";
 
 const statusLabel = {
   waiting: "待處理",
@@ -35,7 +35,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
         if (!active || !Array.isArray(orders)) return;
         const targetStatus = serviceType === QUEUE_SERVICE.PICKUP ? ORDER_STATUS.READY : ORDER_STATUS.PENDING;
         const normalized = orders
-          .filter((order) => order.status === targetStatus && (serviceType !== QUEUE_SERVICE.PICKUP || !order.tailor_info?.pickup_called_at))
+          .filter((order) => isQueueOrderToday(order.created_at) && order.status === targetStatus && (serviceType !== QUEUE_SERVICE.PICKUP || !order.tailor_info?.pickup_called_at))
           .map((order) => ({
             id: order.id,
             queueNo: order.queue_number || order.queueNumber || "",
@@ -153,7 +153,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
   });
   const targetStatus = serviceType === QUEUE_SERVICE.PICKUP ? ORDER_STATUS.READY : ORDER_STATUS.PENDING;
   const serviceLabel = serviceType === QUEUE_SERVICE.PICKUP ? "取貨排隊管理" : "度身排隊管理";
-  const rows = useMemo(() => visibleVisits.filter((visit) => visit.status === targetStatus && (serviceType !== QUEUE_SERVICE.PICKUP || !visit.tailor_info?.pickup_called_at)), [visibleVisits, targetStatus, serviceType]);
+  const rows = useMemo(() => visibleVisits.filter((visit) => isQueueOrderToday(visit.created_at) && visit.status === targetStatus && (serviceType !== QUEUE_SERVICE.PICKUP || !visit.tailor_info?.pickup_called_at)), [visibleVisits, targetStatus, serviceType]);
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
@@ -222,17 +222,6 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
               </div>
 
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                <button
-                  className="pos-btn"
-                  onClick={() => {
-                    onViewGuest?.(visit);
-                    const visitId = visit.id || visit.queueNo || "";
-                    navigate(`/fitting?id=${encodeURIComponent(visitId)}`);
-                  }}
-                  style={{ flex: 1, background: "#EEF1F5", color: "#1F3A5F", padding: "8px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600 }}
-                >
-                  查看資料
-                </button>
                 {serviceType === QUEUE_SERVICE.FITTING && visit.status === ORDER_STATUS.PENDING ? (
                   <button
                     className="pos-btn"

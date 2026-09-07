@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { QrCode, Users, Volume2 } from "lucide-react";
 import qrcodeGenerator from "qrcode-generator";
-import { ORDER_STATUS, QUEUE_SERVICE, queueOrderService } from "../services/queueOrderService";
+import { ORDER_STATUS, QUEUE_SERVICE, queueOrderService, isQueueOrderToday } from "../services/queueOrderService";
+import { isSupabaseAuthEnabled } from "../supabaseClient";
 
 const activeStatuses = [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STATUS.READY];
 let announcementChain = Promise.resolve();
@@ -26,6 +27,17 @@ const enqueueAnnouncement = (announcement) => {
   return announcementChain;
 };
 
+const schoolNameStyle = (schoolName = "") => {
+  const characterCount = Array.from(schoolName).length;
+  const fontSize = characterCount > 36 ? 26 : characterCount > 28 ? 32 : characterCount > 20 ? 40 : 52;
+  return {
+    ...styles.school,
+    fontSize: `${fontSize}px`,
+    overflowWrap: "anywhere",
+    wordBreak: "break-word",
+  };
+};
+
 function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING, embedded = false, showHeader = true }) {
   const laneCounterName = serviceType === QUEUE_SERVICE.PICKUP ? "pickup" : "fitting";
   const [counter, setCounter] = useState(null);
@@ -47,10 +59,39 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
 
   useEffect(() => {
     let active = true;
+    if (!isSupabaseAuthEnabled) {
+      const refreshPublicDisplay = async () => {
+        try {
+          const next = await queueOrderService.getPublicQueueDisplay({
+            schoolId: schoolName,
+            outletName,
+            counterName: laneCounterName,
+            serviceType,
+          });
+          if (!active || !next) return;
+          setWaitingCount(Number(next.waiting_count || 0));
+          setCounter((previous) => {
+            if (next.current_queue_number && (next.current_queue_number !== previous?.current_queue_number || next.updated_at !== previous?.updated_at)) {
+              setIsCalling(true);
+              window.setTimeout(() => active && setIsCalling(false), 6000);
+            }
+            return next;
+          });
+        } catch (error) {
+          console.warn("public queue display refresh failed", error);
+        }
+      };
+      refreshPublicDisplay();
+      const timer = window.setInterval(refreshPublicDisplay, 5000);
+      return () => {
+        active = false;
+        window.clearInterval(timer);
+      };
+    }
     const updateOrders = (orders) => {
       if (!active) return;
       const waitingStatus = serviceType === QUEUE_SERVICE.PICKUP ? ORDER_STATUS.READY : ORDER_STATUS.PENDING;
-      setWaitingCount((orders || []).filter((order) => order.status === waitingStatus).length);
+      setWaitingCount((orders || []).filter((order) => isQueueOrderToday(order.created_at) && order.status === waitingStatus).length);
     };
     queueOrderService.listOrders({ schoolId: schoolName }).then(updateOrders).catch(() => {});
     const ordersSubscription = queueOrderService.subscribe({ schoolId: schoolName, serviceType, onChange: updateOrders });
@@ -147,8 +188,8 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
       {showHeader && <div style={styles.header}>
         <div style={styles.headerText}>
           <div style={styles.eyebrow}>雲端排隊系統 · {serviceType === QUEUE_SERVICE.PICKUP ? "PICKUP" : "FITTING"}</div>
-          <h1 style={styles.school}>{schoolName || "校服服務中心"}</h1>
-          <div style={styles.outlet}>{outletName || counterName}</div>
+          <h1 style={schoolNameStyle(schoolName || "校服服務中心")}>{schoolName || "校服服務中心"}</h1>
+          <div style={styles.outlet}>如需加購校服或更換校服尺碼，請前往指定門市：{outletName || counterName}</div>
         </div>
         {qrCode && <div style={styles.headerQr}><img src={qrCode} alt="客人登記 QR code" style={styles.headerQrImage} /><div><QrCode size={13} /> 登記／查詢</div></div>}
       </div>}
@@ -194,8 +235,8 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
       {isDualDisplay && <div style={styles.sharedHeader}>
         <div style={styles.sharedHeaderText}>
           <div style={styles.eyebrow}>雲端排隊系統 · NOW SERVING</div>
-          <h1 style={styles.school}>{schoolName || "校服服務中心"}</h1>
-          <div style={styles.outlet}>{outletName || counterName}</div>
+          <h1 style={schoolNameStyle(schoolName || "校服服務中心")}>{schoolName || "校服服務中心"}</h1>
+          <div style={styles.outlet}>如需加購校服或更換校服尺碼，請前往指定門市：{outletName || counterName}</div>
         </div>
         {qrCode && <div style={styles.headerQr}><img src={qrCode} alt="客人登記 QR code" style={styles.headerQrImage} /><div><QrCode size={13} /> 登記／查詢</div></div>}
       </div>}
@@ -223,7 +264,7 @@ const styles = {
   header: { display: "flex", justifyContent: "center", alignItems: "center", gap: 22, textAlign: "center", flexWrap: "wrap" },
   headerText: { minWidth: 0 },
   eyebrow: { color: "#7dd3fc", fontSize: "clamp(14px, 2vw, 22px)", letterSpacing: 2, fontWeight: 800 },
-  school: { margin: "12px 0 4px", fontSize: "clamp(26px, 4vw, 52px)", lineHeight: 1.15 },
+  school: { margin: "12px 0 4px", fontSize: "clamp(26px, 4vw, 52px)", lineHeight: 1.15, color: "#fef08a", textShadow: "0 2px 10px rgba(250, 204, 21, 0.24)" },
   outlet: { color: "#a8b8cc", fontSize: "clamp(16px, 2vw, 24px)" },
   headerQr: { display: "grid", justifyItems: "center", gap: 4, color: "#dbeafe", fontSize: 12, fontWeight: 800, flexShrink: 0 },
   headerQrImage: { width: 76, height: 76, background: "#fff", padding: 5, borderRadius: 6 },

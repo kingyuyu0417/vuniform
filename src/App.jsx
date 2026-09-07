@@ -743,7 +743,10 @@ export default function UniformPOS() {
 
   const [selectedSchool, setSelectedSchool] = useState(DESIGNATED_SCHOOL);
   const [schoolPanelOpen, setSchoolPanelOpen] = useState(false);
-  const schools = listSchools(products);
+  const customerSchools = [...new Set(products.map(schoolOf).filter(Boolean))]
+    .filter((school) => !deletedSchoolsRuntime.has(school))
+    .sort((a, b) => a.localeCompare(b, "zh-Hant"));
+  const schools = customerSchools;
 
   // 學校分類資料（階段/地區/18區），共用儲存，全部裝置見到同一份
   const [schoolMeta, setSchoolMeta] = useState({});
@@ -1804,11 +1807,11 @@ export default function UniformPOS() {
   };
 
   if (location.pathname === "/checkin") {
-    return <CustomerCheckinPage school={publicRouteSchool} schools={schools} schoolMeta={schoolMeta} onSubmit={handleGuestSubmit} />;
+    return <CustomerCheckinPage school={publicRouteSchool} schools={customerSchools} schoolMeta={schoolMeta} onSubmit={handleGuestSubmit} />;
   }
 
   if (location.pathname === "/queue-status") {
-    return <GuestQueueStatusPage queueNo={routeId || publicQueueParam || ""} schoolName={publicRouteSchool || ""} />;
+    return <GuestQueueStatusPage queueNo={routeId || publicQueueParam || ""} schoolName={publicRouteSchool || ""} schools={customerSchools} />;
   }
 
   if (location.pathname === "/queue-display") {
@@ -1899,6 +1902,21 @@ export default function UniformPOS() {
                 {syncing ? "同步緊…" : lastSync ? `已同步 ${lastSync.toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "多裝置同步中"}
               </button>
             )}
+            {session.role !== ROLES.GUEST && selectedSchool && (
+              <button
+                className="pos-btn"
+                onClick={() => {
+                  const outlet = outletNameForSchool(selectedSchool, schoolMeta);
+                  const url = `/queue-display?school_id=${encodeURIComponent(selectedSchool)}&outlet=${encodeURIComponent(outlet)}`;
+                  window.open(url, "_blank", "noopener,noreferrer");
+                }}
+                style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, opacity: 0.9, background: "rgba(255,255,255,0.12)", color: "#fff", padding: "4px 8px", borderRadius: 8 }}
+                title="開啟目前學校的公開叫號頁"
+              >
+                <QrCode size={12} />
+                公開叫號頁
+              </button>
+            )}
             <button
               className="pos-btn"
               onClick={logout}
@@ -1974,7 +1992,7 @@ export default function UniformPOS() {
         <Routes>
           <Route
             path="/checkin"
-            element={<CustomerCheckinPage school={publicRouteSchool} schools={schools} schoolMeta={schoolMeta} onSubmit={handleGuestSubmit} />}
+            element={<CustomerCheckinPage school={publicRouteSchool} schools={customerSchools} schoolMeta={schoolMeta} onSubmit={handleGuestSubmit} />}
           />
           <Route
             path="/queue-status"

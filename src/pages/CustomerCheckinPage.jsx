@@ -3,9 +3,21 @@ import { useNavigate } from "react-router-dom";
 import qrcodeGenerator from "qrcode-generator";
 import { Copy, QrCode } from "lucide-react";
 import { queueOrderService } from "../services/queueOrderService";
+import baseSchoolCatalog from "../schoolCatalog.json";
+import workbookSchoolCatalog from "../workbookSchoolCatalog.json";
 
 const DESIGNATED_SCHOOL = "香港中國婦女會馮堯敬紀念中學";
+const schoolCatalog = {
+  ...baseSchoolCatalog,
+  ...workbookSchoolCatalog,
+  [DESIGNATED_SCHOOL]: { category: "資助中學", level: "中學", region: "新界區", district: "沙田區" },
+};
 const SCHOOL_LEVELS = ["幼稚園", "小學", "中學", "其他"];
+const CLASS_OPTIONS = {
+  幼稚園: ["N班", "K1", "K2", "K3"],
+  小學: ["小一", "小二", "小三", "小四", "小五", "小六"],
+  中學: ["中一", "中二", "中三", "中四", "中五", "中六"],
+};
 
 const emptyForm = {
   guestName: "",
@@ -14,6 +26,17 @@ const emptyForm = {
   weightKg: "",
   phone: "",
   notes: "",
+};
+
+const maskName = (name = "") => {
+  const value = String(name).trim();
+  if (value.length <= 1) return "*";
+  return `${value.slice(0, 1)}${"*".repeat(Math.min(value.length - 1, 2))}`;
+};
+
+const maskPhone = (phone = "") => {
+  const value = String(phone).replace(/\D/g, "");
+  return value.length > 4 ? `${"*".repeat(value.length - 4)}${value.slice(-4)}` : "****";
 };
 
 const fieldStyle = {
@@ -29,7 +52,7 @@ const fieldStyle = {
 const metaOf = (schoolMeta, name) => {
   const base = { level: "其他", region: "其他" };
   if (!name) return base;
-  return { ...base, ...(schoolMeta?.[name] || {}) };
+  return { ...base, ...(schoolCatalog[name] || {}), ...(schoolMeta?.[name] || {}) };
 };
 
 const normalizeSchoolLevel = (schoolName, schoolMeta = {}) => {
@@ -56,6 +79,7 @@ export default function CustomerCheckinPage({ onSubmit, school = "", schools = [
   const [copied, setCopied] = useState(false);
   const [selectedLevel, setSelectedLevel] = useState(null);
   const [selectedDistrict, setSelectedDistrict] = useState(null);
+  const [schoolSearch, setSchoolSearch] = useState("");
   const [selectedSchoolId, setSelectedSchoolId] = useState(school || "");
   const isSchoolLocked = Boolean(String(school || "").trim());
 
@@ -90,25 +114,34 @@ export default function CustomerCheckinPage({ onSubmit, school = "", schools = [
   const districtFilteredSchools = selectedDistrict
     ? levelFilteredSchools.filter((schoolName) => (metaOf(schoolMeta, schoolName).district || "其他") === selectedDistrict)
     : levelFilteredSchools;
+  const searchResults = schoolSearch.trim()
+    ? schoolOptions.filter((schoolName) => schoolName.toLowerCase().includes(schoolSearch.trim().toLowerCase()))
+    : [];
 
   const effectiveSchool = selectedSchoolId || school || "";
+  const schoolLevel = normalizeSchoolLevel(effectiveSchool, schoolMeta);
+  const classOptions = CLASS_OPTIONS[schoolLevel] || [];
 
   const handleLevelSelect = (level) => {
     setSelectedLevel(level);
     setSelectedDistrict(null);
     setSelectedSchoolId("");
+    setSchoolSearch("");
   };
 
   const handleDistrictSelect = (district) => {
     setSelectedDistrict(district);
     setSelectedSchoolId("");
+    setSchoolSearch("");
   };
 
   const handleSchoolPick = (schoolName) => {
     const nextSchool = schoolName || DESIGNATED_SCHOOL;
     setSelectedSchoolId(nextSchool);
+    setForm((prev) => ({ ...prev, className: "" }));
     setSelectedDistrict(null);
     setSelectedLevel(null);
+    setSchoolSearch("");
     navigate(`/checkin?school_id=${encodeURIComponent(nextSchool)}`, { replace: true });
   };
 
@@ -175,8 +208,7 @@ export default function CustomerCheckinPage({ onSubmit, school = "", schools = [
       setSubmitted(record);
       onSubmit?.(record);
       setForm(emptyForm);
-      // 登記成功後必須留在排隊頁，避免自動進入度身流程
-      navigate("/queue", { replace: true });
+      navigate(`/queue-status?id=${encodeURIComponent(record.queueNo)}&school_id=${encodeURIComponent(schoolId)}`, { replace: true });
     } catch (err) {
       setError("登記失敗：" + (err.message || "未知錯誤"));
     } finally {
@@ -231,7 +263,45 @@ export default function CustomerCheckinPage({ onSubmit, school = "", schools = [
               </div>
             </div>
 
-            {selectedLevel && (
+            <div>
+              <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8, fontWeight: 700 }}>直接搜尋學校</div>
+              <input
+                value={schoolSearch}
+                onChange={(event) => {
+                  setSchoolSearch(event.target.value);
+                  setSelectedLevel(null);
+                  setSelectedDistrict(null);
+                  setSelectedSchoolId("");
+                }}
+                placeholder="搜尋學校名稱…"
+                style={fieldStyle}
+              />
+            </div>
+
+            {schoolSearch.trim() && (
+              <div>
+                <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8, fontWeight: 700 }}>
+                  搜尋結果（{searchResults.length}）
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 240, overflowY: "auto", paddingRight: 4 }}>
+                  {searchResults.length > 0 ? searchResults.map((schoolName) => (
+                    <button
+                      key={schoolName}
+                      type="button"
+                      className="pos-btn"
+                      onClick={() => handleSchoolPick(schoolName)}
+                      style={{ width: "100%", textAlign: "left", padding: "10px 12px", borderRadius: 10, background: "#fff", border: "1px solid #D5DDE5", color: "#1F3A5F", fontSize: 14, fontWeight: 500 }}
+                    >
+                      {schoolName}
+                    </button>
+                  )) : (
+                    <div style={{ fontSize: 12, color: "#66717D" }}>找不到相符學校</div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {selectedLevel && !schoolSearch.trim() && (
               <div>
                 <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8, fontWeight: 700 }}>第二步：選擇地區（18區）</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -262,7 +332,7 @@ export default function CustomerCheckinPage({ onSubmit, school = "", schools = [
               </div>
             )}
 
-            {selectedDistrict && (
+            {selectedDistrict && !schoolSearch.trim() && (
               <div>
                 <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8, fontWeight: 700 }}>第三步：選擇學校</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 240, overflowY: "auto", paddingRight: 4 }}>
@@ -338,20 +408,30 @@ export default function CustomerCheckinPage({ onSubmit, school = "", schools = [
 
             <div style={{ display: "grid", gap: 6 }}>
               <label style={{ fontSize: 13, fontWeight: 600, color: "#45515F" }}>班級</label>
-              <input
-                value={form.className}
-                onChange={handleChange("className")}
-                placeholder="例如：中二A"
-                style={fieldStyle}
-              />
+              {classOptions.length > 0 ? (
+                <select value={form.className} onChange={handleChange("className")} style={fieldStyle}>
+                  <option value="">請選擇班級</option>
+                  {classOptions.map((className) => <option key={className} value={className}>{className}</option>)}
+                </select>
+              ) : (
+                <input
+                  value={form.className}
+                  onChange={handleChange("className")}
+                  placeholder="請輸入班級／年級"
+                  style={fieldStyle}
+                />
+              )}
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div style={{ display: "grid", gap: 6 }}>
                 <label style={{ fontSize: 13, fontWeight: 600, color: "#45515F" }}>身高（cm）</label>
                 <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   value={form.heightCm}
-                  onChange={handleChange("heightCm")}
+                  onChange={(event) => setForm((prev) => ({ ...prev, heightCm: event.target.value.replace(/\D/g, "") }))}
                   placeholder="160"
                   style={fieldStyle}
                 />
@@ -359,8 +439,11 @@ export default function CustomerCheckinPage({ onSubmit, school = "", schools = [
               <div style={{ display: "grid", gap: 6 }}>
                 <label style={{ fontSize: 13, fontWeight: 600, color: "#45515F" }}>體重（kg）</label>
                 <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   value={form.weightKg}
-                  onChange={handleChange("weightKg")}
+                  onChange={(event) => setForm((prev) => ({ ...prev, weightKg: event.target.value.replace(/\D/g, "") }))}
                   placeholder="48"
                   style={fieldStyle}
                 />
@@ -370,8 +453,11 @@ export default function CustomerCheckinPage({ onSubmit, school = "", schools = [
             <div style={{ display: "grid", gap: 6 }}>
               <label style={{ fontSize: 13, fontWeight: 600, color: "#45515F" }}>電話</label>
               <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={form.phone}
-                onChange={handleChange("phone")}
+                onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value.replace(/\D/g, "") }))}
                 placeholder="例如：91234567"
                 style={fieldStyle}
               />
@@ -404,6 +490,23 @@ export default function CustomerCheckinPage({ onSubmit, school = "", schools = [
             >
               {isLoading ? "提交中…" : "提交登記"}
             </button>
+            <button
+              type="button"
+              onClick={() => navigate(effectiveSchool ? `/queue-status?school_id=${encodeURIComponent(effectiveSchool)}` : "/queue-status")}
+              className="pos-btn"
+              style={{
+                padding: "10px 16px",
+                borderRadius: 10,
+                background: "#EEF2F7",
+                color: "#1F3A5F",
+                border: "1px solid #D5DDE5",
+                fontSize: 14,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              重新查詢排隊狀態
+            </button>
           </form>
         </div>
       )}
@@ -416,8 +519,22 @@ export default function CustomerCheckinPage({ onSubmit, school = "", schools = [
       )}
 
       {submitted && (
-        <div style={{ background: "#EAF7EF", border: "1px solid #B7E0C6", borderRadius: 12, padding: 16 }}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15, 23, 42, 0.62)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ width: "min(100%, 390px)", maxHeight: "calc(100vh - 32px)", overflowY: "auto", background: "#EAF7EF", border: "1px solid #B7E0C6", borderRadius: 14, padding: 16, boxSizing: "border-box" }}>
+          <button
+            type="button"
+            onClick={() => setSubmitted(null)}
+            style={{ float: "right", border: "none", background: "transparent", color: "#52627A", fontSize: 22, lineHeight: 1, cursor: "pointer" }}
+            aria-label="關閉登記成功視窗"
+          >
+            ×
+          </button>
           <div style={{ fontSize: 18, fontWeight: 700, color: "#21693C", marginBottom: 16, textAlign: "center" }}>✓ 登記成功</div>
+
+          <div style={{ background: "rgba(255,255,255,0.7)", borderRadius: 10, padding: "10px 12px", marginBottom: 16, color: "#255F3D", fontSize: 13 }}>
+            <div>姓名：{maskName(submitted.guestName)}</div>
+            <div style={{ marginTop: 4 }}>電話：{maskPhone(submitted.phone)}</div>
+          </div>
 
           <div style={{ textAlign: "center", marginBottom: 20 }}>
             <div style={{ fontSize: 12, color: "#255F3D", marginBottom: 8 }}>您的排隊號</div>
@@ -486,6 +603,7 @@ export default function CustomerCheckinPage({ onSubmit, school = "", schools = [
               </div>
             </div>
           )}
+          </div>
         </div>
       )}
     </div>

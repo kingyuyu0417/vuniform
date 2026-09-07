@@ -54,7 +54,9 @@ begin
     perform pg_advisory_xact_lock(hashtextextended(p_school_id || '::' || coalesce(p_outlet_name, '') || '::' || coalesce(p_service_type, 'FITTING'), 0));
   select * into next_order
   from public.customer_orders
-  where school_id = p_school_id and status = case when p_service_type = 'PICKUP' then 'READY' else 'PENDING' end
+  where school_id = p_school_id
+    and status = case when p_service_type = 'PICKUP' then 'READY' else 'PENDING' end
+    and (created_at at time zone 'Asia/Hong_Kong')::date = (now() at time zone 'Asia/Hong_Kong')::date
   order by created_at asc
   for update skip locked
   limit 1;
@@ -117,7 +119,9 @@ declare
 begin
     perform pg_advisory_xact_lock(hashtextextended(p_school_id || '::' || coalesce(p_outlet_name, '') || '::FITTING', 0));
   select * into next_order from public.customer_orders
-  where school_id = p_school_id and status = 'PENDING'
+  where school_id = p_school_id
+    and status = 'PENDING'
+    and (created_at at time zone 'Asia/Hong_Kong')::date = (now() at time zone 'Asia/Hong_Kong')::date
   order by created_at asc for update skip locked limit 1;
   insert into public.queue_counters (school_id, outlet_name, counter_name, service_type, current_order_id, current_queue_number, updated_at, updated_by)
   values (p_school_id, coalesce(p_outlet_name, ''), 'fitting', 'FITTING', next_order.id, next_order.queue_number, now(), p_called_by)
@@ -144,7 +148,9 @@ declare
 begin
     perform pg_advisory_xact_lock(hashtextextended(p_school_id || '::' || coalesce(p_outlet_name, '') || '::PICKUP', 0));
   select * into next_order from public.customer_orders
-  where school_id = p_school_id and status = 'READY'
+  where school_id = p_school_id
+    and status = 'READY'
+    and (created_at at time zone 'Asia/Hong_Kong')::date = (now() at time zone 'Asia/Hong_Kong')::date
     and not (tailor_info ? 'pickup_called_at')
   order by created_at asc for update skip locked limit 1;
   insert into public.queue_counters (school_id, outlet_name, counter_name, service_type, current_order_id, current_queue_number, updated_at, updated_by)

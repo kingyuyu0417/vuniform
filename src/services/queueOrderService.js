@@ -15,15 +15,12 @@ const hongKongDate = (value = new Date()) => new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Hong_Kong",
 }).format(new Date(value));
 const DAY_PREFIX = () => hongKongDate().replace(/-/g, "");
+export const isQueueOrderToday = (value) => hongKongDate(value) === hongKongDate();
 
 const safeSchoolId = (schoolId = "") => String(schoolId || "").trim() || "default-school";
 const toRecord = (value) => (value && typeof value === "object" ? value : {});
 
-const makeQueueNumber = (schoolId, sequence) => {
-  const prefix = String(schoolId || "").trim();
-  const schoolPrefix = prefix ? prefix.slice(0, 1).toUpperCase() : "A";
-  return `${schoolPrefix}-${String(sequence).padStart(3, "0")}`;
-};
+const makeQueueNumber = (schoolId, sequence) => `A${String(sequence).padStart(3, "0")}`;
 
 const readQueueCache = () => {
   if (typeof window === "undefined") return [];
@@ -107,7 +104,7 @@ export const generateQueueNumber = async (schoolId) => {
 
     if (!error && data && data.length) {
       const lastQueue = data[0]?.queue_number || "";
-      const match = String(lastQueue).match(/-(\d+)$/);
+      const match = String(lastQueue).match(/(\d+)$/);
       if (match) nextSequence = Number(match[1]) + 1;
     }
   }
@@ -115,7 +112,7 @@ export const generateQueueNumber = async (schoolId) => {
   const existing = localRows.filter((row) => safeSchoolId(row.school_id) === normalizedSchoolId && hongKongDate(row.created_at) === hongKongDate());
   if (existing.length) {
     const maxNumber = existing.reduce((max, row) => {
-      const match = String(row.queue_number || row.queueNumber || "").match(/-(\d+)$/);
+      const match = String(row.queue_number || row.queueNumber || "").match(/(\d+)$/);
       return Math.max(max, match ? Number(match[1]) : 0);
     }, 0);
     nextSequence = Math.max(nextSequence, maxNumber + 1);
@@ -125,6 +122,31 @@ export const generateQueueNumber = async (schoolId) => {
 };
 
 export const queueOrderService = {
+  // Public pages only receive sanitized queue data from RPCs. They must never
+  // query customer_orders directly because it contains personal information.
+  async getPublicQueueStatus({ schoolId = "", queueNumber = "", phoneLast4 = "" } = {}) {
+    if (!isSupabaseConfigured || !supabase) return null;
+    const { data, error } = await supabase.rpc("get_public_queue_status", {
+      p_school_id: safeSchoolId(schoolId),
+      p_queue_number: queueNumber || null,
+      p_phone_last4: phoneLast4 || null,
+    });
+    if (error) throw error;
+    return data || null;
+  },
+
+  async getPublicQueueDisplay({ schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING } = {}) {
+    if (!isSupabaseConfigured || !supabase) return null;
+    const { data, error } = await supabase.rpc("get_public_queue_display", {
+      p_school_id: safeSchoolId(schoolId),
+      p_outlet_name: outletName || "",
+      p_counter_name: counterName || "main",
+      p_service_type: serviceType,
+    });
+    if (error) throw error;
+    return data || null;
+  },
+
   async createOrder(payload) {
     const schoolId = safeSchoolId(payload.school_id || payload.schoolId || payload.school);
     const queueNumber = payload.queue_number || payload.queueNumber || "";
@@ -321,7 +343,15 @@ export const queueOrderService = {
 
   async getQueueCounter({ schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING } = {}) {
     const key = counterKey(schoolId, outletName, counterName, serviceType);
-    if (!isSupabaseConfigured || !supabase) return readCounterCache()[key] || normalizeCounter({ school_id: schoolId, outlet_name: outletName, counter_name: counterName, service_type: serviceType });
+    if (!isSupabaseConfigured || !supabase) {
+      const cached = readCounterCache()[key];
+      if (cached?.current_queue_number && !isQueueOrderToday(cached.updated_at)) {
+        const resetCounter = normalizeCounter({ school_id: schoolId, outlet_name: outletName, counter_name: counterName, service_type: serviceType });
+        writeCounterCache({ ...readCounterCache(), [key]: resetCounter });
+        return resetCounter;
+      }
+      return cached || normalizeCounter({ school_id: schoolId, outlet_name: outletName, counter_name: counterName, service_type: serviceType });
+    }
 
     try {
       const { data, error } = await supabase
@@ -335,6 +365,20 @@ export const queueOrderService = {
       if (error) throw error;
       const normalized = normalizeCounter(data || { school_id: schoolId, outlet_name: outletName, counter_name: counterName, service_type: serviceType });
       if (normalized.service_type !== serviceType) throw new Error("叫號 counter 服務類型不一致");
+      if (normalized.current_queue_number && !isQueueOrderToday(normalized.updated_at)) {
+        const reset = await supabase.rpc("clear_queue_counter", {
+          p_school_id: safeSchoolId(schoolId),
+          p_outlet_name: outletName || "",
+          p_counter_name: counterName || "main",
+          p_service_type: serviceType,
+        });
+        if (!reset.error) {
+          const resetCounter = normalizeCounter(reset.data);
+          writeCounterCache({ ...readCounterCache(), [key]: resetCounter });
+          return resetCounter;
+        }
+        return normalizeCounter({ school_id: schoolId, outlet_name: outletName, counter_name: counterName, service_type: serviceType });
+      }
       writeCounterCache({ ...readCounterCache(), [key]: normalized });
       return normalized;
     } catch (error) {
@@ -360,7 +404,8 @@ export const queueOrderService = {
       return normalized;
     }
 
-    const orders = await this.listOrders({ schoolId, status: serviceType === QUEUE_SERVICE.PICKUP ? ORDER_STATUS.READY : ORDER_STATUS.PENDING });
+    const orders = (await this.listOrders({ schoolId, status: serviceType === QUEUE_SERVICE.PICKUP ? ORDER_STATUS.READY : ORDER_STATUS.PENDING }))
+      .filter((order) => isQueueOrderToday(order.created_at));
     const next = orders.sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0];
     const current = normalizeCounter({ school_id: schoolId, outlet_name: outletName, counter_name: counterName, service_type: serviceType, current_order_id: next?.id, current_queue_number: next?.queue_number });
     writeCounterCache({ ...readCounterCache(), [key]: current });
