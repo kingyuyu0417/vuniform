@@ -143,8 +143,8 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
     if (!canAnnounce()) return;
     await playChime();
     if (!window.speechSynthesis) return;
-    const destination = serviceType === QUEUE_SERVICE.PICKUP ? "取貨處攞嘢" : "度身室度身";
-    const utterance = new SpeechSynthesisUtterance(`唔該 ${queueNumberForSpeech(counterToAnnounce.current_queue_number)} 號嘅同學，去${destination}。`);
+    const destination = serviceType === QUEUE_SERVICE.PICKUP ? "取貨區取貨付款" : "度身區度身";
+    const utterance = new SpeechSynthesisUtterance(`唔該 ${queueNumberForSpeech(counterToAnnounce.current_queue_number)} 號嘅同學，請立即到${destination}。`);
     const voices = window.speechSynthesis.getVoices();
     const cantoneseVoice = voices.find((voice) => /^yue(?:[-_]hk)?$/i.test(voice.lang))
       || voices.find((voice) => /^yue[-_]/i.test(voice.lang))
@@ -174,11 +174,11 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
         {qrCode && <div style={styles.headerQr}><img src={qrCode} alt="客人登記 QR code" style={styles.headerQrImage} /><div><QrCode size={13} /> 登記／查詢</div></div>}
       </div>}
       <section style={styles.hero} aria-live="polite">
-        <div style={styles.label}>{isCalling ? (serviceType === QUEUE_SERVICE.PICKUP ? "請立即到隔離房間取貨" : "請立即到度身房間") : (serviceType === QUEUE_SERVICE.PICKUP ? "現正取貨" : "現正度身")}</div>
+        <div style={styles.label}>{isCalling ? (serviceType === QUEUE_SERVICE.PICKUP ? "請立即到取貨區取貨付款" : "請立即到度身區度身") : (serviceType === QUEUE_SERVICE.PICKUP ? "現正取貨" : "現正度身")}</div>
         <div key={`${counter?.current_queue_number || "empty"}-${counter?.updated_at || ""}`} style={{ ...styles.queueNumber, ...(embedded ? styles.embeddedQueueNumber : {}), ...(isCalling ? styles.queueNumberCalling : {}) }}>
           {counter?.current_queue_number || "--"}
         </div>
-        <div style={{ ...styles.counter, ...(isCalling ? styles.counterCalling : {}) }}>{isCalling ? (serviceType === QUEUE_SERVICE.PICKUP ? "請到隔離房間取貨" : "請到度身房間") : "請留意叫號"}</div>
+        <div style={{ ...styles.counter, ...(isCalling ? styles.counterCalling : {}) }}>{isCalling ? (serviceType === QUEUE_SERVICE.PICKUP ? "請到取貨區取貨付款" : "請到度身區度身") : "請留意叫號"}</div>
         <button type="button" onClick={enableAutomaticAudio} style={styles.announceButton} title="啟用自動叫號提示">
           <Volume2 size={18} /> 啟用自動提示
         </button>
