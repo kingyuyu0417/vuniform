@@ -12,7 +12,7 @@
 - Foundry Toolkit is not currently configured in this repository. Before adding Foundry, Azure OpenAI, an agent, or an AI workflow, state the integration boundary and verify that it is required; do not replace Supabase or invent Azure resources implicitly.
 - For Foundry Toolkit work, keep credentials and service keys server-side. `VITE_*` values are browser-visible; never put service-role keys, Foundry secrets, or other privileged credentials in `.env.local` or client code.
 - Prefer a small, isolated integration under a clear service boundary. Preserve the existing React/Vite entry points and public/customer data protections unless the request explicitly changes them.
-- Validate any new Toolkit or Azure configuration with the narrowest available local check, then run the normal production build. Confirm the target deployment provider before adding deployment configuration because Netlify and Cloudflare Pages metadata both exist.
+- Validate any new Toolkit or Azure configuration with the narrowest available local check, then run the normal production build. Cloudflare Pages is the only supported deployment provider; keep deployment configuration in `wrangler.toml`.
 
 ## Security And Data Rules
 

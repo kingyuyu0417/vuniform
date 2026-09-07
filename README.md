@@ -76,9 +76,17 @@ Project URL 必須是 `https://你的-project-ref.supabase.co`，不要加 `/res
 npm run build
 ```
 
-將 `dist` 資料夾部署到 Netlify Drop，或連接 GitHub 後部署到 Vercel。部署平台需要設定同一組 `VITE_SUPABASE_URL` 和 `VITE_SUPABASE_ANON_KEY` 環境變數。
+本專案只使用 Cloudflare Pages 部署。連接 GitHub repository 後，設定：
 
-要自動更新，先將專案推送到 GitHub，再在 Netlify 選 **Add new project → Import from Git**，選取 repository。`netlify.toml` 已固定 `npm run build` 和 `dist` 設定；之後每次 `git push` 都會自動部署。
+- Build command：`npm run build`
+- Build output directory：`dist`
+- Node.js version：`20`
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `VITE_USE_SUPABASE_AUTH`
+- `VITE_PUBLIC_APP_URL`
+
+Cloudflare Pages 會在每次 `git push` 後自動部署。專案的 Cloudflare Pages 設定保存在 `wrangler.toml`；請不要再使用 Netlify 或 Vercel 設定。
 
 目前 schema 的匿名政策只適合測試。正式公開前，必須改用 Supabase Auth 和更嚴格的 Row Level Security，避免任何人讀寫全部 POS 資料。
 
