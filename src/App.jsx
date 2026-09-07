@@ -3188,10 +3188,20 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
   const dateOrders = normalizedPhoneSearch.length === 4
     ? salesLog.filter((o) => customerPhoneLast4(o.customerPhone || o.phone) === normalizedPhoneSearch)
     : salesLog.filter((o) => o.date === effectiveDate);
-  const schoolNames = Array.from(new Set(dateOrders.map((o) => o.school).filter(Boolean))).sort((a, b) => a.localeCompare(b, "zh-Hant"));
-  const outletForOrder = (order) => order.outletName || outletNameForSchool(order.school, schoolMeta);
-  const availableSchools = schoolNames.filter((school) => !outletFilter || outletForOrder({ school }) === outletFilter);
-  const dayOrders = dateOrders.filter((o) => (!outletFilter || outletForOrder(o) === outletFilter) && (!schoolFilter || o.school === schoolFilter));
+  const outletForOrder = (order) => String(order.outletName || order.outlet_name || outletNameForSchool(order.school, schoolMeta) || "").trim();
+  const selectedOutlet = OUTLETS.find((outlet) => outlet.name === outletFilter);
+  const outletMatches = (order) => {
+    if (!outletFilter) return true;
+    if (outletForOrder(order) === outletFilter) return true;
+    return Boolean(
+      selectedOutlet
+      && ((selectedOutlet.phone && order.outletPhone === selectedOutlet.phone)
+        || (selectedOutlet.address && order.outletAddress === selectedOutlet.address))
+    );
+  };
+  const availableSchools = Array.from(new Set(dateOrders.filter(outletMatches).map((o) => o.school).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b, "zh-Hant"));
+  const dayOrders = dateOrders.filter((o) => outletMatches(o) && (!schoolFilter || o.school === schoolFilter));
   const dayTotal = dayOrders.reduce((s, o) => s + o.total, 0);
   const dayItems = dayOrders.reduce((s, o) => s + o.itemCount, 0);
   const knownCustomerPhones = new Set(dayOrders.map((o) => customerPhoneLast4(o.customerPhone || o.phone)).filter(Boolean));
