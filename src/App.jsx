@@ -3194,6 +3194,9 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
   const dayOrders = dateOrders.filter((o) => (!outletFilter || outletForOrder(o) === outletFilter) && (!schoolFilter || o.school === schoolFilter));
   const dayTotal = dayOrders.reduce((s, o) => s + o.total, 0);
   const dayItems = dayOrders.reduce((s, o) => s + o.itemCount, 0);
+  const knownCustomerPhones = new Set(dayOrders.map((o) => customerPhoneLast4(o.customerPhone || o.phone)).filter(Boolean));
+  const customerCount = knownCustomerPhones.size;
+  const missingCustomerPhoneCount = dayOrders.filter((o) => !customerPhoneLast4(o.customerPhone || o.phone)).length;
 
   const byOutlet = {};
   const bySchool = {};
@@ -3280,7 +3283,7 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
           </button>
         )}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 14 }}>
         <div style={{ background: "#EEF1F5", borderRadius: 10, padding: "12px 14px" }}>
           <div style={{ fontSize: 12, color: "#666" }}>總收入</div>
           <div style={{ fontSize: 20, fontWeight: 600 }}>{fmt(dayTotal)}</div>
@@ -3288,6 +3291,11 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
         <div style={{ background: "#EEF1F5", borderRadius: 10, padding: "12px 14px" }}>
           <div style={{ fontSize: 12, color: "#666" }}>賣出件數</div>
           <div style={{ fontSize: 20, fontWeight: 600 }}>{dayItems}</div>
+        </div>
+        <div style={{ background: "#EEF1F5", borderRadius: 10, padding: "12px 14px" }} title="按已保存的電話最後4位去重；未有電話資料的單據不會計入">
+          <div style={{ fontSize: 12, color: "#666" }}>客人數（按電話尾4位）</div>
+          <div style={{ fontSize: 20, fontWeight: 600 }}>{customerCount}</div>
+          {missingCustomerPhoneCount > 0 && <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>另有 {missingCustomerPhoneCount} 張單無電話資料</div>}
         </div>
       </div>
       {Object.keys(byOutlet).length > 0 && (
