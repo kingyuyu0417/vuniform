@@ -3175,7 +3175,7 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
   const [outletFilter, setOutletFilter] = useState("");
   const [schoolFilter, setSchoolFilter] = useState("");
   const effectiveDate = canViewAllDates ? date : todayStr();
-  const dateOrders = salesLog.filter((o) => o.date === effectiveDate && (!selectedSchool || o.school === selectedSchool));
+  const dateOrders = salesLog.filter((o) => o.date === effectiveDate);
   const schoolNames = Array.from(new Set(dateOrders.map((o) => o.school).filter(Boolean))).sort((a, b) => a.localeCompare(b, "zh-Hant"));
   const outletForOrder = (order) => order.outletName || outletNameForSchool(order.school, schoolMeta);
   const availableSchools = schoolNames.filter((school) => !outletFilter || outletForOrder({ school }) === outletFilter);
