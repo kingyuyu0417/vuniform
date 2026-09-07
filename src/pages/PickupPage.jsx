@@ -24,6 +24,12 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
   const [loading, setLoading] = useState(false);
   const [updatingId, setUpdatingId] = useState("");
   const [notice, setNotice] = useState("");
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const syncOrders = async () => {
     setLoading(true);
@@ -91,6 +97,11 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
   }, [displayOrders]);
 
   const summaryRows = useMemo(() => Object.values(batchSummary), [batchSummary]);
+  const elapsedSeconds = (order) => {
+    const startedAt = order.tailor_info?.prepared_at || order.created_at;
+    const startedTime = Date.parse(startedAt || "");
+    return Number.isFinite(startedTime) ? Math.max(0, Math.floor((now - startedTime) / 1000)) : null;
+  };
 
   const markReady = async (orderId) => {
     if (updatingId) return;
@@ -193,7 +204,10 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
                 <div style={styles.queue}>{order.queue_number}</div>
                 <div style={styles.customer}>{order.customer_info?.guestName || "顧客"} · {order.customer_info?.phone || "電話未填"}</div>
               </div>
-              <div style={styles.badge}>{statusLabel[order.status] || order.status}</div>
+              <div style={styles.cardTopRight}>
+                <div style={styles.elapsed}>已開始 {elapsedSeconds(order) ?? "-"} 秒</div>
+                <div style={styles.badge}>{statusLabel[order.status] || order.status}</div>
+              </div>
             </div>
 
             <div style={styles.itemsWrap}>
@@ -307,8 +321,10 @@ const styles = {
     gap: 12,
   },
   cardTop: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 },
+  cardTopRight: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 },
   queue: { fontSize: 30, fontWeight: 900, color: "#0f172a", letterSpacing: 1.2 },
   customer: { fontSize: 13, color: "#475569", fontWeight: 700, marginTop: 4 },
+  elapsed: { color: "#1d4ed8", fontSize: 12, fontWeight: 800, whiteSpace: "nowrap" },
   badge: {
     background: "#fff7ed",
     color: "#c2410c",
