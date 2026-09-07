@@ -371,14 +371,24 @@ const OUTLETS = [
   { name: "沙田分店", address: "沙田石門安群街3號京瑞廣場一期5樓A室（近屯馬線石門站C出口）", phone: "2637 3313", region: "新界區", districts: ["沙田區", "北區", "西貢區", "葵青區", "離島區"] },
 ];
 
+const explicitOutletNameForSchool = (school, schoolMeta = {}) => (
+  schoolMeta[school]?.outletName
+  || workbookSchoolOutlets[school]
+  || EXTRA_SCHOOL_OUTLETS[school]
+  || ""
+);
 const outletForSchool = (school, schoolMeta = {}) => {
+  const explicitOutletName = explicitOutletNameForSchool(school, schoolMeta);
+  if (explicitOutletName) {
+    return OUTLETS.find((outlet) => outlet.name === explicitOutletName) || { name: explicitOutletName };
+  }
   const meta = metaOf(schoolMeta, school);
   const candidates = OUTLETS.filter((outlet) => outlet.districts.includes(meta.district));
   if (candidates.length === 1) return candidates[0];
   if (candidates.length > 1 && school.includes("屯門")) return candidates[0];
   return candidates[0] || OUTLETS.find((outlet) => outlet.region === meta.region) || null;
 };
-const outletNameForSchool = (school, schoolMeta = {}) => schoolMeta[school]?.outletName || workbookSchoolOutlets[school] || EXTRA_SCHOOL_OUTLETS[school] || outletForSchool(school, schoolMeta)?.name || "未指定門店";
+const outletNameForSchool = (school, schoolMeta = {}) => outletForSchool(school, schoolMeta)?.name || "未指定門店";
 
 const UNCLASSIFIED = "未分類";
 const schoolCatalog = { ...baseSchoolCatalog, ...workbookSchoolCatalog, ...EXTRA_SCHOOL_CATALOG };
@@ -3227,7 +3237,11 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
   const dateOrders = normalizedPhoneSearch.length === 4
     ? salesLog.filter((o) => customerPhoneLast4(o.customerPhone || o.phone) === normalizedPhoneSearch)
     : salesLog.filter((o) => o.date === effectiveDate);
-  const outletForOrder = (order) => String(order.outletName || order.outlet_name || outletNameForSchool(order.school, schoolMeta) || "").trim();
+  const outletForOrder = (order) => {
+    const configuredOutlet = outletNameForSchool(order.school, schoolMeta);
+    if (configuredOutlet !== "未指定門店") return configuredOutlet;
+    return String(order.outletName || order.outlet_name || "").trim();
+  };
   const selectedOutlet = OUTLETS.find((outlet) => outlet.name === outletFilter);
   const outletMatches = (order) => {
     if (!outletFilter) return true;
