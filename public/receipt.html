@@ -43,6 +43,8 @@
     const money = (value) => "$" + Math.round(Number(value) || 0).toLocaleString("en-HK");
     const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
     const text = (value, fallback = "-") => escapeHtml(value == null || value === "" ? fallback : value);
+    const customerSurname = (name) => String(name || "").trim().replace(/\s+/g, "").slice(0, 1);
+    const customerPhoneLast4 = (phone) => String(phone || "").replace(/\D/g, "").slice(-4);
     const sizeLabel = (item) => item.length ? `${item.size}／${item.length}` : item.size;
     const getSizeDimensionLabel = (productName) => {
       if (!productName) return "尺碼";
@@ -72,6 +74,8 @@
             <dt>收據編號</dt><dd>#${text(order.id).toUpperCase()}</dd>
             <dt>交易日期</dt><dd>${text(order.date)} ${text(order.time, "")}</dd>
             <dt>學校</dt><dd>${text(order.school)}</dd>
+            <dt>客人</dt><dd>${text(customerSurname(order.customerName))}</dd>
+            <dt>電話尾4位</dt><dd>${text(customerPhoneLast4(order.customerPhone))}</dd>
           </dl>
           <div class="items">
               ${items.map((item) => `<div class="item"><div class="item-main"><span>${text(item.name)}</span><span>${money(Number(item.price) * Number(item.qty))}</span></div><div class="item-sub"><span>${formatSizeDisplay(item.name, item.size, item.length)}</span></div><div class="item-sub"><span>數量</span><span>${text(item.qty, "0")} 件 × ${money(item.price)}</span></div></div>`).join("")}

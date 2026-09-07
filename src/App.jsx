@@ -81,6 +81,8 @@ const DEFAULT_PRODUCTS = [
 const fmt = (n) => `$${Math.round(n).toLocaleString("en-HK")}`;
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const uid = () => Math.random().toString(36).slice(2, 10);
+const customerSurname = (name = "") => String(name || "").trim().replace(/\s+/g, "").slice(0, 1);
+const customerPhoneLast4 = (phone = "") => String(phone || "").replace(/\D/g, "").slice(-4);
 const sizeLabel = (size) => size.length ? `${size.length}／${size.size}` : size.size;
 const hasLengthOptions = (product) => product.sizes.some((size) => size.length);
 const sizeDimensionLabel = (product) => {
@@ -540,6 +542,10 @@ const buildReceiptLines = (order, shopName) => {
   lines.push(`收據編號：#${(order.id || "").toUpperCase()}`);
   lines.push(`交易日期：${order.date || "-"} ${order.time || ""}`);
   lines.push(`學校：${order.school || shopName || "-"}`);
+  if (order.customerName || order.customerPhone) {
+    lines.push(`客人：${customerSurname(order.customerName) || "-"}`);
+    lines.push(`電話尾4位：${customerPhoneLast4(order.customerPhone) || "-"}`);
+  }
   if (order.outletName) {
     lines.push(`最近門店：${order.outletName}`);
     lines.push(`門店地址：${order.outletAddress}`);
@@ -1508,6 +1514,7 @@ export default function UniformPOS() {
       id: `order-${Date.now()}`,
       ticketId: ticket.id,
       guestName: ticket.guestName,
+      customerPhone: ticket.phone || ticket.customerPhone || "",
       queueNo: ticket.queueNo,
       items: orderItems,
       totalPrice,
@@ -1562,6 +1569,7 @@ export default function UniformPOS() {
         sourceOrderId: order.id || "",
         sourceQueueNo: order.queue_number || order.queueNo || "",
         sourceGuestName: order.customer_info?.guestName || order.guestName || "",
+        sourceGuestPhone: order.customer_info?.phone || order.phone || "",
       };
     });
 
@@ -1599,6 +1607,8 @@ export default function UniformPOS() {
             cashierId: session ? session.id : null,
             cashierName: session ? session.name : "",
             school: paidOrder.school || selectedSchool || "",
+            customerName: paidOrder.guestName || paidOrder.customerName || "",
+            customerPhone: paidOrder.customerPhone || paidOrder.phone || "",
             outletName: paidOrder.outletName || outletNameForSchool(paidOrder.school || selectedSchool || "", schoolMeta),
             outletAddress: paidOrder.outletAddress || "",
             outletPhone: paidOrder.outletPhone || "",
@@ -1660,6 +1670,8 @@ export default function UniformPOS() {
       school: selectedSchool || "",
       queueNo: sourceMeta.sourceQueueNo || "",
       guestName: sourceMeta.sourceGuestName || "",
+      customerName: sourceMeta.sourceGuestName || "",
+      customerPhone: sourceMeta.sourceGuestPhone || "",
     };
     const outlet = outletForSchool(order.school, schoolMeta);
     if (outlet) {
@@ -2206,6 +2218,8 @@ export default function UniformPOS() {
             <div>收據編號：#{(receipt.id || "").toUpperCase()}</div>
             <div>交易日期：{receipt.date} {receipt.time}</div>
             <div>學校：{receipt.school || "-"}</div>
+            <div>客人：{customerSurname(receipt.customerName) || "-"}</div>
+            <div>電話尾4位：{customerPhoneLast4(receipt.customerPhone) || "-"}</div>
             <div>--------------------------------</div>
             <div>商品明細</div>
             {receipt.items.map((it, i) => (
@@ -3415,6 +3429,8 @@ function ReceiptModal({ order, onClose, onPrintBrowser, onPrintBluetooth, btStat
           <div style={{ marginTop: 4 }}>收據編號：#{(order.id || "").toUpperCase()}</div>
           <div>交易日期：{order.date} {order.time}</div>
           <div>學校：{order.school || "-"}</div>
+          <div>客人：{customerSurname(order.customerName) || "-"}</div>
+          <div>電話尾4位：{customerPhoneLast4(order.customerPhone) || "-"}</div>
           <div>--------------------------------</div>
           <div>商品明細</div>
           {order.items.map((it, i) => (
