@@ -26,6 +26,12 @@ const enqueueAnnouncement = (announcement) => {
   return announcementChain;
 };
 
+const CANTONESE_DIGITS = { 0: "零", 1: "一", 2: "二", 3: "三", 4: "四", 5: "五", 6: "六", 7: "七", 8: "八", 9: "九" };
+const queueNumberForSpeech = (value = "") => String(value)
+  .trim()
+  .replace(/\d/g, (digit) => ` ${CANTONESE_DIGITS[digit]} `)
+  .replace(/\s+/g, " ");
+
 const schoolNameStyle = (schoolName = "") => {
   const characterCount = Array.from(schoolName).length;
   const fontSize = characterCount > 36 ? 26 : characterCount > 28 ? 32 : characterCount > 20 ? 40 : 52;
@@ -137,15 +143,16 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
     if (!canAnnounce()) return;
     await playChime();
     if (!window.speechSynthesis) return;
-    const destination = serviceType === QUEUE_SERVICE.PICKUP ? "隔離房間取貨" : "度身房間度身";
-    const utterance = new SpeechSynthesisUtterance(`請排隊號碼 ${counterToAnnounce.current_queue_number}，請到${destination}。`);
-    utterance.lang = "zh-HK";
+    const destination = serviceType === QUEUE_SERVICE.PICKUP ? "取貨處取貨" : "度身室度身";
+    const utterance = new SpeechSynthesisUtterance(`請 ${queueNumberForSpeech(counterToAnnounce.current_queue_number)} 號，請到${destination}。`);
     const voices = window.speechSynthesis.getVoices();
-    utterance.voice = voices.find((voice) => voice.lang.toLowerCase() === "zh-hk")
-      || voices.find((voice) => voice.lang.toLowerCase().startsWith("zh-hk"))
-      || voices.find((voice) => voice.lang.toLowerCase().startsWith("zh-tw"))
-      || voices.find((voice) => voice.lang.toLowerCase().startsWith("zh"))
+    const cantoneseVoice = voices.find((voice) => /^yue(?:[-_]hk)?$/i.test(voice.lang))
+      || voices.find((voice) => /^yue[-_]/i.test(voice.lang))
+      || voices.find((voice) => /^zh[-_]hk/i.test(voice.lang))
+      || voices.find((voice) => /cantonese|粵語|广东话|廣東話/i.test(voice.name))
       || null;
+    utterance.lang = cantoneseVoice?.lang || "yue-HK";
+    utterance.voice = cantoneseVoice;
     utterance.rate = 0.9;
     utterance.pitch = 1;
     window.speechSynthesis.speak(utterance);
