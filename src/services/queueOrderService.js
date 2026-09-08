@@ -16,6 +16,13 @@ const hongKongDate = (value = new Date()) => new Intl.DateTimeFormat("en-CA", {
 }).format(new Date(value));
 const DAY_PREFIX = () => hongKongDate().replace(/-/g, "");
 export const isQueueOrderToday = (value) => hongKongDate(value) === hongKongDate();
+const getHongKongDayBounds = () => {
+  const today = hongKongDate();
+  const [year, month, day] = today.split("-").map(Number);
+  const start = new Date(Date.UTC(year, month - 1, day) - 8 * 60 * 60 * 1000);
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  return { start: start.toISOString(), end: end.toISOString() };
+};
 
 const safeSchoolId = (schoolId = "") => String(schoolId || "").trim() || "default-school";
 const toRecord = (value) => (value && typeof value === "object" ? value : {});
@@ -223,13 +230,22 @@ export const queueOrderService = {
 
   async listOrders({ schoolId = "", status = null } = {}) {
     const schoolFilter = schoolId ? safeSchoolId(schoolId) : "";
+    const { start: todayStart, end: tomorrowStart } = getHongKongDayBounds();
     if (!isSupabaseConfigured || !supabase) {
-      const rows = readQueueCache().filter((row) => !schoolFilter || safeSchoolId(row.school_id) === schoolFilter);
+      const rows = readQueueCache().filter((row) =>
+        isQueueOrderToday(row.created_at)
+        && (!schoolFilter || safeSchoolId(row.school_id) === schoolFilter)
+      );
       return rows.filter((row) => !status || row.status === status).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     }
 
     try {
-      let query = supabase.from("customer_orders").select("*").order("created_at", { ascending: false });
+      let query = supabase
+        .from("customer_orders")
+        .select("*")
+        .gte("created_at", todayStart)
+        .lt("created_at", tomorrowStart)
+        .order("created_at", { ascending: false });
       if (schoolFilter) query = query.eq("school_id", schoolFilter);
 
       const { data, error } = await query;
@@ -245,7 +261,10 @@ export const queueOrderService = {
       return finalRows.filter((row) => !status || row.status === status).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     } catch (error) {
       console.warn("listOrders fallback to local cache", error);
-      const rows = readQueueCache().filter((row) => !schoolFilter || safeSchoolId(row.school_id) === schoolFilter);
+      const rows = readQueueCache().filter((row) =>
+        isQueueOrderToday(row.created_at)
+        && (!schoolFilter || safeSchoolId(row.school_id) === schoolFilter)
+      );
       return rows.filter((row) => !status || row.status === status).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     }
   },
