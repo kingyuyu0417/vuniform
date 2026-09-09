@@ -823,7 +823,13 @@ export default function UniformPOS() {
             .select("id, display_name, role")
             .eq("id", data.session.user.id)
             .maybeSingle();
-          if (profile) setSession({ id: profile.id, name: profile.display_name, role: profile.role });
+          if (profile) {
+            setSession({ id: profile.id, name: profile.display_name, role: profile.role });
+          } else {
+            setSession(null);
+          }
+        } else if (active) {
+          setSession(null);
         }
       } catch (e) {
         console.error("讀取驗證登入狀態失敗", e);
@@ -1202,11 +1208,12 @@ export default function UniformPOS() {
 
   // 每30秒自動由雲端拉一次最新資料
   useEffect(() => {
+    if (!authReady || (isSupabaseAuthEnabled && !session)) return undefined;
     const timer = setInterval(() => {
       refreshFromCloud();
     }, 30000);
     return () => clearInterval(timer);
-  }, []);
+  }, [authReady, session]);
 
   const persistProducts = async (next, { orderOnly = false } = {}) => {
     try {
