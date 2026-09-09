@@ -2204,6 +2204,8 @@ export default function UniformPOS() {
                 setCashReceived={setCashReceived}
                 changeDue={changeDue}
                 cashAmount={cashAmount}
+                exchangeMode={exchangeMode}
+                refundDue={refundDue}
               />
             }
           />
@@ -2230,6 +2232,8 @@ export default function UniformPOS() {
                     setCashReceived={setCashReceived}
                     changeDue={changeDue}
                     cashAmount={cashAmount}
+                    exchangeMode={exchangeMode}
+                    refundDue={refundDue}
                   />
                 )}
                 {tab === "guest" && (
@@ -2369,6 +2373,8 @@ function SaleTab({
   setCashReceived,
   changeDue,
   cashAmount,
+  exchangeMode = false,
+  refundDue = 0,
 }) {
   const [genderFilter, setGenderFilter] = useState("全部");
   const [selectedLength, setSelectedLength] = useState("");
