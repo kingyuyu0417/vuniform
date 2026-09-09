@@ -587,8 +587,9 @@ const buildReceiptLines = (order, shopName) => {
   lines.push(`商品件數：${order.itemCount || 0}`);
   lines.push(`應付總額：${fmt(order.total)}`);
   if (typeof order.cashReceived === "number") lines.push(`實收現金：${fmt(order.cashReceived)}`);
-  if (typeof order.changeDue === "number") lines.push(`找續：${fmt(order.changeDue)}`);
-  lines.push("交易狀態：已完成");
+  if (order.refundDue > 0) lines.push(`應退客人：${fmt(order.refundDue)}`);
+  else if (typeof order.changeDue === "number") lines.push(`找續：${fmt(order.changeDue)}`);
+  lines.push(order.exchangeSourceReceiptId ? "交易狀態：換貨完成" : "交易狀態：已完成");
   lines.push("--------------------------------");
   lines.push("多謝惠顧，歡迎重臨");
   lines.push("此 QR Code 內容為本單電子收據");
@@ -1353,7 +1354,7 @@ export default function UniformPOS() {
   const addToCart = (product, sizeObj, quantity = 1) => {
     const qty = Math.max(1, Math.min(99, Number(quantity) || 1));
     setCart((prev) => {
-      const idx = prev.findIndex((c) => c.productId === product.id && c.size === sizeObj.size && c.length === (sizeObj.length || ""));
+      const idx = prev.findIndex((c) => !c.exchangeReturn && c.productId === product.id && c.size === sizeObj.size && c.length === (sizeObj.length || ""));
       if (idx >= 0) {
         const next = [...prev];
         next[idx] = { ...next[idx], qty: next[idx].qty + qty };
@@ -1372,6 +1373,39 @@ export default function UniformPOS() {
   };
 
   const removeItem = (key) => setCart((prev) => prev.filter((c) => c.key !== key));
+
+  const startExchange = (order, item) => {
+    const product = products.find((candidate) => candidate.name === item.name || candidate.id === item.productId);
+    if (!product) {
+      setStorageError("找不到原有貨品款式，請先更新商品資料後再試。");
+      return;
+    }
+    const originalSize = product.sizes?.find((size) => String(size.size) === String(item.size) && String(size.length || "") === String(item.length || ""))
+      || product.sizes?.find((size) => String(size.size) === String(item.size));
+    if (!originalSize) {
+      setStorageError("找不到原有貨品碼數，請先更新商品資料後再試。");
+      return;
+    }
+    setSelectedSchool(order.school || selectedSchool);
+    setCart([{
+      key: uid(),
+      productId: product.id,
+      name: item.name,
+      size: item.size,
+      length: item.length || "",
+      price: -Math.abs(Number(item.price || originalSize.price || 0)),
+      qty: 1,
+      exchangeReturn: true,
+      exchangeSourceReceiptId: order.id || "",
+      sourceGuestName: order.customerName || "",
+      sourceGuestPhone: order.customerPhone || "",
+    }]);
+    setCashReceived("");
+    setSelectedProduct(null);
+    setReceipt(null);
+    setTab("sale");
+    navigate("/sale", { replace: true });
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -1696,9 +1730,14 @@ export default function UniformPOS() {
 
   const cartTotal = cart.reduce((sum, c) => sum + c.price * c.qty, 0);
   const cartCount = cart.reduce((sum, c) => sum + c.qty, 0);
+  const exchangeMode = cart.some((item) => item.exchangeReturn);
   const cartSourceMeta = cart.find((item) => item.sourceQueueNo || item.sourceGuestName) || {};
-  const cashAmount = cashReceived === "" ? cartTotal : Number(cashReceived || 0);
-  const changeDue = cashAmount - cartTotal;
+  const cashAmount = exchangeMode
+    ? (cashReceived === "" ? 0 : Number(cashReceived || 0))
+    : (cashReceived === "" ? cartTotal : Number(cashReceived || 0));
+  const settlementDifference = cashAmount - cartTotal;
+  const changeDue = exchangeMode ? Math.max(cartTotal - cashAmount, 0) : Math.max(settlementDifference, 0);
+  const refundDue = exchangeMode ? Math.max(-cartTotal - cashAmount, 0) : 0;
 
   const checkout = async () => {
     if (cart.length === 0 || checkoutSubmittingRef.current) return;
@@ -1710,10 +1749,11 @@ export default function UniformPOS() {
       id: "",
       date: todayStr(),
       time: now.toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit" }),
-      items: cart.map(({ name, size, length, price, qty }) => ({ name, size, length, price, qty })),
+      items: cart.map(({ name, size, length, price, qty, exchangeReturn, exchangeSourceReceiptId }) => ({ name, size, length, price, qty, exchangeReturn, exchangeSourceReceiptId })),
       total: cartTotal,
       cashReceived: received,
-      changeDue: Math.max(received - cartTotal, 0),
+      changeDue: exchangeMode ? Math.max(cartTotal - received, 0) : Math.max(received - cartTotal, 0),
+      refundDue: exchangeMode ? Math.max(-cartTotal - received, 0) : 0,
       itemCount: cartCount,
       cashierId: session ? session.id : null,
       cashierName: session ? session.name : "",
@@ -1722,6 +1762,7 @@ export default function UniformPOS() {
       guestName: sourceMeta.sourceGuestName || "",
       customerName: sourceMeta.sourceGuestName || "",
       customerPhone: sourceMeta.sourceGuestPhone || "",
+      exchangeSourceReceiptId: cart.find((item) => item.exchangeSourceReceiptId)?.exchangeSourceReceiptId || "",
     };
     const outlet = outletForSchool(order.school, schoolMeta);
     if (outlet) {
@@ -2268,6 +2309,7 @@ export default function UniformPOS() {
             }
             return started;
           }}
+          onExchange={startExchange}
           onPrintBrowser={printBrowser}
           onPrintBluetooth={() => printBluetooth(receipt)}
           btStatus={btStatus}
@@ -2576,17 +2618,21 @@ function SaleTab({
         {cart.map((c) => (
           <div key={c.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #E5E5E0" }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>{c.name}（{sizeLabel(c)}）</div>
-              <div style={{ fontSize: 12, color: "#888" }}>{fmt(c.price)} x {c.qty} = {fmt(c.price * c.qty)}</div>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>{c.exchangeReturn ? "換出：" : ""}{c.name}（{sizeLabel(c)}）</div>
+              <div style={{ fontSize: 12, color: c.exchangeReturn ? "#9A3412" : "#888" }}>{fmt(c.price)} x {c.qty} = {fmt(c.price * c.qty)}</div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <button className="pos-btn" onClick={() => changeQty(c.key, -1)} style={{ width: 26, height: 26, borderRadius: 6, background: "#fff", border: "1px solid #ccc" }}>
-                <Minus size={13} style={{ margin: "auto" }} />
-              </button>
-              <span style={{ fontSize: 13, minWidth: 16, textAlign: "center" }}>{c.qty}</span>
-              <button className="pos-btn" onClick={() => changeQty(c.key, 1)} style={{ width: 26, height: 26, borderRadius: 6, background: "#fff", border: "1px solid #ccc" }}>
-                <Plus size={13} style={{ margin: "auto" }} />
-              </button>
+              {!c.exchangeReturn && (
+                <>
+                  <button className="pos-btn" onClick={() => changeQty(c.key, -1)} style={{ width: 26, height: 26, borderRadius: 6, background: "#fff", border: "1px solid #ccc" }}>
+                    <Minus size={13} style={{ margin: "auto" }} />
+                  </button>
+                  <span style={{ fontSize: 13, minWidth: 16, textAlign: "center" }}>{c.qty}</span>
+                  <button className="pos-btn" onClick={() => changeQty(c.key, 1)} style={{ width: 26, height: 26, borderRadius: 6, background: "#fff", border: "1px solid #ccc" }}>
+                    <Plus size={13} style={{ margin: "auto" }} />
+                  </button>
+                </>
+              )}
               <button className="pos-btn" onClick={() => removeItem(c.key)} style={{ width: 26, height: 26, borderRadius: 6, background: "#fff", border: "1px solid #eee", color: "#c33" }}>
                 <Trash2 size={13} style={{ margin: "auto" }} />
               </button>
@@ -2596,18 +2642,19 @@ function SaleTab({
         {cart.length > 0 && (
           <>
             <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", fontSize: 15, fontWeight: 700 }}>
-              <span>總計（{cartCount}件）</span>
+              <span>{exchangeMode ? "換貨應補／應退" : `總計（${cartCount}件）`}</span>
               <span>{fmt(cartTotal)}</span>
             </div>
 
             <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, paddingTop: 10, borderTop: "1px solid #E5E5E0" }}>
-              <label htmlFor="cash-received" style={{ fontSize: 13, fontWeight: 600, color: "#45515F" }}>實收現金</label>
+              <label htmlFor="cash-received" style={{ fontSize: 13, fontWeight: 600, color: "#45515F" }}>{exchangeMode ? "補回現金" : "實收現金"}</label>
               <input
                 id="cash-received"
                 type="number"
                 min="0"
                 step="1"
-                value={cashReceived}
+                value={exchangeMode && refundDue > 0 ? 0 : cashReceived}
+                disabled={exchangeMode && refundDue > 0}
                 onFocus={(e) => {
                   e.target.select();
                   if (cashReceived === "" || Number(cashReceived || 0) === 0) {
@@ -2623,9 +2670,9 @@ function SaleTab({
               />
             </div>
 
-            <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 600, color: changeDue >= 0 ? "#1F3A5F" : "#B42318" }}>
-              <span>{changeDue >= 0 ? "找續" : "尚欠"}</span>
-              <span>{fmt(Math.abs(changeDue))}</span>
+            <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 600, color: exchangeMode && refundDue > 0 ? "#166534" : "#1F3A5F" }}>
+              <span>{exchangeMode && refundDue > 0 ? "應退客人" : exchangeMode ? "應補差額" : "找續"}</span>
+              <span>{fmt(exchangeMode && refundDue > 0 ? refundDue : exchangeMode ? changeDue : changeDue)}</span>
             </div>
 
             <div style={{ marginTop: 6, display: "flex", justifyContent: "space-between", fontSize: 12, color: "#666" }}>
@@ -2651,7 +2698,7 @@ function SaleTab({
           fontWeight: 600,
         }}
       >
-        完成交易並開單
+        {exchangeMode ? (refundDue > 0 ? `完成換貨／退回 ${fmt(refundDue)}` : `完成換貨${changeDue > 0 ? `／補回 ${fmt(changeDue)}` : ""}`) : "完成交易"}並開單
       </button>
       {storageError && (
         <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 8, background: "#FFF1F0", color: "#B42318", fontSize: 12, display: "flex", gap: 6, alignItems: "flex-start" }}>
@@ -3593,7 +3640,8 @@ function ReceiptQR({ order }) {
   );
 }
 
-function ReceiptModal({ order, onClose, onRedoSale, onPrintBrowser, onPrintBluetooth, btStatus }) {
+function ReceiptModal({ order, onClose, onRedoSale, onExchange, onPrintBrowser, onPrintBluetooth, btStatus }) {
+  const [exchangeItem, setExchangeItem] = useState(null);
   const openCustomerReceipt = () => {
     const receiptUrl = buildReceiptUrl(order);
     const anchor = document.createElement("a");
@@ -3629,17 +3677,21 @@ function ReceiptModal({ order, onClose, onRedoSale, onPrintBrowser, onPrintBluet
           <div>商品明細</div>
           {order.items.map((it, i) => (
             <div key={i}>
-              <div>{it.name}</div>
+              <div>{it.exchangeReturn ? "換出：" : ""}{it.name}</div>
               <div>  {formatSizeForReceipt(it.name, it.size, it.length)}</div>
-              <div>  數量 {it.qty} x {fmt(it.price)} = {fmt(it.price * it.qty)}</div>
+              <div>  數量 {it.qty} x {fmt(Math.abs(it.price))} = {fmt(it.price * it.qty)}</div>
             </div>
           ))}
           <div>--------------------------------</div>
           <div>商品件數：{order.itemCount}</div>
           <div>應付總額：{fmt(order.total)}</div>
           <div>實收現金：{fmt(order.cashReceived ?? order.total)}</div>
-          <div style={{ fontWeight: 700 }}>找續：{fmt(Math.max(order.changeDue ?? 0, 0))}</div>
-          <div>交易狀態：已完成</div>
+          {order.refundDue > 0 ? (
+            <div style={{ fontWeight: 700, color: "#166534" }}>應退客人：{fmt(order.refundDue)}</div>
+          ) : (
+            <div style={{ fontWeight: 700 }}>找續：{fmt(Math.max(order.changeDue ?? 0, 0))}</div>
+          )}
+          <div>交易狀態：{order.exchangeSourceReceiptId ? "換貨完成" : "已完成"}</div>
           <div style={{ marginTop: 8, color: "#555", lineHeight: 1.5 }}>
             換貨條款：全新校服可於購買日起一個月內到指定門店換貨。<br />
             不設退款；貨品必須未經洗滌、未曾使用，並保留完整吊牌及剪牌，否則恕不接受換貨。
@@ -3663,6 +3715,33 @@ function ReceiptModal({ order, onClose, onRedoSale, onPrintBrowser, onPrintBluet
         >
           <ShoppingCart size={16} /> 退／換貨：重新進行此單銷售
         </button>
+        {exchangeItem ? (
+          <div style={{ background: "#FFF7ED", border: "1px solid #FDBA74", borderRadius: 10, padding: 12, marginBottom: 8 }}>
+            <div style={{ color: "#9A3412", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>揀選需要更換的其中一件</div>
+            {order.items.map((item, index) => (
+              <button
+                key={`${item.name}-${item.size}-${index}`}
+                className="pos-btn"
+                onClick={() => onExchange?.(order, item)}
+                style={{ width: "100%", padding: "10px", marginBottom: 6, borderRadius: 8, background: "#fff", border: "1px solid #FDBA74", color: "#7C2D12", textAlign: "left" }}
+              >
+                {item.name}（{sizeLabel(item)}）× {item.qty}，原價 {fmt(item.price)}
+              </button>
+            ))}
+            <button className="pos-btn" onClick={() => setExchangeItem(null)} style={{ width: "100%", padding: "8px", borderRadius: 8, background: "transparent", color: "#9A3412" }}>
+              取消
+            </button>
+          </div>
+        ) : (
+          <button
+            className="pos-btn"
+            onClick={() => setExchangeItem(true)}
+            title="只更換此收據其中一件貨品，並自動計算補差額"
+            style={{ width: "100%", padding: "13px 0", borderRadius: 10, background: "#ECFDF3", color: "#166534", border: "1px solid #86EFAC", fontSize: 14, fontWeight: 700, marginBottom: 8 }}
+          >
+            快速換貨／補差額（只換一件）
+          </button>
+        )}
         <button
           className="pos-btn"
           onClick={onPrintBluetooth}
