@@ -16,6 +16,7 @@ import GuestPortalPage from "./pages/GuestPortalPage";
 import GuestQueueStatusPage from "./pages/GuestQueueStatusPage";
 import StaffOrderTracking from "./pages/StaffOrderTracking";
 import QueueDisplayPage from "./pages/QueueDisplayPage";
+import DirectoryPage from "./pages/DirectoryPage";
 import { QUEUE_SERVICE, queueOrderService } from "./services/queueOrderService";
 import baseSchoolCatalog from "./schoolCatalog.json";
 import workbookSchoolCatalog from "./workbookSchoolCatalog.json";
@@ -32,6 +33,17 @@ const DESIGNATED_SCHOOL = "香港中國婦女會馮堯敬紀念中學";
 const EXTRA_SCHOOL_CATALOG = {
   "香港中國婦女會馮堯敬紀念中學": { category: "資助中學", level: "中學", region: "新界區", district: "沙田區" },
 };
+
+const directoryIds = [
+  "sale",
+  "guest",
+  "queue",
+  "track",
+  "fitting",
+  "pickup",
+  "cashier",
+  ...(perms?.tabs || []),
+];
 const EXTRA_SCHOOL_OUTLETS = {
   "香港中國婦女會馮堯敬紀念中學": "沙田分店",
 };
@@ -912,6 +924,7 @@ export default function UniformPOS() {
     const s = { id: account.id, name: account.name, role: account.role };
     setSession(s);
     window.storage.set("current-session", JSON.stringify(s), false).catch((e) => console.error("記住登入狀態失敗", e));
+    navigate("/menu");
   };
 
   const loginWithAuth = async (email, password) => {
@@ -929,6 +942,7 @@ export default function UniformPOS() {
     }
     setSession({ id: profile.id, name: profile.display_name, role: profile.role });
     await refreshFromCloud({ skipProductsWhileEditing: false });
+    navigate("/menu");
     if (profile.role === ROLES.ADMIN) {
       const { data: migrationResult, error: migrationError } = await supabase.rpc("migrate_legacy_data");
       if (!migrationError) {
@@ -2017,44 +2031,15 @@ export default function UniformPOS() {
       {schoolPanelOpen && <div style={{ height: 16, background: "#1F3A5F", borderRadius: "0 0 16px 16px" }} />}
 
       {session.role !== ROLES.GUEST && (
-      <div style={{ display: "flex", gap: 8, padding: "12px 16px 0" }}>
-        {[
-          { id: "sale", label: "銷售", icon: ShoppingCart },
-          { id: "guest", label: "客人登記", icon: Users },
-          { id: "queue", label: "排隊", icon: ClipboardList },
-          { id: "track", label: "查單", icon: Search },
-          { id: "fitting", label: "度身", icon: Users },
-          { id: "pickup", label: "取貨", icon: ClipboardList },
-          { id: "cashier", label: "收銀", icon: ShoppingCart },
-          { id: "products", label: "商品", icon: Settings },
-          { id: "records", label: "記錄", icon: ClipboardList },
-          { id: "staff", label: "員工", icon: Users },
-        ]
-          .filter((t) => (perms?.tabs?.includes(t.id)) || ["guest", "queue", "fitting", "pickup", "cashier", "track"].includes(t.id))
-          .map(({ id, label, icon: Icon }) => (
+        <div style={{ padding: "12px 16px 0" }}>
           <button
-            key={id}
             className="pos-btn"
-            onClick={() => handleTabChange(id)}
-            style={{
-              flex: 1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              padding: "10px 0",
-              borderRadius: 10,
-              background: tab === id ? "#1F3A5F" : "#EEF1F5",
-              color: tab === id ? "#fff" : "#333",
-              fontSize: 14,
-              fontWeight: 500,
-            }}
+            onClick={() => navigate("/menu")}
+            style={{ width: "100%", padding: "10px 14px", borderRadius: 10, background: location.pathname === "/menu" ? "#1F3A5F" : "#EEF1F5", color: location.pathname === "/menu" ? "#fff" : "#1F3A5F", fontSize: 14, fontWeight: 700 }}
           >
-            <Icon size={16} />
-            {label}
+            功能目錄
           </button>
-        ))}
-      </div>
+        </div>
       )}
 
       {(() => {
@@ -2150,6 +2135,10 @@ export default function UniformPOS() {
           <Route
             path="/staff"
             element={isSupabaseAuthEnabled ? <AuthStaffTab manageStaff={manageStaff} currentId={session.id} /> : <StaffTab accounts={accounts} saveAccounts={saveAccounts} currentId={session.id} />}
+          />
+          <Route
+            path="/menu"
+            element={<DirectoryPage availableIds={[...new Set(directoryIds)]} onNavigate={handleTabChange} />}
           />
           <Route
             path="/sale"
