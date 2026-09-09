@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { Search, Check, AlertCircle, Camera, QrCode, Zap } from "lucide-react";
+import { BrowserQRCodeReader } from "@zxing/browser";
 import { queueOrderService } from "../services/queueOrderService";
 
 const statusLabel = {
@@ -39,6 +40,7 @@ const StaffOrderTracking = ({ visits = [], currentSchoolId = "", onStatusUpdate 
   const [lastUpdatedAt, setLastUpdatedAt] = useState(new Date());
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+  const scannerControlsRef = useRef(null);
   const visibleVisits = useMemo(
     () => (syncedVisits.length > 0 ? syncedVisits : visits).filter((visit) => {
       if (!currentSchoolId) return true;
@@ -78,6 +80,8 @@ const StaffOrderTracking = ({ visits = [], currentSchoolId = "", onStatusUpdate 
   }, [currentSchoolId, visits]);
 
   const stopCamera = () => {
+    scannerControlsRef.current?.stop();
+    scannerControlsRef.current = null;
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
@@ -100,6 +104,44 @@ const StaffOrderTracking = ({ visits = [], currentSchoolId = "", onStatusUpdate 
     }
     return () => stopCamera();
   }, [visibleVisits, selectedVisit]);
+
+  useEffect(() => {
+    if (!scanning || !videoRef.current) return undefined;
+    let active = true;
+    const reader = new BrowserQRCodeReader();
+
+    reader.decodeFromVideoDevice(undefined, videoRef.current, (result, scanError) => {
+      if (!active || !result) {
+        if (scanError && scanError.name !== "NotFoundException") {
+          console.warn("QR 掃描中斷", scanError);
+        }
+        return;
+      }
+
+      const queue = normalizeQueue(result.getText());
+      if (!queue) return;
+      stopCamera();
+      handleSearch(queue);
+    }).then((controls) => {
+      if (active) {
+        scannerControlsRef.current = controls;
+      } else {
+        controls.stop();
+      }
+    }).catch((scanError) => {
+      if (!active) return;
+      console.error("開啟 QR 掃描器失敗", scanError);
+      setError("無法開啟相機，請檢查相機權限後再試，或手動輸入排隊號。");
+      stopCamera();
+    });
+
+    return () => {
+      active = false;
+      scannerControlsRef.current?.stop();
+      scannerControlsRef.current = null;
+      reader.reset();
+    };
+  }, [scanning]);
 
   const normalizeQueue = (value) => {
     const text = (value || "").trim();
@@ -136,52 +178,13 @@ const StaffOrderTracking = ({ visits = [], currentSchoolId = "", onStatusUpdate 
   };
 
   const handleScanQr = async () => {
-    if (!("BarcodeDetector" in window) || !navigator.mediaDevices?.getUserMedia) {
-      setError("此瀏覽器不支援直接掃碼，請手動輸入排隊號。");
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError("此瀏覽器不支援相機功能，請手動輸入排隊號。");
       return;
     }
 
-    try {
-      setError("");
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-      streamRef.current = stream;
-      setScanning(true);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
-
-      const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
-      let stopped = false;
-
-      const scanLoop = async () => {
-        if (!videoRef.current || stopped) return;
-        try {
-          const barcodes = await detector.detect(videoRef.current);
-          if (barcodes && barcodes.length > 0) {
-            const raw = barcodes[0].rawValue || "";
-            const queue = normalizeQueue(raw);
-            if (queue) {
-              stopped = true;
-              stopCamera();
-              handleSearch(queue);
-              return;
-            }
-          }
-        } catch (innerError) {
-          console.warn("掃碼中斷", innerError);
-        }
-        if (!stopped) {
-          requestAnimationFrame(scanLoop);
-        }
-      };
-
-      scanLoop();
-    } catch (scanError) {
-      console.error("開啟鏡頭失敗", scanError);
-      setError("無法開啟相機，請手動輸入排隊號。");
-      stopCamera();
-    }
+    setError("");
+    setScanning(true);
   };
 
   const handleMarkReady = () => {

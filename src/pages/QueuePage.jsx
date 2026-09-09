@@ -137,7 +137,6 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
       await queueOrderService.updateStatus(
         counter.current_order_id,
         ORDER_STATUS.SKIPPED,
-        { skipped_at: new Date().toISOString(), skipped_reason: "未到場" },
         currentSchoolId,
         expectedStatus
       );
