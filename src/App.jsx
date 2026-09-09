@@ -564,6 +564,7 @@ const buildReceiptLines = (order, shopName) => {
   lines.push("電子銷售單 ELECTRONIC RECEIPT");
   lines.push("================================");
   lines.push(`收據編號：#${(order.id || "").toUpperCase()}`);
+  if (order.exchangeSourceReceiptId) lines.push(`來源單據：#${String(order.exchangeSourceReceiptId).toUpperCase()}`);
   lines.push(`交易日期：${order.date || "-"} ${order.time || ""}`);
   lines.push(`學校：${order.school || shopName || "-"}`);
   if (order.customerName || order.customerPhone) {
@@ -2326,6 +2327,7 @@ export default function UniformPOS() {
             <div style={{ textAlign: "center", fontWeight: 700 }}>Victoria Uniform 校服銷售</div>
             <div style={{ textAlign: "center" }}>電子銷售單 ELECTRONIC RECEIPT</div>
             <div>收據編號：#{(receipt.id || "").toUpperCase()}</div>
+            {receipt.exchangeSourceReceiptId && <div>來源單據：#{String(receipt.exchangeSourceReceiptId).toUpperCase()}</div>}
             <div>交易日期：{receipt.date} {receipt.time}</div>
             <div>學校：{receipt.school || "-"}</div>
             <div>客人：{customerSurname(receipt.customerName) || "-"}</div>
@@ -3538,6 +3540,7 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
         <div key={o.id} style={{ background: "#fff", border: "1px solid #E5E5E0", borderRadius: 10, padding: "10px 14px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <div style={{ fontSize: 13, fontWeight: 500 }}>{o.time} · {o.itemCount}件 · #{(o.id || "").slice(0, 6).toUpperCase()}</div>
+            {o.exchangeSourceReceiptId && <div style={{ fontSize: 12, color: "#9A3412", fontWeight: 600 }}>來源單據：#{String(o.exchangeSourceReceiptId).toUpperCase()}</div>}
             <div style={{ fontSize: 12, color: "#888" }}>{o.items.map((it) => `${it.name}(${sizeLabel({ size: it.size, length: it.length })})x${it.qty}`).join("、")}</div>
             {o.cashierName && <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>開單：{o.cashierName}</div>}
           </div>
@@ -3675,6 +3678,7 @@ function ReceiptModal({ order, onClose, onRedoSale, onExchange, onPrintBrowser, 
           <div style={{ textAlign: "center", fontWeight: 700, fontSize: 13 }}>Victoria Uniform 校服銷售</div>
           <div style={{ textAlign: "center", color: "#888", fontSize: 11 }}>電子銷售單 ELECTRONIC RECEIPT</div>
           <div style={{ marginTop: 4 }}>收據編號：#{(order.id || "").toUpperCase()}</div>
+          {order.exchangeSourceReceiptId && <div>來源單據：#{String(order.exchangeSourceReceiptId).toUpperCase()}</div>}
           <div>交易日期：{order.date} {order.time}</div>
           <div>學校：{order.school || "-"}</div>
           <div>客人：{customerSurname(order.customerName) || "-"}</div>
