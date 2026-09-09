@@ -2348,6 +2348,12 @@ function SaleTab({
     setSelectedLength("");
   }, [selectedProduct]);
 
+  const handleSizeSelect = (product, size) => {
+    addToCart(product, size);
+    setSelectedProduct(null);
+    setSelectedLength("");
+  };
+
   return (
     <div>
       {(cartSourceMeta.sourceQueueNo || cartSourceMeta.sourceGuestName) && (
@@ -2363,20 +2369,22 @@ function SaleTab({
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 12, padding: 4, background: "#F7F7F5", borderRadius: 10 }}>
-        {["全部", "男裝", "女裝"].map((gender) => (
-          <button
-            key={gender}
-            className="pos-btn"
-            onClick={() => setGenderFilter(gender)}
-            style={{ flex: 1, padding: "9px 4px", borderRadius: 8, background: genderFilter === gender ? "#1F3A5F" : "transparent", color: genderFilter === gender ? "#fff" : "#555", fontSize: 13, fontWeight: 600 }}
-          >
-            {gender}
-          </button>
-        ))}
-      </div>
+      {!selectedProduct && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 12, padding: 4, background: "#F7F7F5", borderRadius: 10 }}>
+          {["全部", "男裝", "女裝"].map((gender) => (
+            <button
+              key={gender}
+              className="pos-btn"
+              onClick={() => setGenderFilter(gender)}
+              style={{ flex: 1, padding: "9px 4px", borderRadius: 8, background: genderFilter === gender ? "#1F3A5F" : "transparent", color: genderFilter === gender ? "#fff" : "#555", fontSize: 13, fontWeight: 600 }}
+            >
+              {gender}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {filteredProducts.length === 0 && (
+      {!selectedProduct && filteredProducts.length === 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
           <div style={{ gridColumn: "1 / -1", fontSize: 13, color: "#999", padding: "8px 2px" }}>
             此分類未有商品，請選擇其他分類或到「商品」分頁新增／匯入。
@@ -2384,7 +2392,7 @@ function SaleTab({
         </div>
       )}
 
-      <div style={{ marginBottom: 16 }}>
+      {!selectedProduct && <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: "#2F6F68", padding: "8px 2px", borderBottom: "1px solid #DDE8E5", marginBottom: 8 }}>
           商品列表
         </div>
@@ -2412,10 +2420,20 @@ function SaleTab({
             </button>
           ))}
         </div>
-      </div>
+      </div>}
 
       {selectedProduct && (
         <div key={selectedProduct} style={{ marginBottom: 16 }}>
+          <button
+            className="pos-btn"
+            onClick={() => {
+              setSelectedProduct(null);
+              setSelectedLength("");
+            }}
+            style={{ marginBottom: 10, padding: "7px 10px", borderRadius: 8, background: "#F0F0EC", border: "1px solid #ddd", color: "#1F3A5F", fontSize: 12, fontWeight: 700 }}
+          >
+            ← 返回選款式
+          </button>
           {(() => {
             const product = products.find((p) => p.id === selectedProduct);
             const categoryLabel = hasLengthOptions(product) ? `先揀長度，再揀${sizeDimensionLabel(product)}：` : "揀尺碼：";
@@ -2432,7 +2450,7 @@ function SaleTab({
                   <button
                     key={`${selectedProduct}-${s.size}`}
                     className="pos-btn"
-                    onClick={() => addToCart(product, s)}
+                    onClick={() => handleSizeSelect(product, s)}
                     style={{ padding: "10px 14px", borderRadius: 10, background: "#fff", border: "1px solid #ccc", fontSize: 14 }}
                   >
                     <div style={{ fontWeight: 600 }}>{sizeLabel(s)}</div>
@@ -2469,7 +2487,7 @@ function SaleTab({
                     <button
                       key={`${selectedProduct}-${s.size}-${s.length}`}
                       className="pos-btn"
-                      onClick={() => addToCart(product, s)}
+                      onClick={() => handleSizeSelect(product, s)}
                       style={{ minWidth: 76, padding: "8px 7px", borderRadius: 8, background: "#fff", border: "1px solid #ccc", fontSize: 12 }}
                     >
                       <div style={{ fontWeight: 600 }}>{sizeDimensionLabel(product)} {s.size} 吋</div>
