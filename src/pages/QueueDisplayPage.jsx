@@ -52,6 +52,7 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
   const hasLoadedCounterRef = useRef(false);
   const lastAnnouncedCallRef = useRef("");
   const chimeAudioRef = useRef(null);
+  const refreshInFlightRef = useRef(false);
 
   useEffect(() => {
     const audio = new Audio("/audio/queue-chime.mpeg");
@@ -66,6 +67,8 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
   useEffect(() => {
     let active = true;
     const refreshPublicDisplay = async () => {
+      if (!active || refreshInFlightRef.current) return;
+      refreshInFlightRef.current = true;
       try {
         const next = await queueOrderService.getPublicQueueDisplay({
           schoolId: schoolName,
@@ -84,10 +87,14 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
         });
       } catch (error) {
         console.warn("public queue display refresh failed", error);
+      } finally {
+        refreshInFlightRef.current = false;
       }
     };
     refreshPublicDisplay();
-    const timer = window.setInterval(refreshPublicDisplay, 5000);
+    // Keep the public display nearly real-time while retaining polling as a
+    // reliable fallback when Realtime is unavailable on the display device.
+    const timer = window.setInterval(refreshPublicDisplay, 1000);
     return () => {
       active = false;
       window.clearInterval(timer);
