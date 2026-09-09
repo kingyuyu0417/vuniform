@@ -1350,15 +1350,16 @@ export default function UniformPOS() {
     }
   };
 
-  const addToCart = (product, sizeObj) => {
+  const addToCart = (product, sizeObj, quantity = 1) => {
+    const qty = Math.max(1, Math.min(99, Number(quantity) || 1));
     setCart((prev) => {
       const idx = prev.findIndex((c) => c.productId === product.id && c.size === sizeObj.size && c.length === (sizeObj.length || ""));
       if (idx >= 0) {
         const next = [...prev];
-        next[idx] = { ...next[idx], qty: next[idx].qty + 1 };
+        next[idx] = { ...next[idx], qty: next[idx].qty + qty };
         return next;
       }
-      return [...prev, { key: uid(), productId: product.id, name: product.name, size: sizeObj.size, length: sizeObj.length || "", price: sizeObj.price, qty: 1 }];
+      return [...prev, { key: uid(), productId: product.id, name: product.name, size: sizeObj.size, length: sizeObj.length || "", price: sizeObj.price, qty }];
     });
   };
 
@@ -2329,6 +2330,7 @@ function SaleTab({
 }) {
   const [genderFilter, setGenderFilter] = useState("全部");
   const [selectedLength, setSelectedLength] = useState("");
+  const [quantityPrompt, setQuantityPrompt] = useState(null);
   const schools = listSchools(products);
   const visibleProducts = selectedSchool ? products.filter((p) => schoolOf(p) === selectedSchool) : products;
   const filteredProducts = visibleProducts.filter((product) =>
@@ -2349,7 +2351,15 @@ function SaleTab({
   }, [selectedProduct]);
 
   const handleSizeSelect = (product, size) => {
-    addToCart(product, size);
+    setQuantityPrompt({ product, size, quantity: "", custom: false });
+  };
+
+  const confirmQuantity = (selectedQuantity = quantityPrompt?.quantity) => {
+    if (!quantityPrompt) return;
+    const quantity = Number(selectedQuantity);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) return;
+    addToCart(quantityPrompt.product, quantityPrompt.size, quantity);
+    setQuantityPrompt(null);
     setSelectedProduct(null);
     setSelectedLength("");
   };
@@ -2498,6 +2508,65 @@ function SaleTab({
               </div>
             );
           })()}
+        </div>
+      )}
+
+      {quantityPrompt && (
+        <div style={{ background: "#EAF4FF", border: "1px solid #B7D4F2", borderRadius: 12, padding: 14, marginBottom: 16 }}>
+          <div style={{ color: "#1F3A5F", fontSize: 14, fontWeight: 800 }}>需要購買數量</div>
+          <div style={{ color: "#64748B", fontSize: 12, marginTop: 4 }}>
+            {displayProductName(quantityPrompt.product.name)}（{sizeLabel(quantityPrompt.size)}）
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 12 }}>
+            {[1, 2, 3].map((quantity) => (
+              <button
+                key={quantity}
+                className="pos-btn"
+                onClick={() => confirmQuantity(quantity)}
+                style={{ padding: "12px 8px", borderRadius: 8, background: "#1F3A5F", border: "none", color: "#fff", fontSize: 16, fontWeight: 800 }}
+              >
+                {quantity}件
+              </button>
+            ))}
+          </div>
+          <button
+            className="pos-btn"
+            onClick={() => setQuantityPrompt((current) => ({ ...current, custom: true, quantity: "" }))}
+            style={{ width: "100%", marginTop: 8, padding: "10px", borderRadius: 8, background: quantityPrompt.custom ? "#DCEEFF" : "#fff", border: "1px solid #9BC3EC", color: "#1F3A5F", fontWeight: 800 }}
+          >
+            其他（4–99件）
+          </button>
+          {!quantityPrompt.custom && (
+            <button className="pos-btn" onClick={() => setQuantityPrompt(null)} style={{ width: "100%", marginTop: 8, padding: "9px 10px", borderRadius: 8, background: "#fff", border: "1px solid #CBD5E1", color: "#475569", fontWeight: 700 }}>
+              取消
+            </button>
+          )}
+          {quantityPrompt.custom && (
+            <>
+              <input
+                type="number"
+                min="4"
+                max="99"
+                inputMode="numeric"
+                autoFocus
+                placeholder="輸入數量（4–99）"
+                value={quantityPrompt.quantity}
+                onChange={(event) => setQuantityPrompt((current) => ({ ...current, quantity: event.target.value }))}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") confirmQuantity();
+                }}
+                style={{ width: "100%", boxSizing: "border-box", marginTop: 10, padding: "10px 12px", border: "1px solid #9BC3EC", borderRadius: 8, fontSize: 18, fontWeight: 700 }}
+              />
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button className="pos-btn" onClick={() => setQuantityPrompt(null)} style={{ flex: 1, padding: "9px 10px", borderRadius: 8, background: "#fff", border: "1px solid #CBD5E1", color: "#475569", fontWeight: 700 }}>
+                  取消
+                </button>
+                <button className="pos-btn" onClick={() => confirmQuantity()} disabled={!Number.isInteger(Number(quantityPrompt.quantity)) || Number(quantityPrompt.quantity) < 4 || Number(quantityPrompt.quantity) > 99} style={{ flex: 1, padding: "9px 10px", borderRadius: 8, background: "#1F3A5F", border: "none", color: "#fff", fontWeight: 700 }}>
+                  確定加入
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
