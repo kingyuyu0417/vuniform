@@ -238,7 +238,11 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
   const targetStatus = serviceType === QUEUE_SERVICE.PICKUP ? ORDER_STATUS.READY : ORDER_STATUS.PENDING;
   const serviceLabel = serviceType === QUEUE_SERVICE.PICKUP ? "取貨排隊管理" : "度身排隊管理";
   const rows = useMemo(() => visibleVisits.filter((visit) => isQueueOrderToday(visit.created_at) && visit.status === targetStatus && (serviceType !== QUEUE_SERVICE.PICKUP || !visit.tailor_info?.pickup_called_at)), [visibleVisits, targetStatus, serviceType]);
-  const skippedRows = useMemo(() => visibleVisits.filter((visit) => isQueueOrderToday(visit.created_at) && visit.status === ORDER_STATUS.SKIPPED), [visibleVisits]);
+  const skippedRows = useMemo(() => visibleVisits.filter((visit) => {
+    if (!isQueueOrderToday(visit.created_at) || visit.status !== ORDER_STATUS.SKIPPED) return false;
+    if (serviceType === QUEUE_SERVICE.PICKUP) return Boolean(visit.tailor_info?.prepared_at);
+    return !visit.tailor_info?.prepared_at;
+  }), [visibleVisits, serviceType]);
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
