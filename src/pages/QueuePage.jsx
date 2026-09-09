@@ -243,6 +243,26 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <div style={{ background: "#F7F7F5", borderRadius: 12, padding: 16 }}>
+        {skippedRows.length > 0 && (
+          <div style={{ marginBottom: 12, background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 10, padding: 12 }}>
+            <div style={{ color: "#9a3412", fontSize: 13, fontWeight: 800, marginBottom: 8 }}>已過號（可重新叫號）</div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {skippedRows.map((visit) => (
+                <div key={visit.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                  <span style={{ color: "#7c2d12", fontWeight: 700 }}>{visit.queueNo} · {visit.guestName}</span>
+                  <button
+                    className="pos-btn"
+                    onClick={() => recallSkipped(visit)}
+                    disabled={calling}
+                    style={{ background: "#ea580c", color: "#fff", padding: "7px 10px", borderRadius: 7, fontSize: 12, fontWeight: 700 }}
+                  >
+                    重新叫號
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <div style={{ fontSize: 18, fontWeight: 700, color: "#1F3A5F" }}>{serviceLabel}</div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -344,26 +364,6 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
                 ) : (
                   <div style={{ flex: 1, background: "#F1F5F9", color: "#64748B", padding: "8px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600, textAlign: "center" }}>
                     {statusLabel[visit.status] || "處理中"}
-                  </div>
-                )}
-                {skippedRows.length > 0 && (
-                  <div style={{ marginTop: 12, background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 10, padding: 12 }}>
-                    <div style={{ color: "#9a3412", fontSize: 13, fontWeight: 800, marginBottom: 8 }}>已過號（可重新叫號）</div>
-                    <div style={{ display: "grid", gap: 8 }}>
-                      {skippedRows.map((visit) => (
-                        <div key={visit.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                          <span style={{ color: "#7c2d12", fontWeight: 700 }}>{visit.queueNo} · {visit.guestName}</span>
-                          <button
-                            className="pos-btn"
-                            onClick={() => recallSkipped(visit)}
-                            disabled={calling}
-                            style={{ background: "#ea580c", color: "#fff", padding: "7px 10px", borderRadius: 7, fontSize: 12, fontWeight: 700 }}
-                          >
-                            重新叫號
-                          </button>
-                        </div>
-                      ))}
-                    </div>
                   </div>
                 )}
               </div>
