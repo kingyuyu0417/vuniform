@@ -104,15 +104,9 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     setCalling(true);
     setCallError("");
     try {
-      const next = await queueOrderService.callSpecific({
-        schoolId: currentSchoolId,
-        outletName,
-        counterName,
-        serviceType,
-        orderId: visit.id,
-        queueNumber: visit.queueNo,
-        calledBy,
-      });
+      const next = serviceType === QUEUE_SERVICE.PICKUP
+        ? await queueOrderService.callNextPickup({ schoolId: currentSchoolId, outletName, calledBy })
+        : await queueOrderService.callNextFitting({ schoolId: currentSchoolId, outletName, calledBy });
       setCounter(next);
       if (next?.current_queue_number) playCallChime();
     } catch (error) {
