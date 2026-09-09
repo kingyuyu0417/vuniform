@@ -34,16 +34,6 @@ const EXTRA_SCHOOL_CATALOG = {
   "香港中國婦女會馮堯敬紀念中學": { category: "資助中學", level: "中學", region: "新界區", district: "沙田區" },
 };
 
-const directoryIds = [
-  "sale",
-  "guest",
-  "queue",
-  "track",
-  "fitting",
-  "pickup",
-  "cashier",
-  ...(perms?.tabs || []),
-];
 const EXTRA_SCHOOL_OUTLETS = {
   "香港中國婦女會馮堯敬紀念中學": "沙田分店",
 };
@@ -805,7 +795,7 @@ export default function UniformPOS() {
   const [session, setSession] = useState(null); // { id, name, role } | null
   const [authReady, setAuthReady] = useState(!isSupabaseAuthEnabled); // Wait for auth before loading protected data
   const [passwordSetupRequired, setPasswordSetupRequired] = useState(false);
-  const perms = session ? PERMISSIONS[session.role] : null;
+  const perms = session ? (PERMISSIONS[session.role] || PERMISSIONS[ROLES.STAFF]) : null;
 
   const isPasswordSetupLink = () => /(?:^|&)type=(?:invite|recovery)(?:&|$)/.test(window.location.hash.slice(1));
 
@@ -873,10 +863,10 @@ export default function UniformPOS() {
   // 目前登入角色見唔到嘅分頁，自動跳去佢見到嘅第一個（例如店員唔應停留喺「商品」）
   useEffect(() => {
     const newTabsAlwaysAllowed = ["guest", "queue", "fitting", "pickup", "cashier"];
-    if (session && !newTabsAlwaysAllowed.includes(tab) && !PERMISSIONS[session.role].tabs.includes(tab)) {
-      setTab(PERMISSIONS[session.role].tabs[0]);
+    if (session && !newTabsAlwaysAllowed.includes(tab) && !perms.tabs.includes(tab)) {
+      setTab(perms.tabs[0]);
     }
-  }, [session, tab]);
+  }, [perms, session, tab]);
 
   // 讀返呢部裝置上次揀嘅學校（個人儲存，唔係共用）
   useEffect(() => {
@@ -1877,6 +1867,17 @@ export default function UniformPOS() {
     }
   };
 
+  const directoryIds = [
+    "sale",
+    "guest",
+    "queue",
+    "track",
+    "fitting",
+    "pickup",
+    "cashier",
+    ...(perms?.tabs || []),
+  ];
+
   if (location.pathname === "/checkin") {
     return <CustomerCheckinPage school={publicRouteSchool} schools={customerSchools} schoolMeta={schoolMeta} onSubmit={handleGuestSubmit} />;
   }
@@ -2014,7 +2015,7 @@ export default function UniformPOS() {
               style={{ fontSize: 11, opacity: 0.9, background: "rgba(255,255,255,0.12)", color: "#fff", padding: "4px 8px", borderRadius: 8 }}
               title="登出"
             >
-              {session.name}（{ROLE_LABEL[session.role].split("／")[0].replace(" ADMIN", "")}）· 登出
+              {session.name}（{(ROLE_LABEL[session.role] || ROLE_LABEL[ROLES.STAFF]).split("／")[0].replace(" ADMIN", "")}）· 登出
             </button>
           </div>
         </div>
