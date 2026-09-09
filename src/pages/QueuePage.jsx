@@ -1,6 +1,6 @@
 import React, { useMemo, useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Zap, Bell, RotateCcw, Check } from "lucide-react";
+import { Zap, Bell, RotateCcw, Check, SkipForward } from "lucide-react";
 import { ORDER_STATUS, QUEUE_SERVICE, queueOrderService, isQueueOrderToday } from "../services/queueOrderService";
 
 const statusLabel = {
@@ -128,6 +128,28 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     }
   };
 
+  const skipCurrentCall = async () => {
+    if (!counter?.current_order_id) return;
+    setCalling(true);
+    setCallError("");
+    const expectedStatus = serviceType === QUEUE_SERVICE.PICKUP ? ORDER_STATUS.READY : ORDER_STATUS.PENDING;
+    try {
+      await queueOrderService.updateStatus(
+        counter.current_order_id,
+        ORDER_STATUS.SKIPPED,
+        { skipped_at: new Date().toISOString(), skipped_reason: "未到場" },
+        currentSchoolId,
+        expectedStatus
+      );
+      const next = await queueOrderService.clearQueueCounter({ schoolId: currentSchoolId, outletName, counterName, serviceType });
+      setCounter(next);
+    } catch (error) {
+      setCallError(error.message || "過號處理失敗");
+    } finally {
+      setCalling(false);
+    }
+  };
+
   const startCurrentFitting = async () => {
     if (!counter?.current_order_id) return;
     await clearCurrentCall();
@@ -202,6 +224,9 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
             </button>
             <button className="pos-btn" onClick={recallCurrentCall} disabled={calling || !counter?.current_queue_number} style={{ padding: "10px 9px", borderRadius: 8, background: "rgba(255,255,255,0.16)", color: "#fff", fontWeight: 700 }} title="重新叫號">
               <RotateCcw size={16} />
+            </button>
+            <button className="pos-btn" onClick={skipCurrentCall} disabled={calling || !counter?.current_order_id} style={{ padding: "10px 9px", borderRadius: 8, background: "rgba(239,68,68,0.8)", color: "#fff", fontWeight: 700 }} title="客人未到場，標記為過號">
+              <SkipForward size={16} />
             </button>
             <button className="pos-btn" onClick={serviceType === QUEUE_SERVICE.PICKUP ? completeCurrentPickup : startCurrentFitting} disabled={calling || !counter?.current_order_id} style={{ padding: "10px 9px", borderRadius: 8, background: "rgba(255,255,255,0.16)", color: "#fff", fontWeight: 700 }} title={serviceType === QUEUE_SERVICE.PICKUP ? "前往收銀" : "開始目前客人度身"}>
               <Check size={16} />
