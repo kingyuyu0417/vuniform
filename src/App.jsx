@@ -579,13 +579,13 @@ const buildReceiptLines = (order, shopName) => {
   lines.push("--------------------------------");
   lines.push("商品明細");
   order.items.forEach((it) => {
-    lines.push(`${it.name}`);
+    lines.push(`${it.exchangeReturn ? "換出：" : ""}${it.name}`);
     lines.push(`  ${formatSizeForReceipt(it.name, it.size, it.length)}`);
-    lines.push(`  數量 ${it.qty} x ${fmt(it.price)} = ${fmt(it.price * it.qty)}`);
+    lines.push(`  數量 ${it.qty} x ${fmt(Math.abs(it.price))} = ${fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}`);
   });
   lines.push("--------------------------------");
   lines.push(`商品件數：${order.itemCount || 0}`);
-  lines.push(`應付總額：${fmt(order.total)}`);
+  lines.push(`${order.exchangeSourceReceiptId ? "換貨差額" : "應付總額"}：${fmt(order.total)}`);
   if (typeof order.cashReceived === "number") lines.push(`實收現金：${fmt(order.cashReceived)}`);
   if (order.refundDue > 0) lines.push(`應退客人：${fmt(order.refundDue)}`);
   else if (typeof order.changeDue === "number") lines.push(`找續：${fmt(order.changeDue)}`);
@@ -1393,7 +1393,7 @@ export default function UniformPOS() {
       name: item.name,
       size: item.size,
       length: item.length || "",
-      price: -Math.abs(Number(item.price || originalSize.price || 0)),
+      price: Math.abs(Number(item.price || originalSize.price || 0)),
       qty: 1,
       exchangeReturn: true,
       exchangeSourceReceiptId: order.id || "",
@@ -1728,7 +1728,7 @@ export default function UniformPOS() {
     }
   };
 
-  const cartTotal = cart.reduce((sum, c) => sum + c.price * c.qty, 0);
+  const cartTotal = cart.reduce((sum, c) => sum + (c.exchangeReturn ? -1 : 1) * c.price * c.qty, 0);
   const cartCount = cart.reduce((sum, c) => sum + c.qty, 0);
   const exchangeMode = cart.some((item) => item.exchangeReturn);
   const cartSourceMeta = cart.find((item) => item.sourceQueueNo || item.sourceGuestName) || {};
@@ -2625,7 +2625,7 @@ function SaleTab({
           <div key={c.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #E5E5E0" }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13, fontWeight: 500 }}>{c.exchangeReturn ? "換出：" : ""}{c.name}（{sizeLabel(c)}）</div>
-              <div style={{ fontSize: 12, color: c.exchangeReturn ? "#9A3412" : "#888" }}>{fmt(c.price)} x {c.qty} = {fmt(c.price * c.qty)}</div>
+              <div style={{ fontSize: 12, color: c.exchangeReturn ? "#9A3412" : "#888" }}>{c.exchangeReturn ? "-" : ""}{fmt(c.price)} x {c.qty} = {fmt((c.exchangeReturn ? -1 : 1) * c.price * c.qty)}</div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               {!c.exchangeReturn && (
@@ -3685,12 +3685,12 @@ function ReceiptModal({ order, onClose, onRedoSale, onExchange, onPrintBrowser, 
             <div key={i}>
               <div>{it.exchangeReturn ? "換出：" : ""}{it.name}</div>
               <div>  {formatSizeForReceipt(it.name, it.size, it.length)}</div>
-              <div>  數量 {it.qty} x {fmt(Math.abs(it.price))} = {fmt(it.price * it.qty)}</div>
+              <div>  數量 {it.qty} x {fmt(Math.abs(it.price))} = {fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}</div>
             </div>
           ))}
           <div>--------------------------------</div>
           <div>商品件數：{order.itemCount}</div>
-          <div>應付總額：{fmt(order.total)}</div>
+          <div>{order.exchangeSourceReceiptId ? "換貨差額：" : "應付總額："}{fmt(order.total)}</div>
           <div>實收現金：{fmt(order.cashReceived ?? order.total)}</div>
           {order.refundDue > 0 ? (
             <div style={{ fontWeight: 700, color: "#166534" }}>應退客人：{fmt(order.refundDue)}</div>
