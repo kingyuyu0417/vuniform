@@ -1911,7 +1911,7 @@ export default function UniformPOS() {
   }
 
   if (location.pathname === "/" || location.pathname === "") {
-    return <PublicHomePage schools={schools} schoolMeta={schoolMeta} onStaffLogin={() => navigate("/staff")} />;
+    return <PublicHomePage schools={schools} schoolMeta={schoolMeta} onStaffLogin={() => navigate("/menu")} />;
   }
 
   if (!session) {
