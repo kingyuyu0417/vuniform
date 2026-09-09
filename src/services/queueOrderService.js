@@ -439,6 +439,44 @@ export const queueOrderService = {
     return this.callNext({ ...options, counterName: "pickup", serviceType: QUEUE_SERVICE.PICKUP });
   },
 
+  async callSpecific({ schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING, orderId = "", queueNumber = "", calledBy = "" } = {}) {
+    const key = counterKey(schoolId, outletName, counterName, serviceType);
+    const updatedAt = new Date().toISOString();
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase
+        .from("queue_counters")
+        .upsert({
+          school_id: safeSchoolId(schoolId),
+          outlet_name: outletName || "",
+          counter_name: counterName || "main",
+          service_type: serviceType,
+          current_order_id: orderId,
+          current_queue_number: queueNumber,
+          updated_at: updatedAt,
+          updated_by: calledBy || null,
+        }, { onConflict: "school_id,outlet_name,counter_name,service_type" })
+        .select("school_id, outlet_name, counter_name, service_type, current_order_id, current_queue_number, updated_at")
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error("重新叫號未能更新叫號櫃檯");
+      const normalized = normalizeCounter(data);
+      writeCounterCache({ ...readCounterCache(), [key]: normalized });
+      return normalized;
+    }
+
+    const current = normalizeCounter({
+      school_id: schoolId,
+      outlet_name: outletName,
+      counter_name: counterName,
+      service_type: serviceType,
+      current_order_id: orderId,
+      current_queue_number: queueNumber,
+      updated_at: updatedAt,
+    });
+    writeCounterCache({ ...readCounterCache(), [key]: current });
+    return current;
+  },
+
   async clearQueueCounter({ schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING } = {}) {
     const key = counterKey(schoolId, outletName, counterName, serviceType);
     if (isSupabaseConfigured && supabase) {

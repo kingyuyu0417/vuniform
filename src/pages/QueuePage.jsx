@@ -63,6 +63,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
             tailor_info: order.tailor_info || {},
             school: order.school_id || order.schoolId || "",
             status: order.status,
+            created_at: order.created_at || order.createdAt || "",
           }));
         setSyncedVisits(normalized);
         setLastUpdatedAt(new Date());
@@ -103,9 +104,15 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     setCalling(true);
     setCallError("");
     try {
-      const next = serviceType === QUEUE_SERVICE.PICKUP
-        ? await queueOrderService.callNextPickup({ schoolId: currentSchoolId, outletName, calledBy })
-        : await queueOrderService.callNextFitting({ schoolId: currentSchoolId, outletName, calledBy });
+      const next = await queueOrderService.callSpecific({
+        schoolId: currentSchoolId,
+        outletName,
+        counterName,
+        serviceType,
+        orderId: visit.id,
+        queueNumber: visit.queueNo,
+        calledBy,
+      });
       setCounter(next);
       if (next?.current_queue_number) playCallChime();
     } catch (error) {
@@ -151,15 +158,31 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
   };
 
   const recallSkipped = async (visit) => {
-    if (!visit?.id || counter?.current_order_id) return;
+    if (!visit?.id) {
+      setCallError("過號資料缺少訂單編號，無法重新叫號");
+      return;
+    }
+    if (counter?.current_order_id) {
+      setCallError(`目前仍在叫號 ${counter.current_queue_number || "客人"}，請先完成、過號或清除目前叫號`);
+      return;
+    }
     setCalling(true);
     setCallError("");
     const targetStatus = serviceType === QUEUE_SERVICE.PICKUP ? ORDER_STATUS.READY : ORDER_STATUS.PENDING;
     try {
       await queueOrderService.updateStatus(visit.id, targetStatus, {}, currentSchoolId, ORDER_STATUS.SKIPPED);
-      const next = serviceType === QUEUE_SERVICE.PICKUP
-        ? await queueOrderService.callNextPickup({ schoolId: currentSchoolId, outletName, calledBy })
-        : await queueOrderService.callNextFitting({ schoolId: currentSchoolId, outletName, calledBy });
+      setSyncedVisits((previous) => (previous || []).map((order) => (
+        order.id === visit.id ? { ...order, status: targetStatus } : order
+      )));
+      const next = await queueOrderService.callSpecific({
+        schoolId: currentSchoolId,
+        outletName,
+        counterName,
+        serviceType,
+        orderId: visit.id,
+        queueNumber: visit.queueNo,
+        calledBy,
+      });
       setCounter(next);
       if (next?.current_queue_number) playCallChime();
     } catch (error) {
@@ -333,7 +356,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
                           <button
                             className="pos-btn"
                             onClick={() => recallSkipped(visit)}
-                            disabled={calling || Boolean(counter?.current_order_id)}
+                            disabled={calling}
                             style={{ background: "#ea580c", color: "#fff", padding: "7px 10px", borderRadius: 7, fontSize: 12, fontWeight: 700 }}
                           >
                             重新叫號
