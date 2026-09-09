@@ -1605,8 +1605,8 @@ export default function UniformPOS() {
         qty,
         sourceOrderId: order.id || "",
         sourceQueueNo: order.queue_number || order.queueNo || "",
-        sourceGuestName: order.customer_info?.guestName || order.guestName || "",
-        sourceGuestPhone: order.customer_info?.phone || order.phone || "",
+        sourceGuestName: order.customer_info?.guestName || order.guestName || order.customerName || "",
+        sourceGuestPhone: order.customer_info?.phone || order.phone || order.customerPhone || "",
       };
     });
 
@@ -1614,6 +1614,7 @@ export default function UniformPOS() {
       setStorageError("此訂單沒有可銷售商品，請返回取貨頁重新載入訂單。");
       return false;
     }
+    if (order.school) setSelectedSchool(order.school);
     setCart(readyItems);
     setCashReceived("");
     setSelectedProduct(null);
@@ -2260,6 +2261,14 @@ export default function UniformPOS() {
           onClose={() => {
             setReceipt(null);
             setBtStatus({ state: "idle", msg: "" });
+          }}
+          onRedoSale={(order) => {
+            const started = handleReadyForSale({ ...order, id: "" });
+            if (started) {
+              setReceipt(null);
+              setBtStatus({ state: "idle", msg: "" });
+            }
+            return started;
           }}
           onPrintBrowser={printBrowser}
           onPrintBluetooth={() => printBluetooth(receipt)}
@@ -3500,7 +3509,7 @@ function ReceiptQR({ order }) {
   );
 }
 
-function ReceiptModal({ order, onClose, onPrintBrowser, onPrintBluetooth, btStatus }) {
+function ReceiptModal({ order, onClose, onRedoSale, onPrintBrowser, onPrintBluetooth, btStatus }) {
   const openCustomerReceipt = () => {
     const receiptUrl = buildReceiptUrl(order);
     const anchor = document.createElement("a");
@@ -3561,6 +3570,14 @@ function ReceiptModal({ order, onClose, onPrintBrowser, onPrintBluetooth, btStat
           style={{ width: "100%", padding: "13px 0", borderRadius: 10, background: "#1F3A5F", color: "#fff", fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 8 }}
         >
           <QrCode size={16} /> 查看客人電子收據
+        </button>
+        <button
+          className="pos-btn"
+          onClick={() => onRedoSale?.(order)}
+          title="將此收據所有商品帶入銷售頁，重新進行退／換貨處理"
+          style={{ width: "100%", padding: "13px 0", borderRadius: 10, background: "#FFF7ED", color: "#9A3412", border: "1px solid #FDBA74", fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 8 }}
+        >
+          <ShoppingCart size={16} /> 退／換貨：重新進行此單銷售
         </button>
         <button
           className="pos-btn"
