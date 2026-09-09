@@ -53,7 +53,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
         if (!active || !Array.isArray(orders)) return;
         const targetStatus = serviceType === QUEUE_SERVICE.PICKUP ? ORDER_STATUS.READY : ORDER_STATUS.PENDING;
         const normalized = orders
-          .filter((order) => isQueueOrderToday(order.created_at) && order.status === targetStatus && (serviceType !== QUEUE_SERVICE.PICKUP || !order.tailor_info?.pickup_called_at))
+          .filter((order) => isQueueOrderToday(order.created_at) && (order.status === targetStatus || order.status === ORDER_STATUS.SKIPPED) && (serviceType !== QUEUE_SERVICE.PICKUP || !order.tailor_info?.pickup_called_at))
           .map((order) => ({
             id: order.id,
             queueNo: order.queue_number || order.queueNumber || "",
@@ -150,6 +150,25 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     }
   };
 
+  const recallSkipped = async (visit) => {
+    if (!visit?.id || counter?.current_order_id) return;
+    setCalling(true);
+    setCallError("");
+    const targetStatus = serviceType === QUEUE_SERVICE.PICKUP ? ORDER_STATUS.READY : ORDER_STATUS.PENDING;
+    try {
+      await queueOrderService.updateStatus(visit.id, targetStatus, {}, currentSchoolId, ORDER_STATUS.SKIPPED);
+      const next = serviceType === QUEUE_SERVICE.PICKUP
+        ? await queueOrderService.callNextPickup({ schoolId: currentSchoolId, outletName, calledBy })
+        : await queueOrderService.callNextFitting({ schoolId: currentSchoolId, outletName, calledBy });
+      setCounter(next);
+      if (next?.current_queue_number) playCallChime();
+    } catch (error) {
+      setCallError(error.message || "重新叫過號失敗");
+    } finally {
+      setCalling(false);
+    }
+  };
+
   const startCurrentFitting = async () => {
     if (!counter?.current_order_id) return;
     await clearCurrentCall();
@@ -196,6 +215,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
   const targetStatus = serviceType === QUEUE_SERVICE.PICKUP ? ORDER_STATUS.READY : ORDER_STATUS.PENDING;
   const serviceLabel = serviceType === QUEUE_SERVICE.PICKUP ? "取貨排隊管理" : "度身排隊管理";
   const rows = useMemo(() => visibleVisits.filter((visit) => isQueueOrderToday(visit.created_at) && visit.status === targetStatus && (serviceType !== QUEUE_SERVICE.PICKUP || !visit.tailor_info?.pickup_called_at)), [visibleVisits, targetStatus, serviceType]);
+  const skippedRows = useMemo(() => visibleVisits.filter((visit) => isQueueOrderToday(visit.created_at) && visit.status === ORDER_STATUS.SKIPPED), [visibleVisits]);
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
@@ -301,6 +321,26 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
                 ) : (
                   <div style={{ flex: 1, background: "#F1F5F9", color: "#64748B", padding: "8px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600, textAlign: "center" }}>
                     {statusLabel[visit.status] || "處理中"}
+                  </div>
+                )}
+                {skippedRows.length > 0 && (
+                  <div style={{ marginTop: 12, background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 10, padding: 12 }}>
+                    <div style={{ color: "#9a3412", fontSize: 13, fontWeight: 800, marginBottom: 8 }}>已過號（可重新叫號）</div>
+                    <div style={{ display: "grid", gap: 8 }}>
+                      {skippedRows.map((visit) => (
+                        <div key={visit.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                          <span style={{ color: "#7c2d12", fontWeight: 700 }}>{visit.queueNo} · {visit.guestName}</span>
+                          <button
+                            className="pos-btn"
+                            onClick={() => recallSkipped(visit)}
+                            disabled={calling || Boolean(counter?.current_order_id)}
+                            style={{ background: "#ea580c", color: "#fff", padding: "7px 10px", borderRadius: 7, fontSize: 12, fontWeight: 700 }}
+                          >
+                            重新叫號
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
