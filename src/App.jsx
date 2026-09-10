@@ -2023,7 +2023,7 @@ export default function UniformPOS() {
           .pos-page-content { padding: 14px; }
         }
         @media (min-width: 760px) {
-          .pos-shell { border-left: 1px solid #DCE5EF; border-right: 1px solid #DCE5EF; }
+          .pos-shell { box-sizing: border-box; border-left: 1px solid #DCE5EF; border-right: 1px solid #DCE5EF; }
         }
       `}</style>
 
