@@ -27,6 +27,7 @@
     .actions { display: flex; gap: 8px; margin-top: 16px; }
     button { flex: 1; border: 0; border-radius: 7px; padding: 12px; background: #1f3a5f; color: #fff; font-size: 14px; cursor: pointer; }
     .secondary { background: #fff; color: #1f3a5f; border: 1px solid #1f3a5f; }
+    .policy { margin-top: 16px; color: #66717d; font-size: 11px; line-height: 1.6; }
     .error { text-align: center; background: #fff; padding: 32px 20px; color: #b42318; }
     @media print {
       body { background: #fff; }
@@ -61,6 +62,7 @@
         return `尺碼：${text(size)}`;
       }
     };
+    const sourceReceiptId = (order) => order.exchangeSourceReceiptId || order.exchange_source_receipt_id || order.sourceReceiptId || "";
     const render = (order) => {
       document.title = "電子收據 #" + text(order.id).toUpperCase();
       const items = Array.isArray(order.items) ? order.items : [];
@@ -72,7 +74,7 @@
           </header>
           <dl>
             <dt>收據編號</dt><dd>#${text(order.id).toUpperCase()}</dd>
-            ${order.exchangeSourceReceiptId ? `<dt>來源單據</dt><dd>#${text(order.exchangeSourceReceiptId).toUpperCase()}</dd>` : ""}
+            ${sourceReceiptId(order) ? `<dt>來源單據</dt><dd>#${text(sourceReceiptId(order)).toUpperCase()}</dd>` : ""}
             <dt>交易日期</dt><dd>${text(order.date)} ${text(order.time, "")}</dd>
             <dt>學校</dt><dd>${text(order.school)}</dd>
             <dt>客人</dt><dd>${text(customerSurname(order.customerName))}</dd>
@@ -86,9 +88,9 @@
           </div>
           <div class="summary">
             <div class="item-sub"><span>商品件數</span><span>${text(order.itemCount, "0")}</span></div>
-            <div class="total"><span>${order.exchangeSourceReceiptId ? "換貨差額" : "應付總額"}</span><span>${money(order.total)}</span></div>
+            <div class="total"><span>${sourceReceiptId(order) ? "換貨差額" : "應付總額"}</span><span>${money(order.total)}</span></div>
             ${order.refundDue > 0 ? `<div class="item-sub" style="margin-top:8px"><span>應退客人</span><span>${money(order.refundDue)}</span></div>` : ""}
-            <div class="item-sub" style="margin-top:8px"><span>交易狀態</span><span>${order.exchangeSourceReceiptId ? "換貨完成" : "已完成"}</span></div>
+            <div class="item-sub" style="margin-top:8px"><span>交易狀態</span><span>${sourceReceiptId(order) ? "換貨完成" : "已完成"}</span></div>
           </div>
           <div class="policy"><strong>退換條款：</strong>購貨後 30 天內，憑收據且商品未經使用、洗滌或改動，可親臨指定門市辦理更換尺碼。<br><strong>洗滌指引：</strong><br>請勿使用含有漂白成份之洗衣產品、彩漂或漂白水。<br>深淺色衣物必須分開洗滌，清洗後請即時晾曬，以免移色。</div>
           <footer>多謝惠顧，歡迎重臨</footer>
