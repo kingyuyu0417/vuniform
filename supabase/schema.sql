@@ -142,6 +142,7 @@ create table if not exists public.orders (
   total numeric default 0,
   item_count integer default 0,
   exchange_source_receipt_id text,
+  refund_due integer not null default 0 check (refund_due >= 0),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

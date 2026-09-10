@@ -137,7 +137,8 @@ const buildOrderInsertPayload = (order, receiptId) => {
   const payload = {
     id: receiptId,
     school: order.school || "",
-    total: Number(order.total || 0),
+    total: Math.max(0, Number(order.total || 0)),
+    refund_due: Math.max(0, Number(order.refundDue || 0)),
     item_count: Number(order.itemCount || 0),
     created_at: new Date().toISOString(),
   };
@@ -155,6 +156,8 @@ const buildOrderInsertPayload = (order, receiptId) => {
 
   return payload;
 };
+
+const netOrderTotal = (order) => Number(order.total || 0) - Math.max(0, Number(order.refundDue || 0));
 
 const buildOrderItemInsertPayload = (orderId, item) => {
   const payload = {
@@ -185,7 +188,7 @@ const insertSalesOrderRecord = async (order, salesLog) => {
       const missingColumn = /column .* does not exist|42703/i.test(message);
       if (missingColumn) {
         const fallbackPayload = Object.fromEntries(
-          Object.entries(orderPayload).filter(([key]) => !["cashier_id", "cashier_name", "outlet_name", "outlet_address", "outlet_phone", "customer_surname", "customer_phone_last4"].includes(key))
+          Object.entries(orderPayload).filter(([key]) => !["cashier_id", "cashier_name", "outlet_name", "outlet_address", "outlet_phone", "customer_surname", "customer_phone_last4", "refund_due"].includes(key))
         );
         const { error: fallbackError } = await supabase.from("orders").insert(fallbackPayload);
         if (fallbackError) throw fallbackError;
@@ -1122,7 +1125,7 @@ export default function UniformPOS() {
     try {
       let { data, error } = await supabase
         .from("orders")
-        .select("id, school, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, cashier_id, cashier_name, total, item_count, created_at, order_items(name, size, length, price, qty)")
+        .select("id, school, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, refund_due, cashier_id, cashier_name, total, item_count, created_at, order_items(name, size, length, price, qty)")
         .order("created_at", { ascending: false });
       
       if (error?.code === "42703") {
@@ -1147,7 +1150,8 @@ export default function UniformPOS() {
             date: created.toISOString().slice(0, 10),
             time: created.toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit" }),
             items: (order.order_items || []).map((item) => ({ ...item, length: item.length || "" })),
-            total: order.total,
+            total: Math.max(0, Number(order.total || 0)),
+            refundDue: Math.max(0, Number(order.refund_due || 0)),
             itemCount: order.item_count,
             cashierId: order.cashier_id,
             cashierName: order.cashier_name,
@@ -1322,9 +1326,10 @@ export default function UniformPOS() {
 
       if (isSupabaseAuthEnabled && supabase) {
         const requestedReceiptId = localReceiptId(salesLog);
+        const persistedOrder = { ...order, total: Math.max(0, Number(order.total || 0)) };
         const { data: receiptId, error } = await supabase.rpc("create_order_with_items", {
           order_data: {
-            ...order,
+            ...persistedOrder,
             id: requestedReceiptId,
             cashier_id: order.cashierId,
             cashier_name: order.cashierName,
@@ -1335,18 +1340,19 @@ export default function UniformPOS() {
             customer_surname: customerSurname(order.customerName),
             customer_phone_last4: customerPhoneLast4(order.customerPhone),
             exchange_source_receipt_id: order.exchangeSourceReceiptId || null,
+            refund_due: Math.max(0, Number(order.refundDue || 0)),
             created_at: new Date().toISOString(),
           },
         });
 
         if (!error) {
           savedOrder = { ...order, id: receiptId || requestedReceiptId };
-        } else if (error.code === "42702" || error.code === "23505") {
-          const fallbackOrder = { ...order, id: `${requestedReceiptId}-${uid()}` };
+        } else if (error.code === "42702" || error.code === "23505" || error.code === "23514") {
+          const fallbackOrder = { ...persistedOrder, id: `${requestedReceiptId}-${uid()}` };
           const fallbackResult = await insertSalesOrderRecord(fallbackOrder, salesLog);
           savedOrder = fallbackResult.savedOrder;
         } else if (error.message && /row-level security policy|policy|cashier_id|column .* does not exist/i.test(error.message)) {
-          const fallbackResult = await insertSalesOrderRecord(order, salesLog);
+          const fallbackResult = await insertSalesOrderRecord(persistedOrder, salesLog);
           savedOrder = fallbackResult.savedOrder;
         } else {
           throw error;
@@ -3424,7 +3430,7 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
   const availableSchools = Array.from(new Set(dateOrders.filter(outletMatches).map((o) => o.school).filter(Boolean)))
     .sort((a, b) => a.localeCompare(b, "zh-Hant"));
   const dayOrders = dateOrders.filter((o) => outletMatches(o) && (!schoolFilter || o.school === schoolFilter));
-  const dayTotal = dayOrders.reduce((s, o) => s + o.total, 0);
+  const dayTotal = dayOrders.reduce((s, o) => s + netOrderTotal(o), 0);
   const dayItems = dayOrders.reduce((s, o) => s + o.itemCount, 0);
   const knownCustomerPhones = new Set(dayOrders.map((o) => customerPhoneLast4(o.customerPhone || o.phone)).filter(Boolean));
   const customerCount = knownCustomerPhones.size;
@@ -3437,9 +3443,9 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
     const school = o.school || "（未指定學校）";
     if (!byOutlet[outlet]) byOutlet[outlet] = { total: 0, count: 0 };
     if (!bySchool[school]) bySchool[school] = { total: 0, count: 0 };
-    byOutlet[outlet].total += o.total;
+    byOutlet[outlet].total += netOrderTotal(o);
     byOutlet[outlet].count += 1;
-    bySchool[school].total += o.total;
+    bySchool[school].total += netOrderTotal(o);
     bySchool[school].count += 1;
   });
 
@@ -3447,7 +3453,7 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
   dayOrders.forEach((o) => {
     const key = o.cashierName || "（未記名）";
     if (!byCashier[key]) byCashier[key] = { total: 0, count: 0 };
-    byCashier[key].total += o.total;
+    byCashier[key].total += netOrderTotal(o);
     byCashier[key].count += 1;
   });
 

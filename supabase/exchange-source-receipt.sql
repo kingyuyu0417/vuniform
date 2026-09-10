@@ -1,6 +1,8 @@
 -- Preserve the original receipt reference on exchange transactions.
 alter table public.orders
   add column if not exists exchange_source_receipt_id text;
+alter table public.orders
+  add column if not exists refund_due integer not null default 0 check (refund_due >= 0);
 
 create or replace function public.create_order_with_items(order_data jsonb)
 returns text
@@ -25,7 +27,7 @@ begin
 
   insert into public.orders (
     id, school, outlet_name, outlet_address, outlet_phone,
-    customer_surname, customer_phone_last4, exchange_source_receipt_id,
+    customer_surname, customer_phone_last4, exchange_source_receipt_id, refund_due,
     cashier_id, cashier_name, total, item_count, created_at
   )
   values (
@@ -37,9 +39,10 @@ begin
     nullif(order_data ->> 'customer_surname', ''),
     nullif(order_data ->> 'customer_phone_last4', ''),
     nullif(order_data ->> 'exchange_source_receipt_id', ''),
+    greatest(coalesce((order_data ->> 'refund_due')::integer, 0), 0),
     auth.uid(),
     coalesce(order_data ->> 'cashier_name', ''),
-    (order_data ->> 'total')::integer,
+    greatest((order_data ->> 'total')::integer, 0),
     (order_data ->> 'item_count')::integer,
     coalesce((order_data ->> 'created_at')::timestamptz, now())
   );
