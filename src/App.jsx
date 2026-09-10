@@ -2019,8 +2019,12 @@ export default function UniformPOS() {
         .pos-btn:active { transform: scale(0.97); }
         .pos-page-content { padding: 20px; }
         .pos-page-content > * { max-width: 100%; }
+        .sale-product-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+        .sale-product-button { min-height: 58px; }
         @media (max-width: 560px) {
           .pos-page-content { padding: 14px; }
+          .sale-product-grid { grid-template-columns: 1fr; gap: 10px; }
+          .sale-product-button { min-height: 68px; padding: 16px 14px !important; font-size: 16px !important; line-height: 1.35; }
         }
         @media (min-width: 760px) {
           .pos-shell { box-sizing: border-box; border-left: 1px solid #DCE5EF; border-right: 1px solid #DCE5EF; }
@@ -2674,11 +2678,11 @@ function SaleTab({
         <div style={{ fontSize: 14, fontWeight: 700, color: "#2F6F68", padding: "8px 2px", borderBottom: "1px solid #DDE8E5", marginBottom: 8 }}>
           商品列表
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <div className="sale-product-grid">
           {sortedProducts.map((p) => (
             <button
               key={p.id}
-              className="pos-btn"
+              className="pos-btn sale-product-button"
               onClick={() => {
                 setSelectedProduct(p.id === selectedProduct ? null : p.id);
                 setSelectedLength("");
@@ -3598,11 +3602,15 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
   const [outletFilter, setOutletFilter] = useState("");
   const [schoolFilter, setSchoolFilter] = useState("");
   const [phoneSearch, setPhoneSearch] = useState("");
+  const [receiptSearch, setReceiptSearch] = useState("");
   const effectiveDate = canViewAllDates ? date : todayStr();
   const normalizedPhoneSearch = phoneSearch.replace(/\D/g, "").slice(-4);
-  const dateOrders = normalizedPhoneSearch.length === 4
-    ? salesLog.filter((o) => customerPhoneLast4(o.customerPhone || o.phone) === normalizedPhoneSearch)
-    : salesLog.filter((o) => o.date === effectiveDate);
+  const normalizedReceiptSearch = receiptSearch.trim().toLowerCase().replace(/^#/, "");
+  const dateOrders = normalizedReceiptSearch
+    ? salesLog.filter((o) => String(o.id || "").toLowerCase().includes(normalizedReceiptSearch))
+    : normalizedPhoneSearch.length === 4
+      ? salesLog.filter((o) => customerPhoneLast4(o.customerPhone || o.phone) === normalizedPhoneSearch)
+      : salesLog.filter((o) => o.date === effectiveDate);
   const outletForOrder = (order) => {
     const configuredOutlet = outletNameForSchool(order.school, schoolMeta);
     if (configuredOutlet !== "未指定門店") return configuredOutlet;
@@ -3686,6 +3694,13 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
           aria-label="電話最後4位搜尋"
           style={{ padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 14, width: 170 }}
         />
+        <input
+          value={receiptSearch}
+          onChange={(e) => setReceiptSearch(e.target.value)}
+          placeholder="搜尋單號"
+          aria-label="搜尋單號"
+          style={{ padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 14, width: 170 }}
+        />
         {canViewAllDates ? (
           <input
             type="date"
@@ -3695,7 +3710,7 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
           />
         ) : (
           <div style={{ fontSize: 13, background: "#EEF1F5", padding: "8px 12px", borderRadius: 8, color: "#1F3A5F", fontWeight: 500 }}>
-            {normalizedPhoneSearch.length === 4 ? "搜尋全部歷史記錄" : `即時銷售紀錄（${todayStr()}）`}
+            {normalizedReceiptSearch || normalizedPhoneSearch.length === 4 ? "搜尋全部歷史記錄" : `即時銷售紀錄（${todayStr()}）`}
           </div>
         )}
         <select value={outletFilter} onChange={(e) => { setOutletFilter(e.target.value); setSchoolFilter(""); }} style={{ padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 14, maxWidth: "100%" }}>
