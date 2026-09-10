@@ -283,14 +283,17 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
             <button className="pos-btn" onClick={callNext} disabled={calling || Boolean(counter?.current_order_id)} style={{ flex: 1, padding: "10px 8px", borderRadius: 8, background: "#D97757", color: "#fff", fontWeight: 800 }}>
               <Bell size={15} style={{ verticalAlign: "middle", marginRight: 5 }} />{calling ? "處理中…" : "叫下一位"}
             </button>
-            <button className="pos-btn" onClick={recallCurrentCall} disabled={calling || !counter?.current_queue_number} style={{ padding: "10px 9px", borderRadius: 8, background: "rgba(255,255,255,0.16)", color: "#fff", fontWeight: 700 }} title="重新叫號">
+            <button className="pos-btn" onClick={recallCurrentCall} disabled={calling || !counter?.current_queue_number} style={{ padding: "10px 9px", borderRadius: 8, background: "rgba(255,255,255,0.16)", color: "#fff", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }} title="重新叫號" aria-label="重新叫目前號碼">
               <RotateCcw size={16} />
+              <span>重叫</span>
             </button>
-            <button className="pos-btn" onClick={skipCurrentCall} disabled={calling || !counter?.current_order_id} style={{ padding: "10px 9px", borderRadius: 8, background: "rgba(239,68,68,0.8)", color: "#fff", fontWeight: 700 }} title="客人未到場，標記為過號">
+            <button className="pos-btn" onClick={skipCurrentCall} disabled={calling || !counter?.current_order_id} style={{ padding: "10px 9px", borderRadius: 8, background: "rgba(239,68,68,0.8)", color: "#fff", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }} title="客人未到場，標記為過號" aria-label="標記目前客人過號">
               <SkipForward size={16} />
+              <span>過號</span>
             </button>
-            <button className="pos-btn" onClick={serviceType === QUEUE_SERVICE.PICKUP ? completeCurrentPickup : startCurrentFitting} disabled={calling || !counter?.current_order_id} style={{ padding: "10px 9px", borderRadius: 8, background: "rgba(255,255,255,0.16)", color: "#fff", fontWeight: 700 }} title={serviceType === QUEUE_SERVICE.PICKUP ? "前往收銀" : "開始目前客人度身"}>
+            <button className="pos-btn" onClick={serviceType === QUEUE_SERVICE.PICKUP ? completeCurrentPickup : startCurrentFitting} disabled={calling || !counter?.current_order_id} style={{ padding: "10px 9px", borderRadius: 8, background: "rgba(255,255,255,0.16)", color: "#fff", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }} title={serviceType === QUEUE_SERVICE.PICKUP ? "前往收銀" : "開始目前客人度身"} aria-label={serviceType === QUEUE_SERVICE.PICKUP ? "前往收銀處理目前訂單" : "開始目前客人度身"}>
               <Check size={16} />
+              <span>{serviceType === QUEUE_SERVICE.PICKUP ? "前往收銀" : "開始度身"}</span>
             </button>
           </div>
           {callError && <div style={{ marginTop: 8, color: "#fecaca", fontSize: 12 }}>{callError}</div>}
