@@ -72,18 +72,23 @@
           </header>
           <dl>
             <dt>收據編號</dt><dd>#${text(order.id).toUpperCase()}</dd>
+            ${order.exchangeSourceReceiptId ? `<dt>來源單據</dt><dd>#${text(order.exchangeSourceReceiptId).toUpperCase()}</dd>` : ""}
             <dt>交易日期</dt><dd>${text(order.date)} ${text(order.time, "")}</dd>
             <dt>學校</dt><dd>${text(order.school)}</dd>
             <dt>客人</dt><dd>${text(customerSurname(order.customerName))}</dd>
             <dt>電話尾4位</dt><dd>${text(customerPhoneLast4(order.customerPhone))}</dd>
           </dl>
           <div class="items">
-              ${items.map((item) => `<div class="item"><div class="item-main"><span>${text(item.name)}</span><span>${money(Number(item.price) * Number(item.qty))}</span></div><div class="item-sub"><span>${formatSizeDisplay(item.name, item.size, item.length)}</span></div><div class="item-sub"><span>數量</span><span>${text(item.qty, "0")} 件 × ${money(item.price)}</span></div></div>`).join("")}
+              ${items.map((item) => {
+                const sign = item.exchangeReturn ? -1 : 1;
+                return `<div class="item"><div class="item-main"><span>${item.exchangeReturn ? "換出：" : ""}${text(item.name)}</span><span>${money(sign * Number(item.price) * Number(item.qty))}</span></div><div class="item-sub"><span>${formatSizeDisplay(item.name, item.size, item.length)}</span></div><div class="item-sub"><span>數量</span><span>${text(item.qty, "0")} 件 × ${money(item.price)}</span></div></div>`;
+              }).join("")}
           </div>
           <div class="summary">
             <div class="item-sub"><span>商品件數</span><span>${text(order.itemCount, "0")}</span></div>
-            <div class="total"><span>應付總額</span><span>${money(order.total)}</span></div>
-            <div class="item-sub" style="margin-top:8px"><span>交易狀態</span><span>已完成</span></div>
+            <div class="total"><span>${order.exchangeSourceReceiptId ? "換貨差額" : "應付總額"}</span><span>${money(order.total)}</span></div>
+            ${order.refundDue > 0 ? `<div class="item-sub" style="margin-top:8px"><span>應退客人</span><span>${money(order.refundDue)}</span></div>` : ""}
+            <div class="item-sub" style="margin-top:8px"><span>交易狀態</span><span>${order.exchangeSourceReceiptId ? "換貨完成" : "已完成"}</span></div>
           </div>
           <div class="policy">換貨條款：全新校服可於購買日起一個月內到指定門店換貨。<br>不設退款；貨品必須未經洗滌、未曾使用，並保留完整吊牌及剪牌，否則恕不接受換貨。</div>
           <footer>多謝惠顧，歡迎重臨</footer>
