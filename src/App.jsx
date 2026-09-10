@@ -2515,7 +2515,7 @@ function SaleTab({
           {!directExchangeProductId ? (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, maxHeight: 260, overflowY: "auto" }}>
               {visibleProducts.map((product) => (
-                <button key={product.id} className="pos-btn" onClick={() => setDirectExchangeProductId(product.id)} style={{ padding: "9px 8px", borderRadius: 8, background: "#fff", border: "1px solid #86EFAC", color: "#166534", textAlign: "left" }}>
+                <button key={product.id} className="pos-btn" onClick={() => setDirectExchangeProductId(product.id)} style={{ padding: "12px 10px", borderRadius: 10, background: "#fff", border: "1px solid #ddd", color: "#222", fontSize: 14, fontWeight: 500, textAlign: "left" }}>
                   {displayProductName(product.name)}
                 </button>
               ))}
