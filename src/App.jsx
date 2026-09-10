@@ -1135,6 +1135,13 @@ export default function UniformPOS() {
           .select("id, school, exchange_source_receipt_id, cashier_id, cashier_name, total, item_count, created_at, order_items(name, size, price, qty)")
           .order("created_at", { ascending: false }));
       }
+      if (error?.code === "42703") {
+        console.warn("來源單據欄位尚未同步，使用基本訂單查詢", error);
+        ({ data, error } = await supabase
+          .from("orders")
+          .select("id, school, cashier_id, cashier_name, total, item_count, created_at, order_items(name, size, price, qty)")
+          .order("created_at", { ascending: false }));
+      }
       
       if (error) {
         console.error("loadSecureOrders 查詢失敗", error);
