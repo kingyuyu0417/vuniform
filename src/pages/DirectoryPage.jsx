@@ -19,11 +19,11 @@ export default function DirectoryPage({ availableIds = [], onNavigate }) {
 
   return (
     <section style={{ padding: "4px 0 16px" }}>
-      <div style={{ marginBottom: 18 }}>
-        <div style={{ color: "#1F3A5F", fontSize: 24, fontWeight: 800 }}>功能目錄</div>
-        <div style={{ color: "#64748B", fontSize: 13, marginTop: 4 }}>選擇要進入的工作頁面</div>
+      <div style={{ marginBottom: 22, padding: "4px 2px" }}>
+        <div style={{ color: "#1F3A5F", fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em" }}>功能目錄</div>
+        <div style={{ color: "#64748B", fontSize: 13, marginTop: 6 }}>選擇要進入的工作頁面</div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+      <div className="directory-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 14 }}>
         {items.map(({ id, label, description, icon: Icon, path }) => (
           <button
             key={id}
@@ -33,17 +33,18 @@ export default function DirectoryPage({ availableIds = [], onNavigate }) {
               display: "flex",
               alignItems: "center",
               gap: 12,
-              minHeight: 88,
-              padding: 14,
+              minHeight: 92,
+              padding: "15px 16px",
               border: "1px solid #E2E8F0",
-              borderRadius: 12,
-              background: "#fff",
+              borderRadius: 14,
+              background: "linear-gradient(145deg, #fff 0%, #F8FAFD 100%)",
               color: "#1F3A5F",
               textAlign: "left",
-              boxShadow: "0 2px 8px rgba(15, 23, 42, 0.05)",
+              boxShadow: "0 3px 10px rgba(15, 23, 42, 0.06)",
+              transition: "transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease",
             }}
           >
-            <span style={{ display: "grid", placeItems: "center", width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: "#EAF0F8" }}>
+            <span style={{ display: "grid", placeItems: "center", width: 42, height: 42, flexShrink: 0, borderRadius: 12, background: "#EAF0F8" }}>
               <Icon size={20} />
             </span>
             <span>
@@ -53,6 +54,16 @@ export default function DirectoryPage({ availableIds = [], onNavigate }) {
           </button>
         ))}
       </div>
+      <style>{`
+        .directory-grid .pos-btn:hover {
+          transform: translateY(-2px);
+          border-color: #B8CBE1;
+          box-shadow: 0 8px 18px rgba(31, 58, 95, 0.11);
+        }
+        @media (max-width: 520px) {
+          .directory-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
+        }
+      `}</style>
     </section>
   );
 }

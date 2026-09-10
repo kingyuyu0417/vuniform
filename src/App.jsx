@@ -1919,12 +1919,19 @@ export default function UniformPOS() {
   const publicRouteOutlet = new URLSearchParams(location.search).get("outlet") || "";
   const publicQueueService = (new URLSearchParams(location.search).get("service") || "").toUpperCase();
   const routeId = new URLSearchParams(location.search).get("id");
+  const isDirectoryPage = location.pathname === "/menu";
 
   useEffect(() => {
     if (location.pathname === "/" && publicRouteSchool) {
       navigate(`/checkin?school_id=${encodeURIComponent(publicRouteSchool)}`);
     }
   }, [location.pathname, publicRouteSchool, navigate]);
+
+  useEffect(() => {
+    if (!isDirectoryPage && schoolPanelOpen) {
+      setSchoolPanelOpen(false);
+    }
+  }, [isDirectoryPage, schoolPanelOpen]);
 
   const handleTabChange = (nextTab) => {
     setTab(nextTab);
@@ -1998,8 +2005,11 @@ export default function UniformPOS() {
 
   return (
     <AppErrorBoundary>
-      <div style={{ maxWidth: 460, margin: "0 auto", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+      <div className="pos-shell" style={{ maxWidth: 760, minHeight: "100vh", margin: "0 auto", fontFamily: "system-ui, -apple-system, sans-serif", background: "#F7F9FC", boxShadow: "0 0 32px rgba(15, 23, 42, 0.06)" }}>
         <style>{`
+        :root { color-scheme: light; }
+        body { margin: 0; background: #EAF0F6; color: #172B4D; }
+        button, input, select, textarea { font: inherit; }
         @media print {
           body * { visibility: hidden; }
           #print-receipt, #print-receipt * { visibility: visible; }
@@ -2007,6 +2017,14 @@ export default function UniformPOS() {
         }
         .pos-btn { cursor: pointer; border: none; outline: none; }
         .pos-btn:active { transform: scale(0.97); }
+        .pos-page-content { padding: 20px; }
+        .pos-page-content > * { max-width: 100%; }
+        @media (max-width: 560px) {
+          .pos-page-content { padding: 14px; }
+        }
+        @media (min-width: 760px) {
+          .pos-shell { border-left: 1px solid #DCE5EF; border-right: 1px solid #DCE5EF; }
+        }
       `}</style>
 
         {envError && (
@@ -2029,7 +2047,7 @@ export default function UniformPOS() {
           </div>
         )}
 
-        <div style={{ background: "#1F3A5F", color: "#fff", padding: "16px 20px", borderRadius: schoolPanelOpen ? "0" : "0 0 16px 16px", position: "relative" }}>
+        <div style={{ background: "linear-gradient(135deg, #1F3A5F 0%, #294D78 100%)", color: "#fff", padding: "18px 20px", borderRadius: isDirectoryPage && schoolPanelOpen ? "0" : "0 0 16px 16px", position: "relative", boxShadow: "0 3px 12px rgba(31, 58, 95, 0.18)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           {session.role === ROLES.GUEST ? (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -2039,6 +2057,7 @@ export default function UniformPOS() {
               </div>
             </div>
           ) : schools.length > 0 ? (
+            isDirectoryPage ? (
             <button
               className="pos-btn"
               onClick={() => setSchoolPanelOpen((v) => !v)}
@@ -2052,6 +2071,14 @@ export default function UniformPOS() {
                 <div style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>{todayStr()}</div>
               </div>
             </button>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 600 }}>{selectedSchool || "校服銷售"}</div>
+                  <div style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>{todayStr()}</div>
+                </div>
+              </div>
+            )
           ) : (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div>
@@ -2098,7 +2125,7 @@ export default function UniformPOS() {
           </div>
         </div>
 
-        {schoolPanelOpen && schools.length > 0 && session.role !== ROLES.GUEST && (
+        {isDirectoryPage && schoolPanelOpen && schools.length > 0 && session.role !== ROLES.GUEST && (
           <StoreSchoolSwitcher
             schools={schools}
             schoolMeta={schoolMeta}
@@ -2107,7 +2134,7 @@ export default function UniformPOS() {
           />
         )}
       </div>
-      {schoolPanelOpen && <div style={{ height: 16, background: "#1F3A5F", borderRadius: "0 0 16px 16px" }} />}
+      {isDirectoryPage && schoolPanelOpen && <div style={{ height: 16, background: "#294D78", borderRadius: "0 0 16px 16px" }} />}
 
       {session.role !== ROLES.GUEST && (
         <div style={{ padding: "12px 16px 0" }}>
@@ -2129,7 +2156,7 @@ export default function UniformPOS() {
         return null;
       })()}
 
-      <div style={{ padding: "16px" }}>
+      <div className="pos-page-content">
         <Routes>
           <Route
             path="/checkin"

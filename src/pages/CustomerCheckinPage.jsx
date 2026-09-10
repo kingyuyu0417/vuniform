@@ -232,6 +232,14 @@ export default function CustomerCheckinPage({ onSubmit, school = "", schools = [
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
+      <button
+        type="button"
+        className="pos-btn"
+        onClick={() => navigate("/menu")}
+        style={{ justifySelf: "start", padding: "8px 12px", borderRadius: 8, background: "#EEF2F7", color: "#1F3A5F", border: "1px solid #D5DDE5", fontSize: 13, fontWeight: 700 }}
+      >
+        ← 返回功能目錄
+      </button>
       {!effectiveSchool ? (
         <div style={{ background: "#fff", border: "1px solid #D5DDE5", borderRadius: 14, padding: 22 }}>
           <div style={{ fontSize: 18, fontWeight: 800, color: "#1F3A5F" }}>登記學校</div>
@@ -609,4 +617,3 @@ export default function CustomerCheckinPage({ onSubmit, school = "", schools = [
     </div>
   );
 }
-
