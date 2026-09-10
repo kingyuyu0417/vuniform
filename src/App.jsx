@@ -2020,11 +2020,11 @@ export default function UniformPOS() {
         .pos-page-content { padding: 20px; }
         .pos-page-content > * { max-width: 100%; }
         .sale-product-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-        .sale-product-button { aspect-ratio: 1; }
+        .sale-product-button { min-height: 76px; }
         @media (max-width: 560px) {
           .pos-page-content { padding: 14px; }
           .sale-product-grid { gap: 8px; }
-          .sale-product-button { padding: 10px 8px !important; font-size: 16px !important; line-height: 1.35; }
+          .sale-product-button { min-height: 76px; padding: 10px 8px !important; font-size: 16px !important; line-height: 1.35; }
         }
         @media (min-width: 760px) {
           .pos-shell { box-sizing: border-box; border-left: 1px solid #DCE5EF; border-right: 1px solid #DCE5EF; }
