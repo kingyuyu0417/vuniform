@@ -762,6 +762,8 @@ export default function UniformPOS() {
   const [cart, setCart] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [pendingSaleProductId, setPendingSaleProductId] = useState("");
+  const [exchangeReplacementQueue, setExchangeReplacementQueue] = useState([]);
+  const exchangeReplacementQueueRef = useRef([]);
   const [receipt, setReceipt] = useState(null);
   const [cashReceived, setCashReceived] = useState("");
   const [btStatus, setBtStatus] = useState({ state: "idle", msg: "" });
@@ -1437,6 +1439,9 @@ export default function UniformPOS() {
     })));
     setCashReceived("");
     setSelectedProduct(null);
+    const replacementQueue = exchangeItems.map(({ product }) => product.id);
+    exchangeReplacementQueueRef.current = replacementQueue;
+    setExchangeReplacementQueue(replacementQueue);
     setPendingSaleProductId(exchangeItems[0].product.id);
     setReceipt(null);
     setTab("sale");
@@ -1862,7 +1867,16 @@ export default function UniformPOS() {
     setReceipt(savedOrder);
     setCart([]);
     setSelectedProduct(null);
+    exchangeReplacementQueueRef.current = [];
+    setExchangeReplacementQueue([]);
     checkoutSubmittingRef.current = false;
+  };
+
+  const advanceExchangeReplacement = () => {
+    const [, ...remaining] = exchangeReplacementQueueRef.current;
+    exchangeReplacementQueueRef.current = remaining;
+    setExchangeReplacementQueue(remaining);
+    setPendingSaleProductId(remaining[0] || "");
   };
 
   const printBrowser = () => {
@@ -2277,6 +2291,8 @@ export default function UniformPOS() {
                 cashAmount={cashAmount}
                 exchangeMode={exchangeMode}
                 refundDue={refundDue}
+                exchangeReplacementQueue={exchangeReplacementQueue}
+                onExchangeReplacementAdded={advanceExchangeReplacement}
                 salesLog={salesLog}
                 onExchange={startExchange}
               />
@@ -2307,6 +2323,8 @@ export default function UniformPOS() {
                     cashAmount={cashAmount}
                     exchangeMode={exchangeMode}
                     refundDue={refundDue}
+                    exchangeReplacementQueue={exchangeReplacementQueue}
+                    onExchangeReplacementAdded={advanceExchangeReplacement}
                     salesLog={salesLog}
                     onExchange={startExchange}
                   />
@@ -2451,6 +2469,8 @@ function SaleTab({
   cashAmount,
   exchangeMode = false,
   refundDue = 0,
+  exchangeReplacementQueue = [],
+  onExchangeReplacementAdded,
   salesLog = [],
   onExchange,
 }) {
@@ -2483,8 +2503,14 @@ function SaleTab({
   });
 
   useEffect(() => {
-    if (selectedProduct && !filteredProducts.some((product) => product.id === selectedProduct)) setSelectedProduct(null);
-  }, [genderFilter, selectedSchool, products, selectedProduct]);
+    if (
+      selectedProduct
+      && !filteredProducts.some((product) => product.id === selectedProduct)
+      && !exchangeReplacementQueue.includes(selectedProduct)
+    ) {
+      setSelectedProduct(null);
+    }
+  }, [genderFilter, selectedSchool, products, selectedProduct, exchangeReplacementQueue]);
 
   useEffect(() => {
     setSelectedLength("");
@@ -2509,6 +2535,9 @@ function SaleTab({
     setQuantityPrompt(null);
     setSelectedProduct(null);
     setSelectedLength("");
+    if (exchangeMode && exchangeReplacementQueue.length > 0) {
+      onExchangeReplacementAdded?.();
+    }
   };
 
   const openExchangePicker = () => {
@@ -2565,9 +2594,9 @@ function SaleTab({
         <div style={{ background: "#ECFDF3", border: "1px solid #86EFAC", borderRadius: 10, padding: 12, marginBottom: 12 }}>
           <div style={{ color: "#166534", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>第一步：揀選客人退回的款式及尺碼</div>
           {!directExchangeProductId ? (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, maxHeight: 260, overflowY: "auto" }}>
+            <div className="sale-product-grid" style={{ maxHeight: 260, overflowY: "auto" }}>
               {visibleProducts.map((product) => (
-                <button key={product.id} className="pos-btn" onClick={() => setDirectExchangeProductId(product.id)} style={{ padding: "12px 10px", borderRadius: 10, background: "#fff", border: "1px solid #ddd", color: "#222", fontSize: 14, fontWeight: 500, textAlign: "left" }}>
+                <button key={product.id} className="pos-btn sale-product-button" onClick={() => setDirectExchangeProductId(product.id)} style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #86EFAC", color: "#166534", fontSize: 16, fontWeight: 700, textAlign: "left" }}>
                   {displayProductName(product.name)}
                 </button>
               ))}
@@ -2583,12 +2612,12 @@ function SaleTab({
                 <button className="pos-btn" onClick={() => setDirectExchangeProductId("")} style={{ padding: "6px 8px", marginBottom: 8, background: "transparent", color: "#166534" }}>← 返回選款式</button>
                 <div style={{ fontSize: 12, color: "#166534", marginBottom: 6 }}>{displayProductName(product.name)}：揀尺碼</div>
                 {hasLengths && !directExchangeLength ? (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {lengths.map((length) => <button key={length} className="pos-btn" onClick={() => setDirectExchangeLength(length)} style={{ padding: "9px 11px", borderRadius: 8, background: "#fff", border: "1px solid #86EFAC", color: "#166534" }}>{length}</button>)}
+                  <div className="sale-size-grid">
+                    {lengths.map((length) => <button key={length} className="pos-btn sale-size-button" onClick={() => setDirectExchangeLength(length)} style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #86EFAC", color: "#166534", fontSize: 16, fontWeight: 700 }}>{length}</button>)}
                   </div>
-                ) : <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                ) : <div className="sale-size-grid">
                   {sizes.map((size) => (
-                    <button key={`${size.size}-${size.length || ""}`} className="pos-btn" onClick={() => startDirectExchange(product, size)} style={{ padding: "9px 11px", borderRadius: 8, background: "#fff", border: "1px solid #86EFAC", color: "#166534" }}>
+                    <button key={`${size.size}-${size.length || ""}`} className="pos-btn sale-size-button" onClick={() => startDirectExchange(product, size)} style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #86EFAC", color: "#166534", fontSize: 16 }}>
                       {sizeLabel(size)} · {fmt(size.price)}
                     </button>
                   ))}
