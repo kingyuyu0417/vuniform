@@ -2021,10 +2021,14 @@ export default function UniformPOS() {
         .pos-page-content > * { max-width: 100%; }
         .sale-product-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
         .sale-product-button { min-height: 76px; }
+        .sale-size-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+        .sale-size-button { min-height: 76px; }
         @media (max-width: 560px) {
           .pos-page-content { padding: 14px; }
           .sale-product-grid { gap: 8px; }
           .sale-product-button { min-height: 76px; padding: 10px 8px !important; font-size: 16px !important; line-height: 1.35; }
+          .sale-size-grid { gap: 8px; }
+          .sale-size-button { min-height: 76px; padding: 10px 8px !important; font-size: 16px !important; line-height: 1.35; }
         }
         @media (min-width: 760px) {
           .pos-shell { box-sizing: border-box; border-left: 1px solid #DCE5EF; border-right: 1px solid #DCE5EF; }
@@ -2727,13 +2731,13 @@ function SaleTab({
             if (!product) return null;
             const hasLengths = hasLengthOptions(product);
             if (!hasLengths) return (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <div className="sale-size-grid">
                 {product.sizes.map((s) => (
                   <button
                     key={`${selectedProduct}-${s.size}`}
-                    className="pos-btn"
+                    className="pos-btn sale-size-button"
                     onClick={() => handleSizeSelect(product, s)}
-                    style={{ padding: "10px 14px", borderRadius: 10, background: "#fff", border: "1px solid #ccc", fontSize: 14 }}
+                    style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #ccc", fontSize: 16 }}
                   >
                     <div style={{ fontWeight: 600 }}>{sizeLabel(s)}</div>
                     <div style={{ fontSize: 12, color: "#888" }}>{fmt(s.price)}</div>
@@ -2743,14 +2747,9 @@ function SaleTab({
             );
             const lengths = [...new Set(product.sizes.map((size) => size.length))].sort(naturalSizeSort);
             if (!selectedLength) return (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <div className="sale-size-grid">
                 {lengths.map((length) => (
-                  <button
-                    key={`${selectedProduct}-length-${length}`}
-                    className="pos-btn"
-                    onClick={() => setSelectedLength(length)}
-                    style={{ minWidth: 100, padding: "11px 14px", borderRadius: 10, background: "#fff", border: "1px solid #1F3A5F", color: "#1F3A5F", fontSize: 14, fontWeight: 600 }}
-                  >
+                  <button key={`${selectedProduct}-length-${length}`} className="pos-btn sale-size-button" onClick={() => setSelectedLength(length)} style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #1F3A5F", color: "#1F3A5F", fontSize: 16, fontWeight: 700 }}>
                     長度 {length}
                   </button>
                 ))}
@@ -2764,13 +2763,13 @@ function SaleTab({
                 <button className="pos-btn" onClick={() => setSelectedLength("")} style={{ marginBottom: 8, padding: "6px 10px", borderRadius: 8, background: "#F0F0EC", border: "1px solid #ddd", fontSize: 12 }}>
                   更改長度（目前：{selectedLength}）
                 </button>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                <div className="sale-size-grid">
                   {selectedLengthSizes.map((s) => (
                     <button
                       key={`${selectedProduct}-${s.size}-${s.length}`}
-                      className="pos-btn"
+                      className="pos-btn sale-size-button"
                       onClick={() => handleSizeSelect(product, s)}
-                      style={{ minWidth: 76, padding: "8px 7px", borderRadius: 8, background: "#fff", border: "1px solid #ccc", fontSize: 12 }}
+                      style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #ccc", fontSize: 16 }}
                     >
                       <div style={{ fontWeight: 600 }}>{sizeDimensionLabel(product)} {s.size} 吋</div>
                       <div style={{ color: "#888", marginTop: 2 }}>{fmt(s.price)}</div>
