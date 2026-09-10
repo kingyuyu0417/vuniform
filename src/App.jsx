@@ -2461,8 +2461,12 @@ function SaleTab({
   const filteredProducts = visibleProducts.filter((product) =>
     (genderFilter === "全部" || genderOf(product) === genderFilter || genderOf(product) === "男女通用")
   );
+  const exchangeDate = todayStr();
   const exchangeOrders = selectedSchool
-    ? salesLog.filter((order) => String(order.school || "").trim() === String(selectedSchool).trim())
+    ? salesLog.filter((order) =>
+      String(order.school || "").trim() === String(selectedSchool).trim()
+      && String(order.date || "").slice(0, 10) === exchangeDate
+    )
     : [];
   const sortedProducts = [...filteredProducts].sort((a, b) => {
     const aIndex = products.findIndex((p) => p.id === a.id);

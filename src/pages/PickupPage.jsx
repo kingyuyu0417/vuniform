@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCheck, Clock3, PackageCheck, Zap } from "lucide-react";
-import { ORDER_STATUS } from "../services/queueOrderService";
+import { ORDER_STATUS, isQueueOrderToday } from "../services/queueOrderService";
 import { supabase, isSupabaseAuthEnabled, isSupabaseConfigured } from "../supabaseClient";
 
 const statusLabel = {
@@ -25,6 +25,8 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
   const [updatingId, setUpdatingId] = useState("");
   const [notice, setNotice] = useState("");
   const [now, setNow] = useState(() => Date.now());
+  const currentDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Hong_Kong" }).format(new Date(now));
+  const lastLoadedDayRef = useRef(currentDay);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -45,7 +47,9 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
       if (currentSchoolId) query = query.eq("school_id", currentSchoolId);
       const { data, error } = await query;
       if (error) throw error;
-      const nextOrders = (Array.isArray(data) ? data : []).map(getSafeOrder);
+      const nextOrders = (Array.isArray(data) ? data : [])
+        .filter((row) => isQueueOrderToday(row.created_at))
+        .map(getSafeOrder);
       setOrders(nextOrders);
       return nextOrders;
     } catch (error) {
@@ -75,13 +79,23 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
     return () => { supabase.removeChannel(channel); };
   }, [currentSchoolId]);
 
+  useEffect(() => {
+    if (lastLoadedDayRef.current === currentDay) return;
+    lastLoadedDayRef.current = currentDay;
+    syncOrders();
+  }, [currentDay]);
+
+  const readyOrders = useMemo(
+    () => orders.filter((o) => o.status === ORDER_STATUS.READY),
+    [orders]
+  );
   const displayOrders = useMemo(
-    () => orders.filter((o) => o.status === ORDER_STATUS.PREPARING || o.status === ORDER_STATUS.READY),
+    () => orders.filter((o) => o.status === ORDER_STATUS.PREPARING),
     [orders]
   );
 
   const batchSummary = useMemo(() => {
-    return displayOrders.reduce((acc, order) => {
+    return readyOrders.reduce((acc, order) => {
       const items = Array.isArray(order.tailor_info?.items) ? order.tailor_info.items : [];
       items.forEach((item) => {
         const key = `${item.product_name || "未知產品"}::${item.size || ""}`;
@@ -94,7 +108,7 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
       });
       return acc;
     }, {});
-  }, [displayOrders]);
+  }, [readyOrders]);
 
   const summaryRows = useMemo(() => Object.values(batchSummary), [batchSummary]);
   const elapsedSeconds = (order) => {
@@ -195,7 +209,7 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
 
       <div style={styles.list}>
         {loading && <div style={styles.loading}>載入中...</div>}
-        {displayOrders.length === 0 && !loading && <div style={styles.empty}>暫無待執貨或已執好貨的單</div>}
+        {displayOrders.length === 0 && !loading && <div style={styles.empty}>目前沒有待執貨單</div>}
 
         {displayOrders.map((order) => (
           <div key={order.id} style={styles.card}>
@@ -220,25 +234,14 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
               ))}
             </div>
 
-            {order.status === ORDER_STATUS.PREPARING ? (
-              <button
-                style={{ ...styles.readyButton, opacity: updatingId === order.id ? 0.65 : 1 }}
-                onClick={() => markReady(order.id)}
-                disabled={Boolean(updatingId)}
-              >
-                <PackageCheck size={16} />
-                {updatingId === order.id ? "更新中..." : "執好 / 準備結帳"}
-              </button>
-            ) : (
-              <button
-                style={{ ...styles.readyButton, opacity: updatingId === order.id ? 0.65 : 1 }}
-                onClick={() => goToSale(order)}
-                disabled={Boolean(updatingId)}
-              >
-                <PackageCheck size={16} />
-                進行銷售
-              </button>
-            )}
+            <button
+              style={{ ...styles.readyButton, opacity: updatingId === order.id ? 0.65 : 1 }}
+              onClick={() => markReady(order.id)}
+              disabled={Boolean(updatingId)}
+            >
+              <PackageCheck size={16} />
+              {updatingId === order.id ? "更新中..." : "執好 / 準備結帳"}
+            </button>
           </div>
         ))}
       </div>
