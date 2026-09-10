@@ -2136,14 +2136,14 @@ export default function UniformPOS() {
       </div>
       {isDirectoryPage && schoolPanelOpen && <div style={{ height: 16, background: "#294D78", borderRadius: "0 0 16px 16px" }} />}
 
-      {session.role !== ROLES.GUEST && (
+      {session.role !== ROLES.GUEST && !isDirectoryPage && (
         <div style={{ padding: "12px 16px 0" }}>
           <button
             className="pos-btn"
             onClick={() => navigate("/menu")}
             style={{ width: "100%", padding: "10px 14px", borderRadius: 10, background: location.pathname === "/menu" ? "#1F3A5F" : "#EEF1F5", color: location.pathname === "/menu" ? "#fff" : "#1F3A5F", fontSize: 14, fontWeight: 700 }}
           >
-            功能目錄
+            返回目錄
           </button>
         </div>
       )}

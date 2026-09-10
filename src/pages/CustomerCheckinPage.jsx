@@ -238,7 +238,7 @@ export default function CustomerCheckinPage({ onSubmit, school = "", schools = [
         onClick={() => navigate("/menu")}
         style={{ justifySelf: "start", padding: "8px 12px", borderRadius: 8, background: "#EEF2F7", color: "#1F3A5F", border: "1px solid #D5DDE5", fontSize: 13, fontWeight: 700 }}
       >
-        ← 返回功能目錄
+        返回目錄
       </button>
       {!effectiveSchool ? (
         <div style={{ background: "#fff", border: "1px solid #D5DDE5", borderRadius: 14, padding: 22 }}>
