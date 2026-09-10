@@ -3713,7 +3713,20 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
       <div style={{ fontSize: 13, color: "#666", marginBottom: 8 }}>{dayOrders.length} 張單</div>
       {dayOrders.length === 0 && <div style={{ fontSize: 13, color: "#999" }}>呢日未有交易記錄</div>}
       {dayOrders.map((o) => (
-        <div key={o.id} style={{ background: "#fff", border: "1px solid #E5E5E0", borderRadius: 10, padding: "10px 14px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div
+          key={o.id}
+          role="button"
+          tabIndex={0}
+          onClick={() => onReprint(o)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              onReprint(o);
+            }
+          }}
+          style={{ background: "#fff", border: "1px solid #E5E5E0", borderRadius: 10, padding: "10px 14px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
+          title="按此查看單據記錄"
+        >
           <div>
             <div style={{ fontSize: 13, fontWeight: 500 }}>{o.time} · {o.itemCount}件 · #{(o.id || "").slice(0, 6).toUpperCase()}</div>
             {o.exchangeSourceReceiptId && <div style={{ fontSize: 12, color: "#9A3412", fontWeight: 600 }}>來源單據：#{String(o.exchangeSourceReceiptId).toUpperCase()}</div>}
@@ -3722,7 +3735,7 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
           </div>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: 14, fontWeight: 600 }}>{fmt(o.total)}</div>
-            <button className="pos-btn" onClick={() => onReprint(o)} style={{ fontSize: 11, color: "#1F3A5F", background: "none", marginTop: 2 }}>
+            <button className="pos-btn" onClick={(event) => { event.stopPropagation(); onReprint(o); }} style={{ fontSize: 10, color: "#64748B", background: "none", marginTop: 2, padding: "2px 4px" }}>
               重印
             </button>
           </div>
