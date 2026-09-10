@@ -593,6 +593,10 @@ const buildReceiptLines = (order, shopName) => {
   else if (typeof order.changeDue === "number") lines.push(`找續：${fmt(order.changeDue)}`);
   lines.push(order.exchangeSourceReceiptId ? "交易狀態：換貨完成" : "交易狀態：已完成");
   lines.push("--------------------------------");
+  lines.push("退換條款：購貨後 30 天內，憑收據且商品未經使用、洗滌或改動，可親臨指定門市辦理更換尺碼。");
+  lines.push("洗滌指引：");
+  lines.push("請勿使用含有漂白成份之洗衣產品、彩漂或漂白水。");
+  lines.push("深淺色衣物必須分開洗滌，清洗後請即時晾曬，以免移色。");
   lines.push("多謝惠顧，歡迎重臨");
   lines.push("此 QR Code 內容為本單電子收據");
   return lines;
@@ -2363,7 +2367,7 @@ export default function UniformPOS() {
             <div style={{ fontWeight: 700 }}>應付總額：{fmt(receipt.total)}</div>
             <div>交易狀態：已完成</div>
             <div style={{ marginTop: 8, color: "#555", whiteSpace: "pre-line" }}>
-              換貨條款：全新校服可於購買日起一個月內到指定門店換貨。{String.fromCharCode(10)}不設退款；貨品必須未經洗滌、未曾使用，並保留完整吊牌及剪牌，否則恕不接受換貨。
+              <strong>退換條款：</strong>購貨後 30 天內，憑收據且商品未經使用、洗滌或改動，可親臨指定門市辦理更換尺碼。{String.fromCharCode(10)}<strong>洗滌指引：</strong>{String.fromCharCode(10)}請勿使用含有漂白成份之洗衣產品、彩漂或漂白水。{String.fromCharCode(10)}深淺色衣物必須分開洗滌，清洗後請即時晾曬，以免移色。
             </div>
             <div style={{ textAlign: "center", marginTop: 8 }}>多謝惠顧，歡迎重臨</div>
           </div>
@@ -3720,8 +3724,10 @@ function ReceiptModal({ order, onClose, onRedoSale, onExchange, onPrintBrowser, 
           )}
           <div>交易狀態：{order.exchangeSourceReceiptId ? "換貨完成" : "已完成"}</div>
           <div style={{ marginTop: 8, color: "#555", lineHeight: 1.5 }}>
-            換貨條款：全新校服可於購買日起一個月內到指定門店換貨。<br />
-            不設退款；貨品必須未經洗滌、未曾使用，並保留完整吊牌及剪牌，否則恕不接受換貨。
+            <strong>退換條款：</strong>購貨後 30 天內，憑收據且商品未經使用、洗滌或改動，可親臨指定門市辦理更換尺碼。<br />
+            <strong>洗滌指引：</strong><br />
+            請勿使用含有漂白成份之洗衣產品、彩漂或漂白水。<br />
+            深淺色衣物必須分開洗滌，清洗後請即時晾曬，以免移色。
           </div>
           <div style={{ textAlign: "center", marginTop: 6, color: "#888" }}>多謝惠顧，歡迎重臨</div>
         </div>
