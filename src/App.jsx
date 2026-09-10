@@ -2424,6 +2424,9 @@ function SaleTab({
   const [exchangePickerOpen, setExchangePickerOpen] = useState(false);
   const [exchangeOrder, setExchangeOrder] = useState(null);
   const [exchangeItems, setExchangeItems] = useState([]);
+  const [directExchangeOpen, setDirectExchangeOpen] = useState(false);
+  const [directExchangeProductId, setDirectExchangeProductId] = useState("");
+  const [directExchangeLength, setDirectExchangeLength] = useState("");
   const schools = listSchools(products);
   const visibleProducts = selectedSchool ? products.filter((p) => schoolOf(p) === selectedSchool) : products;
   const filteredProducts = visibleProducts.filter((product) =>
@@ -2471,6 +2474,25 @@ function SaleTab({
     setExchangeItems([]);
   };
 
+  const startDirectExchange = (product, size) => {
+    onExchange?.({
+      id: "",
+      school: selectedSchool || schoolOf(product),
+      customerName: "",
+      customerPhone: "",
+    }, [{
+      productId: product.id,
+      name: product.name,
+      size: size.size,
+      length: size.length || "",
+      price: Number(size.price || 0),
+      qty: 1,
+    }]);
+    setDirectExchangeOpen(false);
+    setDirectExchangeProductId("");
+    setDirectExchangeLength("");
+  };
+
   return (
     <div>
       <button
@@ -2480,6 +2502,51 @@ function SaleTab({
       >
         快速換貨／補差額（可換多件）
       </button>
+      <button
+        className="pos-btn"
+        onClick={() => { setDirectExchangeOpen(true); setDirectExchangeProductId(""); setDirectExchangeLength(""); }}
+        style={{ width: "100%", padding: "12px 0", borderRadius: 10, background: "#ECFDF3", color: "#166534", border: "1px solid #86EFAC", fontSize: 14, fontWeight: 700, marginBottom: 12 }}
+      >
+        遺失單據快速換貨（直接揀退回貨品）
+      </button>
+      {directExchangeOpen && (
+        <div style={{ background: "#ECFDF3", border: "1px solid #86EFAC", borderRadius: 10, padding: 12, marginBottom: 12 }}>
+          <div style={{ color: "#166534", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>第一步：揀選客人退回的款式及尺碼</div>
+          {!directExchangeProductId ? (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, maxHeight: 260, overflowY: "auto" }}>
+              {visibleProducts.map((product) => (
+                <button key={product.id} className="pos-btn" onClick={() => setDirectExchangeProductId(product.id)} style={{ padding: "9px 8px", borderRadius: 8, background: "#fff", border: "1px solid #86EFAC", color: "#166534", textAlign: "left" }}>
+                  {displayProductName(product.name)}
+                </button>
+              ))}
+            </div>
+          ) : (() => {
+            const product = visibleProducts.find((item) => item.id === directExchangeProductId);
+            if (!product) return null;
+            const hasLengths = hasLengthOptions(product);
+            const lengths = hasLengths ? [...new Set(product.sizes.map((size) => size.length))].sort(naturalSizeSort) : [];
+            const sizes = hasLengths && directExchangeLength ? product.sizes.filter((size) => size.length === directExchangeLength) : product.sizes;
+            return (
+              <div>
+                <button className="pos-btn" onClick={() => setDirectExchangeProductId("")} style={{ padding: "6px 8px", marginBottom: 8, background: "transparent", color: "#166534" }}>← 返回選款式</button>
+                <div style={{ fontSize: 12, color: "#166534", marginBottom: 6 }}>{displayProductName(product.name)}：揀尺碼</div>
+                {hasLengths && !directExchangeLength ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {lengths.map((length) => <button key={length} className="pos-btn" onClick={() => setDirectExchangeLength(length)} style={{ padding: "9px 11px", borderRadius: 8, background: "#fff", border: "1px solid #86EFAC", color: "#166534" }}>{length}</button>)}
+                  </div>
+                ) : <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {sizes.map((size) => (
+                    <button key={`${size.size}-${size.length || ""}`} className="pos-btn" onClick={() => startDirectExchange(product, size)} style={{ padding: "9px 11px", borderRadius: 8, background: "#fff", border: "1px solid #86EFAC", color: "#166534" }}>
+                      {sizeLabel(size)} · {fmt(size.price)}
+                    </button>
+                  ))}
+                </div>}
+              </div>
+            );
+          })()}
+          <button className="pos-btn" onClick={() => setDirectExchangeOpen(false)} style={{ width: "100%", marginTop: 8, padding: 7, background: "transparent", color: "#166534" }}>取消</button>
+        </div>
+      )}
       {exchangePickerOpen && exchangeOrder === null && (
         <div style={{ background: "#FFF7ED", border: "1px solid #FDBA74", borderRadius: 10, padding: 12, marginBottom: 12 }}>
           <div style={{ color: "#9A3412", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>選擇原單據</div>
