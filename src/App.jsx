@@ -982,6 +982,7 @@ export default function UniformPOS() {
   };
 
   const logout = () => {
+    if (!window.confirm("確定要登出目前帳戶？")) return;
     setSession(null);
     if (isSupabaseAuthEnabled && supabase) supabase.auth.signOut().catch(() => {});
     window.storage.delete("current-session", false).catch(() => {});
@@ -2433,6 +2434,9 @@ function SaleTab({
   const filteredProducts = visibleProducts.filter((product) =>
     (genderFilter === "全部" || genderOf(product) === genderFilter || genderOf(product) === "男女通用")
   );
+  const exchangeOrders = selectedSchool
+    ? salesLog.filter((order) => String(order.school || "").trim() === String(selectedSchool).trim())
+    : [];
   const sortedProducts = [...filteredProducts].sort((a, b) => {
     const aIndex = products.findIndex((p) => p.id === a.id);
     const bIndex = products.findIndex((p) => p.id === b.id);
@@ -2446,6 +2450,13 @@ function SaleTab({
   useEffect(() => {
     setSelectedLength("");
   }, [selectedProduct]);
+
+  useEffect(() => {
+    setExchangePickerOpen(false);
+    setExchangeOrder(null);
+    setExchangeItems([]);
+    setExchangeSearch("");
+  }, [selectedSchool]);
 
   const handleSizeSelect = (product, size) => {
     setQuantityPrompt({ product, size, quantity: "", custom: false });
@@ -2552,7 +2563,7 @@ function SaleTab({
       {exchangePickerOpen && exchangeOrder === null && (
         <div style={{ background: "#FFF7ED", border: "1px solid #FDBA74", borderRadius: 10, padding: 12, marginBottom: 12 }}>
           <div style={{ color: "#9A3412", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>選擇原單據</div>
-          {salesLog.length > 0 ? (
+          {exchangeOrders.length > 0 ? (
             <>
             <input
               value={exchangeSearch}
@@ -2561,7 +2572,7 @@ function SaleTab({
               style={{ width: "100%", boxSizing: "border-box", padding: "9px 10px", marginBottom: 8, borderRadius: 8, border: "1px solid #FDBA74", fontSize: 13 }}
             />
             <div style={{ display: "grid", gap: 6, maxHeight: 220, overflowY: "auto" }}>
-              {salesLog.filter((order) => {
+              {exchangeOrders.filter((order) => {
                 const query = exchangeSearch.trim().toLowerCase();
                 if (!query) return true;
                 return String(order.id || "").toLowerCase().includes(query);
@@ -2572,7 +2583,7 @@ function SaleTab({
               ))}
             </div>
             </>
-          ) : <div style={{ color: "#9A3412", fontSize: 12 }}>目前沒有可供換貨的銷售單據。</div>}
+          ) : <div style={{ color: "#9A3412", fontSize: 12 }}>{selectedSchool ? `「${selectedSchool}」目前沒有可供換貨的銷售單據。` : "請先在左上角選擇學校。"}</div>}
           <button className="pos-btn" onClick={() => setExchangePickerOpen(false)} style={{ width: "100%", marginTop: 8, padding: 7, background: "transparent", color: "#9A3412" }}>取消</button>
         </div>
       )}
