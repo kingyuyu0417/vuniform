@@ -2019,12 +2019,12 @@ export default function UniformPOS() {
         .pos-btn:active { transform: scale(0.97); }
         .pos-page-content { padding: 20px; }
         .pos-page-content > * { max-width: 100%; }
-        .sale-product-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-        .sale-product-button { min-height: 58px; }
+        .sale-product-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+        .sale-product-button { aspect-ratio: 1; }
         @media (max-width: 560px) {
           .pos-page-content { padding: 14px; }
-          .sale-product-grid { grid-template-columns: 1fr; gap: 10px; }
-          .sale-product-button { min-height: 68px; padding: 16px 14px !important; font-size: 16px !important; line-height: 1.35; }
+          .sale-product-grid { gap: 8px; }
+          .sale-product-button { padding: 10px 8px !important; font-size: 16px !important; line-height: 1.35; }
         }
         @media (min-width: 760px) {
           .pos-shell { box-sizing: border-box; border-left: 1px solid #DCE5EF; border-right: 1px solid #DCE5EF; }
@@ -2451,7 +2451,6 @@ function SaleTab({
   onExchange,
 }) {
   const [genderFilter, setGenderFilter] = useState("全部");
-  const [productSearch, setProductSearch] = useState("");
   const [selectedLength, setSelectedLength] = useState("");
   const [quantityPrompt, setQuantityPrompt] = useState(null);
   const [exchangePickerOpen, setExchangePickerOpen] = useState(false);
@@ -2464,8 +2463,7 @@ function SaleTab({
   const schools = listSchools(products);
   const visibleProducts = selectedSchool ? products.filter((p) => schoolOf(p) === selectedSchool) : products;
   const filteredProducts = visibleProducts.filter((product) =>
-    (genderFilter === "全部" || genderOf(product) === genderFilter || genderOf(product) === "男女通用")
-    && (!productSearch.trim() || displayProductName(product.name).toLowerCase().includes(productSearch.trim().toLowerCase()))
+    genderFilter === "全部" || genderOf(product) === genderFilter || genderOf(product) === "男女通用"
   );
   const exchangeDate = todayStr();
   const exchangeOrders = selectedSchool
@@ -2654,46 +2652,24 @@ function SaleTab({
       )}
 
       {!selectedProduct && (
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ position: "relative", marginBottom: 8 }}>
-            <input
-              value={productSearch}
-              onChange={(event) => setProductSearch(event.target.value)}
-              placeholder="搜尋款式，例如：恤衫、褲、裙"
-              aria-label="搜尋款式"
-              style={{ width: "100%", boxSizing: "border-box", padding: "13px 42px 13px 14px", borderRadius: 10, border: "1px solid #B7C9DC", background: "#fff", color: "#1F3A5F", fontSize: 16, outline: "none" }}
-            />
-            {productSearch && (
-              <button
-                type="button"
-                className="pos-btn"
-                onClick={() => setProductSearch("")}
-                aria-label="清除款式搜尋"
-                style={{ position: "absolute", top: 5, right: 5, width: 34, height: 34, borderRadius: 8, background: "#EEF2F7", color: "#1F3A5F", fontSize: 20, lineHeight: 1 }}
-              >
-                ×
-              </button>
-            )}
-          </div>
-          <div style={{ display: "flex", gap: 8, padding: 4, background: "#F7F7F5", borderRadius: 10 }}>
-            {["全部", "男裝", "女裝"].map((gender) => (
-              <button
-                key={gender}
-                className="pos-btn"
-                onClick={() => setGenderFilter(gender)}
-                style={{ flex: 1, padding: "9px 4px", borderRadius: 8, background: genderFilter === gender ? "#1F3A5F" : "transparent", color: genderFilter === gender ? "#fff" : "#555", fontSize: 13, fontWeight: 600 }}
-              >
-                {gender}
-              </button>
-            ))}
-          </div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 12, padding: 4, background: "#F7F7F5", borderRadius: 10 }}>
+          {["全部", "男裝", "女裝"].map((gender) => (
+            <button
+              key={gender}
+              className="pos-btn"
+              onClick={() => setGenderFilter(gender)}
+              style={{ flex: 1, padding: "9px 4px", borderRadius: 8, background: genderFilter === gender ? "#1F3A5F" : "transparent", color: genderFilter === gender ? "#fff" : "#555", fontSize: 13, fontWeight: 600 }}
+            >
+              {gender}
+            </button>
+          ))}
         </div>
       )}
 
       {!selectedProduct && filteredProducts.length === 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
           <div style={{ gridColumn: "1 / -1", fontSize: 13, color: "#999", padding: "8px 2px" }}>
-            {productSearch.trim() ? `找不到「${productSearch.trim()}」相關款式。` : "此分類未有商品，請選擇其他分類或到「商品」分頁新增／匯入。"}
+            此分類未有商品，請選擇其他分類或到「商品」分頁新增／匯入。
           </div>
         </div>
       )}
@@ -2717,8 +2693,8 @@ function SaleTab({
                 background: selectedProduct === p.id ? "#D97757" : "#fff",
                 color: selectedProduct === p.id ? "#fff" : "#222",
                 border: "1px solid " + (selectedProduct === p.id ? "#D97757" : "#ddd"),
-                fontSize: 14,
-                fontWeight: 500,
+                fontSize: 16,
+                fontWeight: 700,
                 textAlign: "left",
               }}
             >
