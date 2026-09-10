@@ -1087,7 +1087,7 @@ export default function UniformPOS() {
         setProducts(authoritative);
       }
       
-      if (s) {
+      if (isSupabaseAuthEnabled ? Array.isArray(s) : s) {
         try {
           setSalesLog(isSupabaseAuthEnabled ? s : JSON.parse(s.value));
         } catch (parseError) {
@@ -1132,14 +1132,14 @@ export default function UniformPOS() {
         console.warn("orders 表結構版本不相容，嘗試使用簡化查詢", error);
         ({ data, error } = await supabase
           .from("orders")
-          .select("id, school, cashier_id, cashier_name, total, item_count, created_at, order_items(name, size, price, qty)")
+          .select("id, school, exchange_source_receipt_id, cashier_id, cashier_name, total, item_count, created_at, order_items(name, size, price, qty)")
           .order("created_at", { ascending: false }));
       }
       
       if (error) {
         console.error("loadSecureOrders 查詢失敗", error);
-        // 如果查詢失敗，返回空陣列而不是拋出異常
-        return [];
+        // 查詢失敗時保留現有記錄，避免同步錯誤清空畫面。
+        return null;
       }
       
       return (data || []).map((order) => {
@@ -1161,7 +1161,7 @@ export default function UniformPOS() {
             outletPhone: order.outlet_phone,
             customerName: order.customer_surname || "",
             customerPhone: order.customer_phone_last4 || "",
-            exchangeSourceReceiptId: order.exchange_source_receipt_id || "",
+            exchangeSourceReceiptId: order.exchange_source_receipt_id || order.exchangeSourceReceiptId || order.source_receipt_id || "",
           };
         } catch (mapError) {
           console.error("轉換訂單數據失敗", mapError, order);
@@ -1170,7 +1170,7 @@ export default function UniformPOS() {
       }).filter(Boolean);
     } catch (error) {
       console.error("loadSecureOrders 異常", error);
-      return [];
+      return null;
     }
   };
 
@@ -1204,7 +1204,7 @@ export default function UniformPOS() {
           setSourceIntegrityWarning(authoritative.length === 0 && p.length > 0 ? "產品資料來源不完整：目前只檢測到示範資料，已阻止當作正式產品庫。" : "");
           setProducts(authoritative);
         }
-        if (s) setSalesLog(isSupabaseAuthEnabled ? s : JSON.parse(s.value));
+        if (isSupabaseAuthEnabled ? Array.isArray(s) : s) setSalesLog(isSupabaseAuthEnabled ? s : JSON.parse(s.value));
         if (a && a.value) {
           setAccounts(JSON.parse(a.value));
         } else {
