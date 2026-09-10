@@ -8,6 +8,13 @@ const paymentMethods = [
   { id: "transfer", label: "轉帳" },
 ];
 
+const hongKongDate = (value = new Date()) => new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Hong_Kong",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+}).format(new Date(value));
+
 const asRecord = (value) => {
   if (value && typeof value === "object") return value;
   if (typeof value !== "string") return {};
@@ -66,8 +73,9 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
       const { data, error: queryError } = await query;
       if (queryError) throw queryError;
       const normalizedOrders = (Array.isArray(data) ? data : []).map(normalizeOrder);
-      const invalidOrders = normalizedOrders.filter((order) => !order.items.length);
-      const ready = normalizedOrders
+      const todayOrders = normalizedOrders.filter((order) => hongKongDate(order.created_at) === hongKongDate());
+      const invalidOrders = todayOrders.filter((order) => !order.items.length);
+      const ready = todayOrders
         .filter((order) => order.status === ORDER_STATUS.READY || (!order.tailor_info?.payment && !order.tailor_info?.paid_at))
         .filter((order) => order.items.length > 0);
       if (!ready.length && invalidOrders.length) {

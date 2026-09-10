@@ -754,6 +754,7 @@ export default function UniformPOS() {
   const [paymentOrders, setPaymentOrders] = useState([]);
   const [cart, setCart] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [pendingSaleProductId, setPendingSaleProductId] = useState("");
   const [receipt, setReceipt] = useState(null);
   const [cashReceived, setCashReceived] = useState("");
   const [btStatus, setBtStatus] = useState({ state: "idle", msg: "" });
@@ -799,6 +800,14 @@ export default function UniformPOS() {
   const [authReady, setAuthReady] = useState(!isSupabaseAuthEnabled); // Wait for auth before loading protected data
   const [passwordSetupRequired, setPasswordSetupRequired] = useState(false);
   const perms = session ? (PERMISSIONS[session.role] || PERMISSIONS[ROLES.STAFF]) : null;
+
+  useEffect(() => {
+    if (!pendingSaleProductId) return;
+    const product = products.find((candidate) => candidate.id === pendingSaleProductId);
+    if (!product || schoolOf(product) !== selectedSchool) return;
+    setSelectedProduct(pendingSaleProductId);
+    setPendingSaleProductId("");
+  }, [pendingSaleProductId, products, selectedSchool]);
 
   const isPasswordSetupLink = () => /(?:^|&)type=(?:invite|recovery)(?:&|$)/.test(window.location.hash.slice(1));
 
@@ -1410,6 +1419,7 @@ export default function UniformPOS() {
     })));
     setCashReceived("");
     setSelectedProduct(null);
+    setPendingSaleProductId(exchangeItems[0].product.id);
     setReceipt(null);
     setTab("sale");
     navigate("/sale", { replace: true });
