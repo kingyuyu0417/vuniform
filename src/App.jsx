@@ -2424,6 +2424,7 @@ function SaleTab({
   const [exchangePickerOpen, setExchangePickerOpen] = useState(false);
   const [exchangeOrder, setExchangeOrder] = useState(null);
   const [exchangeItems, setExchangeItems] = useState([]);
+  const [exchangeSearch, setExchangeSearch] = useState("");
   const [directExchangeOpen, setDirectExchangeOpen] = useState(false);
   const [directExchangeProductId, setDirectExchangeProductId] = useState("");
   const [directExchangeLength, setDirectExchangeLength] = useState("");
@@ -2464,6 +2465,7 @@ function SaleTab({
     setExchangePickerOpen(true);
     setExchangeOrder(null);
     setExchangeItems([]);
+    setExchangeSearch("");
   };
 
   const confirmExchangeItems = () => {
@@ -2551,13 +2553,25 @@ function SaleTab({
         <div style={{ background: "#FFF7ED", border: "1px solid #FDBA74", borderRadius: 10, padding: 12, marginBottom: 12 }}>
           <div style={{ color: "#9A3412", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>選擇原單據</div>
           {salesLog.length > 0 ? (
+            <>
+            <input
+              value={exchangeSearch}
+              onChange={(event) => setExchangeSearch(event.target.value)}
+              placeholder="搜尋單據尾4位或部分單號"
+              style={{ width: "100%", boxSizing: "border-box", padding: "9px 10px", marginBottom: 8, borderRadius: 8, border: "1px solid #FDBA74", fontSize: 13 }}
+            />
             <div style={{ display: "grid", gap: 6, maxHeight: 220, overflowY: "auto" }}>
-              {salesLog.slice(0, 20).map((order) => (
+              {salesLog.filter((order) => {
+                const query = exchangeSearch.trim().toLowerCase();
+                if (!query) return true;
+                return String(order.id || "").toLowerCase().includes(query);
+              }).slice(0, 20).map((order) => (
                 <button key={order.id} className="pos-btn" onClick={() => { setExchangeOrder(order); setExchangeItems([]); }} style={{ textAlign: "left", padding: "9px 10px", borderRadius: 8, background: "#fff", border: "1px solid #FDBA74", color: "#7C2D12" }}>
                   #{order.id} · {order.date} · {fmt(order.total)}
                 </button>
               ))}
             </div>
+            </>
           ) : <div style={{ color: "#9A3412", fontSize: 12 }}>目前沒有可供換貨的銷售單據。</div>}
           <button className="pos-btn" onClick={() => setExchangePickerOpen(false)} style={{ width: "100%", marginTop: 8, padding: 7, background: "transparent", color: "#9A3412" }}>取消</button>
         </div>
