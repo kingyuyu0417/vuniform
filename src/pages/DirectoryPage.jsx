@@ -7,7 +7,7 @@ const DIRECTORY_ITEMS = [
   { id: "queue", label: "排隊", description: "管理度身及取貨叫號", icon: ClipboardList, path: "/queue" },
   { id: "track", label: "查單", description: "搜尋及更新訂單", icon: Search, path: "/track" },
   { id: "fitting", label: "度身", description: "處理客人度身流程", icon: Users, path: "/fitting" },
-  { id: "pickup", label: "取貨", description: "管理執貨及取貨", icon: ClipboardList, path: "/pickup" },
+  { id: "pickup", label: "執貨", description: "管理執貨及取貨", icon: ClipboardList, path: "/pickup" },
   { id: "cashier", label: "收銀", description: "核對訂單及完成付款", icon: ShoppingCart, path: "/cashier" },
   { id: "products", label: "商品", description: "管理款式、尺碼及價格", icon: Settings, path: "/products" },
   { id: "records", label: "記錄", description: "查看銷售及收據記錄", icon: ClipboardList, path: "/records" },

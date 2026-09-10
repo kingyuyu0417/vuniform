@@ -3766,11 +3766,11 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
               onReprint(o);
             }
           }}
-          style={{ background: "#fff", border: "1px solid #E5E5E0", borderRadius: 10, padding: "10px 14px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
+          style={{ background: "#fff", border: "1px solid #E5E5E0", borderRadius: 10, padding: "10px 14px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, cursor: "pointer" }}
           title="按此查看單據記錄"
         >
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>{o.time} · {o.itemCount}件 · #{(o.id || "").slice(0, 6).toUpperCase()}</div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, overflowWrap: "anywhere" }}>{o.time} · {o.itemCount}件 · #{(o.id || "").toUpperCase()}</div>
             {o.exchangeSourceReceiptId && <div style={{ fontSize: 12, color: "#9A3412", fontWeight: 600 }}>來源單據：#{String(o.exchangeSourceReceiptId).toUpperCase()}</div>}
             <div style={{ fontSize: 12, color: "#888" }}>{o.items.map((it) => `${it.name}(${sizeLabel({ size: it.size, length: it.length })})x${it.qty}`).join("、")}</div>
             {o.cashierName && <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>開單：{o.cashierName}</div>}
