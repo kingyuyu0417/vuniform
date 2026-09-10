@@ -2241,6 +2241,8 @@ export default function UniformPOS() {
                 cashAmount={cashAmount}
                 exchangeMode={exchangeMode}
                 refundDue={refundDue}
+                salesLog={salesLog}
+                onExchange={startExchange}
               />
             }
           />
@@ -2269,6 +2271,8 @@ export default function UniformPOS() {
                     cashAmount={cashAmount}
                     exchangeMode={exchangeMode}
                     refundDue={refundDue}
+                    salesLog={salesLog}
+                    onExchange={startExchange}
                   />
                 )}
                 {tab === "guest" && (
@@ -2411,10 +2415,15 @@ function SaleTab({
   cashAmount,
   exchangeMode = false,
   refundDue = 0,
+  salesLog = [],
+  onExchange,
 }) {
   const [genderFilter, setGenderFilter] = useState("全部");
   const [selectedLength, setSelectedLength] = useState("");
   const [quantityPrompt, setQuantityPrompt] = useState(null);
+  const [exchangePickerOpen, setExchangePickerOpen] = useState(false);
+  const [exchangeOrder, setExchangeOrder] = useState(null);
+  const [exchangeItems, setExchangeItems] = useState([]);
   const schools = listSchools(products);
   const visibleProducts = selectedSchool ? products.filter((p) => schoolOf(p) === selectedSchool) : products;
   const filteredProducts = visibleProducts.filter((product) =>
@@ -2448,8 +2457,60 @@ function SaleTab({
     setSelectedLength("");
   };
 
+  const openExchangePicker = () => {
+    setExchangePickerOpen(true);
+    setExchangeOrder(null);
+    setExchangeItems([]);
+  };
+
+  const confirmExchangeItems = () => {
+    if (!exchangeOrder || exchangeItems.length === 0) return;
+    onExchange?.(exchangeOrder, exchangeItems);
+    setExchangePickerOpen(false);
+    setExchangeOrder(null);
+    setExchangeItems([]);
+  };
+
   return (
     <div>
+      <button
+        className="pos-btn"
+        onClick={openExchangePicker}
+        style={{ width: "100%", padding: "12px 0", borderRadius: 10, background: "#FFF7ED", color: "#9A3412", border: "1px solid #FDBA74", fontSize: 14, fontWeight: 700, marginBottom: 12 }}
+      >
+        快速換貨／補差額（可換多件）
+      </button>
+      {exchangePickerOpen && exchangeOrder === null && (
+        <div style={{ background: "#FFF7ED", border: "1px solid #FDBA74", borderRadius: 10, padding: 12, marginBottom: 12 }}>
+          <div style={{ color: "#9A3412", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>選擇原單據</div>
+          {salesLog.length > 0 ? (
+            <div style={{ display: "grid", gap: 6, maxHeight: 220, overflowY: "auto" }}>
+              {salesLog.slice(0, 20).map((order) => (
+                <button key={order.id} className="pos-btn" onClick={() => { setExchangeOrder(order); setExchangeItems([]); }} style={{ textAlign: "left", padding: "9px 10px", borderRadius: 8, background: "#fff", border: "1px solid #FDBA74", color: "#7C2D12" }}>
+                  #{order.id} · {order.date} · {fmt(order.total)}
+                </button>
+              ))}
+            </div>
+          ) : <div style={{ color: "#9A3412", fontSize: 12 }}>目前沒有可供換貨的銷售單據。</div>}
+          <button className="pos-btn" onClick={() => setExchangePickerOpen(false)} style={{ width: "100%", marginTop: 8, padding: 7, background: "transparent", color: "#9A3412" }}>取消</button>
+        </div>
+      )}
+      {exchangePickerOpen && exchangeOrder && (
+        <div style={{ background: "#FFF7ED", border: "1px solid #FDBA74", borderRadius: 10, padding: 12, marginBottom: 12 }}>
+          <div style={{ color: "#9A3412", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>揀選換貨貨品（可多選）</div>
+          {exchangeOrder.items.map((item, index) => {
+            const selected = exchangeItems.includes(item);
+            return (
+              <label key={`${item.name}-${item.size}-${index}`} style={{ display: "flex", alignItems: "center", gap: 8, padding: 8, marginBottom: 6, borderRadius: 8, background: "#fff", border: "1px solid #FDBA74", color: "#7C2D12" }}>
+                <input type="checkbox" checked={selected} onChange={() => setExchangeItems((previous) => selected ? previous.filter((entry) => entry !== item) : [...previous, item])} />
+                <span>{item.name}（{sizeLabel(item)}）× {item.qty}</span>
+              </label>
+            );
+          })}
+          <button className="pos-btn" disabled={exchangeItems.length === 0} onClick={confirmExchangeItems} style={{ width: "100%", padding: 10, borderRadius: 8, background: "#166534", color: "#fff", fontWeight: 700 }}>確定換選貨品（{exchangeItems.length}款）</button>
+          <button className="pos-btn" onClick={() => setExchangeOrder(null)} style={{ width: "100%", marginTop: 6, padding: 7, background: "transparent", color: "#9A3412" }}>返回單據選擇</button>
+        </div>
+      )}
       {(cartSourceMeta.sourceQueueNo || cartSourceMeta.sourceGuestName) && (
         <div style={{ background: "#EAF4FF", border: "1px solid #CFE0F9", borderRadius: 10, padding: "10px 12px", marginBottom: 12, fontSize: 13, color: "#1F3A5F" }}>
           <div style={{ fontWeight: 700, marginBottom: 4 }}>轉入單據</div>
