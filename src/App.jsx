@@ -151,6 +151,7 @@ const buildOrderInsertPayload = (order, receiptId) => {
   }
   if (order.cashierId !== undefined) payload.cashier_id = order.cashierId || null;
   if (order.cashierName) payload.cashier_name = order.cashierName;
+  if (order.exchangeSourceReceiptId) payload.exchange_source_receipt_id = order.exchangeSourceReceiptId;
 
   return payload;
 };
@@ -1108,7 +1109,7 @@ export default function UniformPOS() {
     try {
       let { data, error } = await supabase
         .from("orders")
-        .select("id, school, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, cashier_id, cashier_name, total, item_count, created_at, order_items(name, size, length, price, qty)")
+        .select("id, school, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, cashier_id, cashier_name, total, item_count, created_at, order_items(name, size, length, price, qty)")
         .order("created_at", { ascending: false });
       
       if (error?.code === "42703") {
@@ -1143,6 +1144,7 @@ export default function UniformPOS() {
             outletPhone: order.outlet_phone,
             customerName: order.customer_surname || "",
             customerPhone: order.customer_phone_last4 || "",
+            exchangeSourceReceiptId: order.exchange_source_receipt_id || "",
           };
         } catch (mapError) {
           console.error("轉換訂單數據失敗", mapError, order);
@@ -1319,6 +1321,7 @@ export default function UniformPOS() {
             outlet_phone: order.outletPhone,
             customer_surname: customerSurname(order.customerName),
             customer_phone_last4: customerPhoneLast4(order.customerPhone),
+            exchange_source_receipt_id: order.exchangeSourceReceiptId || null,
             created_at: new Date().toISOString(),
           },
         });
@@ -1375,32 +1378,36 @@ export default function UniformPOS() {
 
   const removeItem = (key) => setCart((prev) => prev.filter((c) => c.key !== key));
 
-  const startExchange = (order, item) => {
-    const product = products.find((candidate) => candidate.name === item.name || candidate.id === item.productId);
-    if (!product) {
+  const startExchange = (order, selectedItems) => {
+    const items = Array.isArray(selectedItems) ? selectedItems : [selectedItems];
+    const exchangeItems = items.map((item) => {
+      const product = products.find((candidate) => candidate.name === item.name || candidate.id === item.productId);
+      const originalSize = product?.sizes?.find((size) => String(size.size) === String(item.size) && String(size.length || "") === String(item.length || ""))
+        || product?.sizes?.find((size) => String(size.size) === String(item.size));
+      return { item, product, originalSize };
+    });
+    if (exchangeItems.some(({ product }) => !product)) {
       setStorageError("找不到原有貨品款式，請先更新商品資料後再試。");
       return;
     }
-    const originalSize = product.sizes?.find((size) => String(size.size) === String(item.size) && String(size.length || "") === String(item.length || ""))
-      || product.sizes?.find((size) => String(size.size) === String(item.size));
-    if (!originalSize) {
+    if (exchangeItems.some(({ originalSize }) => !originalSize)) {
       setStorageError("找不到原有貨品碼數，請先更新商品資料後再試。");
       return;
     }
     setSelectedSchool(order.school || selectedSchool);
-    setCart([{
+    setCart(exchangeItems.map(({ item, product, originalSize }) => ({
       key: uid(),
       productId: product.id,
       name: item.name,
       size: item.size,
       length: item.length || "",
       price: Math.abs(Number(item.price || originalSize.price || 0)),
-      qty: 1,
+      qty: Math.max(1, Number(item.qty || 1)),
       exchangeReturn: true,
       exchangeSourceReceiptId: order.id || "",
       sourceGuestName: order.customerName || "",
       sourceGuestPhone: order.customerPhone || "",
-    }]);
+    })));
     setCashReceived("");
     setSelectedProduct(null);
     setReceipt(null);
@@ -3650,7 +3657,7 @@ function ReceiptQR({ order }) {
 }
 
 function ReceiptModal({ order, onClose, onRedoSale, onExchange, onPrintBrowser, onPrintBluetooth, btStatus }) {
-  const [exchangeItem, setExchangeItem] = useState(null);
+  const [exchangeSelection, setExchangeSelection] = useState(null);
   const openCustomerReceipt = () => {
     const receiptUrl = buildReceiptUrl(order);
     const anchor = document.createElement("a");
@@ -3725,31 +3732,39 @@ function ReceiptModal({ order, onClose, onRedoSale, onExchange, onPrintBrowser, 
         >
           <ShoppingCart size={16} /> 退／換貨：重新進行此單銷售
         </button>
-        {exchangeItem ? (
+        {exchangeSelection ? (
           <div style={{ background: "#FFF7ED", border: "1px solid #FDBA74", borderRadius: 10, padding: 12, marginBottom: 8 }}>
-            <div style={{ color: "#9A3412", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>揀選需要更換的其中一件</div>
+            <div style={{ color: "#9A3412", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>揀選需要更換的貨品（可多選）</div>
             {order.items.map((item, index) => (
-              <button
+              <label
                 key={`${item.name}-${item.size}-${index}`}
-                className="pos-btn"
-                onClick={() => onExchange?.(order, item)}
-                style={{ width: "100%", padding: "10px", marginBottom: 6, borderRadius: 8, background: "#fff", border: "1px solid #FDBA74", color: "#7C2D12", textAlign: "left" }}
+                style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", boxSizing: "border-box", padding: "10px", marginBottom: 6, borderRadius: 8, background: "#fff", border: "1px solid #FDBA74", color: "#7C2D12", cursor: "pointer" }}
               >
-                {item.name}（{sizeLabel(item)}）× {item.qty}，原價 {fmt(item.price)}
-              </button>
+                <input
+                  type="checkbox"
+                  checked={exchangeSelection.some((selected) => selected.index === index)}
+                  onChange={() => setExchangeSelection((current) => current.some((selected) => selected.index === index)
+                    ? current.filter((selected) => selected.index !== index)
+                    : [...current, { ...item, index }])}
+                />
+                <span>{item.name}（{sizeLabel(item)}）× {item.qty}，原價 {fmt(item.price)}</span>
+              </label>
             ))}
-            <button className="pos-btn" onClick={() => setExchangeItem(null)} style={{ width: "100%", padding: "8px", borderRadius: 8, background: "transparent", color: "#9A3412" }}>
+            <button className="pos-btn" disabled={exchangeSelection.length === 0} onClick={() => onExchange?.(order, exchangeSelection)} style={{ width: "100%", padding: "10px", marginTop: 4, borderRadius: 8, background: "#166534", border: "none", color: "#fff", fontWeight: 700 }}>
+              確定換選貨品（{exchangeSelection.length}款）
+            </button>
+            <button className="pos-btn" onClick={() => setExchangeSelection(null)} style={{ width: "100%", padding: "8px", borderRadius: 8, background: "transparent", color: "#9A3412" }}>
               取消
             </button>
           </div>
         ) : (
           <button
             className="pos-btn"
-            onClick={() => setExchangeItem(true)}
-            title="只更換此收據其中一件貨品，並自動計算補差額"
+            onClick={() => setExchangeSelection([])}
+            title="選擇此收據一件或多件貨品進行換貨，並自動計算差額"
             style={{ width: "100%", padding: "13px 0", borderRadius: 10, background: "#ECFDF3", color: "#166534", border: "1px solid #86EFAC", fontSize: 14, fontWeight: 700, marginBottom: 8 }}
           >
-            快速換貨／補差額（只換一件）
+            快速換貨／補差額（可換多件）
           </button>
         )}
         <button

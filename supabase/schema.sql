@@ -141,6 +141,7 @@ create table if not exists public.orders (
   cashier_name text,
   total numeric default 0,
   item_count integer default 0,
+  exchange_source_receipt_id text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
