@@ -318,12 +318,16 @@ const listSchools = (products) => {
 };
 
 const normalizeProductState = (products) => {
-  const normalizedProducts = (Array.isArray(products) ? products : []).map((product) => ({
-    ...product,
-    school: canonicalSchoolName(product.school),
-    name: cleanProductName(product.name),
-    sizes: normalizeProductSizes(product.sizes),
-  }));
+  const normalizedProducts = (Array.isArray(products) ? products : []).map((product) => {
+    const sizes = normalizeProductSizes(product.sizes);
+    return {
+      ...product,
+      school: canonicalSchoolName(product.school),
+      name: cleanProductName(product.name),
+      priceMode: sizes.some((size) => size.length) ? "matrix" : product.priceMode,
+      sizes,
+    };
+  });
 
   return normalizedProducts.reduce((result, product) => {
     const productParts = productIdentityParts(schoolOf(product), product.name);
@@ -338,6 +342,9 @@ const normalizeProductState = (products) => {
       return result;
     }
 
+    if (productPriceMode(product) === "matrix" || hasLengthOptions(product)) {
+      duplicate.priceMode = "matrix";
+    }
     const sizes = [...(duplicate.sizes || [])];
     (product.sizes || []).forEach((size) => {
       const exists = sizes.some((item) => item.size === size.size && (item.length || "") === (size.length || ""));

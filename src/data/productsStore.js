@@ -11,22 +11,24 @@ export const normalizeProducts = (products = []) => {
 
   return products.map((product) => {
     const storedMode = product.priceMode || product.sizes?.find((size) => ["simple", "matrix", "fixed"].includes(size?.__priceMode))?.__priceMode;
+    const sizes = Array.isArray(product.sizes) ? product.sizes.map(({ __priceMode, ...size }) => {
+      const legacyTailored = typeof size.length === "string" && size.length.trim().match(/^裁碼\s*(.+)$/);
+      return normalizeSize({
+        ...size,
+        length: legacyTailored ? legacyTailored[1].trim() : size.length,
+        isTailored: Boolean(size.isTailored || legacyTailored),
+      });
+    }) : [];
+    const hasLengthOptions = sizes.some((size) => size.length);
     const normalized = {
       ...product,
       id: String(product.id || `product-${Math.random().toString(36).slice(2, 10)}`),
       school: String(product.school || "").trim(),
       name: String(product.name || "").trim(),
-      priceMode: ["simple", "matrix", "fixed"].includes(storedMode)
-        ? storedMode
-        : (Array.isArray(product.sizes) && product.sizes.some((size) => size?.length) ? "matrix" : "simple"),
-      sizes: Array.isArray(product.sizes) ? product.sizes.map(({ __priceMode, ...size }) => {
-        const legacyTailored = typeof size.length === "string" && size.length.trim().match(/^裁碼\s*(.+)$/);
-        return normalizeSize({
-          ...size,
-          length: legacyTailored ? legacyTailored[1].trim() : size.length,
-          isTailored: Boolean(size.isTailored || legacyTailored),
-        });
-      }) : [],
+      priceMode: hasLengthOptions
+        ? "matrix"
+        : (["simple", "matrix", "fixed"].includes(storedMode) ? storedMode : "simple"),
+      sizes,
     };
 
     return normalized;
