@@ -2,7 +2,7 @@ const normalizeSize = (size = {}) => {
   const normalized = { ...size };
   if (normalized.size === undefined || normalized.size === null) normalized.size = "";
   if (normalized.length === undefined || normalized.length === null) normalized.length = "";
-  if (normalized.price === undefined || normalized.price === null) normalized.price = 0;
+  if (normalized.price === undefined) normalized.price = null;
   return normalized;
 };
 
@@ -15,6 +15,9 @@ export const normalizeProducts = (products = []) => {
       id: String(product.id || `product-${Math.random().toString(36).slice(2, 10)}`),
       school: String(product.school || "").trim(),
       name: String(product.name || "").trim(),
+      priceMode: ["simple", "matrix", "fixed"].includes(product.priceMode)
+        ? product.priceMode
+        : (Array.isArray(product.sizes) && product.sizes.some((size) => size?.length) ? "matrix" : "simple"),
       sizes: Array.isArray(product.sizes) ? product.sizes.map(normalizeSize) : [],
     };
 

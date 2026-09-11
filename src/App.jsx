@@ -93,6 +93,13 @@ const DEFAULT_PRODUCTS = [
 const fmt = (n) => `$${Math.round(n).toLocaleString("en-HK")}`;
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const uid = () => Math.random().toString(36).slice(2, 10);
+const PRICE_MODE_LABELS = {
+  simple: "一般尺碼",
+  matrix: "長度／袖長 × 腰圍／上圍",
+  fixed: "所有尺寸同價",
+};
+const productPriceMode = (product) => PRICE_MODE_LABELS[product?.priceMode] ? product.priceMode : (hasLengthOptions(product || {}) ? "matrix" : "simple");
+const isPricedSize = (size) => size && size.price !== null && size.price !== undefined && Number.isFinite(Number(size.price)) && Number(size.price) >= 0;
 const customerSurname = (name = "") => String(name || "").trim().replace(/\s+/g, "").slice(0, 1);
 const customerPhoneLast4 = (phone = "") => String(phone || "").replace(/\D/g, "").slice(-4);
 const sizeLabel = (size) => size.length ? `${size.length}／${size.size}` : size.size;
@@ -2607,7 +2614,8 @@ function SaleTab({
   const [directExchangeProductId, setDirectExchangeProductId] = useState("");
   const [directExchangeLength, setDirectExchangeLength] = useState("");
   const schools = listSchools(products);
-  const visibleProducts = selectedSchool ? products.filter((p) => schoolOf(p) === selectedSchool) : products;
+  const visibleProducts = (selectedSchool ? products.filter((p) => schoolOf(p) === selectedSchool) : products)
+    .filter((product) => product.sizes.some(isPricedSize));
   const filteredProducts = visibleProducts.filter((product) =>
     genderFilter === "全部" || genderOf(product) === genderFilter || genderOf(product) === "男女通用"
   );
@@ -2727,8 +2735,9 @@ function SaleTab({
             const product = visibleProducts.find((item) => item.id === directExchangeProductId);
             if (!product) return null;
             const hasLengths = hasLengthOptions(product);
-            const lengths = hasLengths ? [...new Set(product.sizes.map((size) => size.length))].sort(naturalSizeSort) : [];
-            const sizes = hasLengths && directExchangeLength ? product.sizes.filter((size) => size.length === directExchangeLength) : product.sizes;
+            const pricedSizes = product.sizes.filter(isPricedSize);
+            const lengths = hasLengths ? [...new Set(pricedSizes.map((size) => size.length))].sort(naturalSizeSort) : [];
+            const sizes = hasLengths && directExchangeLength ? pricedSizes.filter((size) => size.length === directExchangeLength) : pricedSizes;
             return (
               <div>
                 <button className="pos-btn" onClick={() => setDirectExchangeProductId("")} style={{ padding: "6px 8px", marginBottom: 8, background: "transparent", color: "#166534" }}>← 返回選款式</button>
@@ -2883,7 +2892,7 @@ function SaleTab({
             const hasLengths = hasLengthOptions(product);
             if (!hasLengths) return (
               <div className="sale-size-grid">
-                {product.sizes.map((s) => (
+                {product.sizes.filter(isPricedSize).map((s) => (
                   <button
                     key={`${selectedProduct}-${s.size}`}
                     className="pos-btn sale-size-button"
@@ -2896,7 +2905,7 @@ function SaleTab({
                 ))}
               </div>
             );
-            const lengths = [...new Set(product.sizes.map((size) => size.length))].sort(naturalSizeSort);
+            const lengths = [...new Set(product.sizes.filter(isPricedSize).map((size) => size.length))].sort(naturalSizeSort);
             if (!selectedLength) return (
               <div className="sale-size-grid">
                 {lengths.map((length) => (
@@ -2907,7 +2916,7 @@ function SaleTab({
               </div>
             );
             const selectedLengthSizes = product.sizes
-              .filter((size) => size.length === selectedLength)
+              .filter((size) => size.length === selectedLength && isPricedSize(size))
               .sort((a, b) => naturalSizeSort(a.size, b.size));
             return (
               <div>
@@ -3126,6 +3135,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   const [importing, setImporting] = useState(false);
   const [lengthPromptProductId, setLengthPromptProductId] = useState(null);
   const [lengthDraft, setLengthDraft] = useState("");
+  const [matrixDrafts, setMatrixDrafts] = useState({});
   const activeSchool = selectedSchool;
 
   const fileInputRef = useRef(null);
@@ -3183,7 +3193,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
       const existingSizes = [...new Set(product.sizes.map((size) => size.size))];
       const additions = existingSizes
         .filter((size) => !existingKeys.has(`${size}\u0000${normalizedLength}`))
-        .map((size) => ({ size, length: normalizedLength, price: product.sizes.find((item) => item.size === size)?.price || 0 }));
+        .map((size) => ({ size, length: normalizedLength, price: product.sizes.find((item) => item.size === size)?.price ?? null }));
       sizes = [...product.sizes, ...additions];
     }
     updateProduct(product.id, { ...product, sizes });
@@ -3192,9 +3202,57 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   };
 
   const addProduct = (school) => {
-    const np = { id: uid(), school: school || "", name: "新款式", sizes: [{ size: "M", price: 0 }] };
+    const np = { id: uid(), school: school || "", name: "新款式", priceMode: "simple", sizes: [{ size: "M", price: null }] };
     saveProducts([...products, np]);
     setExpanded(np.id);
+  };
+
+  const updateMatrixDraft = (productId, field, value) => {
+    setMatrixDrafts((current) => ({ ...current, [productId]: { ...(current[productId] || {}), [field]: value } }));
+  };
+
+  const applyMatrixDraft = (product) => {
+    const draft = matrixDrafts[product.id] || {};
+    const lengths = String(draft.lengths || "").split(/[,\s，、]+/).map((value) => value.trim()).filter(Boolean);
+    const sizes = String(draft.sizes || "").split(/[,\s，、]+/).map((value) => value.trim()).filter(Boolean);
+    const uniqueLengths = [...new Set(lengths)];
+    const uniqueSizes = [...new Set(sizes)];
+    if (!uniqueLengths.length || !uniqueSizes.length) {
+      window.alert("請先輸入至少一個長度／袖長及一個腰圍／上圍。");
+      return;
+    }
+    const existing = new Map(product.sizes.map((item) => [`${item.length || ""}\u0000${item.size || ""}`, item]));
+    const nextSizes = uniqueLengths.flatMap((length) => uniqueSizes.map((size) => {
+      const previous = existing.get(`${length}\u0000${size}`);
+      return previous ? { ...previous } : { length, size, price: null };
+    }));
+    updateProduct(product.id, { ...product, priceMode: "matrix", sizes: nextSizes });
+    updateMatrixDraft(product.id, "lengths", "");
+    updateMatrixDraft(product.id, "sizes", "");
+  };
+
+  const applyMatrixPricing = (product) => {
+    const draft = matrixDrafts[product.id] || {};
+    const baseByLength = {};
+    String(draft.basePrices || "").split(/[,\n，、]+/).map((entry) => entry.trim()).filter(Boolean).forEach((entry) => {
+      const match = entry.match(/^(.+?)\s*[=:]\s*(\d+(?:\.\d+)?)$/);
+      if (match) baseByLength[match[1].trim()] = Number(match[2]);
+    });
+    const surchargeRules = String(draft.surcharges || "").split(/[,\n，、]+/).map((entry) => entry.trim()).filter(Boolean).map((entry) => {
+      const match = entry.match(/^(\d+)\s*(\+)?\s*[=:]\s*\+?(\d+(?:\.\d+)?)$/);
+      return match ? { threshold: Number(match[1]), amount: Number(match[3]), minimum: Boolean(match[2]) } : null;
+    }).filter(Boolean).sort((first, second) => second.threshold - first.threshold);
+    if (!Object.keys(baseByLength).length || !surchargeRules.length) {
+      window.alert("請輸入基本價及加價規則，例如：33=87,34=90；32+=0,40=10,42=20,44+=30。");
+      return;
+    }
+    const nextSizes = product.sizes.map((item) => {
+      const base = baseByLength[item.length];
+      const sizeNumber = Number(String(item.size).replace(/[^\d.]/g, ""));
+      const rule = surchargeRules.find((candidate) => candidate.minimum ? sizeNumber >= candidate.threshold : sizeNumber === candidate.threshold);
+      return { ...item, price: Number.isFinite(Number(base)) && rule ? Number(base) + rule.amount : null };
+    });
+    updateProduct(product.id, { ...product, priceMode: "matrix", sizes: nextSizes, pricing: { baseByLength, surchargeRules } });
   };
 
   const moveProduct = (id, direction) => {
@@ -3521,13 +3579,61 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
                 disabled={!canManageSchools}
                 style={{ width: "100%", padding: 8, marginBottom: 10, borderRadius: 8, border: "1px solid #ccc", fontSize: 14, boxSizing: "border-box", background: canManageSchools ? "#fff" : "#F0F0EC", color: canManageSchools ? "#000" : "#888" }}
               />
-              <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>{hasLengthOptions(p) ? `款式名稱（長度 → ${sizeDimensionLabel(p)} → 價錢）` : "款式名稱（尺碼 → 價錢）"}</div>
+              <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>{productPriceMode(p) === "matrix" ? `款式名稱（長度／袖長 → ${sizeDimensionLabel(p)} → 價錢）` : productPriceMode(p) === "fixed" ? "款式名稱（所有尺寸同價）" : "款式名稱（尺碼 → 價錢）"}</div>
               <input
                 value={p.name}
                 onChange={(e) => updateProduct(p.id, { ...p, name: e.target.value })}
                 placeholder="款式名稱"
                 style={{ width: "100%", padding: 8, marginBottom: 10, borderRadius: 8, border: "1px solid #ccc", fontSize: 14, boxSizing: "border-box" }}
               />
+              <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>價格模式</div>
+              <select
+                value={productPriceMode(p)}
+                onChange={(e) => updateProduct(p.id, { ...p, priceMode: e.target.value })}
+                style={{ width: "100%", padding: 8, marginBottom: 10, borderRadius: 8, border: "1px solid #ccc", fontSize: 13, boxSizing: "border-box" }}
+              >
+                {Object.entries(PRICE_MODE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+              {productPriceMode(p) === "matrix" && (
+                <div style={{ padding: 9, marginBottom: 10, background: "#F0F7FF", border: "1px solid #B8D8F5", borderRadius: 8 }}>
+                  <div style={{ fontSize: 12, color: "#1F3A5F", fontWeight: 600, marginBottom: 5 }}>批量建立長度 × 尺碼組合</div>
+                  <div style={{ fontSize: 11, color: "#52657A", marginBottom: 6 }}>先建立組合，價格可稍後補上；留空會標記為「待補價」。</div>
+                  <input
+                    value={matrixDrafts[p.id]?.lengths || ""}
+                    onChange={(e) => updateMatrixDraft(p.id, "lengths", e.target.value)}
+                    placeholder="長度／袖長，例如：30,31,32,33,裁碼42"
+                    style={{ width: "100%", padding: 7, marginBottom: 6, borderRadius: 7, border: "1px solid #B8C7D8", fontSize: 12, boxSizing: "border-box" }}
+                  />
+                  <input
+                    value={matrixDrafts[p.id]?.sizes || ""}
+                    onChange={(e) => updateMatrixDraft(p.id, "sizes", e.target.value)}
+                    placeholder={`${sizeDimensionLabel(p)}，例如：32,34,36,38,40,42`}
+                    style={{ width: "100%", padding: 7, marginBottom: 6, borderRadius: 7, border: "1px solid #B8C7D8", fontSize: 12, boxSizing: "border-box" }}
+                  />
+                  <button className="pos-btn" onClick={() => applyMatrixDraft(p)} style={{ padding: "7px 10px", borderRadius: 7, background: "#1F3A5F", color: "#fff", fontSize: 12 }}>建立組合（保留已有價格）</button>
+                  <div style={{ borderTop: "1px solid #D9E2EC", marginTop: 9, paddingTop: 9 }}>
+                    <div style={{ fontSize: 11, color: "#52657A", marginBottom: 5 }}>可選：批量套用基本價及加價（未符合規則會保持待補價）</div>
+                    <input
+                      value={matrixDrafts[p.id]?.basePrices || ""}
+                      onChange={(e) => updateMatrixDraft(p.id, "basePrices", e.target.value)}
+                      placeholder="基本價，例如：33=87,34=90,35=94,40=114,裁碼=139"
+                      style={{ width: "100%", padding: 7, marginBottom: 6, borderRadius: 7, border: "1px solid #B8C7D8", fontSize: 12, boxSizing: "border-box" }}
+                    />
+                    <input
+                      value={matrixDrafts[p.id]?.surcharges || ""}
+                      onChange={(e) => updateMatrixDraft(p.id, "surcharges", e.target.value)}
+                      placeholder={`上圍加價，例如：32+=0,40=10,42=20,44+=30`}
+                      style={{ width: "100%", padding: 7, marginBottom: 6, borderRadius: 7, border: "1px solid #B8C7D8", fontSize: 12, boxSizing: "border-box" }}
+                    />
+                    <button className="pos-btn" onClick={() => applyMatrixPricing(p)} style={{ padding: "7px 10px", borderRadius: 7, background: "#28784B", color: "#fff", fontSize: 12 }}>套用價格並保留每格最終價</button>
+                  </div>
+                </div>
+              )}
+              {p.sizes.some((size) => !isPricedSize(size)) && (
+                <div style={{ marginBottom: 8, padding: 8, borderRadius: 7, background: "#FFF8E7", color: "#9A6700", fontSize: 12 }}>
+                  尚有 {p.sizes.filter((size) => !isPricedSize(size)).length} 個組合待補價，未補價格不可銷售。
+                </div>
+              )}
               {p.sizes.map((s, i) => (
                 <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
                   {hasLengthOptions(p) && (
@@ -3554,13 +3660,13 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
                   />
                   <input
                     type="number"
-                    value={s.price}
+                    value={s.price ?? ""}
                     onChange={(e) => {
                       const sizes = [...p.sizes];
-                      sizes[i] = { ...sizes[i], price: Number(e.target.value) };
+                      sizes[i] = { ...sizes[i], price: e.target.value === "" ? null : Number(e.target.value) };
                       updateProduct(p.id, { ...p, sizes });
                     }}
-                    placeholder="價錢"
+                    placeholder="價錢（待補）"
                     style={{ flex: 1, padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 13 }}
                   />
                   <button
@@ -3577,7 +3683,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
               ))}
               <button
                 className="pos-btn"
-                onClick={() => updateProduct(p.id, { ...p, sizes: [...p.sizes, { size: "", length: "", price: 0 }] })}
+                onClick={() => updateProduct(p.id, { ...p, sizes: [...p.sizes, { size: "", length: "", price: null }] })}
                 style={{ fontSize: 12, padding: "6px 10px", borderRadius: 8, background: "#F0F0EC", border: "1px solid #ddd", marginTop: 2 }}
               >
                 + 加碼數
