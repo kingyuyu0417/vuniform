@@ -133,7 +133,13 @@ const analyzePriceDocumentLocally = async (file, targetSchool) => {
   issues.push("本地分析只抽取 PDF 文字，不會自動判讀圖片或推算缺少價格；所有價格仍需人工確認。");
   const generatedProducts = [];
   let currentProduct = null;
+  let ambiguousRows = 0;
   priceLines.forEach((line) => {
+    const separatorCount = (line.match(/\|/g) || []).length;
+    if (line.length > 120 || separatorCount > 8) {
+      ambiguousRows += 1;
+      return;
+    }
     const numbers = [...line.matchAll(/(?:[$＄]\s*)?(\d+(?:\.\d+)?)/g)]
       .map((match) => Number(match[1]))
       .filter((number) => number < 1000 && number !== new Date().getFullYear() && number !== new Date().getFullYear() + 1);
@@ -143,6 +149,11 @@ const analyzePriceDocumentLocally = async (file, targetSchool) => {
     const price = numbers[numbers.length - 1];
     if (!size || !price || !name || numbers.length > 3) return;
     const productName = name.replace(size, "").trim();
+    const hasGarmentName = /(恤|衫|褲|裙|運動|冷衫|背心|襪|皮帶|底衫|底裙|套裝|校服)/.test(productName);
+    if (!hasGarmentName || productName.length > 48 || productName.includes(targetSchool)) {
+      ambiguousRows += 1;
+      return;
+    }
     if (productName && (!currentProduct || currentProduct.name !== productName)) {
       currentProduct = { id: `source-${uid()}`, school: targetSchool, name: productName, sizes: [] };
       generatedProducts.push(currentProduct);
@@ -151,8 +162,13 @@ const analyzePriceDocumentLocally = async (file, targetSchool) => {
       currentProduct.sizes.push({ size, price });
     }
   });
+  if (ambiguousRows) issues.push(`有 ${ambiguousRows} 行包含多欄或多款式內容，系統未自動配對，請先整理成清晰表格。`);
   if (generatedProducts.some((product) => product.sizes.length < 1)) issues.push("部分款式未能完整配對尺碼及價格，請人工核對。");
-  if (!generatedProducts.length) issues.push("未能由分析結果建立可核對款式；系統不會自動新增商品。");
+  if (!generatedProducts.length || ambiguousRows) {
+    if (!generatedProducts.length) issues.push("未能由分析結果建立可核對款式；系統不會自動新增商品。");
+    if (ambiguousRows) issues.push("分析結果含有未能可靠分欄的內容；系統不會使用部分結果新增商品。");
+    generatedProducts.length = 0;
+  }
   return {
     status: "succeeded",
     targetSchool,
