@@ -19,7 +19,14 @@ export const normalizeProducts = (products = []) => {
       priceMode: ["simple", "matrix", "fixed"].includes(storedMode)
         ? storedMode
         : (Array.isArray(product.sizes) && product.sizes.some((size) => size?.length) ? "matrix" : "simple"),
-      sizes: Array.isArray(product.sizes) ? product.sizes.map(({ __priceMode, ...size }) => normalizeSize(size)) : [],
+      sizes: Array.isArray(product.sizes) ? product.sizes.map(({ __priceMode, ...size }) => {
+        const legacyTailored = typeof size.length === "string" && size.length.trim().match(/^裁碼\s*(.+)$/);
+        return normalizeSize({
+          ...size,
+          length: legacyTailored ? legacyTailored[1].trim() : size.length,
+          isTailored: Boolean(size.isTailored || legacyTailored),
+        });
+      }) : [],
     };
 
     return normalized;

@@ -102,7 +102,7 @@ const productPriceMode = (product) => PRICE_MODE_LABELS[product?.priceMode] ? pr
 const isPricedSize = (size) => size && size.price !== null && size.price !== undefined && Number.isFinite(Number(size.price)) && Number(size.price) >= 0;
 const customerSurname = (name = "") => String(name || "").trim().replace(/\s+/g, "").slice(0, 1);
 const customerPhoneLast4 = (phone = "") => String(phone || "").replace(/\D/g, "").slice(-4);
-const sizeLabel = (size) => size.length ? `${size.length}／${size.size}` : size.size;
+const sizeLabel = (size) => size.length ? `${size.isTailored ? "裁碼 " : ""}${size.length}／${size.size}` : size.size;
 const hasLengthOptions = (product) => product.sizes.some((size) => size.length);
 const sizeDimensionLabel = (product) => {
   if (!product || !product.name) return "尺碼";
@@ -114,7 +114,7 @@ const formatSizeForReceipt = (itemName, size, length) => {
   const isDimensioned = /(褲|短褲|長褲|西褲|運動褲|裙)/.test(itemName);
   const dimensionLabel = isDimensioned ? "腰圍" : "尺碼";
   const sizeStr = String(size || "");
-  const lengthStr = String(length || "");
+  const lengthStr = String(length || "").replace(/^裁碼\s*/, "");
   
   if (lengthStr && sizeStr) {
     return `${dimensionLabel}：${lengthStr}（${sizeStr}）`;
@@ -1507,7 +1507,7 @@ export default function UniformPOS() {
         next[idx] = { ...next[idx], qty: next[idx].qty + qty };
         return next;
       }
-      return [...prev, { key: uid(), productId: product.id, name: product.name, size: sizeObj.size, length: sizeObj.length || "", price: sizeObj.price, qty }];
+      return [...prev, { key: uid(), productId: product.id, name: product.name, size: sizeObj.size, length: sizeObj.length || "", isTailored: Boolean(sizeObj.isTailored), price: sizeObj.price, qty }];
     });
   };
 
@@ -1544,6 +1544,7 @@ export default function UniformPOS() {
       name: item.name,
       size: item.size,
       length: item.length || "",
+      isTailored: Boolean(item.isTailored || originalSize.isTailored),
       price: Math.abs(Number(item.price || originalSize.price || 0)),
       qty: Math.max(1, Number(item.qty || 1)),
       exchangeReturn: true,
@@ -2696,6 +2697,7 @@ function SaleTab({
       name: product.name,
       size: size.size,
       length: size.length || "",
+      isTailored: Boolean(size.isTailored),
       price: Number(size.price || 0),
       qty: 1,
     }]);
@@ -2931,7 +2933,7 @@ function SaleTab({
                       onClick={() => handleSizeSelect(product, s)}
                       style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #ccc", fontSize: 16 }}
                     >
-                      <div style={{ fontWeight: 600 }}>{sizeDimensionLabel(product)} {s.size} 吋</div>
+                      <div style={{ fontWeight: 600 }}>{s.isTailored ? "裁碼" : sizeDimensionLabel(product)} {s.size} 吋</div>
                       <div style={{ color: "#888", marginTop: 2 }}>{fmt(s.price)}</div>
                     </button>
                   ))}
@@ -3229,10 +3231,15 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
       return;
     }
     const existing = new Map(product.sizes.map((item) => [`${item.length || ""}\u0000${item.size || ""}`, item]));
-    const nextSizes = uniqueLengths.flatMap((length) => uniqueSizes.map((size) => {
-      const previous = existing.get(`${length}\u0000${size}`);
-      return previous ? { ...previous } : { length, size, price: null };
-    }));
+    const nextSizes = uniqueLengths.flatMap((rawLength) => {
+      const tailoredMatch = rawLength.match(/^裁碼\s*(.+)$/);
+      const length = tailoredMatch ? tailoredMatch[1].trim() : rawLength;
+      const isTailored = Boolean(tailoredMatch);
+      return uniqueSizes.map((size) => {
+        const previous = existing.get(`${length}\u0000${size}`);
+        return previous ? { ...previous, isTailored: previous.isTailored || isTailored } : { length, size, isTailored, price: null };
+      });
+    });
     updateProduct(product.id, { ...product, priceMode: "matrix", sizes: nextSizes });
     updateMatrixDraft(product.id, "lengths", "");
     updateMatrixDraft(product.id, "sizes", "");
@@ -3644,16 +3651,19 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
               {p.sizes.map((s, i) => (
                 <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
                   {hasLengthOptions(p) && (
-                    <input
-                      value={s.length || ""}
-                      onChange={(e) => {
-                        const sizes = [...p.sizes];
-                        sizes[i] = { ...sizes[i], length: e.target.value };
-                        updateProduct(p.id, { ...p, sizes });
-                      }}
-                      placeholder="長度"
-                      style={{ width: 70, padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 13 }}
-                    />
+                    <>
+                      {s.isTailored && <span style={{ alignSelf: "center", fontSize: 11, color: "#9A6700" }}>裁碼</span>}
+                      <input
+                        value={s.length || ""}
+                        onChange={(e) => {
+                          const sizes = [...p.sizes];
+                          sizes[i] = { ...sizes[i], length: e.target.value.replace(/^裁碼\s*/, ""), isTailored: s.isTailored };
+                          updateProduct(p.id, { ...p, sizes });
+                        }}
+                        placeholder="長度"
+                        style={{ width: 70, padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 13 }}
+                      />
+                    </>
                   )}
                   <input
                     value={s.size}
