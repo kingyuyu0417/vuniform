@@ -159,6 +159,15 @@ const PRICE_SOURCE_TEST_PRODUCTS = [
 const fmt = (n) => `$${Math.round(n).toLocaleString("en-HK")}`;
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const uid = () => Math.random().toString(36).slice(2, 10);
+const fileToBase64 = async (file) => {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)));
+  }
+  return btoa(binary);
+};
 const customerSurname = (name = "") => String(name || "").trim().replace(/\s+/g, "").slice(0, 1);
 const customerPhoneLast4 = (phone = "") => String(phone || "").replace(/\D/g, "").slice(-4);
 const sizeLabel = (size) => size.length ? `${size.length}／${size.size}` : size.size;
@@ -3213,6 +3222,8 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   const [priceSourcePublished, setPriceSourcePublished] = useState(false);
   const [priceSourceError, setPriceSourceError] = useState("");
   const [priceSourceBatch, setPriceSourceBatch] = useState(null);
+  const [priceSourceAnalysis, setPriceSourceAnalysis] = useState(null);
+  const [priceSourceAnalyzing, setPriceSourceAnalyzing] = useState(false);
 
   const schools = listSchools(products);
   const schoolSuggestions = newSchoolName.trim().length >= 2
@@ -3253,6 +3264,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
           setPriceSourceFiles(parsed.files || { price: null, notice: null });
           setPriceSourceReady(Boolean(parsed.targetSchool && parsed.files?.price));
           setPriceSourcePublished(Boolean(parsed.publishedAt));
+          setPriceSourceAnalysis(parsed.analysis || null);
         }
       } catch (error) {
         console.error("讀取價格來源批次失敗", error);
@@ -3464,6 +3476,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
     setPriceSourceReady(false);
     setPriceSourceConfirmations({ missing39: false, pricingRule: false });
     setPriceSourcePublished(false);
+    setPriceSourceAnalysis(null);
     setPriceSourceBatch((current) => ({
       id: current?.id || uid(),
       targetSchool: "",
@@ -3481,7 +3494,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
       setPriceSourceError("請先選擇要發布的學校。");
       return;
     }
-    if (priceSourceTargetSchool !== DESIGNATED_SCHOOL || !priceSourceBatch?.files?.price || priceSourceBatch.targetSchool !== priceSourceTargetSchool) {
+    if (priceSourceTargetSchool !== DESIGNATED_SCHOOL || !priceSourceBatch?.files?.price || priceSourceBatch.targetSchool !== priceSourceTargetSchool || !priceSourceAnalysis?.documentSchoolMatched) {
       setPriceSourceError("來源批次未完成學校綁定，或目標學校與批次不一致；系統已阻止發布。");
       return;
     }
@@ -3516,17 +3529,33 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
       setPriceSourceError("請先選擇目標學校及上載價目表。");
       return;
     }
-    const nextBatch = { ...priceSourceBatch, targetSchool: priceSourceTargetSchool, createdAt: new Date().toISOString(), confirmedAt: null, publishedAt: null };
+    if (!supabase || !isSupabaseAuthEnabled) {
+      setPriceSourceError("未連接安全分析服務，暫時不能自動分析文件。");
+      return;
+    }
+    setPriceSourceAnalyzing(true);
+    setPriceSourceError("");
     try {
+      const fileBase64 = await fileToBase64(priceSourceFiles.price);
+      const { data, error } = await supabase.functions.invoke("analyze-price-source", {
+        body: { targetSchool: priceSourceTargetSchool, contentType: priceSourceFiles.price.type, fileBase64 },
+      });
+      if (error || !data || data.status !== "succeeded") {
+        throw new Error(error?.message || data?.error || "文件分析失敗");
+      }
+      const nextBatch = { ...priceSourceBatch, targetSchool: priceSourceTargetSchool, createdAt: new Date().toISOString(), confirmedAt: null, publishedAt: null, analysis: data };
       await window.storage.set("price-source-batch", JSON.stringify(nextBatch), false);
       setPriceSourceBatch(nextBatch);
+      setPriceSourceAnalysis(data);
       setPriceSourceReady(false);
       setPriceSourceConfirmations({ missing39: false, pricingRule: false });
       setPriceSourceError("");
       setPriceSourceReady(true);
     } catch (error) {
       console.error("保存價格來源批次失敗", error);
-      setPriceSourceError("無法保存來源批次，未能開始分析。");
+      setPriceSourceError(error.message || "無法分析來源文件，未能開始分析。");
+    } finally {
+      setPriceSourceAnalyzing(false);
     }
   };
 
@@ -3570,13 +3599,20 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
                 <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={(event) => handlePriceSourceFile("notice", event)} style={{ display: "none" }} />
               </label>
             </div>
-            <button className="pos-btn" disabled={!priceSourceFiles.price} onClick={createPriceSourceBatch} style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, background: priceSourceFiles.price ? "#28784B" : "#AAB4BF", color: "#fff", fontSize: 12, fontWeight: 600 }}>
-              {priceSourceReady ? "已建立測試分析批次" : "建立測試分析批次"}
+            <button className="pos-btn" disabled={!priceSourceFiles.price || priceSourceAnalyzing} onClick={createPriceSourceBatch} style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, background: priceSourceFiles.price ? "#28784B" : "#AAB4BF", color: "#fff", fontSize: 12, fontWeight: 600 }}>
+              {priceSourceAnalyzing ? "分析緊文件…" : priceSourceReady ? "已完成文件分析" : "開始分析文件"}
             </button>
             {priceSourceReady && (
               <div style={{ marginTop: 12, borderTop: "1px solid #E5E5E0", paddingTop: 10 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>已核對示範批次：馮堯敬中學 2026 夏季</div>
-                <div style={{ fontSize: 12, color: "#52657A", lineHeight: 1.5, marginBottom: 8 }}>此批次包含 8 款及雙尺寸價格組合。系統目前只保存文件指紋，尚未自動讀取文件內文；發布前必須由管理員確認文件確實屬於所選學校。</div>
+                <div style={{ fontSize: 12, color: "#52657A", lineHeight: 1.5, marginBottom: 8 }}>系統已使用 Azure Document Intelligence 讀取文件文字及表格；OCR 結果只作核對提示，所有價格仍需管理員確認。</div>
+                {priceSourceAnalysis && (
+                  <div style={{ marginBottom: 8, padding: 9, borderRadius: 7, background: priceSourceAnalysis.documentSchoolMatched ? "#EEF8F1" : "#FFF1F0", color: priceSourceAnalysis.documentSchoolMatched ? "#28784B" : "#B42318", fontSize: 12, lineHeight: 1.5 }}>
+                    <b>{priceSourceAnalysis.documentSchoolMatched ? "文件學校名稱與目前選擇一致" : "文件未能確認目前選擇的學校"}</b>
+                    <div>偵測到 {priceSourceAnalysis.tables?.length || 0} 個表格。</div>
+                    {priceSourceAnalysis.issues?.map((issue) => <div key={issue}>・{issue}</div>)}
+                  </div>
+                )}
                 <div style={{ display: "grid", gap: 6, fontSize: 12 }}>
                   <label style={{ display: "flex", alignItems: "flex-start", gap: 7, padding: 8, background: priceSourceConfirmations.missing39 ? "#EEF8F1" : "#FFF8E7", borderRadius: 7 }}>
                     <input type="checkbox" checked={priceSourceConfirmations.missing39} onChange={(event) => setPriceSourceConfirmations((current) => ({ ...current, missing39: event.target.checked }))} />
