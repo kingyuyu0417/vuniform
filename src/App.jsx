@@ -104,7 +104,20 @@ const analyzePriceDocumentLocally = async (file, targetSchool) => {
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
       const page = await pdf.getPage(pageNumber);
       const content = await page.getTextContent();
-      pages.push(content.items.map((item) => item.str || "").join(" "));
+      const rows = new Map();
+      content.items.forEach((item) => {
+        const text = String(item.str || "").trim();
+        if (!text) return;
+        const x = Number(item.transform?.[4] || 0);
+        const y = Math.round(Number(item.transform?.[5] || 0) / 2) * 2;
+        const row = rows.get(y) || [];
+        row.push({ x, text });
+        rows.set(y, row);
+      });
+      pages.push([...rows.entries()]
+        .sort(([firstY], [secondY]) => secondY - firstY)
+        .map(([, row]) => row.sort((first, second) => first.x - second.x).map((item) => item.text).join(" | "))
+        .join("\n"));
     }
     extractedText = pages.join("\n");
     if (!extractedText.trim()) issues.push("PDF 沒有可直接讀取的文字，可能係掃描圖片；需要人工核對。");
@@ -115,18 +128,20 @@ const analyzePriceDocumentLocally = async (file, targetSchool) => {
   const normalizedSchool = targetSchool.replace(/\s+/g, "").toLowerCase();
   const documentSchoolMatched = Boolean(extractedText) && normalizedText.includes(normalizedSchool);
   if (extractedText && !documentSchoolMatched) issues.push("文件內未能確認學校名稱與目前選擇一致，必須人工核對。");
-  const priceLines = extractedText.split(/\r?\n/).map((line) => line.trim()).filter((line) => /\d/.test(line) && /[$＄]|價|尺碼|碼|長|腰|裙|褲/.test(line));
+  const priceLines = extractedText.split(/\r?\n/).map((line) => line.trim()).filter((line) => /\d/.test(line) && /[$＄]|價|尺碼|碼|長|腰|裙|褲|裁碼/.test(line));
   if (!priceLines.length) issues.push("未能可靠偵測價格／尺碼表格，請人工逐項確認。");
   issues.push("本地分析只抽取 PDF 文字，不會自動判讀圖片或推算缺少價格；所有價格仍需人工確認。");
   const generatedProducts = [];
   let currentProduct = null;
   priceLines.forEach((line) => {
-    const numbers = [...line.matchAll(/(?:[$＄]\s*)?(\d+(?:\.\d+)?)/g)].map((match) => Number(match[1]));
+    const numbers = [...line.matchAll(/(?:[$＄]\s*)?(\d+(?:\.\d+)?)/g)]
+      .map((match) => Number(match[1]))
+      .filter((number) => number < 1000 && number !== new Date().getFullYear() && number !== new Date().getFullYear() + 1);
     if (!numbers.length) return;
     const name = line.replace(/[$＄]?\s*\d+(?:\.\d+)?/g, " ").replace(/[,:：|]/g, " ").replace(/\s+/g, " ").trim();
-    const size = (line.match(/\b(?:XS|S|M|L|XL|XXL|\d{1,3}(?:\.\d+)?|裁碼)\b/i) || [])[0] || "";
+    const size = (line.match(/(?:XS|XXL|XL|L|M|S|裁碼|\d{1,3}(?:\.\d+)?)(?!\d)/i) || [])[0] || "";
     const price = numbers[numbers.length - 1];
-    if (!size || !price || !name) return;
+    if (!size || !price || !name || numbers.length > 3) return;
     const productName = name.replace(size, "").trim();
     if (productName && (!currentProduct || currentProduct.name !== productName)) {
       currentProduct = { id: `source-${uid()}`, school: targetSchool, name: productName, sizes: [] };
@@ -136,6 +151,7 @@ const analyzePriceDocumentLocally = async (file, targetSchool) => {
       currentProduct.sizes.push({ size, price });
     }
   });
+  if (generatedProducts.some((product) => product.sizes.length < 1)) issues.push("部分款式未能完整配對尺碼及價格，請人工核對。");
   if (!generatedProducts.length) issues.push("未能由分析結果建立可核對款式；系統不會自動新增商品。");
   return {
     status: "succeeded",
