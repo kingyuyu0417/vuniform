@@ -10,15 +10,16 @@ export const normalizeProducts = (products = []) => {
   if (!Array.isArray(products)) return [];
 
   return products.map((product) => {
+    const storedMode = product.priceMode || product.sizes?.find((size) => ["simple", "matrix", "fixed"].includes(size?.__priceMode))?.__priceMode;
     const normalized = {
       ...product,
       id: String(product.id || `product-${Math.random().toString(36).slice(2, 10)}`),
       school: String(product.school || "").trim(),
       name: String(product.name || "").trim(),
-      priceMode: ["simple", "matrix", "fixed"].includes(product.priceMode)
-        ? product.priceMode
+      priceMode: ["simple", "matrix", "fixed"].includes(storedMode)
+        ? storedMode
         : (Array.isArray(product.sizes) && product.sizes.some((size) => size?.length) ? "matrix" : "simple"),
-      sizes: Array.isArray(product.sizes) ? product.sizes.map(normalizeSize) : [],
+      sizes: Array.isArray(product.sizes) ? product.sizes.map(({ __priceMode, ...size }) => normalizeSize(size)) : [],
     };
 
     return normalized;
@@ -128,11 +129,11 @@ export const saveProducts = async ({ products, storage, supabase, isSupabaseAuth
       if (deleteError) throw deleteError;
     }
 
-    const { error } = await supabase.from("products").upsert(uniqueProducts.map(({ id, school, name, sizes }, index) => ({
+    const { error } = await supabase.from("products").upsert(uniqueProducts.map(({ id, school, name, sizes, priceMode }, index) => ({
       id,
       school: school || "",
       name,
-      sizes,
+      sizes: sizes.map((size) => ({ ...size, __priceMode: priceMode })),
       display_order: index,
     })));
 

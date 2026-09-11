@@ -3177,7 +3177,14 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   };
 
   const updateProduct = (id, next) => {
-    saveProducts(products.map((p) => (p.id === id ? next : p)));
+    const currentProducts = productsRef.current;
+    const current = currentProducts.find((product) => product.id === id);
+    if (!current) return;
+    const merged = { ...current, ...next };
+    if (!PRICE_MODE_LABELS[merged.priceMode]) {
+      merged.priceMode = merged.sizes?.some((size) => size?.length) ? "matrix" : "simple";
+    }
+    saveProducts(currentProducts.map((product) => (product.id === id ? merged : product)));
   };
 
   const addProductLength = (product, suppliedLength) => {
