@@ -3209,6 +3209,8 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   const [priceSourceReady, setPriceSourceReady] = useState(false);
   const [priceSourceConfirmations, setPriceSourceConfirmations] = useState({ missing39: false, pricingRule: false });
   const [priceSourcePublished, setPriceSourcePublished] = useState(false);
+  const [priceSourceTargetSchool, setPriceSourceTargetSchool] = useState("");
+  const [priceSourceError, setPriceSourceError] = useState("");
 
   const schools = listSchools(products);
   const schoolSuggestions = newSchoolName.trim().length >= 2
@@ -3413,15 +3415,25 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
     setPriceSourceReady(false);
     setPriceSourceConfirmations({ missing39: false, pricingRule: false });
     setPriceSourcePublished(false);
+    setPriceSourceError("");
   };
 
   const publishPriceSourceTest = async () => {
     if (!priceSourceReady || !priceSourceConfirmations.missing39 || !priceSourceConfirmations.pricingRule) return;
+    if (!priceSourceTargetSchool) {
+      setPriceSourceError("請先選擇要發布的學校。");
+      return;
+    }
+    if (priceSourceTargetSchool !== DESIGNATED_SCHOOL) {
+      setPriceSourceError(`目前這個示範批次只包含「${DESIGNATED_SCHOOL}」的已核對資料；呂明才文件尚未完成讀取及價格核對，因此系統已阻止發布，避免錯誤套用馮堯敬價格。`);
+      return;
+    }
     const retainedProducts = productsRef.current.filter((product) => schoolOf(product) !== DESIGNATED_SCHOOL);
     saveProducts([...retainedProducts, ...PRICE_SOURCE_TEST_PRODUCTS]);
     await saveProductsNow();
-    setSelectedSchool(DESIGNATED_SCHOOL);
+    setSelectedSchool(priceSourceTargetSchool);
     setPriceSourcePublished(true);
+    setPriceSourceError("");
   };
 
   const visibleProducts = activeSchool ? products.filter((p) => schoolOf(p) === activeSchool) : [];
@@ -3447,6 +3459,13 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
         {showPriceSourceTest && (
           <div style={{ marginTop: 12, background: "#fff", borderRadius: 10, padding: 12 }}>
             <div style={{ fontSize: 12, color: "#555", marginBottom: 9 }}>上載價目表為必要項目；通告／訂購回條可作補充來源。分析結果需要按項確認，避免將未核實數字寫入商品庫。</div>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 9 }}>
+              發布到哪間學校？
+              <select value={priceSourceTargetSchool} onChange={(event) => { setPriceSourceTargetSchool(event.target.value); setPriceSourceError(""); setPriceSourcePublished(false); }} style={{ display: "block", width: "100%", marginTop: 5, padding: "9px 10px", border: "1px solid #B8C7D8", borderRadius: 8, background: "#fff", fontSize: 13 }}>
+                <option value="">請先選擇學校（不會自動套用目前學校）</option>
+                {schools.map((school) => <option key={school} value={school}>{school}</option>)}
+              </select>
+            </label>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               <label style={{ border: "1px dashed #A8BBD0", borderRadius: 8, padding: 10, cursor: "pointer", fontSize: 12 }}>
                 <div style={{ fontWeight: 600 }}>價目表（必須）</div>
@@ -3464,8 +3483,8 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
             </button>
             {priceSourceReady && (
               <div style={{ marginTop: 12, borderTop: "1px solid #E5E5E0", paddingTop: 10 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>馮堯敬中學 2026 夏季：正式商品批次</div>
-                <div style={{ fontSize: 12, color: "#52657A", lineHeight: 1.5, marginBottom: 8 }}>此批次包含 8 款及雙尺寸價格組合。正式自動解析尚未接入，因此系統不會假裝從檔案讀出數字；確認後會替換該校現有商品，其他學校商品不受影響。</div>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>已核對示範批次：馮堯敬中學 2026 夏季</div>
+                <div style={{ fontSize: 12, color: "#52657A", lineHeight: 1.5, marginBottom: 8 }}>此批次包含 8 款及雙尺寸價格組合。上載檔案目前只會記錄檔名，尚未自動讀取學校名稱及價格；如果你上載其他學校，系統會阻止發布，不會套用馮堯敬資料。</div>
                 <div style={{ display: "grid", gap: 6, fontSize: 12 }}>
                   <label style={{ display: "flex", alignItems: "flex-start", gap: 7, padding: 8, background: priceSourceConfirmations.missing39 ? "#EEF8F1" : "#FFF8E7", borderRadius: 7 }}>
                     <input type="checkbox" checked={priceSourceConfirmations.missing39} onChange={(event) => setPriceSourceConfirmations((current) => ({ ...current, missing39: event.target.checked }))} />
@@ -3476,6 +3495,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
                     <span><b>確認：裙／褲雙尺寸加價規則</b><br /><span style={{ color: "#6B7280" }}>每個長度及腰圍／上圍組合會保存為獨立價格。</span></span>
                   </label>
                 </div>
+                {priceSourceError && <div style={{ marginTop: 8, padding: 9, borderRadius: 7, background: "#FFF1F0", color: "#B42318", fontSize: 12, lineHeight: 1.5 }}>{priceSourceError}</div>}
                 <button className="pos-btn" disabled={!priceSourceConfirmations.missing39 || !priceSourceConfirmations.pricingRule || priceSourcePublished} onClick={publishPriceSourceTest} style={{ marginTop: 10, padding: "9px 14px", borderRadius: 8, background: priceSourcePublished ? "#28784B" : "#1F3A5F", color: "#fff", fontSize: 12, fontWeight: 700 }}>
                   {priceSourcePublished ? "已正式發布，可到銷售頁使用" : "確認並正式替換該校商品"}
                 </button>
