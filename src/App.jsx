@@ -760,6 +760,7 @@ export default function UniformPOS() {
   const [pickupTickets, setPickupTickets] = useState([]);
   const [paymentOrders, setPaymentOrders] = useState([]);
   const [cart, setCart] = useState([]);
+  const [heldSales, setHeldSales] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [pendingSaleProductId, setPendingSaleProductId] = useState("");
   const [exchangeReplacementQueue, setExchangeReplacementQueue] = useState([]);
@@ -809,6 +810,64 @@ export default function UniformPOS() {
   const [authReady, setAuthReady] = useState(!isSupabaseAuthEnabled); // Wait for auth before loading protected data
   const [passwordSetupRequired, setPasswordSetupRequired] = useState(false);
   const perms = session ? (PERMISSIONS[session.role] || PERMISSIONS[ROLES.STAFF]) : null;
+
+  useEffect(() => {
+    window.storage.get("held-sales", false).then((saved) => {
+      if (!saved?.value) return;
+      try {
+        const parsed = JSON.parse(saved.value);
+        if (Array.isArray(parsed)) setHeldSales(parsed);
+      } catch (error) {
+        console.error("讀取 HOLD 單失敗", error);
+      }
+    }).catch((error) => console.error("讀取 HOLD 單失敗", error));
+  }, []);
+
+  const persistHeldSales = (next) => {
+    setHeldSales(next);
+    window.storage.set("held-sales", JSON.stringify(next), false).catch((error) => {
+      console.error("儲存 HOLD 單失敗", error);
+      setStorageError("HOLD 單未能儲存，請檢查裝置儲存空間後再試。");
+    });
+  };
+
+  const clearCartWithConfirmation = () => {
+    if (cart.length === 0) return;
+    if (!window.confirm("確定要刪除購物車內所有款式嗎？此操作不能復原。")) return;
+    setCart([]);
+    setCashReceived("");
+    setSelectedProduct(null);
+    setExchangeReplacementQueue([]);
+    exchangeReplacementQueueRef.current = [];
+  };
+
+  const holdCurrentSale = () => {
+    if (cart.length === 0) return;
+    const hold = {
+      id: uid(),
+      createdAt: new Date().toISOString(),
+      school: selectedSchool || "",
+      cart,
+      cashReceived,
+    };
+    persistHeldSales([hold, ...heldSales]);
+    setCart([]);
+    setCashReceived("");
+    setSelectedProduct(null);
+  };
+
+  const resumeHeldSale = (hold) => {
+    if (cart.length > 0 && !window.confirm("目前購物車已有款式，確定要載入 HOLD 單並取代目前內容嗎？")) return;
+    setSelectedSchool(hold.school || selectedSchool);
+    setCart(hold.cart || []);
+    setCashReceived(hold.cashReceived || "");
+    setSelectedProduct(null);
+    persistHeldSales(heldSales.filter((item) => item.id !== hold.id));
+  };
+
+  const discardHeldSale = (holdId) => {
+    persistHeldSales(heldSales.filter((item) => item.id !== holdId));
+  };
 
   useEffect(() => {
     if (!pendingSaleProductId) return;
@@ -2295,6 +2354,11 @@ export default function UniformPOS() {
                 onExchangeReplacementAdded={advanceExchangeReplacement}
                 salesLog={salesLog}
                 onExchange={startExchange}
+                heldSales={heldSales}
+                onHoldSale={holdCurrentSale}
+                onResumeHeldSale={resumeHeldSale}
+                onDiscardHeldSale={discardHeldSale}
+                onClearCart={clearCartWithConfirmation}
               />
             }
           />
@@ -2327,6 +2391,11 @@ export default function UniformPOS() {
                     onExchangeReplacementAdded={advanceExchangeReplacement}
                     salesLog={salesLog}
                     onExchange={startExchange}
+                    heldSales={heldSales}
+                    onHoldSale={holdCurrentSale}
+                    onResumeHeldSale={resumeHeldSale}
+                    onDiscardHeldSale={discardHeldSale}
+                    onClearCart={clearCartWithConfirmation}
                   />
                 )}
                 {tab === "guest" && (
@@ -2473,6 +2542,11 @@ function SaleTab({
   onExchangeReplacementAdded,
   salesLog = [],
   onExchange,
+  heldSales = [],
+  onHoldSale,
+  onResumeHeldSale,
+  onDiscardHeldSale,
+  onClearCart,
 }) {
   const [genderFilter, setGenderFilter] = useState("全部");
   const [selectedLength, setSelectedLength] = useState("");
@@ -2899,6 +2973,11 @@ function SaleTab({
         ))}
         {cart.length > 0 && (
           <>
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <button className="pos-btn" onClick={onClearCart} style={{ flex: 1, padding: "9px 8px", borderRadius: 8, background: "#FFF1F2", border: "1px solid #FDA4AF", color: "#BE123C", fontSize: 13, fontWeight: 700 }}>
+                刪除所有款式
+              </button>
+            </div>
             <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", fontSize: 15, fontWeight: 700 }}>
               <span>{exchangeMode ? "換貨應補／應退" : `總計（${cartCount}件）`}</span>
               <span>{fmt(cartTotal)}</span>
@@ -2958,6 +3037,32 @@ function SaleTab({
       >
         {exchangeMode ? (refundDue > 0 ? `完成換貨／退回 ${fmt(refundDue)}` : `完成換貨${changeDue > 0 ? `／補回 ${fmt(changeDue)}` : ""}`) : "完成交易"}並開單
       </button>
+      {!exchangeMode && cart.length > 0 && (
+        <button
+          className="pos-btn"
+          onClick={onHoldSale}
+          style={{ width: "100%", marginTop: 8, padding: "12px 0", borderRadius: 10, background: "#FFF7ED", border: "1px solid #FDBA74", color: "#9A3412", fontSize: 15, fontWeight: 700 }}
+        >
+          HOLD 單（稍後繼續）
+        </button>
+      )}
+      {heldSales.length > 0 && (
+        <div style={{ marginTop: 14, background: "#F8FAFC", border: "1px solid #CBD5E1", borderRadius: 10, padding: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#1F3A5F", marginBottom: 8 }}>HOLD 單（{heldSales.length}張）</div>
+          <div style={{ display: "grid", gap: 6 }}>
+            {heldSales.map((hold) => (
+              <div key={hold.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: "#fff", borderRadius: 8, border: "1px solid #E2E8F0" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#334155" }}>{hold.school || "未選學校"} · {hold.cart?.reduce((sum, item) => sum + Number(item.qty || 0), 0) || 0}件</div>
+                  <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{new Date(hold.createdAt).toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit" })}</div>
+                </div>
+                <button className="pos-btn" onClick={() => onResumeHeldSale(hold)} style={{ padding: "8px 10px", borderRadius: 7, background: "#1F3A5F", color: "#fff", fontSize: 12, fontWeight: 700 }}>繼續</button>
+                <button className="pos-btn" onClick={() => onDiscardHeldSale(hold.id)} style={{ padding: "8px 9px", borderRadius: 7, background: "#FFF1F2", color: "#BE123C", fontSize: 12, fontWeight: 700 }}>刪除</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {storageError && (
         <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 8, background: "#FFF1F0", color: "#B42318", fontSize: 12, display: "flex", gap: 6, alignItems: "flex-start" }}>
           <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
