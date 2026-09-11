@@ -3240,7 +3240,13 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
       if (!saved?.value) return;
       try {
         const parsed = JSON.parse(saved.value);
-        if (parsed && typeof parsed === "object") setPriceSourceBatch(parsed);
+        if (parsed && typeof parsed === "object") {
+          setPriceSourceBatch(parsed);
+          setPriceSourceTargetSchool(parsed.targetSchool || "");
+          setPriceSourceFiles(parsed.files || { price: null, notice: null });
+          setPriceSourceReady(Boolean(parsed.targetSchool && parsed.files?.price));
+          setPriceSourcePublished(Boolean(parsed.publishedAt));
+        }
       } catch (error) {
         console.error("讀取價格來源批次失敗", error);
       }
@@ -3430,6 +3436,13 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
       setPriceSourceError("檔案不可超過 20MB。");
       return;
     }
+    const allowedTypes = kind === "price"
+      ? ["application/pdf", "image/jpeg", "image/png"]
+      : ["application/pdf", "image/jpeg", "image/png"];
+    if (file.type && !allowedTypes.includes(file.type)) {
+      setPriceSourceError("只接受 PDF、JPG 或 PNG 檔案。");
+      return;
+    }
     let hash;
     try {
       const buffer = await file.arrayBuffer();
@@ -3460,15 +3473,19 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
       setPriceSourceError("請先選擇要發布的學校。");
       return;
     }
-    if (priceSourceTargetSchool !== DESIGNATED_SCHOOL || !priceSourceBatch?.files?.price || !/馮堯敬|馮堯敬紀念中學/.test(priceSourceBatch.files.price.name)) {
-      setPriceSourceError(`目前這個示範批次只包含「${DESIGNATED_SCHOOL}」的已核對資料；呂明才文件尚未完成讀取及價格核對，因此系統已阻止發布，避免錯誤套用馮堯敬價格。`);
+    if (priceSourceTargetSchool !== DESIGNATED_SCHOOL || !priceSourceBatch?.files?.price || priceSourceBatch.targetSchool !== priceSourceTargetSchool) {
+      setPriceSourceError("來源批次未完成學校綁定，或目標學校與批次不一致；系統已阻止發布。");
       return;
     }
+    const previousProducts = productsRef.current;
     const retainedProducts = productsRef.current.filter((product) => schoolOf(product) !== DESIGNATED_SCHOOL);
     saveProducts([...retainedProducts, ...PRICE_SOURCE_TEST_PRODUCTS]);
     const saved = await saveProductsNow();
     if (!saved) {
-      setPriceSourceError("商品保存失敗，未完成發布；原有商品未被視為已替換。");
+      saveProducts(previousProducts);
+      await saveProductsNow();
+      setPriceSourcePublished(false);
+      setPriceSourceError("商品保存失敗，系統已嘗試回復原有商品，未完成發布。");
       return;
     }
     const publishedBatch = { ...priceSourceBatch, targetSchool: priceSourceTargetSchool, confirmedAt: new Date().toISOString(), publishedAt: new Date().toISOString() };
@@ -3486,13 +3503,18 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   };
 
   const createPriceSourceBatch = async () => {
-    if (!priceSourceFiles.price || !priceSourceBatch?.files?.price) return;
+    if (!priceSourceFiles.price || !priceSourceBatch?.files?.price || !priceSourceTargetSchool) {
+      setPriceSourceError("請先選擇目標學校及上載價目表。");
+      return;
+    }
     const nextBatch = { ...priceSourceBatch, targetSchool: priceSourceTargetSchool, createdAt: new Date().toISOString(), confirmedAt: null, publishedAt: null };
     try {
       await window.storage.set("price-source-batch", JSON.stringify(nextBatch), false);
       setPriceSourceBatch(nextBatch);
-      setPriceSourceReady(true);
+      setPriceSourceReady(false);
+      setPriceSourceConfirmations({ missing39: false, pricingRule: false });
       setPriceSourceError("");
+      setPriceSourceReady(true);
     } catch (error) {
       console.error("保存價格來源批次失敗", error);
       setPriceSourceError("無法保存來源批次，未能開始分析。");
@@ -3547,7 +3569,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
             {priceSourceReady && (
               <div style={{ marginTop: 12, borderTop: "1px solid #E5E5E0", paddingTop: 10 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>已核對示範批次：馮堯敬中學 2026 夏季</div>
-                <div style={{ fontSize: 12, color: "#52657A", lineHeight: 1.5, marginBottom: 8 }}>此批次包含 8 款及雙尺寸價格組合。上載檔案目前只會記錄檔名，尚未自動讀取學校名稱及價格；如果你上載其他學校，系統會阻止發布，不會套用馮堯敬資料。</div>
+                <div style={{ fontSize: 12, color: "#52657A", lineHeight: 1.5, marginBottom: 8 }}>此批次包含 8 款及雙尺寸價格組合。系統目前只保存文件指紋，尚未自動讀取文件內文；發布前必須由管理員確認文件確實屬於所選學校。</div>
                 <div style={{ display: "grid", gap: 6, fontSize: 12 }}>
                   <label style={{ display: "flex", alignItems: "flex-start", gap: 7, padding: 8, background: priceSourceConfirmations.missing39 ? "#EEF8F1" : "#FFF8E7", borderRadius: 7 }}>
                     <input type="checkbox" checked={priceSourceConfirmations.missing39} onChange={(event) => setPriceSourceConfirmations((current) => ({ ...current, missing39: event.target.checked }))} />
