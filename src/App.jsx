@@ -164,7 +164,7 @@ const analyzePriceDocumentLocally = async (file, targetSchool) => {
   let extractedText = "";
   const issues = [];
   if (file.type === "application/pdf") {
-    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()), disableWorker: true }).promise;
     const pages = [];
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
       const page = await pdf.getPage(pageNumber);
@@ -3285,7 +3285,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
         const parsed = JSON.parse(saved.value);
         if (parsed && typeof parsed === "object") {
           setPriceSourceBatch(parsed);
-          setPriceSourceFiles(parsed.files || { price: null, notice: null });
+          setPriceSourceFiles({ price: null, notice: null });
           setPriceSourceReady(Boolean(parsed.targetSchool && parsed.files?.price));
           setPriceSourcePublished(Boolean(parsed.publishedAt));
           setPriceSourceAnalysis(parsed.analysis || null);
@@ -3549,8 +3549,8 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
 
   const createPriceSourceBatch = async () => {
     const priceSourceTargetSchool = activeSchool;
-    if (!priceSourceFiles.price || !priceSourceBatch?.files?.price || !priceSourceTargetSchool) {
-      setPriceSourceError("請先選擇目標學校及上載價目表。");
+    if (!priceSourceFiles.price || typeof priceSourceFiles.price.arrayBuffer !== "function" || !priceSourceBatch?.files?.price || !priceSourceTargetSchool) {
+      setPriceSourceError("請先重新選擇價目表檔案、確認已選擇學校，再開始分析。");
       return;
     }
     setPriceSourceAnalyzing(true);
@@ -3613,7 +3613,8 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
                 <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={(event) => handlePriceSourceFile("notice", event)} style={{ display: "none" }} />
               </label>
             </div>
-            <button className="pos-btn" disabled={!priceSourceFiles.price || priceSourceAnalyzing} onClick={createPriceSourceBatch} style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, background: priceSourceFiles.price ? "#28784B" : "#AAB4BF", color: "#fff", fontSize: 12, fontWeight: 600 }}>
+            {priceSourceError && <div style={{ marginTop: 8, marginBottom: 8, padding: 9, borderRadius: 7, background: "#FFF1F0", color: "#B42318", fontSize: 12, lineHeight: 1.5 }}>{priceSourceError}</div>}
+            <button className="pos-btn" disabled={!priceSourceFiles.price || typeof priceSourceFiles.price.arrayBuffer !== "function" || priceSourceAnalyzing} onClick={createPriceSourceBatch} style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, background: priceSourceFiles.price ? "#28784B" : "#AAB4BF", color: "#fff", fontSize: 12, fontWeight: 600 }}>
               {priceSourceAnalyzing ? "分析緊文件…" : priceSourceReady ? "已完成文件分析" : "開始分析文件"}
             </button>
             {priceSourceReady && (
