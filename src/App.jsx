@@ -3417,12 +3417,9 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
 
   const publishPriceSourceTest = async () => {
     if (!priceSourceReady || !priceSourceConfirmations.missing39 || !priceSourceConfirmations.pricingRule) return;
-    const existingIds = new Set(productsRef.current.map((product) => product.id));
-    const additions = PRICE_SOURCE_TEST_PRODUCTS.filter((product) => !existingIds.has(product.id));
-    if (additions.length) {
-      saveProducts([...productsRef.current, ...additions]);
-      await saveProductsNow();
-    }
+    const retainedProducts = productsRef.current.filter((product) => schoolOf(product) !== DESIGNATED_SCHOOL);
+    saveProducts([...retainedProducts, ...PRICE_SOURCE_TEST_PRODUCTS]);
+    await saveProductsNow();
     setSelectedSchool(DESIGNATED_SCHOOL);
     setPriceSourcePublished(true);
   };
@@ -3440,8 +3437,8 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
       <div style={{ background: "#F0F7FF", border: "1px solid #B8D8F5", borderRadius: 12, padding: 14, marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#1F3A5F" }}>智能新增款式（測試模式）</div>
-            <div style={{ fontSize: 12, color: "#52657A", marginTop: 3 }}>先核對來源及待確認項目，全部確認後先會加入商品資料；未確認前唔會改動正式商品。</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#1F3A5F" }}>智能新增款式（正式來源核對）</div>
+            <div style={{ fontSize: 12, color: "#52657A", marginTop: 3 }}>先核對來源及待確認項目，全部確認後先會替換指定學校商品；未確認前唔會改動商品資料。</div>
           </div>
           <button className="pos-btn" onClick={() => setShowPriceSourceTest((current) => !current)} style={{ padding: "8px 12px", borderRadius: 8, background: "#1F3A5F", color: "#fff", fontSize: 12, fontWeight: 600 }}>
             {showPriceSourceTest ? "收起測試區" : "開始測試"}
@@ -3449,7 +3446,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
         </div>
         {showPriceSourceTest && (
           <div style={{ marginTop: 12, background: "#fff", borderRadius: 10, padding: 12 }}>
-            <div style={{ fontSize: 12, color: "#555", marginBottom: 9 }}>上載價目表為必要項目；通告／訂購回條可作補充來源。現階段上載只會保留於本次測試畫面，分析結果需要按項確認，避免將未核實數字寫入商品庫。</div>
+            <div style={{ fontSize: 12, color: "#555", marginBottom: 9 }}>上載價目表為必要項目；通告／訂購回條可作補充來源。分析結果需要按項確認，避免將未核實數字寫入商品庫。</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               <label style={{ border: "1px dashed #A8BBD0", borderRadius: 8, padding: 10, cursor: "pointer", fontSize: 12 }}>
                 <div style={{ fontWeight: 600 }}>價目表（必須）</div>
@@ -3467,8 +3464,8 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
             </button>
             {priceSourceReady && (
               <div style={{ marginTop: 12, borderTop: "1px solid #E5E5E0", paddingTop: 10 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>馮堯敬中學 2026 夏季：測試結果</div>
-                <div style={{ fontSize: 12, color: "#52657A", lineHeight: 1.5, marginBottom: 8 }}>示範批次包含 8 款及雙尺寸價格組合。正式自動解析尚未接入，因此系統不會假裝從檔案讀出數字；你可以先測試「來源 → 確認 → 發布 → 銷售」完整流程。</div>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>馮堯敬中學 2026 夏季：正式商品批次</div>
+                <div style={{ fontSize: 12, color: "#52657A", lineHeight: 1.5, marginBottom: 8 }}>此批次包含 8 款及雙尺寸價格組合。正式自動解析尚未接入，因此系統不會假裝從檔案讀出數字；確認後會替換該校現有商品，其他學校商品不受影響。</div>
                 <div style={{ display: "grid", gap: 6, fontSize: 12 }}>
                   <label style={{ display: "flex", alignItems: "flex-start", gap: 7, padding: 8, background: priceSourceConfirmations.missing39 ? "#EEF8F1" : "#FFF8E7", borderRadius: 7 }}>
                     <input type="checkbox" checked={priceSourceConfirmations.missing39} onChange={(event) => setPriceSourceConfirmations((current) => ({ ...current, missing39: event.target.checked }))} />
@@ -3480,7 +3477,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
                   </label>
                 </div>
                 <button className="pos-btn" disabled={!priceSourceConfirmations.missing39 || !priceSourceConfirmations.pricingRule || priceSourcePublished} onClick={publishPriceSourceTest} style={{ marginTop: 10, padding: "9px 14px", borderRadius: 8, background: priceSourcePublished ? "#28784B" : "#1F3A5F", color: "#fff", fontSize: 12, fontWeight: 700 }}>
-                  {priceSourcePublished ? "已發布測試商品，可到銷售頁試用" : "確認並發布到測試商品"}
+                  {priceSourcePublished ? "已正式發布，可到銷售頁使用" : "確認並正式替換該校商品"}
                 </button>
               </div>
             )}
