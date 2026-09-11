@@ -92,74 +92,6 @@ const DEFAULT_PRODUCTS = [
   },
 ];
 
-const makeTestSizeMatrix = (rows, dimensions, getPrice) => rows.reduce(
-  (all, [baseDimension, basePrice]) => all.concat(dimensions.map((dimension) => ({
-    size: getPrice.size ? getPrice.size(baseDimension, dimension) : dimension,
-    length: getPrice.length ? getPrice.length(baseDimension, dimension) : undefined,
-    price: getPrice.price(baseDimension, basePrice, dimension),
-  }))),
-  [],
-);
-
-const PRICE_SOURCE_TEST_PRODUCTS = [
-  {
-    id: "demo-fung-yiu-shirt",
-    school: DESIGNATED_SCHOOL,
-    name: "男生白色短袖恤（連校徽）",
-    sizes: [["12", 34], ["12.5", 38], ["13", 42], ["13.5", 46], ["14", 50], ["14.5", 54], ["15", 60], ["15.5", 67], ["16", 74], ["裁碼", 94]].map(([size, price]) => ({ size, price })),
-  },
-  {
-    id: "demo-fung-yiu-trouser",
-    school: DESIGNATED_SCHOOL,
-    name: "男生白色長西褲（測試價目）",
-    sizes: makeTestSizeMatrix([["23", 76], ["24", 80], ["25", 84], ["26", 88], ["27", 92], ["28", 96], ["29", 104], ["30", 115], ["裁碼", 134]], ["普通褲長", "40", "41.5", "43或以上"], {
-      size: (baseDimension) => baseDimension,
-      length: (_baseDimension, dimension) => dimension,
-      price: (_baseDimension, basePrice, dimension) => basePrice + (dimension === "40" ? 10 : dimension === "41.5" ? 20 : dimension === "43或以上" ? 30 : 0),
-    }),
-  },
-  {
-    id: "demo-fung-yiu-skirt",
-    school: DESIGNATED_SCHOOL,
-    name: "女生白色裙（連校徽、紅色蝴蝶結）（測試價目）",
-    sizes: makeTestSizeMatrix([["33", 87], ["34", 90], ["35", 94], ["36", 98], ["37", 102], ["38", 106], ["40", 114]], ["32-38", "40", "42", "44或以上"], {
-      size: (_baseDimension, dimension) => dimension,
-      length: (baseDimension) => baseDimension,
-      price: (_baseDimension, basePrice, dimension) => basePrice + (dimension === "40" ? 10 : dimension === "42" ? 20 : dimension === "44或以上" ? 30 : 0),
-    }),
-  },
-  {
-    id: "demo-fung-yiu-sports-shirt",
-    school: DESIGNATED_SCHOOL,
-    name: "運動短袖衫",
-    sizes: [["34", 44], ["36", 44], ["38", 48], ["40", 48], ["42", 52], ["44", 52]].map(([size, price]) => ({ size, price })),
-  },
-  {
-    id: "demo-fung-yiu-sports-shorts",
-    school: DESIGNATED_SCHOOL,
-    name: "運動短褲",
-    sizes: [["XS", 38], ["S", 38], ["M", 42], ["L", 42], ["XL", 46], ["XXL", 46]].map(([size, price]) => ({ size, price })),
-  },
-  {
-    id: "demo-fung-yiu-tracksuit",
-    school: DESIGNATED_SCHOOL,
-    name: "運動套裝（長袖外套／長褲）",
-    sizes: [["34", 178], ["36", 184], ["38", 189], ["40", 197], ["42", 205], ["44", 215], ["裁碼", 235]].map(([size, price]) => ({ size, price })),
-  },
-  {
-    id: "demo-fung-yiu-knit-vest",
-    school: DESIGNATED_SCHOOL,
-    name: "藍色混毛冷衫（背心）",
-    sizes: [["32", 105], ["34", 111], ["36", 117], ["38", 123], ["40", 129], ["42", 135], ["裁碼", 165]].map(([size, price]) => ({ size, price })),
-  },
-  {
-    id: "demo-fung-yiu-knit-long",
-    school: DESIGNATED_SCHOOL,
-    name: "藍色混毛冷衫（長袖）",
-    sizes: [["32", 115], ["34", 121], ["36", 127], ["38", 133], ["40", 139], ["42", 145], ["裁碼", 175]].map(([size, price]) => ({ size, price })),
-  },
-];
-
 const fmt = (n) => `$${Math.round(n).toLocaleString("en-HK")}`;
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -183,9 +115,28 @@ const analyzePriceDocumentLocally = async (file, targetSchool) => {
   const normalizedSchool = targetSchool.replace(/\s+/g, "").toLowerCase();
   const documentSchoolMatched = Boolean(extractedText) && normalizedText.includes(normalizedSchool);
   if (extractedText && !documentSchoolMatched) issues.push("文件內未能確認學校名稱與目前選擇一致，必須人工核對。");
-  const priceLines = extractedText.split(/\r?\n/).filter((line) => /\d/.test(line) && /[$＄]|價|尺碼|碼|長|腰|裙|褲/.test(line));
+  const priceLines = extractedText.split(/\r?\n/).map((line) => line.trim()).filter((line) => /\d/.test(line) && /[$＄]|價|尺碼|碼|長|腰|裙|褲/.test(line));
   if (!priceLines.length) issues.push("未能可靠偵測價格／尺碼表格，請人工逐項確認。");
   issues.push("本地分析只抽取 PDF 文字，不會自動判讀圖片或推算缺少價格；所有價格仍需人工確認。");
+  const generatedProducts = [];
+  let currentProduct = null;
+  priceLines.forEach((line) => {
+    const numbers = [...line.matchAll(/(?:[$＄]\s*)?(\d+(?:\.\d+)?)/g)].map((match) => Number(match[1]));
+    if (!numbers.length) return;
+    const name = line.replace(/[$＄]?\s*\d+(?:\.\d+)?/g, " ").replace(/[,:：|]/g, " ").replace(/\s+/g, " ").trim();
+    const size = (line.match(/\b(?:XS|S|M|L|XL|XXL|\d{1,3}(?:\.\d+)?|裁碼)\b/i) || [])[0] || "";
+    const price = numbers[numbers.length - 1];
+    if (!size || !price || !name) return;
+    const productName = name.replace(size, "").trim();
+    if (productName && (!currentProduct || currentProduct.name !== productName)) {
+      currentProduct = { id: `source-${uid()}`, school: targetSchool, name: productName, sizes: [] };
+      generatedProducts.push(currentProduct);
+    }
+    if (currentProduct && !currentProduct.sizes.some((item) => item.size === size && !item.length)) {
+      currentProduct.sizes.push({ size, price });
+    }
+  });
+  if (!generatedProducts.length) issues.push("未能由分析結果建立可核對款式；系統不會自動新增商品。");
   return {
     status: "succeeded",
     targetSchool,
@@ -193,6 +144,7 @@ const analyzePriceDocumentLocally = async (file, targetSchool) => {
     tables: priceLines.length ? [{ rowCount: priceLines.length, columnCount: 1, cells: priceLines.map((content, rowIndex) => ({ rowIndex, columnIndex: 0, content })) }] : [],
     issues,
     documentSchoolMatched,
+    generatedProducts,
   };
 };
 const customerSurname = (name = "") => String(name || "").trim().replace(/\s+/g, "").slice(0, 1);
@@ -3521,13 +3473,23 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
       setPriceSourceError("請先選擇要發布的學校。");
       return;
     }
-    if (priceSourceTargetSchool !== DESIGNATED_SCHOOL || !priceSourceBatch?.files?.price || priceSourceBatch.targetSchool !== priceSourceTargetSchool || !priceSourceAnalysis?.documentSchoolMatched) {
+    if (!priceSourceBatch?.files?.price || priceSourceBatch.targetSchool !== priceSourceTargetSchool || !priceSourceAnalysis?.documentSchoolMatched || !priceSourceAnalysis?.generatedProducts?.length) {
       setPriceSourceError("來源批次未完成學校綁定，或目標學校與批次不一致；系統已阻止發布。");
       return;
     }
     const previousProducts = productsRef.current;
-    const retainedProducts = productsRef.current.filter((product) => schoolOf(product) !== DESIGNATED_SCHOOL);
-    saveProducts([...retainedProducts, ...PRICE_SOURCE_TEST_PRODUCTS]);
+    const generatedProducts = priceSourceAnalysis.generatedProducts.map((product) => ({
+      ...product,
+      id: product.id || `source-${uid()}`,
+      school: priceSourceTargetSchool,
+      sizes: product.sizes.filter((item) => Number.isFinite(Number(item.price)) && Number(item.price) >= 0),
+    })).filter((product) => product.name && product.sizes.length);
+    if (!generatedProducts.length) {
+      setPriceSourceError("分析結果沒有有效款式或價格，未能發布。");
+      return;
+    }
+    const retainedProducts = productsRef.current.filter((product) => schoolOf(product) !== priceSourceTargetSchool);
+    saveProducts([...retainedProducts, ...generatedProducts]);
     const saved = await saveProductsNow();
     if (!saved) {
       saveProducts(previousProducts);
@@ -3622,13 +3584,24 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
             </button>
             {priceSourceReady && (
               <div style={{ marginTop: 12, borderTop: "1px solid #E5E5E0", paddingTop: 10 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>已核對示範批次：馮堯敬中學 2026 夏季</div>
-                <div style={{ fontSize: 12, color: "#52657A", lineHeight: 1.5, marginBottom: 8 }}>系統已在瀏覽器本地讀取 PDF 文字及尺碼／價格線索，不會上載文件到第三方服務；圖片未有本地 OCR 時會標示需要人工核對，所有價格仍需管理員確認。</div>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>文件分析結果：{activeSchool}</div>
+                <div style={{ fontSize: 12, color: "#52657A", lineHeight: 1.5, marginBottom: 8 }}>系統已在瀏覽器本地讀取 PDF 文字及尺碼／價格線索，不會上載文件到第三方服務；圖片或掃描 PDF 未有可讀文字時，不會自動新增商品。</div>
                 {priceSourceAnalysis && (
                   <div style={{ marginBottom: 8, padding: 9, borderRadius: 7, background: priceSourceAnalysis.documentSchoolMatched ? "#EEF8F1" : "#FFF1F0", color: priceSourceAnalysis.documentSchoolMatched ? "#28784B" : "#B42318", fontSize: 12, lineHeight: 1.5 }}>
                     <b>{priceSourceAnalysis.documentSchoolMatched ? "文件學校名稱與目前選擇一致" : "文件未能確認目前選擇的學校"}</b>
                     <div>偵測到 {priceSourceAnalysis.tables?.length || 0} 個表格。</div>
+                    <div>可建立 {priceSourceAnalysis.generatedProducts?.length || 0} 款商品。</div>
                     {priceSourceAnalysis.issues?.map((issue) => <div key={issue}>・{issue}</div>)}
+                  </div>
+                )}
+                {priceSourceAnalysis?.generatedProducts?.length > 0 && (
+                  <div style={{ marginBottom: 8, maxHeight: 180, overflowY: "auto", border: "1px solid #D9E2EC", borderRadius: 7, padding: 8, fontSize: 12 }}>
+                    {priceSourceAnalysis.generatedProducts.map((product) => (
+                      <div key={product.id} style={{ padding: "5px 0", borderBottom: "1px solid #EEF2F6" }}>
+                        <b>{product.name}</b>
+                        <div style={{ color: "#52657A" }}>{product.sizes.map((item) => `${item.size} $${item.price}`).join("、")}</div>
+                      </div>
+                    ))}
                   </div>
                 )}
                 <label style={{ display: "flex", alignItems: "flex-start", gap: 7, padding: 8, background: priceSourceConfirmed ? "#EEF8F1" : "#FFF8E7", borderRadius: 7, fontSize: 12 }}>
