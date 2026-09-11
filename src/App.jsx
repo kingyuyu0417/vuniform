@@ -1487,10 +1487,12 @@ export default function UniformPOS() {
     try {
       await productsPersistQueueRef.current;
       setProductsSaveState("saved");
+      return true;
     } catch (error) {
       const detail = error?.message || error?.code || "未知錯誤";
       setProductsSaveError(`商品未能保存：${detail}`);
       setProductsSaveState("error");
+      return false;
     } finally {
       productsSavePendingRef.current = false;
     }
@@ -3211,6 +3213,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   const [priceSourcePublished, setPriceSourcePublished] = useState(false);
   const [priceSourceTargetSchool, setPriceSourceTargetSchool] = useState("");
   const [priceSourceError, setPriceSourceError] = useState("");
+  const [priceSourceBatch, setPriceSourceBatch] = useState(null);
 
   const schools = listSchools(products);
   const schoolSuggestions = newSchoolName.trim().length >= 2
@@ -3231,6 +3234,18 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   useEffect(() => {
     productsRef.current = products;
   }, [products]);
+
+  useEffect(() => {
+    window.storage.get("price-source-batch", false).then((saved) => {
+      if (!saved?.value) return;
+      try {
+        const parsed = JSON.parse(saved.value);
+        if (parsed && typeof parsed === "object") setPriceSourceBatch(parsed);
+      } catch (error) {
+        console.error("讀取價格來源批次失敗", error);
+      }
+    }).catch((error) => console.error("讀取價格來源批次失敗", error));
+  }, []);
 
   const saveProductChanges = (next, options = {}) => {
     productsRef.current = next;
@@ -3407,14 +3422,35 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
     }
   };
 
-  const handlePriceSourceFile = (kind, event) => {
+  const handlePriceSourceFile = async (kind, event) => {
     const file = event.target.files && event.target.files[0];
     event.target.value = "";
     if (!file) return;
+    if (file.size > 20 * 1024 * 1024) {
+      setPriceSourceError("檔案不可超過 20MB。");
+      return;
+    }
+    let hash;
+    try {
+      const buffer = await file.arrayBuffer();
+      const digest = await crypto.subtle.digest("SHA-256", buffer);
+      hash = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    } catch (error) {
+      console.error("計算來源檔案指紋失敗", error);
+      setPriceSourceError("無法驗證檔案來源，請重新上載。");
+      return;
+    }
     setPriceSourceFiles((current) => ({ ...current, [kind]: file }));
     setPriceSourceReady(false);
     setPriceSourceConfirmations({ missing39: false, pricingRule: false });
     setPriceSourcePublished(false);
+    setPriceSourceBatch((current) => ({
+      id: current?.id || uid(),
+      targetSchool: "",
+      files: { ...(current?.files || {}), [kind]: { name: file.name, size: file.size, type: file.type, hash } },
+      confirmedAt: null,
+      publishedAt: null,
+    }));
     setPriceSourceError("");
   };
 
@@ -3424,16 +3460,43 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
       setPriceSourceError("請先選擇要發布的學校。");
       return;
     }
-    if (priceSourceTargetSchool !== DESIGNATED_SCHOOL) {
+    if (priceSourceTargetSchool !== DESIGNATED_SCHOOL || !priceSourceBatch?.files?.price || !/馮堯敬|馮堯敬紀念中學/.test(priceSourceBatch.files.price.name)) {
       setPriceSourceError(`目前這個示範批次只包含「${DESIGNATED_SCHOOL}」的已核對資料；呂明才文件尚未完成讀取及價格核對，因此系統已阻止發布，避免錯誤套用馮堯敬價格。`);
       return;
     }
     const retainedProducts = productsRef.current.filter((product) => schoolOf(product) !== DESIGNATED_SCHOOL);
     saveProducts([...retainedProducts, ...PRICE_SOURCE_TEST_PRODUCTS]);
-    await saveProductsNow();
+    const saved = await saveProductsNow();
+    if (!saved) {
+      setPriceSourceError("商品保存失敗，未完成發布；原有商品未被視為已替換。");
+      return;
+    }
+    const publishedBatch = { ...priceSourceBatch, targetSchool: priceSourceTargetSchool, confirmedAt: new Date().toISOString(), publishedAt: new Date().toISOString() };
+    try {
+      await window.storage.set("price-source-batch", JSON.stringify(publishedBatch), false);
+    } catch (error) {
+      console.error("保存價格來源批次失敗", error);
+      setPriceSourceError("商品已保存，但來源批次記錄未能保存；請勿再次發布，先檢查儲存服務。");
+      return;
+    }
+    setPriceSourceBatch(publishedBatch);
     setSelectedSchool(priceSourceTargetSchool);
     setPriceSourcePublished(true);
     setPriceSourceError("");
+  };
+
+  const createPriceSourceBatch = async () => {
+    if (!priceSourceFiles.price || !priceSourceBatch?.files?.price) return;
+    const nextBatch = { ...priceSourceBatch, targetSchool: priceSourceTargetSchool, createdAt: new Date().toISOString(), confirmedAt: null, publishedAt: null };
+    try {
+      await window.storage.set("price-source-batch", JSON.stringify(nextBatch), false);
+      setPriceSourceBatch(nextBatch);
+      setPriceSourceReady(true);
+      setPriceSourceError("");
+    } catch (error) {
+      console.error("保存價格來源批次失敗", error);
+      setPriceSourceError("無法保存來源批次，未能開始分析。");
+    }
   };
 
   const visibleProducts = activeSchool ? products.filter((p) => schoolOf(p) === activeSchool) : [];
@@ -3478,7 +3541,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
                 <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={(event) => handlePriceSourceFile("notice", event)} style={{ display: "none" }} />
               </label>
             </div>
-            <button className="pos-btn" disabled={!priceSourceFiles.price} onClick={() => setPriceSourceReady(true)} style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, background: priceSourceFiles.price ? "#28784B" : "#AAB4BF", color: "#fff", fontSize: 12, fontWeight: 600 }}>
+            <button className="pos-btn" disabled={!priceSourceFiles.price} onClick={createPriceSourceBatch} style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, background: priceSourceFiles.price ? "#28784B" : "#AAB4BF", color: "#fff", fontSize: 12, fontWeight: 600 }}>
               {priceSourceReady ? "已建立測試分析批次" : "建立測試分析批次"}
             </button>
             {priceSourceReady && (
