@@ -3211,7 +3211,6 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   const [priceSourceReady, setPriceSourceReady] = useState(false);
   const [priceSourceConfirmations, setPriceSourceConfirmations] = useState({ missing39: false, pricingRule: false });
   const [priceSourcePublished, setPriceSourcePublished] = useState(false);
-  const [priceSourceTargetSchool, setPriceSourceTargetSchool] = useState("");
   const [priceSourceError, setPriceSourceError] = useState("");
   const [priceSourceBatch, setPriceSourceBatch] = useState(null);
 
@@ -3236,13 +3235,21 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   }, [products]);
 
   useEffect(() => {
+    if (priceSourceBatch?.targetSchool && priceSourceBatch.targetSchool !== activeSchool) {
+      setPriceSourceReady(false);
+      setPriceSourceConfirmations({ missing39: false, pricingRule: false });
+      setPriceSourcePublished(false);
+      setPriceSourceError("你已切換學校；請重新上載並建立該學校的來源批次。");
+    }
+  }, [activeSchool, priceSourceBatch?.targetSchool]);
+
+  useEffect(() => {
     window.storage.get("price-source-batch", false).then((saved) => {
       if (!saved?.value) return;
       try {
         const parsed = JSON.parse(saved.value);
         if (parsed && typeof parsed === "object") {
           setPriceSourceBatch(parsed);
-          setPriceSourceTargetSchool(parsed.targetSchool || "");
           setPriceSourceFiles(parsed.files || { price: null, notice: null });
           setPriceSourceReady(Boolean(parsed.targetSchool && parsed.files?.price));
           setPriceSourcePublished(Boolean(parsed.publishedAt));
@@ -3468,6 +3475,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   };
 
   const publishPriceSourceTest = async () => {
+    const priceSourceTargetSchool = activeSchool;
     if (!priceSourceReady || !priceSourceConfirmations.missing39 || !priceSourceConfirmations.pricingRule) return;
     if (!priceSourceTargetSchool) {
       setPriceSourceError("請先選擇要發布的學校。");
@@ -3503,6 +3511,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   };
 
   const createPriceSourceBatch = async () => {
+    const priceSourceTargetSchool = activeSchool;
     if (!priceSourceFiles.price || !priceSourceBatch?.files?.price || !priceSourceTargetSchool) {
       setPriceSourceError("請先選擇目標學校及上載價目表。");
       return;
@@ -3545,11 +3554,9 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
           <div style={{ marginTop: 12, background: "#fff", borderRadius: 10, padding: 12 }}>
             <div style={{ fontSize: 12, color: "#555", marginBottom: 9 }}>上載價目表為必要項目；通告／訂購回條可作補充來源。分析結果需要按項確認，避免將未核實數字寫入商品庫。</div>
             <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 9 }}>
-              發布到哪間學校？
-              <select value={priceSourceTargetSchool} onChange={(event) => { setPriceSourceTargetSchool(event.target.value); setPriceSourceError(""); setPriceSourcePublished(false); }} style={{ display: "block", width: "100%", marginTop: 5, padding: "9px 10px", border: "1px solid #B8C7D8", borderRadius: 8, background: "#fff", fontSize: 13 }}>
-                <option value="">請先選擇學校（不會自動套用目前學校）</option>
-                {schools.map((school) => <option key={school} value={school}>{school}</option>)}
-              </select>
+              <span style={{ display: "block", marginTop: 5, padding: "9px 10px", border: "1px solid #B8C7D8", borderRadius: 8, background: activeSchool ? "#F7FAFC" : "#FFF8E7", color: activeSchool ? "#1F3A5F" : "#9A6700", fontSize: 13 }}>
+                {activeSchool ? activeSchool : "請先在頁面上方選擇學校"}
+              </span>
             </label>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               <label style={{ border: "1px dashed #A8BBD0", borderRadius: 8, padding: 10, cursor: "pointer", fontSize: 12 }}>
