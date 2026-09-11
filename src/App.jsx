@@ -1,5 +1,6 @@
 ﻿import React, { useState, useEffect, useRef } from "react";
 import Papa from "papaparse";
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import qrcode from "qrcode-generator";
 import { useLocation, useNavigate, Routes, Route, Navigate } from "react-router-dom";
 import { Plus, Minus, Trash2, Printer, Bluetooth, ChevronDown, ChevronUp, ChevronLeft, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown, X, ShoppingCart, Settings, ClipboardList, Check, AlertCircle, Upload, Download, School, Users, Eye, EyeOff, MapPin, GraduationCap, Search, QrCode } from "lucide-react";
@@ -159,14 +160,37 @@ const PRICE_SOURCE_TEST_PRODUCTS = [
 const fmt = (n) => `$${Math.round(n).toLocaleString("en-HK")}`;
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const uid = () => Math.random().toString(36).slice(2, 10);
-const fileToBase64 = async (file) => {
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)));
+const analyzePriceDocumentLocally = async (file, targetSchool) => {
+  let extractedText = "";
+  const issues = [];
+  if (file.type === "application/pdf") {
+    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+    const pages = [];
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const content = await page.getTextContent();
+      pages.push(content.items.map((item) => item.str || "").join(" "));
+    }
+    extractedText = pages.join("\n");
+    if (!extractedText.trim()) issues.push("PDF 沒有可直接讀取的文字，可能係掃描圖片；需要人工核對。");
+  } else {
+    issues.push("圖片未加入本地 OCR；請人工核對圖片內學校、尺碼及價格。");
   }
-  return btoa(binary);
+  const normalizedText = extractedText.replace(/\s+/g, "").toLowerCase();
+  const normalizedSchool = targetSchool.replace(/\s+/g, "").toLowerCase();
+  const documentSchoolMatched = Boolean(extractedText) && normalizedText.includes(normalizedSchool);
+  if (extractedText && !documentSchoolMatched) issues.push("文件內未能確認學校名稱與目前選擇一致，必須人工核對。");
+  const priceLines = extractedText.split(/\r?\n/).filter((line) => /\d/.test(line) && /[$＄]|價|尺碼|碼|長|腰|裙|褲/.test(line));
+  if (!priceLines.length) issues.push("未能可靠偵測價格／尺碼表格，請人工逐項確認。");
+  issues.push("本地分析只抽取 PDF 文字，不會自動判讀圖片或推算缺少價格；所有價格仍需人工確認。");
+  return {
+    status: "succeeded",
+    targetSchool,
+    extractedText,
+    tables: priceLines.length ? [{ rowCount: priceLines.length, columnCount: 1, cells: priceLines.map((content, rowIndex) => ({ rowIndex, columnIndex: 0, content })) }] : [],
+    issues,
+    documentSchoolMatched,
+  };
 };
 const customerSurname = (name = "") => String(name || "").trim().replace(/\s+/g, "").slice(0, 1);
 const customerPhoneLast4 = (phone = "") => String(phone || "").replace(/\D/g, "").slice(-4);
@@ -3529,20 +3553,10 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
       setPriceSourceError("請先選擇目標學校及上載價目表。");
       return;
     }
-    if (!supabase || !isSupabaseAuthEnabled) {
-      setPriceSourceError("未連接安全分析服務，暫時不能自動分析文件。");
-      return;
-    }
     setPriceSourceAnalyzing(true);
     setPriceSourceError("");
     try {
-      const fileBase64 = await fileToBase64(priceSourceFiles.price);
-      const { data, error } = await supabase.functions.invoke("analyze-price-source", {
-        body: { targetSchool: priceSourceTargetSchool, contentType: priceSourceFiles.price.type, fileBase64 },
-      });
-      if (error || !data || data.status !== "succeeded") {
-        throw new Error(error?.message || data?.error || "文件分析失敗");
-      }
+      const data = await analyzePriceDocumentLocally(priceSourceFiles.price, priceSourceTargetSchool);
       const nextBatch = { ...priceSourceBatch, targetSchool: priceSourceTargetSchool, createdAt: new Date().toISOString(), confirmedAt: null, publishedAt: null, analysis: data };
       await window.storage.set("price-source-batch", JSON.stringify(nextBatch), false);
       setPriceSourceBatch(nextBatch);
@@ -3605,7 +3619,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
             {priceSourceReady && (
               <div style={{ marginTop: 12, borderTop: "1px solid #E5E5E0", paddingTop: 10 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>已核對示範批次：馮堯敬中學 2026 夏季</div>
-                <div style={{ fontSize: 12, color: "#52657A", lineHeight: 1.5, marginBottom: 8 }}>系統已使用 Azure Document Intelligence 讀取文件文字及表格；OCR 結果只作核對提示，所有價格仍需管理員確認。</div>
+                <div style={{ fontSize: 12, color: "#52657A", lineHeight: 1.5, marginBottom: 8 }}>系統已在瀏覽器本地讀取 PDF 文字及尺碼／價格線索，不會上載文件到第三方服務；圖片未有本地 OCR 時會標示需要人工核對，所有價格仍需管理員確認。</div>
                 {priceSourceAnalysis && (
                   <div style={{ marginBottom: 8, padding: 9, borderRadius: 7, background: priceSourceAnalysis.documentSchoolMatched ? "#EEF8F1" : "#FFF1F0", color: priceSourceAnalysis.documentSchoolMatched ? "#28784B" : "#B42318", fontSize: 12, lineHeight: 1.5 }}>
                     <b>{priceSourceAnalysis.documentSchoolMatched ? "文件學校名稱與目前選擇一致" : "文件未能確認目前選擇的學校"}</b>
