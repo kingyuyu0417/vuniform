@@ -3245,7 +3245,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   const [showPriceSourceTest, setShowPriceSourceTest] = useState(false);
   const [priceSourceFiles, setPriceSourceFiles] = useState({ price: null, notice: null });
   const [priceSourceReady, setPriceSourceReady] = useState(false);
-  const [priceSourceConfirmations, setPriceSourceConfirmations] = useState({ missing39: false, pricingRule: false });
+  const [priceSourceConfirmed, setPriceSourceConfirmed] = useState(false);
   const [priceSourcePublished, setPriceSourcePublished] = useState(false);
   const [priceSourceError, setPriceSourceError] = useState("");
   const [priceSourceBatch, setPriceSourceBatch] = useState(null);
@@ -3275,7 +3275,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   useEffect(() => {
     if (priceSourceBatch?.targetSchool && priceSourceBatch.targetSchool !== activeSchool) {
       setPriceSourceReady(false);
-      setPriceSourceConfirmations({ missing39: false, pricingRule: false });
+      setPriceSourceConfirmed(false);
       setPriceSourcePublished(false);
       setPriceSourceError("你已切換學校；請重新上載並建立該學校的來源批次。");
     }
@@ -3501,7 +3501,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
     }
     setPriceSourceFiles((current) => ({ ...current, [kind]: file }));
     setPriceSourceReady(false);
-    setPriceSourceConfirmations({ missing39: false, pricingRule: false });
+    setPriceSourceConfirmed(false);
     setPriceSourcePublished(false);
     setPriceSourceAnalysis(null);
     setPriceSourceBatch((current) => ({
@@ -3516,7 +3516,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
 
   const publishPriceSourceTest = async () => {
     const priceSourceTargetSchool = activeSchool;
-    if (!priceSourceReady || !priceSourceConfirmations.missing39 || !priceSourceConfirmations.pricingRule) return;
+    if (!priceSourceReady || !priceSourceConfirmed) return;
     if (!priceSourceTargetSchool) {
       setPriceSourceError("請先選擇要發布的學校。");
       return;
@@ -3565,7 +3565,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
       setPriceSourceBatch(nextBatch);
       setPriceSourceAnalysis(data);
       setPriceSourceReady(false);
-      setPriceSourceConfirmations({ missing39: false, pricingRule: false });
+      setPriceSourceConfirmed(false);
       setPriceSourceError("");
       setPriceSourceReady(true);
     } catch (error) {
@@ -3631,18 +3631,12 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
                     {priceSourceAnalysis.issues?.map((issue) => <div key={issue}>・{issue}</div>)}
                   </div>
                 )}
-                <div style={{ display: "grid", gap: 6, fontSize: 12 }}>
-                  <label style={{ display: "flex", alignItems: "flex-start", gap: 7, padding: 8, background: priceSourceConfirmations.missing39 ? "#EEF8F1" : "#FFF8E7", borderRadius: 7 }}>
-                    <input type="checkbox" checked={priceSourceConfirmations.missing39} onChange={(event) => setPriceSourceConfirmations((current) => ({ ...current, missing39: event.target.checked }))} />
-                    <span><b>確認：39 碼不提供</b><br /><span style={{ color: "#6B7280" }}>系統不會用價格趨勢補出 39 碼。</span></span>
-                  </label>
-                  <label style={{ display: "flex", alignItems: "flex-start", gap: 7, padding: 8, background: priceSourceConfirmations.pricingRule ? "#EEF8F1" : "#FFF8E7", borderRadius: 7 }}>
-                    <input type="checkbox" checked={priceSourceConfirmations.pricingRule} onChange={(event) => setPriceSourceConfirmations((current) => ({ ...current, pricingRule: event.target.checked }))} />
-                    <span><b>確認：裙／褲雙尺寸加價規則</b><br /><span style={{ color: "#6B7280" }}>每個長度及腰圍／上圍組合會保存為獨立價格。</span></span>
-                  </label>
-                </div>
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 7, padding: 8, background: priceSourceConfirmed ? "#EEF8F1" : "#FFF8E7", borderRadius: 7, fontSize: 12 }}>
+                  <input type="checkbox" checked={priceSourceConfirmed} onChange={(event) => setPriceSourceConfirmed(event.target.checked)} />
+                  <span><b>確認：我已核對今次文件分析結果及所有價格</b><br /><span style={{ color: "#6B7280" }}>系統不會自行推算文件沒有列出的尺碼或價格。</span></span>
+                </label>
                 {priceSourceError && <div style={{ marginTop: 8, padding: 9, borderRadius: 7, background: "#FFF1F0", color: "#B42318", fontSize: 12, lineHeight: 1.5 }}>{priceSourceError}</div>}
-                <button className="pos-btn" disabled={!priceSourceConfirmations.missing39 || !priceSourceConfirmations.pricingRule || priceSourcePublished} onClick={publishPriceSourceTest} style={{ marginTop: 10, padding: "9px 14px", borderRadius: 8, background: priceSourcePublished ? "#28784B" : "#1F3A5F", color: "#fff", fontSize: 12, fontWeight: 700 }}>
+                <button className="pos-btn" disabled={!priceSourceConfirmed || priceSourcePublished} onClick={publishPriceSourceTest} style={{ marginTop: 10, padding: "9px 14px", borderRadius: 8, background: priceSourcePublished ? "#28784B" : "#1F3A5F", color: "#fff", fontSize: 12, fontWeight: 700 }}>
                   {priceSourcePublished ? "已正式發布，可到銷售頁使用" : "確認並正式替換該校商品"}
                 </button>
               </div>
