@@ -11,9 +11,10 @@ export const QUEUE_SERVICE = { FITTING: "FITTING", PICKUP: "PICKUP" };
 
 const STORAGE_KEY = "uniform-pos-customer-flow-cache";
 const COUNTER_STORAGE_KEY = "uniform-pos-queue-counter-cache";
-const hongKongDate = (value = new Date()) => new Intl.DateTimeFormat("en-CA", {
+export const getHongKongDate = (value = new Date()) => new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Hong_Kong",
 }).format(new Date(value));
+const hongKongDate = getHongKongDate;
 const DAY_PREFIX = () => hongKongDate().replace(/-/g, "");
 export const isQueueOrderToday = (value) => hongKongDate(value) === hongKongDate();
 const getHongKongDayBounds = () => {
@@ -129,6 +130,32 @@ export const generateQueueNumber = async (schoolId) => {
 };
 
 export const queueOrderService = {
+  async clearExpiredData() {
+    const { start: todayStart } = getHongKongDayBounds();
+    const cachedRows = readQueueCache().filter((row) => new Date(row.created_at).getTime() >= new Date(todayStart).getTime());
+    writeQueueCache(cachedRows);
+
+    const counters = readCounterCache();
+    const currentCounters = Object.fromEntries(Object.entries(counters).filter(([, counter]) => (
+      new Date(counter.updated_at).getTime() >= new Date(todayStart).getTime()
+    )));
+    writeCounterCache(currentCounters);
+
+    if (!isSupabaseConfigured || !supabase) return;
+
+    const { error: ordersError } = await supabase
+      .from("customer_orders")
+      .delete()
+      .lt("created_at", todayStart);
+    if (ordersError) throw ordersError;
+
+    const { error: countersError } = await supabase
+      .from("queue_counters")
+      .delete()
+      .lt("updated_at", todayStart);
+    if (countersError) throw countersError;
+  },
+
   // Public pages only receive sanitized queue data from RPCs. They must never
   // query customer_orders directly because it contains personal information.
   async getPublicQueueStatus({ schoolId = "", queueNumber = "", phoneLast4 = "" } = {}) {

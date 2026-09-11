@@ -17,7 +17,7 @@ import GuestQueueStatusPage from "./pages/GuestQueueStatusPage";
 import StaffOrderTracking from "./pages/StaffOrderTracking";
 import QueueDisplayPage from "./pages/QueueDisplayPage";
 import DirectoryPage from "./pages/DirectoryPage";
-import { QUEUE_SERVICE, queueOrderService } from "./services/queueOrderService";
+import { getHongKongDate, QUEUE_SERVICE, queueOrderService } from "./services/queueOrderService";
 import baseSchoolCatalog from "./schoolCatalog.json";
 import workbookSchoolCatalog from "./workbookSchoolCatalog.json";
 import workbookSchoolOutlets from "./workbookSchoolOutlets.json";
@@ -85,6 +85,74 @@ const DEFAULT_PRODUCTS = [
       { size: "XS", price: 110 }, { size: "S", price: 110 }, { size: "M", price: 115 },
       { size: "L", price: 120 }, { size: "XL", price: 125 },
     ],
+  },
+];
+
+const makeTestSizeMatrix = (rows, dimensions, getPrice) => rows.reduce(
+  (all, [baseDimension, basePrice]) => all.concat(dimensions.map((dimension) => ({
+    size: getPrice.size ? getPrice.size(baseDimension, dimension) : dimension,
+    length: getPrice.length ? getPrice.length(baseDimension, dimension) : undefined,
+    price: getPrice.price(baseDimension, basePrice, dimension),
+  }))),
+  [],
+);
+
+const PRICE_SOURCE_TEST_PRODUCTS = [
+  {
+    id: "demo-fung-yiu-shirt",
+    school: DESIGNATED_SCHOOL,
+    name: "男生白色短袖恤（連校徽）",
+    sizes: [["12", 34], ["12.5", 38], ["13", 42], ["13.5", 46], ["14", 50], ["14.5", 54], ["15", 60], ["15.5", 67], ["16", 74], ["裁碼", 94]].map(([size, price]) => ({ size, price })),
+  },
+  {
+    id: "demo-fung-yiu-trouser",
+    school: DESIGNATED_SCHOOL,
+    name: "男生白色長西褲（測試價目）",
+    sizes: makeTestSizeMatrix([["23", 76], ["24", 80], ["25", 84], ["26", 88], ["27", 92], ["28", 96], ["29", 104], ["30", 115], ["裁碼", 134]], ["普通褲長", "40", "41.5", "43或以上"], {
+      size: (baseDimension) => baseDimension,
+      length: (_baseDimension, dimension) => dimension,
+      price: (_baseDimension, basePrice, dimension) => basePrice + (dimension === "40" ? 10 : dimension === "41.5" ? 20 : dimension === "43或以上" ? 30 : 0),
+    }),
+  },
+  {
+    id: "demo-fung-yiu-skirt",
+    school: DESIGNATED_SCHOOL,
+    name: "女生白色裙（連校徽、紅色蝴蝶結）（測試價目）",
+    sizes: makeTestSizeMatrix([["33", 87], ["34", 90], ["35", 94], ["36", 98], ["37", 102], ["38", 106], ["40", 114]], ["32-38", "40", "42", "44或以上"], {
+      size: (_baseDimension, dimension) => dimension,
+      length: (baseDimension) => baseDimension,
+      price: (_baseDimension, basePrice, dimension) => basePrice + (dimension === "40" ? 10 : dimension === "42" ? 20 : dimension === "44或以上" ? 30 : 0),
+    }),
+  },
+  {
+    id: "demo-fung-yiu-sports-shirt",
+    school: DESIGNATED_SCHOOL,
+    name: "運動短袖衫",
+    sizes: [["34", 44], ["36", 44], ["38", 48], ["40", 48], ["42", 52], ["44", 52]].map(([size, price]) => ({ size, price })),
+  },
+  {
+    id: "demo-fung-yiu-sports-shorts",
+    school: DESIGNATED_SCHOOL,
+    name: "運動短褲",
+    sizes: [["XS", 38], ["S", 38], ["M", 42], ["L", 42], ["XL", 46], ["XXL", 46]].map(([size, price]) => ({ size, price })),
+  },
+  {
+    id: "demo-fung-yiu-tracksuit",
+    school: DESIGNATED_SCHOOL,
+    name: "運動套裝（長袖外套／長褲）",
+    sizes: [["34", 178], ["36", 184], ["38", 189], ["40", 197], ["42", 205], ["44", 215], ["裁碼", 235]].map(([size, price]) => ({ size, price })),
+  },
+  {
+    id: "demo-fung-yiu-knit-vest",
+    school: DESIGNATED_SCHOOL,
+    name: "藍色混毛冷衫（背心）",
+    sizes: [["32", 105], ["34", 111], ["36", 117], ["38", 123], ["40", 129], ["42", 135], ["裁碼", 165]].map(([size, price]) => ({ size, price })),
+  },
+  {
+    id: "demo-fung-yiu-knit-long",
+    school: DESIGNATED_SCHOOL,
+    name: "藍色混毛冷衫（長袖）",
+    sizes: [["32", 115], ["34", 121], ["36", 127], ["38", 133], ["40", 139], ["42", 145], ["裁碼", 175]].map(([size, price]) => ({ size, price })),
   },
 ];
 
@@ -816,12 +884,56 @@ export default function UniformPOS() {
       if (!saved?.value) return;
       try {
         const parsed = JSON.parse(saved.value);
-        if (Array.isArray(parsed)) setHeldSales(parsed);
+        if (Array.isArray(parsed)) {
+          const today = getHongKongDate();
+          const current = parsed.filter((hold) => getHongKongDate(hold.createdAt) === today);
+          setHeldSales(current);
+          if (current.length !== parsed.length) {
+            window.storage.set("held-sales", JSON.stringify(current), false).catch((error) => {
+              console.error("清理過期 HOLD 單失敗", error);
+            });
+          }
+        }
       } catch (error) {
         console.error("讀取 HOLD 單失敗", error);
       }
     }).catch((error) => console.error("讀取 HOLD 單失敗", error));
   }, []);
+
+  useEffect(() => {
+    if (!authReady || (isSupabaseAuthEnabled && !session)) return undefined;
+    let lastDate = getHongKongDate();
+    const cleanup = async () => {
+      const today = getHongKongDate();
+      if (today === lastDate) return;
+      lastDate = today;
+      try {
+        await queueOrderService.clearExpiredData();
+      } catch (error) {
+        console.error("清理過期排隊資料失敗", error);
+      }
+      setHeldSales((previous) => {
+        const current = previous.filter((hold) => getHongKongDate(hold.createdAt) === today);
+        if (current.length !== previous.length) {
+          window.storage.set("held-sales", JSON.stringify(current), false).catch((error) => {
+            console.error("清理過期 HOLD 單失敗", error);
+          });
+        }
+        return current;
+      });
+      setCart([]);
+      setCashReceived("");
+      setSelectedProduct(null);
+      setExchangeReplacementQueue([]);
+      exchangeReplacementQueueRef.current = [];
+    };
+
+    queueOrderService.clearExpiredData().catch((error) => {
+      console.error("清理過期排隊資料失敗", error);
+    });
+    const timer = window.setInterval(cleanup, 30 * 1000);
+    return () => window.clearInterval(timer);
+  }, [authReady, session]);
 
   const persistHeldSales = (next) => {
     setHeldSales(next);
@@ -3092,6 +3204,11 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   const newSchoolInputRef = useRef(null);
   const [showClassifyPanel, setShowClassifyPanel] = useState(false);
   const productsRef = useRef(products);
+  const [showPriceSourceTest, setShowPriceSourceTest] = useState(false);
+  const [priceSourceFiles, setPriceSourceFiles] = useState({ price: null, notice: null });
+  const [priceSourceReady, setPriceSourceReady] = useState(false);
+  const [priceSourceConfirmations, setPriceSourceConfirmations] = useState({ missing39: false, pricingRule: false });
+  const [priceSourcePublished, setPriceSourcePublished] = useState(false);
 
   const schools = listSchools(products);
   const schoolSuggestions = newSchoolName.trim().length >= 2
@@ -3288,6 +3405,28 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
     }
   };
 
+  const handlePriceSourceFile = (kind, event) => {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = "";
+    if (!file) return;
+    setPriceSourceFiles((current) => ({ ...current, [kind]: file }));
+    setPriceSourceReady(false);
+    setPriceSourceConfirmations({ missing39: false, pricingRule: false });
+    setPriceSourcePublished(false);
+  };
+
+  const publishPriceSourceTest = async () => {
+    if (!priceSourceReady || !priceSourceConfirmations.missing39 || !priceSourceConfirmations.pricingRule) return;
+    const existingIds = new Set(productsRef.current.map((product) => product.id));
+    const additions = PRICE_SOURCE_TEST_PRODUCTS.filter((product) => !existingIds.has(product.id));
+    if (additions.length) {
+      saveProducts([...productsRef.current, ...additions]);
+      await saveProductsNow();
+    }
+    setSelectedSchool(DESIGNATED_SCHOOL);
+    setPriceSourcePublished(true);
+  };
+
   const visibleProducts = activeSchool ? products.filter((p) => schoolOf(p) === activeSchool) : [];
 
   return (
@@ -3298,6 +3437,56 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
           <span>{productsSaveError}</span>
         </div>
       )}
+      <div style={{ background: "#F0F7FF", border: "1px solid #B8D8F5", borderRadius: 12, padding: 14, marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#1F3A5F" }}>智能新增款式（測試模式）</div>
+            <div style={{ fontSize: 12, color: "#52657A", marginTop: 3 }}>先核對來源及待確認項目，全部確認後先會加入商品資料；未確認前唔會改動正式商品。</div>
+          </div>
+          <button className="pos-btn" onClick={() => setShowPriceSourceTest((current) => !current)} style={{ padding: "8px 12px", borderRadius: 8, background: "#1F3A5F", color: "#fff", fontSize: 12, fontWeight: 600 }}>
+            {showPriceSourceTest ? "收起測試區" : "開始測試"}
+          </button>
+        </div>
+        {showPriceSourceTest && (
+          <div style={{ marginTop: 12, background: "#fff", borderRadius: 10, padding: 12 }}>
+            <div style={{ fontSize: 12, color: "#555", marginBottom: 9 }}>上載價目表為必要項目；通告／訂購回條可作補充來源。現階段上載只會保留於本次測試畫面，分析結果需要按項確認，避免將未核實數字寫入商品庫。</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <label style={{ border: "1px dashed #A8BBD0", borderRadius: 8, padding: 10, cursor: "pointer", fontSize: 12 }}>
+                <div style={{ fontWeight: 600 }}>價目表（必須）</div>
+                <div style={{ color: priceSourceFiles.price ? "#28784B" : "#777", marginTop: 4 }}>{priceSourceFiles.price ? `${priceSourceFiles.price.name}（${Math.ceil(priceSourceFiles.price.size / 1024)} KB）` : "選擇 PDF / JPG / PNG"}</div>
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={(event) => handlePriceSourceFile("price", event)} style={{ display: "none" }} />
+              </label>
+              <label style={{ border: "1px dashed #A8BBD0", borderRadius: 8, padding: 10, cursor: "pointer", fontSize: 12 }}>
+                <div style={{ fontWeight: 600 }}>通告／訂購回條（可選）</div>
+                <div style={{ color: priceSourceFiles.notice ? "#28784B" : "#777", marginTop: 4 }}>{priceSourceFiles.notice ? `${priceSourceFiles.notice.name}（${Math.ceil(priceSourceFiles.notice.size / 1024)} KB）` : "選擇 PDF / JPG / PNG"}</div>
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={(event) => handlePriceSourceFile("notice", event)} style={{ display: "none" }} />
+              </label>
+            </div>
+            <button className="pos-btn" disabled={!priceSourceFiles.price} onClick={() => setPriceSourceReady(true)} style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, background: priceSourceFiles.price ? "#28784B" : "#AAB4BF", color: "#fff", fontSize: 12, fontWeight: 600 }}>
+              {priceSourceReady ? "已建立測試分析批次" : "建立測試分析批次"}
+            </button>
+            {priceSourceReady && (
+              <div style={{ marginTop: 12, borderTop: "1px solid #E5E5E0", paddingTop: 10 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>馮堯敬中學 2026 夏季：測試結果</div>
+                <div style={{ fontSize: 12, color: "#52657A", lineHeight: 1.5, marginBottom: 8 }}>示範批次包含 8 款及雙尺寸價格組合。正式自動解析尚未接入，因此系統不會假裝從檔案讀出數字；你可以先測試「來源 → 確認 → 發布 → 銷售」完整流程。</div>
+                <div style={{ display: "grid", gap: 6, fontSize: 12 }}>
+                  <label style={{ display: "flex", alignItems: "flex-start", gap: 7, padding: 8, background: priceSourceConfirmations.missing39 ? "#EEF8F1" : "#FFF8E7", borderRadius: 7 }}>
+                    <input type="checkbox" checked={priceSourceConfirmations.missing39} onChange={(event) => setPriceSourceConfirmations((current) => ({ ...current, missing39: event.target.checked }))} />
+                    <span><b>確認：39 碼不提供</b><br /><span style={{ color: "#6B7280" }}>系統不會用價格趨勢補出 39 碼。</span></span>
+                  </label>
+                  <label style={{ display: "flex", alignItems: "flex-start", gap: 7, padding: 8, background: priceSourceConfirmations.pricingRule ? "#EEF8F1" : "#FFF8E7", borderRadius: 7 }}>
+                    <input type="checkbox" checked={priceSourceConfirmations.pricingRule} onChange={(event) => setPriceSourceConfirmations((current) => ({ ...current, pricingRule: event.target.checked }))} />
+                    <span><b>確認：裙／褲雙尺寸加價規則</b><br /><span style={{ color: "#6B7280" }}>每個長度及腰圍／上圍組合會保存為獨立價格。</span></span>
+                  </label>
+                </div>
+                <button className="pos-btn" disabled={!priceSourceConfirmations.missing39 || !priceSourceConfirmations.pricingRule || priceSourcePublished} onClick={publishPriceSourceTest} style={{ marginTop: 10, padding: "9px 14px", borderRadius: 8, background: priceSourcePublished ? "#28784B" : "#1F3A5F", color: "#fff", fontSize: 12, fontWeight: 700 }}>
+                  {priceSourcePublished ? "已發布測試商品，可到銷售頁試用" : "確認並發布到測試商品"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <button
           className="pos-btn"
