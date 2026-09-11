@@ -1,7 +1,5 @@
-﻿import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Papa from "papaparse";
-import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
-import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import qrcode from "qrcode-generator";
 import { useLocation, useNavigate, Routes, Route, Navigate } from "react-router-dom";
 import { Plus, Minus, Trash2, Printer, Bluetooth, ChevronDown, ChevronUp, ChevronLeft, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown, X, ShoppingCart, Settings, ClipboardList, Check, AlertCircle, Upload, Download, School, Users, Eye, EyeOff, MapPin, GraduationCap, Search, QrCode } from "lucide-react";
@@ -25,7 +23,7 @@ import workbookSchoolCatalog from "./workbookSchoolCatalog.json";
 import workbookSchoolOutlets from "./workbookSchoolOutlets.json";
 import { loadProducts, saveProducts as saveProductsToStore } from "./data/productsStore";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+
 
 // 应用启动时进行环境检查
 if (typeof window !== 'undefined') {
@@ -95,131 +93,6 @@ const DEFAULT_PRODUCTS = [
 const fmt = (n) => `$${Math.round(n).toLocaleString("en-HK")}`;
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const uid = () => Math.random().toString(36).slice(2, 10);
-const analyzePriceDocumentLocally = async (file, targetSchool) => {
-  let extractedText = "";
-  const issues = [];
-  if (file.type === "application/pdf") {
-    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()), disableWorker: true }).promise;
-    const pages = [];
-    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-      const page = await pdf.getPage(pageNumber);
-      const content = await page.getTextContent();
-      const rows = new Map();
-      content.items.forEach((item) => {
-        const text = String(item.str || "").trim();
-        if (!text) return;
-        const x = Number(item.transform?.[4] || 0);
-        const y = Math.round(Number(item.transform?.[5] || 0) / 2) * 2;
-        const row = rows.get(y) || [];
-        row.push({ x, text });
-        rows.set(y, row);
-      });
-      pages.push([...rows.entries()]
-        .sort(([firstY], [secondY]) => secondY - firstY)
-        .map(([, row]) => row.sort((first, second) => first.x - second.x).map((item) => item.text).join(" | "))
-        .join("\n"));
-    }
-    extractedText = pages.join("\n");
-    if (!extractedText.trim()) issues.push("PDF 沒有可直接讀取的文字，可能係掃描圖片；需要人工核對。");
-  } else {
-    issues.push("圖片未加入本地 OCR；請人工核對圖片內學校、尺碼及價格。");
-  }
-  const normalizedText = extractedText.replace(/\s+/g, "").toLowerCase();
-  const normalizedSchool = targetSchool.replace(/\s+/g, "").toLowerCase();
-  const documentSchoolMatched = Boolean(extractedText) && normalizedText.includes(normalizedSchool);
-  if (extractedText && !documentSchoolMatched) issues.push("文件內未能確認學校名稱與目前選擇一致，必須人工核對。");
-  const extractedLines = extractedText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  const priceLines = extractedLines.filter((line) => /\d/.test(line) && /[$＄]|價|尺碼|碼|長|腰|裙|褲|裁碼/.test(line));
-  if (!priceLines.length) issues.push("未能可靠偵測價格／尺碼表格，請人工逐項確認。");
-  issues.push("本地分析只抽取 PDF 文字，不會自動判讀圖片或推算缺少價格；所有價格仍需人工確認。");
-  const generatedProducts = [];
-  let currentProduct = null;
-  let ambiguousRows = 0;
-  const garmentPattern = /(恤|衫|褲|裙|運動|冷衫|背心|襪|皮帶|底衫|底裙|套裝|校服)/;
-  const parseSizes = (line) => {
-    const sizePart = line.replace(/尺\s*碼/g, "").split("|").slice(1).join(" ");
-    return [...sizePart.matchAll(/(?:XS|XXL|XL|L|M|S|\d{1,3}(?:\.\d+)?)(?!\d)/gi)]
-      .map((match) => match[0])
-      .filter((size, index, values) => values.indexOf(size) === index);
-  };
-  const parsePrices = (line) => [...line.matchAll(/[$＄]\s*(?:\|\s*)?(\d+(?:\.\d+)?)/g)].map((match) => Number(match[1]));
-  const structuredProducts = [];
-  const isSizeHeader = (line) => /尺\s*(?:\|\s*)?碼/.test(line);
-  const isPriceHeader = (line) => /價\s*(?:\|\s*)?目/.test(line);
-  for (let lineIndex = 0; lineIndex < extractedLines.length; lineIndex += 1) {
-    const line = extractedLines[lineIndex];
-    if (isSizeHeader(line) || isPriceHeader(line) || /備註|電話|地址/.test(line) || !garmentPattern.test(line)) continue;
-    const productName = line.split("|").map((cell) => cell.trim()).find((cell) => garmentPattern.test(cell) && !/全棉白學生襪|底衫|底裙/.test(cell));
-    if (!productName || productName.length > 48 || productName.includes(targetSchool)) continue;
-    const sizeLineIndex = extractedLines.findIndex((candidate, candidateIndex) => candidateIndex > lineIndex && candidateIndex <= lineIndex + 3 && isSizeHeader(candidate));
-    if (sizeLineIndex < 0) continue;
-    const sizes = parseSizes(extractedLines[sizeLineIndex]);
-    if (sizes.length < 2) continue;
-    const priceLinesForProduct = [];
-    for (let candidateIndex = sizeLineIndex + 1; candidateIndex <= sizeLineIndex + 2; candidateIndex += 1) {
-      const prices = parsePrices(extractedLines[candidateIndex] || "");
-      if (prices.length < sizes.length) break;
-      priceLinesForProduct.push({ line: extractedLines[candidateIndex], prices: prices.slice(0, sizes.length) });
-    }
-    priceLinesForProduct.forEach(({ line: priceLine, prices }) => {
-      const priceLabel = priceLine.split("|")[0].trim();
-      const name = priceLabel && !/價目/.test(priceLabel) ? `${productName}（${priceLabel}）` : productName;
-      if (structuredProducts.some((product) => product.name === name)) return;
-      structuredProducts.push({
-        id: `source-${uid()}`,
-        school: targetSchool,
-        name,
-        sizes: sizes.map((size, index) => ({ size, price: prices[index] })),
-      });
-    });
-  }
-  if (structuredProducts.length) generatedProducts.push(...structuredProducts);
-  priceLines.forEach((line) => {
-    if (structuredProducts.length) return;
-    const separatorCount = (line.match(/\|/g) || []).length;
-    if (line.length > 120 || separatorCount > 8) {
-      ambiguousRows += 1;
-      return;
-    }
-    const numbers = [...line.matchAll(/(?:[$＄]\s*)?(\d+(?:\.\d+)?)/g)]
-      .map((match) => Number(match[1]))
-      .filter((number) => number < 1000 && number !== new Date().getFullYear() && number !== new Date().getFullYear() + 1);
-    if (!numbers.length) return;
-    const name = line.replace(/[$＄]?\s*\d+(?:\.\d+)?/g, " ").replace(/[,:：|]/g, " ").replace(/\s+/g, " ").trim();
-    const size = (line.match(/(?:XS|XXL|XL|L|M|S|裁碼|\d{1,3}(?:\.\d+)?)(?!\d)/i) || [])[0] || "";
-    const price = numbers[numbers.length - 1];
-    if (!size || !price || !name || numbers.length > 3) return;
-    const productName = name.replace(size, "").trim();
-    const hasGarmentName = garmentPattern.test(productName);
-    if (!hasGarmentName || productName.length > 48 || productName.includes(targetSchool)) {
-      ambiguousRows += 1;
-      return;
-    }
-    if (productName && (!currentProduct || currentProduct.name !== productName)) {
-      currentProduct = { id: `source-${uid()}`, school: targetSchool, name: productName, sizes: [] };
-      generatedProducts.push(currentProduct);
-    }
-    if (currentProduct && !currentProduct.sizes.some((item) => item.size === size && !item.length)) {
-      currentProduct.sizes.push({ size, price });
-    }
-  });
-  if (ambiguousRows) issues.push(`有 ${ambiguousRows} 行包含多欄或多款式內容，系統未自動配對，請先整理成清晰表格。`);
-  if (generatedProducts.some((product) => product.sizes.length < 1)) issues.push("部分款式未能完整配對尺碼及價格，請人工核對。");
-  if (!generatedProducts.length || ambiguousRows) {
-    if (!generatedProducts.length) issues.push("未能由分析結果建立可核對款式；系統不會自動新增商品。");
-    if (ambiguousRows) issues.push("分析結果含有未能可靠分欄的內容；系統不會使用部分結果新增商品。");
-    generatedProducts.length = 0;
-  }
-  return {
-    status: "succeeded",
-    targetSchool,
-    extractedText,
-    tables: priceLines.length ? [{ rowCount: priceLines.length, columnCount: 1, cells: priceLines.map((content, rowIndex) => ({ rowIndex, columnIndex: 0, content })) }] : [],
-    issues,
-    documentSchoolMatched,
-    generatedProducts,
-  };
-};
 const customerSurname = (name = "") => String(name || "").trim().replace(/\s+/g, "").slice(0, 1);
 const customerPhoneLast4 = (phone = "") => String(phone || "").replace(/\D/g, "").slice(-4);
 const sizeLabel = (size) => size.length ? `${size.length}／${size.size}` : size.size;
@@ -3267,15 +3140,6 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   const newSchoolInputRef = useRef(null);
   const [showClassifyPanel, setShowClassifyPanel] = useState(false);
   const productsRef = useRef(products);
-  const [showPriceSourceTest, setShowPriceSourceTest] = useState(false);
-  const [priceSourceFiles, setPriceSourceFiles] = useState({ price: null, notice: null });
-  const [priceSourceReady, setPriceSourceReady] = useState(false);
-  const [priceSourceConfirmed, setPriceSourceConfirmed] = useState(false);
-  const [priceSourcePublished, setPriceSourcePublished] = useState(false);
-  const [priceSourceError, setPriceSourceError] = useState("");
-  const [priceSourceBatch, setPriceSourceBatch] = useState(null);
-  const [priceSourceAnalysis, setPriceSourceAnalysis] = useState(null);
-  const [priceSourceAnalyzing, setPriceSourceAnalyzing] = useState(false);
 
   const schools = listSchools(products);
   const schoolSuggestions = newSchoolName.trim().length >= 2
@@ -3296,33 +3160,6 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   useEffect(() => {
     productsRef.current = products;
   }, [products]);
-
-  useEffect(() => {
-    if (priceSourceBatch?.targetSchool && priceSourceBatch.targetSchool !== activeSchool) {
-      setPriceSourceReady(false);
-      setPriceSourceConfirmed(false);
-      setPriceSourcePublished(false);
-      setPriceSourceError("你已切換學校；請重新上載並建立該學校的來源批次。");
-    }
-  }, [activeSchool, priceSourceBatch?.targetSchool]);
-
-  useEffect(() => {
-    window.storage.get("price-source-batch", false).then((saved) => {
-      if (!saved?.value) return;
-      try {
-        const parsed = JSON.parse(saved.value);
-        if (parsed && typeof parsed === "object") {
-          setPriceSourceBatch(parsed);
-          setPriceSourceFiles({ price: null, notice: null });
-          setPriceSourceReady(Boolean(parsed.targetSchool && parsed.files?.price));
-          setPriceSourcePublished(Boolean(parsed.publishedAt));
-          setPriceSourceAnalysis(parsed.analysis || null);
-        }
-      } catch (error) {
-        console.error("讀取價格來源批次失敗", error);
-      }
-    }).catch((error) => console.error("讀取價格來源批次失敗", error));
-  }, []);
 
   const saveProductChanges = (next, options = {}) => {
     productsRef.current = next;
@@ -3499,122 +3336,6 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
     }
   };
 
-  const handlePriceSourceFile = async (kind, event) => {
-    const file = event.target.files && event.target.files[0];
-    event.target.value = "";
-    if (!file) return;
-    if (file.size > 20 * 1024 * 1024) {
-      setPriceSourceError("檔案不可超過 20MB。");
-      return;
-    }
-    const allowedTypes = kind === "price"
-      ? ["application/pdf", "image/jpeg", "image/png"]
-      : ["application/pdf", "image/jpeg", "image/png"];
-    if (file.type && !allowedTypes.includes(file.type)) {
-      setPriceSourceError("只接受 PDF、JPG 或 PNG 檔案。");
-      return;
-    }
-    let hash;
-    try {
-      const buffer = await file.arrayBuffer();
-      const digest = await crypto.subtle.digest("SHA-256", buffer);
-      hash = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
-    } catch (error) {
-      console.error("計算來源檔案指紋失敗", error);
-      setPriceSourceError("無法驗證檔案來源，請重新上載。");
-      return;
-    }
-    setPriceSourceFiles((current) => ({ ...current, [kind]: file }));
-    setPriceSourceReady(false);
-    setPriceSourceConfirmed(false);
-    setPriceSourcePublished(false);
-    setPriceSourceAnalysis(null);
-    setPriceSourceBatch((current) => ({
-      id: current?.id || uid(),
-      targetSchool: "",
-      files: { ...(current?.files || {}), [kind]: { name: file.name, size: file.size, type: file.type, hash } },
-      confirmedAt: null,
-      publishedAt: null,
-    }));
-    setPriceSourceError("");
-  };
-
-  const publishPriceSourceTest = async () => {
-    const priceSourceTargetSchool = activeSchool;
-    if (!priceSourceReady || !priceSourceConfirmed) return;
-    if (!priceSourceTargetSchool) {
-      setPriceSourceError("請先選擇要發布的學校。");
-      return;
-    }
-    if (!priceSourceAnalysis?.generatedProducts?.length) {
-      setPriceSourceError("分析結果沒有可核對的有效款式或價格，系統已阻止發布；現有商品不會被替換。");
-      return;
-    }
-    if (!priceSourceBatch?.files?.price || priceSourceBatch.targetSchool !== priceSourceTargetSchool || !priceSourceAnalysis?.documentSchoolMatched) {
-      setPriceSourceError("來源批次未完成學校綁定，或目標學校與批次不一致；系統已阻止發布。");
-      return;
-    }
-    const previousProducts = productsRef.current;
-    const generatedProducts = priceSourceAnalysis.generatedProducts.map((product) => ({
-      ...product,
-      id: product.id || `source-${uid()}`,
-      school: priceSourceTargetSchool,
-      sizes: product.sizes.filter((item) => Number.isFinite(Number(item.price)) && Number(item.price) >= 0),
-    })).filter((product) => product.name && product.sizes.length);
-    if (!generatedProducts.length) {
-      setPriceSourceError("分析結果沒有有效款式或價格，未能發布。");
-      return;
-    }
-    const retainedProducts = productsRef.current.filter((product) => schoolOf(product) !== priceSourceTargetSchool);
-    saveProducts([...retainedProducts, ...generatedProducts]);
-    const saved = await saveProductsNow();
-    if (!saved) {
-      saveProducts(previousProducts);
-      await saveProductsNow();
-      setPriceSourcePublished(false);
-      setPriceSourceError("商品保存失敗，系統已嘗試回復原有商品，未完成發布。");
-      return;
-    }
-    const publishedBatch = { ...priceSourceBatch, targetSchool: priceSourceTargetSchool, confirmedAt: new Date().toISOString(), publishedAt: new Date().toISOString() };
-    try {
-      await window.storage.set("price-source-batch", JSON.stringify(publishedBatch), false);
-    } catch (error) {
-      console.error("保存價格來源批次失敗", error);
-      setPriceSourceError("商品已保存，但來源批次記錄未能保存；請勿再次發布，先檢查儲存服務。");
-      return;
-    }
-    setPriceSourceBatch(publishedBatch);
-    setSelectedSchool(priceSourceTargetSchool);
-    setPriceSourcePublished(true);
-    setPriceSourceError("");
-  };
-
-  const createPriceSourceBatch = async () => {
-    const priceSourceTargetSchool = activeSchool;
-    if (!priceSourceFiles.price || typeof priceSourceFiles.price.arrayBuffer !== "function" || !priceSourceBatch?.files?.price || !priceSourceTargetSchool) {
-      setPriceSourceError("請先重新選擇價目表檔案、確認已選擇學校，再開始分析。");
-      return;
-    }
-    setPriceSourceAnalyzing(true);
-    setPriceSourceError("");
-    try {
-      const data = await analyzePriceDocumentLocally(priceSourceFiles.price, priceSourceTargetSchool);
-      const nextBatch = { ...priceSourceBatch, targetSchool: priceSourceTargetSchool, createdAt: new Date().toISOString(), confirmedAt: null, publishedAt: null, analysis: data };
-      await window.storage.set("price-source-batch", JSON.stringify(nextBatch), false);
-      setPriceSourceBatch(nextBatch);
-      setPriceSourceAnalysis(data);
-      setPriceSourceReady(false);
-      setPriceSourceConfirmed(false);
-      setPriceSourceError("");
-      setPriceSourceReady(true);
-    } catch (error) {
-      console.error("保存價格來源批次失敗", error);
-      setPriceSourceError(error.message || "無法分析來源文件，未能開始分析。");
-    } finally {
-      setPriceSourceAnalyzing(false);
-    }
-  };
-
   const visibleProducts = activeSchool ? products.filter((p) => schoolOf(p) === activeSchool) : [];
 
   return (
@@ -3625,82 +3346,6 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
           <span>{productsSaveError}</span>
         </div>
       )}
-      <div style={{ background: "#F0F7FF", border: "1px solid #B8D8F5", borderRadius: 12, padding: 14, marginBottom: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#1F3A5F" }}>智能新增款式（正式來源核對）</div>
-            <div style={{ fontSize: 12, color: "#52657A", marginTop: 3 }}>先核對來源及待確認項目，全部確認後先會替換指定學校商品；未確認前唔會改動商品資料。</div>
-          </div>
-          <button className="pos-btn" onClick={() => setShowPriceSourceTest((current) => !current)} style={{ padding: "8px 12px", borderRadius: 8, background: "#1F3A5F", color: "#fff", fontSize: 12, fontWeight: 600 }}>
-            {showPriceSourceTest ? "收起測試區" : "開始測試"}
-          </button>
-        </div>
-        {showPriceSourceTest && (
-          <div style={{ marginTop: 12, background: "#fff", borderRadius: 10, padding: 12 }}>
-            <div style={{ fontSize: 12, color: "#555", marginBottom: 9 }}>上載價目表為必要項目；通告／訂購回條可作補充來源。分析結果需要按項確認，避免將未核實數字寫入商品庫。</div>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 9 }}>
-              <span style={{ display: "block", marginTop: 5, padding: "9px 10px", border: "1px solid #B8C7D8", borderRadius: 8, background: activeSchool ? "#F7FAFC" : "#FFF8E7", color: activeSchool ? "#1F3A5F" : "#9A6700", fontSize: 13 }}>
-                {activeSchool ? activeSchool : "請先在頁面上方選擇學校"}
-              </span>
-            </label>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              <label style={{ border: "1px dashed #A8BBD0", borderRadius: 8, padding: 10, cursor: "pointer", fontSize: 12 }}>
-                <div style={{ fontWeight: 600 }}>價目表（必須）</div>
-                <div style={{ color: priceSourceFiles.price ? "#28784B" : "#777", marginTop: 4 }}>{priceSourceFiles.price ? `${priceSourceFiles.price.name}（${Math.ceil(priceSourceFiles.price.size / 1024)} KB）` : "選擇 PDF / JPG / PNG"}</div>
-                <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={(event) => handlePriceSourceFile("price", event)} style={{ display: "none" }} />
-              </label>
-              <label style={{ border: "1px dashed #A8BBD0", borderRadius: 8, padding: 10, cursor: "pointer", fontSize: 12 }}>
-                <div style={{ fontWeight: 600 }}>通告／訂購回條（可選）</div>
-                <div style={{ color: priceSourceFiles.notice ? "#28784B" : "#777", marginTop: 4 }}>{priceSourceFiles.notice ? `${priceSourceFiles.notice.name}（${Math.ceil(priceSourceFiles.notice.size / 1024)} KB）` : "選擇 PDF / JPG / PNG"}</div>
-                <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={(event) => handlePriceSourceFile("notice", event)} style={{ display: "none" }} />
-              </label>
-            </div>
-            {priceSourceError && <div style={{ marginTop: 8, marginBottom: 8, padding: 9, borderRadius: 7, background: "#FFF1F0", color: "#B42318", fontSize: 12, lineHeight: 1.5 }}>{priceSourceError}</div>}
-            <button className="pos-btn" disabled={!priceSourceFiles.price || typeof priceSourceFiles.price.arrayBuffer !== "function" || priceSourceAnalyzing} onClick={createPriceSourceBatch} style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, background: priceSourceFiles.price ? "#28784B" : "#AAB4BF", color: "#fff", fontSize: 12, fontWeight: 600 }}>
-              {priceSourceAnalyzing ? "分析緊文件…" : priceSourceReady ? "已完成文件分析" : "開始分析文件"}
-            </button>
-            {priceSourceReady && (
-              <div style={{ marginTop: 12, borderTop: "1px solid #E5E5E0", paddingTop: 10 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>文件分析結果：{activeSchool}</div>
-                <div style={{ fontSize: 12, color: "#52657A", lineHeight: 1.5, marginBottom: 8 }}>系統已在瀏覽器本地讀取 PDF 文字及尺碼／價格線索，不會上載文件到第三方服務；圖片或掃描 PDF 未有可讀文字時，不會自動新增商品。</div>
-                {priceSourceAnalysis && (
-                  <div style={{ marginBottom: 8, padding: 9, borderRadius: 7, background: priceSourceAnalysis.documentSchoolMatched ? "#EEF8F1" : "#FFF1F0", color: priceSourceAnalysis.documentSchoolMatched ? "#28784B" : "#B42318", fontSize: 12, lineHeight: 1.5 }}>
-                    <b>{priceSourceAnalysis.documentSchoolMatched ? "文件學校名稱與目前選擇一致" : "文件未能確認目前選擇的學校"}</b>
-                    <div>偵測到 {priceSourceAnalysis.tables?.length || 0} 個表格。</div>
-                    <div>可建立 {priceSourceAnalysis.generatedProducts?.length || 0} 款商品。</div>
-                    {priceSourceAnalysis.issues?.map((issue) => <div key={issue}>・{issue}</div>)}
-                  </div>
-                )}
-                {priceSourceAnalysis?.generatedProducts?.length > 0 && (
-                  <div style={{ marginBottom: 8, maxHeight: 180, overflowY: "auto", border: "1px solid #D9E2EC", borderRadius: 7, padding: 8, fontSize: 12 }}>
-                    {priceSourceAnalysis.generatedProducts.map((product) => (
-                      <div key={product.id} style={{ padding: "5px 0", borderBottom: "1px solid #EEF2F6" }}>
-                        <b>{product.name}</b>
-                        <div style={{ color: "#52657A" }}>{product.sizes.map((item) => `${item.size} $${item.price}`).join("、")}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {priceSourceAnalysis?.generatedProducts?.length > 0 ? (
-                  <label style={{ display: "flex", alignItems: "flex-start", gap: 7, padding: 8, background: priceSourceConfirmed ? "#EEF8F1" : "#FFF8E7", borderRadius: 7, fontSize: 12 }}>
-                    <input type="checkbox" checked={priceSourceConfirmed} onChange={(event) => setPriceSourceConfirmed(event.target.checked)} />
-                    <span><b>確認：我已核對今次文件分析結果及所有價格</b><br /><span style={{ color: "#6B7280" }}>系統不會自行推算文件沒有列出的尺碼或價格。</span></span>
-                  </label>
-                ) : (
-                  <div style={{ padding: 8, background: "#FFF1F0", borderRadius: 7, color: "#B42318", fontSize: 12, lineHeight: 1.5 }}>
-                    <b>目前不能確認或發布</b><br />
-                    文件未能產生可核對的商品及價格；請先整理成清晰表格後重新分析。系統不會替換該校現有商品。
-                  </div>
-                )}
-                {priceSourceError && <div style={{ marginTop: 8, padding: 9, borderRadius: 7, background: "#FFF1F0", color: "#B42318", fontSize: 12, lineHeight: 1.5 }}>{priceSourceError}</div>}
-                <button className="pos-btn" disabled={!priceSourceAnalysis?.generatedProducts?.length || !priceSourceConfirmed || priceSourcePublished} onClick={publishPriceSourceTest} style={{ marginTop: 10, padding: "9px 14px", borderRadius: 8, background: priceSourcePublished ? "#28784B" : "#1F3A5F", color: "#fff", fontSize: 12, fontWeight: 700 }}>
-                  {priceSourcePublished ? "已正式發布，可到銷售頁使用" : "確認並正式替換該校商品"}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <button
           className="pos-btn"
