@@ -1902,7 +1902,9 @@ export default function UniformPOS() {
     if (cart.length === 0 || checkoutSubmittingRef.current) return;
     checkoutSubmittingRef.current = true;
     const now = new Date();
-    const received = cashReceived === "" ? cartTotal : Number(cashReceived || 0);
+    const received = cashReceived === ""
+      ? (exchangeMode ? 0 : cartTotal)
+      : Number(cashReceived || 0);
     const sourceMeta = cart.find((item) => item.sourceQueueNo || item.sourceGuestName) || {};
     const order = {
       id: "",
