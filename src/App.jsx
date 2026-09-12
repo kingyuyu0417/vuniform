@@ -250,11 +250,7 @@ const cleanProductName = (name) => {
   }
   return cleaned;
 };
-const normalizeProductSizes = (sizes = []) => sizes.map((size) => {
-  if (size.length || typeof size.size !== "string") return size;
-  const match = size.size.trim().match(/^([^/／]+)[/／]([^/／]+)$/);
-  return match ? { ...size, size: match[1].trim(), length: match[2].trim() } : size;
-});
+const normalizeProductSizes = (sizes = []) => sizes.map((size) => ({ ...size }));
 const productIdentityParts = (school, name) => {
   const cleaned = cleanProductName(name);
   const genderMatch = cleaned.match(/^(男生|女生|男女生)\s*[-–—:：]?\s*/);
