@@ -612,11 +612,51 @@ const findSheetSchool = (rows) => {
   }
   return rows.flat().map((cell) => String(cell || "").trim()).find((text) => /(?:中學|小學|幼稚園)$/.test(text)) || "";
 };
+const PRICE_LIST_PRODUCT_ALIASES = {
+  "V背心": "V領背心",
+  "V長": "V領長袖冷衫",
+  "冬運套": "冬天運動套裝",
+  "冬運單衫": "冬天運動單衫",
+  "冬運單褲": "冬天運動單褲",
+  "單衫": "冬天運動單衫",
+  "單褲": "冬天運動單褲",
+  "夏運衣": "運動上衣",
+  "夏運褲": "運動褲",
+  "夏季運動衣": "運動上衣",
+  "夏季運動褲": "運動褲",
+  "夏運動衣": "運動上衣",
+  "夏運動褲": "運動褲",
+  "3/7冷衫": "3/7冷衫",
+  "三七冷衫": "3/7冷衫",
+};
+const normalizePriceListProductName = (value) => String(value || "").replace(/[\s　]/g, "").trim();
+const canonicalPriceListProductName = (value) => {
+  const rawName = String(value || "").replace(/\s+/g, " ").trim();
+  const normalizedName = normalizePriceListProductName(rawName);
+  return PRICE_LIST_PRODUCT_ALIASES[normalizedName] || rawName;
+};
 const looksLikeProductHeader = (value) => {
-  const text = String(value || "").replace(/\s+/g, "").trim();
+  const text = normalizePriceListProductName(value);
+  if (Object.prototype.hasOwnProperty.call(PRICE_LIST_PRODUCT_ALIASES, text)) return true;
   return text && text.length <= 24
-    && !/^(上圍|腰圍|褲長|裙長|尺碼|碼數|價錢|價格|數量|夏|冬|V|長|短|背心|長袖|\d|加\$?)/.test(text)
-    && /(?:裙|褲|恤衫|襯衫|恤|衫|棉褸|外套|冷衫|運衣|襪|皮帶|底衫|校徽|套裝|單衫|單褲)/.test(text);
+    && !/^(上圍|腰圍|褲長|裙長|尺碼|碼數|價錢|價格|數量|夏(?!運衣|運褲)|冬|長|短|\d|加\$?)/.test(text)
+    && /(?:裙|褲|恤衫|襯衫|恤|衫|棉褸|外套|冷衫|運衣|運動衣|運動褲|上衣|襪|皮帶|底衫|校徽|套裝|單衫|單褲|背心|長袖|西褲|3\/7)/.test(text);
+};
+const PRICE_LIST_TAILORED_SIZES = [
+  { match: /(?:裙)/, values: ["42", "44", "46", "48", "50"], matrixDimension: "length" },
+  { match: /(?:西褲|長褲)/, values: ["32", "34", "36", "38", "40", "42", "44", "46", "48", "50", "52"], matrixDimension: "length" },
+  { match: /(?:恤衫|襯衫|尖領恤|恤)/, values: ["16.5", "17", "17.5", "18", "18.5", "19", "19.5", "20"] },
+  { match: /(?:運動上衣|夏運衣)/, values: ["46", "48", "50", "52"] },
+  { match: /(?:運動褲|夏運褲)/, values: ["1碼", "2碼", "3碼"] },
+  { match: /(?:3\/7冷衫)/, values: ["44", "46", "48", "50"] },
+  { match: /(?:V領背心)/, values: ["44", "46", "48", "50"] },
+  { match: /(?:V領長袖冷衫)/, values: ["44", "46", "48", "50"] },
+  { match: /(?:冬天運動套裝)/, values: ["46", "48", "50", "52"] },
+  { match: /(?:冬天運動單衫|冬天運動單褲)/, values: ["46", "48", "50", "52"] },
+];
+const expandTailoredPriceListValue = (name, value) => {
+  if (String(value || "").trim() !== "裁碼" || /底裙/.test(name)) return [String(value || "").trim()];
+  return PRICE_LIST_TAILORED_SIZES.find((rule) => rule.match.test(name))?.values || [String(value || "").trim()];
 };
 const parseRangeValues = (text) => {
   const match = String(text || "").match(/(\d+(?:\.\d+)?)\s*(?:-|至|到)\s*(\d+(?:\.\d+)?)/);
@@ -661,8 +701,9 @@ const convertIrregularPriceList = (rows) => {
   const trouserSurchargeRules = findSurchargeRules(rows, /褲長|裤长/);
   rows.forEach((row, rowIndex) => {
     row.forEach((cell, columnIndex) => {
-      const name = String(cell || "").replace(/\s+/g, " ").trim();
-      if (!looksLikeProductHeader(name)) return;
+      const rawName = String(cell || "").replace(/\s+/g, " ").trim();
+      const name = canonicalPriceListProductName(rawName);
+      if (!looksLikeProductHeader(rawName)) return;
       const standalonePrice = row
         .slice(columnIndex + 1)
         .map(numericCell)
@@ -681,6 +722,32 @@ const convertIrregularPriceList = (rows) => {
             sizeColumn = candidate;
             break;
           }
+        }
+      }
+      if (priceColumn < 0) {
+        const headerColumns = row
+          .map((value, index) => ({ value, index }))
+          .filter(({ value }) => looksLikeProductHeader(value))
+          .map(({ index }) => index);
+        const groupStart = headerColumns.find((index) => index >= columnIndex) ?? columnIndex;
+        const groupEnd = headerColumns[headerColumns.indexOf(groupStart) + 1] ?? groupStart;
+        const candidateSizeColumns = [];
+        for (let candidate = groupStart; candidate <= groupEnd + 2; candidate++) {
+          if (rows.slice(rowIndex + 1, rowIndex + 6).some((nextRow) => looksLikeSizeValue(nextRow?.[candidate]))) {
+            candidateSizeColumns.push(candidate);
+          }
+        }
+        if (candidateSizeColumns.length) {
+          sizeColumn = candidateSizeColumns[0];
+          const numericColumns = [];
+          for (let candidate = sizeColumn + 1; candidate < rows[0].length; candidate++) {
+            if (rows.slice(rowIndex + 1, rowIndex + 6).some((nextRow) => numericCell(nextRow?.[candidate]) !== null)) {
+              numericColumns.push(candidate);
+            }
+          }
+          const headerPosition = headerColumns.indexOf(columnIndex);
+          const firstHeaderPosition = headerColumns.findIndex((index) => index >= groupStart);
+          priceColumn = numericColumns[headerPosition - firstHeaderPosition] ?? -1;
         }
       }
       for (let lookAhead = rowIndex + 1; lookAhead < Math.min(rows.length, rowIndex + 5); lookAhead++) {
@@ -720,21 +787,32 @@ const convertIrregularPriceList = (rows) => {
       const isTrousers = /(?:褲|西褲)/.test(name);
       const sizeRange = isSkirt ? findDimensionRange(rows, rowIndex, /上圍|上围|上圉/) : [];
       const lengthRange = isTrousers ? findDimensionRange(rows, rowIndex, /褲長|裤长|長度|长度/) : [];
-      if (isSkirt && sizeRange.length) {
-        rawEntries.forEach(({ size: length, price }) => sizeRange.forEach((size) => {
-          const sizeNumber = Number(size);
-          const rule = skirtSurchargeRules.find((candidate) => candidate.minimum ? sizeNumber >= candidate.threshold : sizeNumber === candidate.threshold);
-          converted.push({ 學校: school, 款式名稱: name, 長度: length, 尺碼: size, 價錢: price + (rule?.amount || 0) });
-        }));
-      } else if (isTrousers && lengthRange.length) {
-        rawEntries.forEach(({ size, price }) => lengthRange.forEach((length) => {
-          const lengthNumber = Number(length);
-          const rule = trouserSurchargeRules.find((candidate) => candidate.minimum ? lengthNumber >= candidate.threshold : lengthNumber === candidate.threshold);
-          converted.push({ 學校: school, 款式名稱: name, 長度: length, 尺碼: size, 價錢: price + (rule?.amount || 0) });
-        }));
+      const hasSkirtMatrix = isSkirt && sizeRange.length > 0;
+      if (hasSkirtMatrix) {
+        rawEntries.forEach(({ size: rawLength, price }) => {
+          const lengths = expandTailoredPriceListValue(name, rawLength);
+          lengths.forEach((length) => sizeRange.forEach((size) => {
+            const sizeNumber = Number(size);
+            const rule = skirtSurchargeRules.find((candidate) => candidate.minimum ? sizeNumber >= candidate.threshold : sizeNumber === candidate.threshold);
+            converted.push({ 學校: school, 款式名稱: name, 長度: length, 尺碼: size, 價錢: price + (rule?.amount || 0) });
+          }));
+        });
+      } else if (isTrousers && (lengthRange.length || PRICE_LIST_TAILORED_SIZES.some((rule) => rule.matrixDimension === "length" && rule.match.test(name)))) {
+        const matrixLengths = lengthRange.length
+          ? lengthRange
+          : PRICE_LIST_TAILORED_SIZES.find((rule) => rule.matrixDimension === "length" && rule.match.test(name))?.values || [];
+        rawEntries.forEach(({ size: rawSize, price }) => {
+          expandTailoredPriceListValue(name, rawSize).forEach((size) => matrixLengths.forEach((length) => {
+            const lengthNumber = Number(length);
+            const rule = trouserSurchargeRules.find((candidate) => candidate.minimum ? lengthNumber >= candidate.threshold : lengthNumber === candidate.threshold);
+            converted.push({ 學校: school, 款式名稱: name, 長度: length, 尺碼: size, 價錢: price + (rule?.amount || 0) });
+          }));
+        });
       } else {
         rawEntries.forEach(({ size, price }) => {
-          converted.push({ 學校: school, 款式名稱: name, 長度: "", 尺碼: size, 價錢: price });
+          expandTailoredPriceListValue(name, size).forEach((expandedSize) => {
+            converted.push({ 學校: school, 款式名稱: name, 長度: "", 尺碼: expandedSize, 價錢: price });
+          });
         });
       }
     });
