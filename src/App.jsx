@@ -591,6 +591,91 @@ const smartImportRows = (rows, existingProducts) => {
   return { next, summary: { addedProducts, addedSizes, updatedSizes, rows: mappedRows.length }, errors, previewRows };
 };
 
+const asSheetRows = (workbook) => XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, defval: "" });
+const numericCell = (value) => {
+  const text = String(value ?? "").replace(/[$,\s]/g, "");
+  if (!text || !/^\d+(?:\.\d+)?$/.test(text)) return null;
+  return Number(text);
+};
+const looksLikeSizeValue = (value) => {
+  const text = String(value ?? "").trim();
+  return Boolean(text) && (text === "裁碼" || /^\d+(?:\.\d+)?(?:-\d+(?:\.\d+)?)?$/.test(text) || /^(?:XS|S|M|L|XL|XXL|均碼)$/i.test(text));
+};
+const findSheetSchool = (rows) => {
+  const catalogNames = Object.keys(schoolCatalog);
+  for (const row of rows) {
+    for (const cell of row) {
+      const text = String(cell || "").trim();
+      const found = catalogNames.find((name) => text.includes(name));
+      if (found) return found;
+    }
+  }
+  return rows.flat().map((cell) => String(cell || "").trim()).find((text) => /(?:中學|小學|幼稚園)$/.test(text)) || "";
+};
+const looksLikeProductHeader = (value) => {
+  const text = String(value || "").replace(/\s+/g, "").trim();
+  return text && text.length <= 24
+    && !/^(上圍|腰圍|褲長|裙長|尺碼|碼數|價錢|價格|數量|夏|冬|V|長|短|背心|長袖|\d|加\$?)/.test(text)
+    && /(?:裙|褲|恤衫|襯衫|恤|衫|棉褸|外套|冷衫|運衣|襪|皮帶|底衫|校徽|套裝|單衫|單褲)/.test(text);
+};
+const convertIrregularPriceList = (rows) => {
+  const school = findSheetSchool(rows);
+  const converted = [];
+  const warnings = [];
+  rows.forEach((row, rowIndex) => {
+    row.forEach((cell, columnIndex) => {
+      const name = String(cell || "").replace(/\s+/g, " ").trim();
+      if (!looksLikeProductHeader(name)) return;
+      let sizeColumn = columnIndex;
+      let priceColumn = -1;
+      const quantityMarker = String(row[columnIndex + 1] || "").trim().match(/^\d+(?:件|條|對|套|包)$/);
+      if (quantityMarker) {
+        priceColumn = columnIndex;
+        for (let candidate = 0; candidate < columnIndex; candidate++) {
+          if (rows.slice(rowIndex + 1, rowIndex + 6).some((nextRow) => looksLikeSizeValue(nextRow?.[candidate]))) {
+            sizeColumn = candidate;
+            break;
+          }
+        }
+      }
+      for (let lookAhead = rowIndex + 1; lookAhead < Math.min(rows.length, rowIndex + 5); lookAhead++) {
+        if (priceColumn >= 0) break;
+        if (looksLikeSizeValue(rows[lookAhead]?.[sizeColumn])) {
+          for (let candidate = columnIndex + 1; candidate < Math.min(row.length, columnIndex + 6); candidate++) {
+            if (numericCell(rows[lookAhead]?.[candidate]) !== null) {
+              priceColumn = candidate;
+              break;
+            }
+          }
+          if (priceColumn >= 0) break;
+        }
+      }
+      if (priceColumn < 0) {
+        const nearbySizeColumn = row.findIndex((_, candidate) => rows.slice(rowIndex + 1, rowIndex + 6).some((nextRow) => looksLikeSizeValue(nextRow?.[candidate])));
+        if (nearbySizeColumn >= 0) {
+          sizeColumn = nearbySizeColumn;
+          priceColumn = row.findIndex((_, candidate) => candidate > sizeColumn && rows.slice(rowIndex + 1, rowIndex + 6).some((nextRow) => numericCell(nextRow?.[candidate]) !== null));
+        }
+      }
+      if (priceColumn < 0) {
+        warnings.push(`第${rowIndex + 1}行「${name}」未能確定尺碼及單價欄，請在預覽後補充。`);
+        return;
+      }
+      for (let dataRow = rowIndex + 1; dataRow < Math.min(rows.length, rowIndex + 15); dataRow++) {
+        const size = String(rows[dataRow]?.[sizeColumn] ?? "").trim();
+        const price = numericCell(rows[dataRow]?.[priceColumn]);
+        if (!size || (!looksLikeSizeValue(size) && size !== "裁碼") || price === null) {
+          if (dataRow > rowIndex + 1 && rows[dataRow]?.every((value) => String(value || "").trim() === "")) break;
+          continue;
+        }
+        converted.push({ 學校: school, 款式名稱: name, 長度: "", 尺碼: size, 價錢: price });
+      }
+    });
+  });
+  if (!school) warnings.unshift("未能從價目表自動識別學校，匯入後會放入未分類。");
+  return { rows: converted, warnings };
+};
+
 const BT_SERVICE = "000018f0-0000-1000-8000-00805f9b34fb";
 const BT_CHAR = "00002af1-0000-1000-8000-00805f9b34fb";
 
@@ -3465,12 +3550,15 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
     setImporting(true);
     try {
       const extension = file.name.toLowerCase().split(".").pop();
-      const workbook = extension === "csv" ? null : XLSX.read(await file.arrayBuffer(), { type: "array" });
-      const rows = extension === "csv"
-        ? Papa.parse(await file.text(), { header: true, skipEmptyLines: true }).data
-        : XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" });
-      const analysis = smartImportRows(rows, products);
-      setImportPreview({ fileName: file.name, ...analysis });
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const sheetRows = asSheetRows(workbook);
+      const headerText = sheetRows.slice(0, 6).flat().map((value) => normalizeImportHeader(value)).join("|");
+      const isStandardFormat = ["學校", "款式名稱", "尺碼", "價錢"].every((header) => headerText.includes(normalizeImportHeader(header)));
+      const converted = isStandardFormat
+        ? { rows: XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" }), warnings: [] }
+        : convertIrregularPriceList(sheetRows);
+      const analysis = smartImportRows(converted.rows, products);
+      setImportPreview({ fileName: file.name, conversionMode: isStandardFormat ? "標準格式" : "價目表格式轉換", conversionWarnings: converted.warnings, ...analysis, errors: [...converted.warnings, ...analysis.errors] });
     } catch (err) {
       console.error(err);
       setImportResult({ summary: null, errors: ["讀取檔案失敗，請確認係 Excel 或 CSV 格式。"] });
@@ -3545,6 +3633,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
         {importPreview && (
           <div style={{ marginTop: 10, background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 8, padding: 10, fontSize: 12 }}>
             <div style={{ fontWeight: 700, color: "#1F3A5F" }}>分析預覽：{importPreview.fileName}</div>
+            <div style={{ marginTop: 4, color: "#52657A" }}>模式：{importPreview.conversionMode}</div>
             <div style={{ marginTop: 5 }}>讀取 {importPreview.summary.rows} 行；新增 {importPreview.summary.addedProducts} 款、新增 {importPreview.summary.addedSizes} 個尺碼、更新 {importPreview.summary.updatedSizes} 個價格。</div>
             {importPreview.previewRows.length > 0 && (
               <div style={{ maxHeight: 180, overflowY: "auto", marginTop: 8, background: "#fff", borderRadius: 6, padding: 6 }}>
@@ -3555,7 +3644,13 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
                 ))}
               </div>
             )}
-            {importPreview.errors.length > 0 && <div style={{ color: "#B42318", marginTop: 6 }}>發現 {importPreview.errors.length} 個問題，錯誤行不會匯入。</div>}
+            {importPreview.errors.length > 0 && (
+              <div style={{ color: "#B42318", marginTop: 6 }}>
+                <div>發現 {importPreview.errors.length} 個問題，錯誤行不會匯入：</div>
+                {importPreview.errors.slice(0, 8).map((error, index) => <div key={index} style={{ marginTop: 2 }}>• {error}</div>)}
+                {importPreview.errors.length > 8 && <div>其餘問題請整理原表後再試。</div>}
+              </div>
+            )}
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
               <button className="pos-btn" onClick={confirmImport} disabled={importing} style={{ flex: 1, padding: 8, background: "#28784B", color: "#fff", borderRadius: 7 }}>確認匯入</button>
               <button className="pos-btn" onClick={() => setImportPreview(null)} disabled={importing} style={{ flex: 1, padding: 8, background: "#fff", color: "#475569", border: "1px solid #CBD5E1", borderRadius: 7 }}>取消</button>
