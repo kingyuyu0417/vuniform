@@ -103,27 +103,43 @@ const isPricedSize = (size) => size && size.price !== null && size.price !== und
 const customerSurname = (name = "") => String(name || "").trim().replace(/\s+/g, "").slice(0, 1);
 const customerPhoneLast4 = (phone = "") => String(phone || "").replace(/\D/g, "").slice(-4);
 const sizeLabel = (size) => size.length ? `${size.isTailored ? "裁碼 " : ""}${size.length}／${size.size}` : size.size;
+const productUnit = (name = "") => {
+  const normalizedName = String(name || "").replace(/\s+/g, "");
+  if (/襪.*[（(]?\d+對|[（(]3對[）)]/.test(normalizedName)) return "包";
+  if (/襪|鞋|手套/.test(normalizedName)) return "對";
+  if (/套裝|套服/.test(normalizedName)) return "套";
+  if (/皮帶|腰帶|領帶|頸巾|圍巾/.test(normalizedName)) return "條";
+  if (/書包|背囊|袋|筆袋/.test(normalizedName)) return "個";
+  return "件";
+};
 const hasLengthOptions = (product) => product.sizes.some((size) => size.length);
-const sizeDimensionLabel = (product) => {
-  if (!product || !product.name) return "尺碼";
-  const name = product.name || "";
-  return /(褲|短褲|長褲|西褲|運動褲|裙)/.test(name) ? "腰圍" : "尺碼";
+const dimensionLabels = (name = "") => {
+  const normalizedName = String(name || "").replace(/\s+/g, "");
+  if (/裙/.test(normalizedName)) return { length: "裙長", size: "上圍" };
+  if (/長袖.*(?:恤衫|襯衫)|(?:恤衫|襯衫).*長袖/.test(normalizedName)) return { length: "袖長", size: "領圍" };
+  if (/(?:西褲|長褲|短褲|運動褲|褲)/.test(normalizedName)) return { length: "褲長", size: "腰圍" };
+  return { length: "長度／袖長", size: "尺碼" };
+};
+const sizeDimensionLabel = (product) => dimensionLabels(product?.name).size;
+const lengthDimensionLabel = (product) => dimensionLabels(product?.name).length;
+const sizeDimensionLabels = (product) => {
+  const labels = dimensionLabels(product?.name);
+  return `${labels.length} → ${labels.size}`;
 };
 // 用於電子銷售單中的清晰尺碼顯示
 const formatSizeForReceipt = (itemName, size, length) => {
-  const isDimensioned = /(褲|短褲|長褲|西褲|運動褲|裙)/.test(itemName);
-  const dimensionLabel = isDimensioned ? "腰圍" : "尺碼";
+  const labels = dimensionLabels(itemName);
   const sizeStr = String(size || "");
   const lengthStr = String(length || "").replace(/^裁碼\s*/, "");
   
   if (lengthStr && sizeStr) {
-    return `${dimensionLabel}：${lengthStr}（${sizeStr}）`;
+    return `${labels.length}：${lengthStr}（${labels.size}：${sizeStr}）`;
   } else if (lengthStr) {
-    return `${dimensionLabel}：${lengthStr}`;
+    return `${labels.length}：${lengthStr}`;
   } else if (sizeStr) {
-    return `${dimensionLabel}：${sizeStr}`;
+    return `${labels.size}：${sizeStr}`;
   } else {
-    return `${dimensionLabel}：-`;
+    return `${labels.size}：-`;
   }
 };
 const naturalSizeSort = (first, second) => {
@@ -598,7 +614,7 @@ const buildReceiptLines = (order, shopName) => {
   order.items.forEach((it) => {
     lines.push(`${it.exchangeReturn ? "換出：" : ""}${it.name}`);
     lines.push(`  ${formatSizeForReceipt(it.name, it.size, it.length)}`);
-    lines.push(`  數量 ${it.qty} x ${fmt(Math.abs(it.price))} = ${fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}`);
+    lines.push(`  數量 ${it.qty}${productUnit(it.name)} x ${fmt(Math.abs(it.price))} = ${fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}`);
   });
   lines.push("--------------------------------");
   lines.push(`商品件數：${order.itemCount || 0}`);
@@ -2560,7 +2576,7 @@ export default function UniformPOS() {
               <div key={i}>
                 <div>{it.name}</div>
                 <div>  {formatSizeForReceipt(it.name, it.size, it.length)}</div>
-                <div>  數量 {it.qty} x {fmt(it.price)} = {fmt(it.price * it.qty)}</div>
+                <div>  數量 {it.qty}{productUnit(it.name)} x {fmt(it.price)} = {fmt(it.price * it.qty)}</div>
               </div>
             ))}
             <div>--------------------------------</div>
@@ -2748,10 +2764,10 @@ function SaleTab({
             return (
               <div>
                 <button className="pos-btn" onClick={() => setDirectExchangeProductId("")} style={{ padding: "6px 8px", marginBottom: 8, background: "transparent", color: "#166534" }}>← 返回選款式</button>
-                <div style={{ fontSize: 12, color: "#166534", marginBottom: 6 }}>{displayProductName(product.name)}：揀尺碼</div>
+                <div style={{ fontSize: 12, color: "#166534", marginBottom: 6 }}>{displayProductName(product.name)}：揀{hasLengths ? `${lengthDimensionLabel(product)}及${sizeDimensionLabel(product)}` : "尺碼"}</div>
                 {hasLengths && !directExchangeLength ? (
                   <div className="sale-size-grid">
-                    {lengths.map((length) => <button key={length} className="pos-btn sale-size-button" onClick={() => setDirectExchangeLength(length)} style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #86EFAC", color: "#166534", fontSize: 16, fontWeight: 700 }}>{length}</button>)}
+                    {lengths.map((length) => <button key={length} className="pos-btn sale-size-button" onClick={() => setDirectExchangeLength(length)} style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #86EFAC", color: "#166534", fontSize: 16, fontWeight: 700 }}>{lengthDimensionLabel(product)} {length}</button>)}
                   </div>
                 ) : <div className="sale-size-grid">
                   {sizes.map((size) => (
@@ -2801,7 +2817,7 @@ function SaleTab({
             return (
               <label key={`${item.name}-${item.size}-${index}`} style={{ display: "flex", alignItems: "center", gap: 8, padding: 8, marginBottom: 6, borderRadius: 8, background: "#fff", border: "1px solid #FDBA74", color: "#7C2D12" }}>
                 <input type="checkbox" checked={selected} onChange={() => setExchangeItems((previous) => selected ? previous.filter((entry) => entry !== item) : [...previous, item])} />
-                <span>{item.name}（{sizeLabel(item)}）× {item.qty}</span>
+                <span>{item.name}（{sizeLabel(item)}）× {item.qty}{productUnit(item.name)}</span>
               </label>
             );
           })}
@@ -2889,7 +2905,7 @@ function SaleTab({
           </button>
           {(() => {
             const product = products.find((p) => p.id === selectedProduct);
-            const categoryLabel = hasLengthOptions(product) ? `先揀長度，再揀${sizeDimensionLabel(product)}：` : "揀尺碼：";
+            const categoryLabel = hasLengthOptions(product) ? `先揀${lengthDimensionLabel(product)}，再揀${sizeDimensionLabel(product)}：` : "揀尺碼：";
             return <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>{categoryLabel}</div>;
           })()}
           {(() => {
@@ -2917,7 +2933,7 @@ function SaleTab({
               <div className="sale-size-grid">
                 {lengths.map((length) => (
                   <button key={`${selectedProduct}-length-${length}`} className="pos-btn sale-size-button" onClick={() => setSelectedLength(length)} style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #1F3A5F", color: "#1F3A5F", fontSize: 16, fontWeight: 700 }}>
-                    長度 {length}
+                    {lengthDimensionLabel(product)} {length}
                   </button>
                 ))}
               </div>
@@ -2963,7 +2979,7 @@ function SaleTab({
                 onClick={() => confirmQuantity(quantity)}
                 style={{ padding: "12px 8px", borderRadius: 8, background: "#1F3A5F", border: "none", color: "#fff", fontSize: 16, fontWeight: 800 }}
               >
-                {quantity}件
+                {quantity}{productUnit(quantityPrompt.product.name)}
               </button>
             ))}
           </div>
@@ -2972,7 +2988,7 @@ function SaleTab({
             onClick={() => setQuantityPrompt((current) => ({ ...current, custom: true, quantity: "" }))}
             style={{ width: "100%", marginTop: 8, padding: "10px", borderRadius: 8, background: quantityPrompt.custom ? "#DCEEFF" : "#fff", border: "1px solid #9BC3EC", color: "#1F3A5F", fontWeight: 800 }}
           >
-            其他（4–99件）
+            其他（4–99{productUnit(quantityPrompt.product.name)}）
           </button>
           {!quantityPrompt.custom && (
             <button className="pos-btn" onClick={() => setQuantityPrompt(null)} style={{ width: "100%", marginTop: 8, padding: "9px 10px", borderRadius: 8, background: "#fff", border: "1px solid #CBD5E1", color: "#475569", fontWeight: 700 }}>
@@ -2987,7 +3003,7 @@ function SaleTab({
                 max="99"
                 inputMode="numeric"
                 autoFocus
-                placeholder="輸入數量（4–99）"
+                placeholder={`輸入數量（4–99${productUnit(quantityPrompt.product.name)}）`}
                 value={quantityPrompt.quantity}
                 onChange={(event) => setQuantityPrompt((current) => ({ ...current, quantity: event.target.value }))}
                 onKeyDown={(event) => {
@@ -3015,7 +3031,7 @@ function SaleTab({
           <div key={c.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #E5E5E0" }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13, fontWeight: 500 }}>{c.exchangeReturn ? "換出：" : ""}{c.name}（{sizeLabel(c)}）</div>
-              <div style={{ fontSize: 12, color: c.exchangeReturn ? "#9A3412" : "#888" }}>{c.exchangeReturn ? "-" : ""}{fmt(c.price)} x {c.qty} = {fmt((c.exchangeReturn ? -1 : 1) * c.price * c.qty)}</div>
+              <div style={{ fontSize: 12, color: c.exchangeReturn ? "#9A3412" : "#888" }}>{c.exchangeReturn ? "-" : ""}{fmt(c.price)} x {c.qty}{productUnit(c.name)} = {fmt((c.exchangeReturn ? -1 : 1) * c.price * c.qty)}</div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               {!c.exchangeReturn && (
@@ -3598,7 +3614,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
                 disabled={!canManageSchools}
                 style={{ width: "100%", padding: 8, marginBottom: 10, borderRadius: 8, border: "1px solid #ccc", fontSize: 14, boxSizing: "border-box", background: canManageSchools ? "#fff" : "#F0F0EC", color: canManageSchools ? "#000" : "#888" }}
               />
-              <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>{productPriceMode(p) === "matrix" ? `款式名稱（長度／袖長 → ${sizeDimensionLabel(p)} → 價錢）` : productPriceMode(p) === "fixed" ? "款式名稱（所有尺寸同價）" : "款式名稱（尺碼 → 價錢）"}</div>
+              <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>{productPriceMode(p) === "matrix" ? `款式名稱（${sizeDimensionLabels(p)} → 價錢）` : productPriceMode(p) === "fixed" ? "款式名稱（所有尺寸同價）" : "款式名稱（尺碼 → 價錢）"}</div>
               <input
                 value={p.name}
                 onChange={(e) => updateProduct(p.id, { ...p, name: e.target.value })}
@@ -3620,7 +3636,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
                   <input
                     value={matrixDrafts[p.id]?.lengths || ""}
                     onChange={(e) => updateMatrixDraft(p.id, "lengths", e.target.value)}
-                    placeholder="長度／袖長，例如：30,31,32,33,裁碼42"
+                    placeholder={`${lengthDimensionLabel(p)}，例如：30,31,32,33,裁碼42`}
                     style={{ width: "100%", padding: 7, marginBottom: 6, borderRadius: 7, border: "1px solid #B8C7D8", fontSize: 12, boxSizing: "border-box" }}
                   />
                   <input
@@ -3665,7 +3681,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
                           sizes[i] = { ...sizes[i], length: e.target.value.replace(/^裁碼\s*/, ""), isTailored: s.isTailored };
                           updateProduct(p.id, { ...p, sizes });
                         }}
-                        placeholder="長度"
+                        placeholder={lengthDimensionLabel(p)}
                         style={{ width: 70, padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 13 }}
                       />
                     </>
@@ -4244,7 +4260,7 @@ function ReceiptModal({ order, onClose, onRedoSale, onExchange, onPrintBrowser, 
             <div key={i}>
               <div>{it.exchangeReturn ? "換出：" : ""}{it.name}</div>
               <div>  {formatSizeForReceipt(it.name, it.size, it.length)}</div>
-              <div>  數量 {it.qty} x {fmt(Math.abs(it.price))} = {fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}</div>
+              <div>  數量 {it.qty}{productUnit(it.name)} x {fmt(Math.abs(it.price))} = {fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}</div>
             </div>
           ))}
           <div>--------------------------------</div>
