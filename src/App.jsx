@@ -618,6 +618,26 @@ const looksLikeProductHeader = (value) => {
     && !/^(上圍|腰圍|褲長|裙長|尺碼|碼數|價錢|價格|數量|夏|冬|V|長|短|背心|長袖|\d|加\$?)/.test(text)
     && /(?:裙|褲|恤衫|襯衫|恤|衫|棉褸|外套|冷衫|運衣|襪|皮帶|底衫|校徽|套裝|單衫|單褲)/.test(text);
 };
+const parseRangeValues = (text) => {
+  const match = String(text || "").match(/(\d+(?:\.\d+)?)\s*(?:-|至|到)\s*(\d+(?:\.\d+)?)/);
+  if (!match) return [];
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  const step = start % 1 === 0 && end % 1 === 0 ? 1 : 0.5;
+  const values = [];
+  for (let value = start; value <= end + 0.0001; value += step) {
+    values.push(String(Number(value.toFixed(1))));
+  }
+  return values;
+};
+const findDimensionRange = (rows, endRow, labelPattern) => {
+  for (let index = endRow - 1; index >= Math.max(0, endRow - 8); index--) {
+    const cell = rows[index]?.find((value) => labelPattern.test(String(value || "")));
+    const values = parseRangeValues(cell);
+    if (values.length) return values;
+  }
+  return [];
+};
 const convertIrregularPriceList = (rows) => {
   const school = findSheetSchool(rows);
   const converted = [];
@@ -661,6 +681,7 @@ const convertIrregularPriceList = (rows) => {
         warnings.push(`第${rowIndex + 1}行「${name}」未能確定尺碼及單價欄，請在預覽後補充。`);
         return;
       }
+      const rawEntries = [];
       for (let dataRow = rowIndex + 1; dataRow < Math.min(rows.length, rowIndex + 15); dataRow++) {
         const size = String(rows[dataRow]?.[sizeColumn] ?? "").trim();
         const price = numericCell(rows[dataRow]?.[priceColumn]);
@@ -668,7 +689,24 @@ const convertIrregularPriceList = (rows) => {
           if (dataRow > rowIndex + 1 && rows[dataRow]?.every((value) => String(value || "").trim() === "")) break;
           continue;
         }
-        converted.push({ 學校: school, 款式名稱: name, 長度: "", 尺碼: size, 價錢: price });
+        rawEntries.push({ size, price });
+      }
+      const isSkirt = /裙/.test(name);
+      const isTrousers = /(?:褲|西褲)/.test(name);
+      const sizeRange = isSkirt ? findDimensionRange(rows, rowIndex, /上圍|上围/) : [];
+      const lengthRange = isTrousers ? findDimensionRange(rows, rowIndex, /褲長|裤长|長度|长度/) : [];
+      if (isSkirt && sizeRange.length) {
+        rawEntries.forEach(({ size: length, price }) => sizeRange.forEach((size) => {
+          converted.push({ 學校: school, 款式名稱: name, 長度: length, 尺碼: size, 價錢: price });
+        }));
+      } else if (isTrousers && lengthRange.length) {
+        rawEntries.forEach(({ size, price }) => lengthRange.forEach((length) => {
+          converted.push({ 學校: school, 款式名稱: name, 長度: length, 尺碼: size, 價錢: price });
+        }));
+      } else {
+        rawEntries.forEach(({ size, price }) => {
+          converted.push({ 學校: school, 款式名稱: name, 長度: "", 尺碼: size, 價錢: price });
+        });
       }
     });
   });
