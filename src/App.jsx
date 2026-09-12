@@ -638,14 +638,39 @@ const findDimensionRange = (rows, endRow, labelPattern) => {
   }
   return [];
 };
+const findSurchargeRules = (rows, labelPattern) => {
+  const rules = [];
+  rows.forEach((row) => row.forEach((cell) => {
+    const text = String(cell || "").replace(/\s+/g, "");
+    if (!labelPattern.test(text)) return;
+    const context = row.join("").replace(/\s+/g, "");
+    const match = context.match(/(\d+(?:\.\d+)?)["”]?或以上.*?加\$?(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)["”]?.*?加\$?(\d+(?:\.\d+)?)/);
+    if (match) {
+      const threshold = Number(match[1] || match[3]);
+      const amount = Number(match[2] || match[4]);
+      if (Number.isFinite(threshold) && Number.isFinite(amount)) rules.push({ threshold, amount, minimum: Boolean(match[1]) });
+    }
+  }));
+  return rules.sort((first, second) => second.threshold - first.threshold);
+};
 const convertIrregularPriceList = (rows) => {
   const school = findSheetSchool(rows);
   const converted = [];
   const warnings = [];
+  const skirtSurchargeRules = findSurchargeRules(rows, /上圍|上围|上圉/);
+  const trouserSurchargeRules = findSurchargeRules(rows, /褲長|裤长/);
   rows.forEach((row, rowIndex) => {
     row.forEach((cell, columnIndex) => {
       const name = String(cell || "").replace(/\s+/g, " ").trim();
       if (!looksLikeProductHeader(name)) return;
+      const standalonePrice = row
+        .slice(columnIndex + 1)
+        .map(numericCell)
+        .find((value) => value !== null);
+      if (/底裙/.test(name) && standalonePrice !== undefined) {
+        converted.push({ 學校: school, 款式名稱: name, 長度: "", 尺碼: "均碼", 價錢: standalonePrice });
+        return;
+      }
       let sizeColumn = columnIndex;
       let priceColumn = -1;
       const quantityMarker = String(row[columnIndex + 1] || "").trim().match(/^\d+(?:件|條|對|套|包)$/);
@@ -693,15 +718,19 @@ const convertIrregularPriceList = (rows) => {
       }
       const isSkirt = /裙/.test(name);
       const isTrousers = /(?:褲|西褲)/.test(name);
-      const sizeRange = isSkirt ? findDimensionRange(rows, rowIndex, /上圍|上围/) : [];
+      const sizeRange = isSkirt ? findDimensionRange(rows, rowIndex, /上圍|上围|上圉/) : [];
       const lengthRange = isTrousers ? findDimensionRange(rows, rowIndex, /褲長|裤长|長度|长度/) : [];
       if (isSkirt && sizeRange.length) {
         rawEntries.forEach(({ size: length, price }) => sizeRange.forEach((size) => {
-          converted.push({ 學校: school, 款式名稱: name, 長度: length, 尺碼: size, 價錢: price });
+          const sizeNumber = Number(size);
+          const rule = skirtSurchargeRules.find((candidate) => candidate.minimum ? sizeNumber >= candidate.threshold : sizeNumber === candidate.threshold);
+          converted.push({ 學校: school, 款式名稱: name, 長度: length, 尺碼: size, 價錢: price + (rule?.amount || 0) });
         }));
       } else if (isTrousers && lengthRange.length) {
         rawEntries.forEach(({ size, price }) => lengthRange.forEach((length) => {
-          converted.push({ 學校: school, 款式名稱: name, 長度: length, 尺碼: size, 價錢: price });
+          const lengthNumber = Number(length);
+          const rule = trouserSurchargeRules.find((candidate) => candidate.minimum ? lengthNumber >= candidate.threshold : lengthNumber === candidate.threshold);
+          converted.push({ 學校: school, 款式名稱: name, 長度: length, 尺碼: size, 價錢: price + (rule?.amount || 0) });
         }));
       } else {
         rawEntries.forEach(({ size, price }) => {
