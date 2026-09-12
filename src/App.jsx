@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import Papa from "papaparse";
+import * as XLSX from "xlsx";
 import qrcode from "qrcode-generator";
 import { useLocation, useNavigate, Routes, Route, Navigate } from "react-router-dom";
 import { Plus, Minus, Trash2, Printer, Bluetooth, ChevronDown, ChevronUp, ChevronLeft, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown, X, ShoppingCart, Settings, ClipboardList, Check, AlertCircle, Upload, Download, School, Users, Eye, EyeOff, MapPin, GraduationCap, Search, QrCode } from "lucide-react";
@@ -534,6 +535,60 @@ const mergeCSVIntoProducts = (csvText, existingProducts) => {
   });
 
   return { next, summary: { addedProducts, addedSizes, updatedSizes }, errors };
+};
+
+const normalizeImportHeader = (value) => String(value || "").replace(/\s+/g, "").toLowerCase();
+const smartImportRows = (rows, existingProducts) => {
+  const headerAliases = {
+    school: ["學校", "学校", "school"],
+    name: ["款式名稱", "款式", "商品名稱", "品名", "name", "product"],
+    length: ["長度", "袖長", "褲長", "裙長", "length"],
+    size: ["尺碼", "碼數", "腰圍", "上圍", "領圍", "size"],
+    price: ["價錢", "價格", "單價", "price"],
+  };
+  const aliases = Object.fromEntries(Object.entries(headerAliases).flatMap(([key, names]) => names.map((name) => [normalizeImportHeader(name), key])));
+  const mappedRows = rows.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [aliases[normalizeImportHeader(key)] || key, value])));
+  const previewRows = [];
+  const errors = [];
+  const next = existingProducts.map((p) => ({ ...p, sizes: p.sizes.map((s) => ({ ...s })) }));
+  let addedProducts = 0;
+  let addedSizes = 0;
+  let updatedSizes = 0;
+
+  mappedRows.forEach((row, index) => {
+    const school = String(row.school || "").trim();
+    const name = String(row.name || "").trim();
+    const size = String(row.size ?? "").trim();
+    const length = String(row.length ?? "").trim();
+    const rawPrice = String(row.price ?? "").replace(/[$,\s]/g, "");
+    const price = Number(rawPrice);
+    if (!name || !size) {
+      errors.push(`第${index + 2}行：缺少款式名稱或尺碼，已略過`);
+      return;
+    }
+    if (!rawPrice || !Number.isFinite(price) || price < 0) {
+      errors.push(`第${index + 2}行：「${name}」價錢「${row.price ?? ""}」無效，已略過`);
+      return;
+    }
+    const schoolKey = school || UNASSIGNED;
+    let product = next.find((item) => schoolOf(item) === schoolKey && item.name === name);
+    if (!product) {
+      product = { id: uid(), school: schoolKey === UNASSIGNED ? "" : schoolKey, name, sizes: [] };
+      next.push(product);
+      addedProducts++;
+    }
+    const existing = product.sizes.find((item) => item.size === size && (item.length || "") === length);
+    const action = existing ? (Number(existing.price) === price ? "無變更" : "更新價格") : "新增尺碼";
+    if (existing) {
+      if (Number(existing.price) !== price) updatedSizes++;
+      existing.price = price;
+    } else {
+      product.sizes.push({ size, length, price });
+      addedSizes++;
+    }
+    if (previewRows.length < 100) previewRows.push({ school: schoolKey, name, length, size, price, action });
+  });
+  return { next, summary: { addedProducts, addedSizes, updatedSizes, rows: mappedRows.length }, errors, previewRows };
 };
 
 const BT_SERVICE = "000018f0-0000-1000-8000-00805f9b34fb";
@@ -3147,6 +3202,7 @@ function SaleTab({
 function ProductsTab({ products, saveProducts, saveProductsNow, importResult, setImportResult, productsSaveError = "", productsSaveState = "saved", sourceIntegrityWarning = "", canManageSchools = true, canImportExport = true, schoolMeta = {}, saveSchoolMeta = async () => {}, setDeletedSchools = () => {}, selectedSchool = null, setSelectedSchool = () => {} }) {
   const [expanded, setExpanded] = useState(null);
   const [importing, setImporting] = useState(false);
+  const [importPreview, setImportPreview] = useState(null);
   const [lengthPromptProductId, setLengthPromptProductId] = useState(null);
   const [lengthDraft, setLengthDraft] = useState("");
   const [matrixDrafts, setMatrixDrafts] = useState({});
@@ -3408,13 +3464,31 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
     if (!file) return;
     setImporting(true);
     try {
-      const text = await file.text();
-      const { next, summary, errors } = mergeCSVIntoProducts(text, products);
-      await saveProducts(next);
-      setImportResult({ summary, errors });
+      const extension = file.name.toLowerCase().split(".").pop();
+      const workbook = extension === "csv" ? null : XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const rows = extension === "csv"
+        ? Papa.parse(await file.text(), { header: true, skipEmptyLines: true }).data
+        : XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" });
+      const analysis = smartImportRows(rows, products);
+      setImportPreview({ fileName: file.name, ...analysis });
     } catch (err) {
       console.error(err);
-      setImportResult({ summary: null, errors: ["讀取檔案失敗，請確認係CSV格式。"] });
+      setImportResult({ summary: null, errors: ["讀取檔案失敗，請確認係 Excel 或 CSV 格式。"] });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const confirmImport = async () => {
+    if (!importPreview) return;
+    setImporting(true);
+    try {
+      await saveProducts(importPreview.next);
+      setImportResult({ summary: importPreview.summary, errors: importPreview.errors });
+      setImportPreview(null);
+    } catch (error) {
+      console.error("智能匯入保存失敗", error);
+      setImportResult({ summary: null, errors: ["匯入分析成功，但保存商品資料失敗，請重試。"] });
     } finally {
       setImporting(false);
     }
@@ -3447,7 +3521,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
       <div style={{ background: "#F7F7F5", borderRadius: 12, padding: 14, marginBottom: 14 }}>
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>批量匯入 / 匯出</div>
         <div style={{ fontSize: 12, color: "#888", marginBottom: 10, lineHeight: 1.5 }}>
-          CSV欄位：學校、款式名稱、長度、尺碼、價錢。褲／裙每個長度及尺碼輸入一行；其他款式只填尺碼。同一組合再匯入會更新價錢，唔會重複。
+          支援 Excel／CSV。系統會自動識別學校、款式、長度／袖長、尺碼及價錢，先預覽分析結果，確認後才寫入。
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button
@@ -3456,7 +3530,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
             disabled={importing}
             style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "#1F3A5F", color: "#fff", fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
           >
-            <Upload size={14} /> {importing ? "匯入緊…" : "匯入 CSV"}
+            <Upload size={14} /> {importing ? "分析緊…" : "智能匯入 Excel／CSV"}
           </button>
           <button
             className="pos-btn"
@@ -3465,8 +3539,29 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
           >
             <Download size={14} /> 匯出 CSV
           </button>
-          <input ref={fileInputRef} type="file" accept=".csv,text/csv" onChange={handleImportFile} style={{ display: "none" }} />
+          <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" onChange={handleImportFile} style={{ display: "none" }} />
         </div>
+
+        {importPreview && (
+          <div style={{ marginTop: 10, background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 8, padding: 10, fontSize: 12 }}>
+            <div style={{ fontWeight: 700, color: "#1F3A5F" }}>分析預覽：{importPreview.fileName}</div>
+            <div style={{ marginTop: 5 }}>讀取 {importPreview.summary.rows} 行；新增 {importPreview.summary.addedProducts} 款、新增 {importPreview.summary.addedSizes} 個尺碼、更新 {importPreview.summary.updatedSizes} 個價格。</div>
+            {importPreview.previewRows.length > 0 && (
+              <div style={{ maxHeight: 180, overflowY: "auto", marginTop: 8, background: "#fff", borderRadius: 6, padding: 6 }}>
+                {importPreview.previewRows.map((row, index) => (
+                  <div key={index} style={{ padding: "3px 0", borderBottom: "1px solid #EEF2F7" }}>
+                    {row.school} · {row.name} · {row.length ? `${row.length}/` : ""}{row.size} · ${row.price}（{row.action}）
+                  </div>
+                ))}
+              </div>
+            )}
+            {importPreview.errors.length > 0 && <div style={{ color: "#B42318", marginTop: 6 }}>發現 {importPreview.errors.length} 個問題，錯誤行不會匯入。</div>}
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <button className="pos-btn" onClick={confirmImport} disabled={importing} style={{ flex: 1, padding: 8, background: "#28784B", color: "#fff", borderRadius: 7 }}>確認匯入</button>
+              <button className="pos-btn" onClick={() => setImportPreview(null)} disabled={importing} style={{ flex: 1, padding: 8, background: "#fff", color: "#475569", border: "1px solid #CBD5E1", borderRadius: 7 }}>取消</button>
+            </div>
+          </div>
+        )}
 
         {importResult && (
           <div style={{ marginTop: 10, fontSize: 12, background: "#fff", borderRadius: 8, padding: 10, border: "1px solid #E5E5E0" }}>
