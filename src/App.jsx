@@ -1085,15 +1085,6 @@ export default function UniformPOS() {
     setSession({ id: profile.id, name: profile.display_name, role: profile.role });
     await refreshFromCloud({ skipProductsWhileEditing: false });
     navigate("/menu");
-    if (profile.role === ROLES.ADMIN) {
-      const { data: migrationResult, error: migrationError } = await supabase.rpc("migrate_legacy_data");
-      if (!migrationError) {
-        console.info("舊資料自動遷移完成", migrationResult);
-        await refreshFromCloud({ skipProductsWhileEditing: false });
-      } else {
-        console.error("舊資料自動遷移失敗", migrationError);
-      }
-    }
     return { error: "" };
   };
 
