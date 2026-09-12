@@ -118,7 +118,7 @@ const dimensionLabels = (name = "") => {
   if (/裙/.test(normalizedName)) return { length: "裙長", size: "上圍" };
   if (/長袖.*(?:恤衫|襯衫)|(?:恤衫|襯衫).*長袖/.test(normalizedName)) return { length: "袖長", size: "領圍" };
   if (/(?:西褲|長褲|短褲|運動褲|褲)/.test(normalizedName)) return { length: "褲長", size: "腰圍" };
-  return { length: "長度／袖長", size: "尺碼" };
+  return { length: "", size: "尺碼" };
 };
 const sizeDimensionLabel = (product) => dimensionLabels(product?.name).size;
 const lengthDimensionLabel = (product) => dimensionLabels(product?.name).length;
