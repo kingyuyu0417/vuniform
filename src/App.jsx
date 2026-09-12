@@ -599,7 +599,7 @@ const numericCell = (value) => {
 };
 const looksLikeSizeValue = (value) => {
   const text = String(value ?? "").trim();
-  return Boolean(text) && (text === "裁碼" || /^\d+(?:\.\d+)?(?:-\d+(?:\.\d+)?)?$/.test(text) || /^(?:XS|S|M|L|XL|XXL|均碼)$/i.test(text));
+  return Boolean(text) && (text === "裁碼" || /^\d+(?:\.\d+)?(?:-\d+(?:\.\d+)?)?(?:碼)?$/.test(text) || /^(?:XS|S|M|L|XL|XXL|均碼)(?:-(?:XS|S|M|L|XL|XXL))?$/i.test(text));
 };
 const findSheetSchool = (rows) => {
   const catalogNames = Object.keys(schoolCatalog);
@@ -628,6 +628,8 @@ const PRICE_LIST_PRODUCT_ALIASES = {
   "夏運動褲": "運動褲",
   "3/7冷衫": "3/7冷衫",
   "三七冷衫": "3/7冷衫",
+  "冷衫背心": "V領背心",
+  "冷衫長袖": "V領長袖冷衫",
 };
 const normalizePriceListProductName = (value) => String(value || "").replace(/[\s　]/g, "").trim();
 const canonicalPriceListProductName = (value) => {
@@ -657,6 +659,19 @@ const PRICE_LIST_TAILORED_SIZES = [
 const expandTailoredPriceListValue = (name, value) => {
   if (String(value || "").trim() !== "裁碼" || /底裙/.test(name)) return [String(value || "").trim()];
   return PRICE_LIST_TAILORED_SIZES.find((rule) => rule.match.test(name))?.values || [String(value || "").trim()];
+};
+const expandPriceListSizeRange = (name, value) => {
+  const text = String(value || "").trim();
+  const numericRange = text.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)(?:碼)?$/);
+  if (numericRange) return [numericRange[1], numericRange[2]];
+  const alphaRange = text.match(/^(XS|S|M|L|XL|XXL)-(XS|S|M|L|XL|XXL)$/i);
+  if (alphaRange) {
+    const sizes = ["XS", "S", "M", "L", "XL", "XXL"];
+    const start = sizes.indexOf(alphaRange[1].toUpperCase());
+    const end = sizes.indexOf(alphaRange[2].toUpperCase());
+    return start >= 0 && end >= start ? sizes.slice(start, end + 1) : [text];
+  }
+  return [text];
 };
 const parseRangeValues = (text) => {
   const match = String(text || "").match(/(\d+(?:\.\d+)?)\s*(?:-|至|到)\s*(\d+(?:\.\d+)?)/);
@@ -693,6 +708,19 @@ const findSurchargeRules = (rows, labelPattern) => {
   }));
   return rules.sort((first, second) => second.threshold - first.threshold);
 };
+const expandDimensionWithSurchargeRules = (values, rules, step = 1) => {
+  const expanded = new Set(values.map((value) => String(value)));
+  rules.forEach(({ threshold }) => {
+    if (!Number.isFinite(threshold)) return;
+    expanded.add(String(threshold));
+    if (rules.some((rule) => rule.minimum && rule.threshold === threshold)) {
+      for (let value = threshold + step; value <= 50; value += step) {
+        expanded.add(String(Number(value.toFixed(1))));
+      }
+    }
+  });
+  return [...expanded].sort((first, second) => Number(first) - Number(second));
+};
 const convertIrregularPriceList = (rows) => {
   const school = findSheetSchool(rows);
   const converted = [];
@@ -717,7 +745,7 @@ const convertIrregularPriceList = (rows) => {
       const quantityMarker = String(row[columnIndex + 1] || "").trim().match(/^\d+(?:件|條|對|套|包)$/);
       if (quantityMarker) {
         priceColumn = columnIndex;
-        for (let candidate = 0; candidate < columnIndex; candidate++) {
+        for (let candidate = columnIndex - 1; candidate >= 0; candidate--) {
           if (rows.slice(rowIndex + 1, rowIndex + 6).some((nextRow) => looksLikeSizeValue(nextRow?.[candidate]))) {
             sizeColumn = candidate;
             break;
@@ -732,7 +760,7 @@ const convertIrregularPriceList = (rows) => {
         const groupStart = headerColumns.find((index) => index >= columnIndex) ?? columnIndex;
         const groupEnd = headerColumns[headerColumns.indexOf(groupStart) + 1] ?? groupStart;
         const candidateSizeColumns = [];
-        for (let candidate = groupStart; candidate <= groupEnd + 2; candidate++) {
+        for (let candidate = Math.max(0, groupStart - 2); candidate <= groupEnd + 2; candidate++) {
           if (rows.slice(rowIndex + 1, rowIndex + 6).some((nextRow) => looksLikeSizeValue(nextRow?.[candidate]))) {
             candidateSizeColumns.push(candidate);
           }
@@ -745,9 +773,9 @@ const convertIrregularPriceList = (rows) => {
               numericColumns.push(candidate);
             }
           }
-          const headerPosition = headerColumns.indexOf(columnIndex);
-          const firstHeaderPosition = headerColumns.findIndex((index) => index >= groupStart);
-          priceColumn = numericColumns[headerPosition - firstHeaderPosition] ?? -1;
+          const sharedSizeHeaders = headerColumns.filter((index) => index >= sizeColumn);
+          const headerPosition = sharedSizeHeaders.indexOf(columnIndex);
+          priceColumn = numericColumns[headerPosition] ?? -1;
         }
       }
       for (let lookAhead = rowIndex + 1; lookAhead < Math.min(rows.length, rowIndex + 5); lookAhead++) {
@@ -785,12 +813,15 @@ const convertIrregularPriceList = (rows) => {
       }
       const isSkirt = /裙/.test(name);
       const isTrousers = /(?:褲|西褲)/.test(name);
-      const sizeRange = isSkirt ? findDimensionRange(rows, rowIndex, /上圍|上围|上圉/) : [];
+      const sizeRange = isSkirt
+        ? expandDimensionWithSurchargeRules(findDimensionRange(rows, rowIndex, /上圍|上围|上圉/), skirtSurchargeRules, 2)
+        : [];
       const lengthRange = isTrousers ? findDimensionRange(rows, rowIndex, /褲長|裤长|長度|长度/) : [];
       const hasSkirtMatrix = isSkirt && sizeRange.length > 0;
       if (hasSkirtMatrix) {
         rawEntries.forEach(({ size: rawLength, price }) => {
-          const lengths = expandTailoredPriceListValue(name, rawLength);
+          const lengths = expandTailoredPriceListValue(name, rawLength)
+            .flatMap((tailoredLength) => expandPriceListSizeRange(name, tailoredLength));
           lengths.forEach((length) => sizeRange.forEach((size) => {
             const sizeNumber = Number(size);
             const rule = skirtSurchargeRules.find((candidate) => candidate.minimum ? sizeNumber >= candidate.threshold : sizeNumber === candidate.threshold);
@@ -798,11 +829,19 @@ const convertIrregularPriceList = (rows) => {
           }));
         });
       } else if (isTrousers && (lengthRange.length || PRICE_LIST_TAILORED_SIZES.some((rule) => rule.matrixDimension === "length" && rule.match.test(name)))) {
-        const matrixLengths = lengthRange.length
-          ? lengthRange
-          : PRICE_LIST_TAILORED_SIZES.find((rule) => rule.matrixDimension === "length" && rule.match.test(name))?.values || [];
+        const tailoredLengthRule = PRICE_LIST_TAILORED_SIZES.find((rule) => rule.matrixDimension === "length" && rule.match.test(name));
+        const matrixLengthValues = new Set([
+          ...lengthRange,
+          ...(tailoredLengthRule?.values || []),
+          ...trouserSurchargeRules.map((rule) => String(rule.threshold)),
+        ]);
+        const matrixLengths = [...matrixLengthValues]
+          .filter((value) => value !== "")
+          .sort((first, second) => Number(first) - Number(second));
         rawEntries.forEach(({ size: rawSize, price }) => {
-          expandTailoredPriceListValue(name, rawSize).forEach((size) => matrixLengths.forEach((length) => {
+          expandTailoredPriceListValue(name, rawSize)
+            .flatMap((tailoredSize) => expandPriceListSizeRange(name, tailoredSize))
+            .forEach((size) => matrixLengths.forEach((length) => {
             const lengthNumber = Number(length);
             const rule = trouserSurchargeRules.find((candidate) => candidate.minimum ? lengthNumber >= candidate.threshold : lengthNumber === candidate.threshold);
             converted.push({ 學校: school, 款式名稱: name, 長度: length, 尺碼: size, 價錢: price + (rule?.amount || 0) });
@@ -810,8 +849,10 @@ const convertIrregularPriceList = (rows) => {
         });
       } else {
         rawEntries.forEach(({ size, price }) => {
-          expandTailoredPriceListValue(name, size).forEach((expandedSize) => {
-            converted.push({ 學校: school, 款式名稱: name, 長度: "", 尺碼: expandedSize, 價錢: price });
+          expandTailoredPriceListValue(name, size)
+            .flatMap((tailoredSize) => expandPriceListSizeRange(name, tailoredSize))
+            .forEach((expandedSize) => {
+              converted.push({ 學校: school, 款式名稱: name, 長度: "", 尺碼: expandedSize, 價錢: price });
           });
         });
       }
