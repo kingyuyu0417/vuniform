@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { lazy, Suspense, useState, useEffect, useRef } from "react";
 import Papa from "papaparse";
-import * as XLSX from "xlsx";
 import qrcode from "qrcode-generator";
 import { useLocation, useNavigate, Routes, Route, Navigate } from "react-router-dom";
 import { Plus, Minus, Trash2, Printer, Bluetooth, ChevronDown, ChevronUp, ChevronLeft, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown, X, ShoppingCart, Settings, ClipboardList, Check, AlertCircle, Upload, Download, School, Users, Eye, EyeOff, MapPin, GraduationCap, Search, QrCode } from "lucide-react";
@@ -8,16 +7,16 @@ import { isSupabaseConfigured, isSupabaseAuthEnabled, supabase } from "./supabas
 import { logStartupCheck, getStartupErrorUI } from "./config/envValidation";
 import { getUserFriendlyError } from "./config/errorHandler";
 import { Alert } from "./components/common";
-import CustomerCheckinPage from "./pages/CustomerCheckinPage";
-import QueuePage from "./pages/QueuePage";
-import FittingPage from "./pages/FittingPage";
-import PickupPage from "./pages/PickupPage";
-import CashierVerifyPage from "./pages/CashierVerifyPage";
-import GuestPortalPage from "./pages/GuestPortalPage";
-import GuestQueueStatusPage from "./pages/GuestQueueStatusPage";
-import StaffOrderTracking from "./pages/StaffOrderTracking";
-import QueueDisplayPage from "./pages/QueueDisplayPage";
-import DirectoryPage from "./pages/DirectoryPage";
+const CustomerCheckinPage = lazy(() => import("./pages/CustomerCheckinPage"));
+const QueuePage = lazy(() => import("./pages/QueuePage"));
+const FittingPage = lazy(() => import("./pages/FittingPage"));
+const PickupPage = lazy(() => import("./pages/PickupPage"));
+const CashierVerifyPage = lazy(() => import("./pages/CashierVerifyPage"));
+const GuestPortalPage = lazy(() => import("./pages/GuestPortalPage"));
+const GuestQueueStatusPage = lazy(() => import("./pages/GuestQueueStatusPage"));
+const StaffOrderTracking = lazy(() => import("./pages/StaffOrderTracking"));
+const QueueDisplayPage = lazy(() => import("./pages/QueueDisplayPage"));
+const DirectoryPage = lazy(() => import("./pages/DirectoryPage"));
 import { getHongKongDate, QUEUE_SERVICE, queueOrderService } from "./services/queueOrderService";
 import baseSchoolCatalog from "./schoolCatalog.json";
 import workbookSchoolCatalog from "./workbookSchoolCatalog.json";
@@ -591,7 +590,7 @@ const smartImportRows = (rows, existingProducts) => {
   return { next, summary: { addedProducts, addedSizes, updatedSizes, rows: mappedRows.length }, errors, previewRows };
 };
 
-const asSheetRows = (workbook) => XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, defval: "" });
+const asSheetRows = (workbook, xlsx) => xlsx.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, defval: "" });
 const numericCell = (value) => {
   const text = String(value ?? "").replace(/[$,\s]/g, "");
   if (!text || !/^\d+(?:\.\d+)?$/.test(text)) return null;
@@ -1100,6 +1099,12 @@ class AppErrorBoundary extends React.Component {
     return this.props.children;
   }
 }
+
+const PageLoading = () => (
+  <div style={{ padding: 40, textAlign: "center", color: "var(--text-secondary, #666)" }}>
+    載入緊…
+  </div>
+);
 
 export default function UniformPOS() {
   const navigate = useNavigate();
@@ -2431,15 +2436,15 @@ export default function UniformPOS() {
   ];
 
   if (location.pathname === "/checkin") {
-    return <CustomerCheckinPage school={publicRouteSchool} schools={customerSchools} schoolMeta={schoolMeta} onSubmit={handleGuestSubmit} />;
+    return <Suspense fallback={<PageLoading />}><CustomerCheckinPage school={publicRouteSchool} schools={customerSchools} schoolMeta={schoolMeta} onSubmit={handleGuestSubmit} /></Suspense>;
   }
 
   if (location.pathname === "/queue-status") {
-    return <GuestQueueStatusPage queueNo={routeId || publicQueueParam || ""} schoolName={publicRouteSchool || ""} schools={customerSchools} />;
+    return <Suspense fallback={<PageLoading />}><GuestQueueStatusPage queueNo={routeId || publicQueueParam || ""} schoolName={publicRouteSchool || ""} schools={customerSchools} /></Suspense>;
   }
 
   if (location.pathname === "/queue-display") {
-    return <QueueDisplayPage schoolName={publicRouteSchool} outletName={publicRouteOutlet} serviceType={publicQueueService} />;
+    return <Suspense fallback={<PageLoading />}><QueueDisplayPage schoolName={publicRouteSchool} outletName={publicRouteOutlet} serviceType={publicQueueService} /></Suspense>;
   }
 
   if (!loaded) {
@@ -2632,7 +2637,8 @@ export default function UniformPOS() {
       })()}
 
       <div className="pos-page-content">
-        <Routes>
+        <Suspense fallback={<PageLoading />}>
+          <Routes>
           <Route
             path="/checkin"
             element={<CustomerCheckinPage school={publicRouteSchool} schools={customerSchools} schoolMeta={schoolMeta} onSubmit={handleGuestSubmit} />}
@@ -2851,7 +2857,8 @@ export default function UniformPOS() {
               </>
             }
           />
-        </Routes>
+          </Routes>
+        </Suspense>
       </div>
 
       {receipt && (
@@ -3736,12 +3743,13 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
     setImporting(true);
     try {
       const extension = file.name.toLowerCase().split(".").pop();
-      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
-      const sheetRows = asSheetRows(workbook);
+      const xlsx = await import("xlsx");
+      const workbook = xlsx.read(await file.arrayBuffer(), { type: "array" });
+      const sheetRows = asSheetRows(workbook, xlsx);
       const headerText = sheetRows.slice(0, 6).flat().map((value) => normalizeImportHeader(value)).join("|");
       const isStandardFormat = ["學校", "款式名稱", "尺碼", "價錢"].every((header) => headerText.includes(normalizeImportHeader(header)));
       const converted = isStandardFormat
-        ? { rows: XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" }), warnings: [] }
+        ? { rows: xlsx.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" }), warnings: [] }
         : convertIrregularPriceList(sheetRows);
       const analysis = smartImportRows(converted.rows, products);
       setImportPreview({ fileName: file.name, conversionMode: isStandardFormat ? "標準格式" : "價目表格式轉換", conversionWarnings: converted.warnings, ...analysis, errors: [...converted.warnings, ...analysis.errors] });
