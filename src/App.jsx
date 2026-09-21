@@ -3481,6 +3481,40 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   const [expanded, setExpanded] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
+  const [importHistory, setImportHistory] = useState([]);
+  const [showImportHistory, setShowImportHistory] = useState(false);
+  const IMPORT_HISTORY_KEY = "import_history_v1";
+
+  const saveSnapshotToCloud = async (snapshot) => {
+    try {
+      // store full snapshot keyed by id
+      await window.storage.set(`import_snapshot:${snapshot.id}`, JSON.stringify(snapshot), true);
+      // update index
+      const existing = await window.storage.get(IMPORT_HISTORY_KEY, true).catch(() => null);
+      const list = existing && existing.value ? JSON.parse(existing.value) : [];
+      const meta = { id: snapshot.id, fileName: snapshot.fileName, timestamp: snapshot.timestamp, confidence: snapshot.confidence, summary: snapshot.summary };
+      const next = [meta, ...list.filter((s) => s.id !== snapshot.id)].slice(0, 50);
+      await window.storage.set(IMPORT_HISTORY_KEY, JSON.stringify(next), true);
+      setImportHistory(next);
+      return true;
+    } catch (e) {
+      console.warn("保存匯入快照失敗", e);
+      return false;
+    }
+  };
+
+  const loadImportHistory = async () => {
+    try {
+      const saved = await window.storage.get(IMPORT_HISTORY_KEY, true).catch(() => null);
+      const list = saved && saved.value ? JSON.parse(saved.value) : [];
+      setImportHistory(Array.isArray(list) ? list : []);
+    } catch (e) {
+      console.warn("載入匯入歷史失敗", e);
+      setImportHistory([]);
+    }
+  };
+
+  useEffect(() => { loadImportHistory(); }, []);
   const [lengthPromptProductId, setLengthPromptProductId] = useState(null);
   const [lengthDraft, setLengthDraft] = useState("");
   const [matrixDrafts, setMatrixDrafts] = useState({});
@@ -3752,7 +3786,44 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
         ? { rows: xlsx.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" }), warnings: [] }
         : convertIrregularPriceList(sheetRows);
       const analysis = smartImportRows(converted.rows, products);
-      setImportPreview({ fileName: file.name, conversionMode: isStandardFormat ? "標準格式" : "價目表格式轉換", conversionWarnings: converted.warnings, ...analysis, errors: [...converted.warnings, ...analysis.errors] });
+
+      // 基本信心評估（簡單版）：
+      // - 以可解析行數比例為主體（最多 0.6）
+      // - 若為標準格式加分（0.2）
+      // - 無 conversion warnings 加分（0.2）
+      let confidence = 0;
+      const totalRows = Math.max(1, (analysis.summary && analysis.summary.rows) || converted.rows.length || 0);
+      const errorCount = (analysis.errors && analysis.errors.length) || 0;
+      const matchedRows = Math.max(0, totalRows - errorCount);
+      confidence += Math.min(1, matchedRows / totalRows) * 0.6;
+      if (isStandardFormat) confidence += 0.2;
+      if (!converted.warnings || converted.warnings.length === 0) confidence += 0.2;
+      confidence = Math.max(0, Math.min(1, Number(confidence.toFixed(2))));
+
+      const timestamp = new Date().toISOString();
+      const snapshot = {
+        id: `snap-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,
+        fileName: file.name,
+        timestamp,
+        conversionMode: isStandardFormat ? "標準格式" : "價目表格式轉換",
+        conversionWarnings: converted.warnings,
+        analysis,
+        next: analysis.next,
+        summary: analysis.summary,
+        errors: [...(converted.warnings || []), ...(analysis.errors || [])],
+        confidence,
+        savedBy: 'ui',
+      };
+
+      // 保存 preview snapshot 到雲端 app_storage（shared）以及更新 index
+      try {
+        await saveSnapshotToCloud(snapshot);
+      } catch (e) {
+        console.warn("儲存匯入快照到雲端失敗", e);
+      }
+
+      setImportPreview({ fileName: file.name, conversionMode: isStandardFormat ? "標準格式" : "價目表格式轉換", conversionWarnings: converted.warnings, ...analysis, errors: [...converted.warnings, ...analysis.errors], confidence, snapshotId: snapshot.id, timestamp });
+
     } catch (err) {
       console.error(err);
       setImportResult({ summary: null, errors: ["讀取檔案失敗，請確認係 Excel 或 CSV 格式。"] });
@@ -3821,6 +3892,15 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
           >
             <Download size={14} /> 匯出 CSV
           </button>
+
+          <button
+            className="pos-btn"
+            onClick={async () => { await loadImportHistory(); setShowImportHistory((v) => !v); }}
+            style={{ padding: "10px 0", borderRadius: 10, background: "#fff", border: "1px solid #CBD5E1", color: "#1F3A5F", fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+          >
+            匯入歷史
+          </button>
+
           <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" onChange={handleImportFile} style={{ display: "none" }} />
         </div>
 
@@ -3875,6 +3955,74 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
             <button className="pos-btn" onClick={() => setImportResult(null)} style={{ fontSize: 11, color: "#999", background: "none", marginTop: 6 }}>
               關閉提示
             </button>
+          </div>
+        )}
+
+        {showImportHistory && (
+          <div style={{ marginTop: 10, background: "#FEFCE8", border: "1px solid #FDE68A", borderRadius: 8, padding: 10 }}>
+            <div style={{ fontWeight: 700, color: "#92400E", marginBottom: 8 }}>匯入歷史（最近 {importHistory.length} 次）</div>
+            {importHistory.length === 0 ? (
+              <div style={{ color: "#92400E" }}>未有匯入紀錄。</div>
+            ) : (
+              <div style={{ maxHeight: 220, overflowY: "auto", display: "grid", gap: 8 }}>
+                {importHistory.map((h) => (
+                  <div key={h.id} style={{ background: "#fff", border: "1px solid #F3F4F6", borderRadius: 6, padding: 8, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#333" }}>{h.fileName}</div>
+                      <div style={{ fontSize: 11, color: "#6B7280" }}>{new Date(h.timestamp).toLocaleString()} · 信心分數: {typeof h.confidence === 'number' ? Math.round(h.confidence*100) + '%' : 'N/A'}</div>
+                      {h.summary && <div style={{ fontSize: 12, color: "#475569", marginTop: 4 }}>新增 {h.summary.addedProducts} 款 · 新增 {h.summary.addedSizes} 碼 · 更新 {h.summary.updatedSizes} 價</div>}
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button className="pos-btn" onClick={async () => {
+                        try {
+                          const snap = await window.storage.get(`import_snapshot:${h.id}`, true).catch(() => null);
+                          if (snap && snap.value) {
+                            const parsed = JSON.parse(snap.value);
+                            setImportPreview({ fileName: parsed.fileName || h.fileName, conversionMode: parsed.conversionMode || '', conversionWarnings: parsed.conversionWarnings || [], ...parsed.analysis, errors: parsed.errors || [], confidence: parsed.confidence, snapshotId: parsed.id, timestamp: parsed.timestamp });
+                            setShowImportHistory(false);
+                          } else {
+                            alert('未能讀取該快照，可能已刪除。');
+                          }
+                        } catch (e) { console.error(e); alert('載入快照失敗'); }
+                      }} style={{ padding: "6px 8px", borderRadius: 6, background: "#FFFFFF", border: "1px solid #D1D5DB", color: "#374151", fontSize: 12 }}>查看</button>
+
+                      <button className="pos-btn" onClick={async () => {
+                        if (!window.confirm('確定要把該快照合併到現有預覽（不直接寫入 master）嗎？')) return;
+                        try {
+                          const snap = await window.storage.get(`import_snapshot:${h.id}`, true).catch(() => null);
+                          if (snap && snap.value) {
+                            const parsed = JSON.parse(snap.value);
+                            setImportPreview({ fileName: parsed.fileName || h.fileName, conversionMode: parsed.conversionMode || '', conversionWarnings: parsed.conversionWarnings || [], ...parsed.analysis, errors: parsed.errors || [], confidence: parsed.confidence, snapshotId: parsed.id, timestamp: parsed.timestamp });
+                            setShowImportHistory(false);
+                          } else {
+                            alert('未能讀取該快照，可能已刪除。');
+                          }
+                        } catch (e) { console.error(e); alert('載入快照失敗'); }
+                      }} style={{ padding: "6px 8px", borderRadius: 6, background: "#E6FFFA", border: "1px solid #C7F3E9", color: "#065F46", fontSize: 12 }}>合併到預覽</button>
+
+                      <button className="pos-btn" onClick={async () => {
+                        if (!window.confirm('確定要把該快照直接套用到 Production(master) 嗎？此動作會覆蓋現有商品資料。')) return;
+                        try {
+                          const snap = await window.storage.get(`import_snapshot:${h.id}`, true).catch(() => null);
+                          if (snap && snap.value) {
+                            const parsed = JSON.parse(snap.value);
+                            await saveProducts(parsed.next);
+                            alert('已把該快照套用到產品資料。');
+                            setShowImportHistory(false);
+                          } else {
+                            alert('未能讀取該快照，可能已刪除。');
+                          }
+                        } catch (e) { console.error(e); alert('套用快照失敗'); }
+                      }} style={{ padding: "6px 8px", borderRadius: 6, background: "#1F3A5F", border: "1px solid #1F3A5F", color: "#FFFFFF", fontSize: 12 }}>合併到 master</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
+              <button className="pos-btn" onClick={() => setShowImportHistory(false)} style={{ padding: "8px 10px", borderRadius: 8, background: "#fff", border: "1px solid #E5E7EB", color: "#374151" }}>關閉</button>
+              <button className="pos-btn" onClick={async () => { if (!confirm('確定清空匯入歷史？此動作會從雲端刪除索引，但不會刪除每個快照項。')) return; await window.storage.set(IMPORT_HISTORY_KEY, JSON.stringify([]), true); setImportHistory([]); }} style={{ padding: "8px 10px", borderRadius: 8, background: "#fff7ed", border: "1px solid #FCD34D", color: "#92400E" }}>清空歷史</button>
+            </div>
           </div>
         )}
       </div>
