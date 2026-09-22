@@ -3829,26 +3829,26 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   };
 
   const calculateMatrixPrices = (sizes, draft, { preserveExistingPrices = false } = {}) => {
-    const baseByLength = {};
+    const baseBySize = {};
     String(draft.basePrices || "").split(/[,\n，、]+/).map((entry) => entry.trim()).filter(Boolean).forEach((entry) => {
       const match = entry.match(/^(.+?)\s*[=:]\s*(\d+(?:\.\d+)?)$/);
-      if (match) baseByLength[match[1].trim()] = Number(match[2]);
+      if (match) baseBySize[match[1].trim()] = Number(match[2]);
     });
     const surchargeRules = String(draft.surcharges || "").split(/[,\n，、]+/).map((entry) => entry.trim()).filter(Boolean).map((entry) => {
       const match = entry.match(/^(\d+(?:\.\d+)?)\s*(\+)?\s*[=:]\s*\+?(\d+(?:\.\d+)?)$/);
       return match ? { threshold: Number(match[1]), amount: Number(match[3]), minimum: Boolean(match[2]) } : null;
     }).filter(Boolean).sort((first, second) => second.threshold - first.threshold);
-    if (!Object.keys(baseByLength).length || !surchargeRules.length) return null;
+    if (!Object.keys(baseBySize).length || !surchargeRules.length) return null;
     return {
       sizes: sizes.map((item) => {
-        const base = baseByLength[item.length];
+        const base = baseBySize[item.size] ?? baseBySize[item.isTailored ? "裁碼" : ""];
         const lengthNumber = Number(String(item.length).replace(/[^\d.]/g, ""));
         const rule = surchargeRules.find((candidate) => candidate.minimum ? lengthNumber >= candidate.threshold : lengthNumber === candidate.threshold);
         const calculatedPrice = Number.isFinite(Number(base)) && rule ? Number(base) + rule.amount : null;
         if (preserveExistingPrices && isPricedSize(item)) return item;
         return calculatedPrice === null ? item : { ...item, price: calculatedPrice };
       }),
-      pricing: { baseByLength, surchargeRules },
+      pricing: { baseBySize, surchargeRules },
     };
   };
 
@@ -3900,7 +3900,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
     const draft = matrixDrafts[product.id] || {};
     const calculated = calculateMatrixPrices(product.sizes, draft);
     if (!calculated) {
-      window.alert("請輸入基本價及長度加價規則，例如：30=87,32=90；40=10,41.5=20,43+=30。");
+      window.alert("請輸入按尺碼的基本價及按長度的加價規則，例如：21=93,22=93,30=128；30+=0,40=10,41.5=20,43+=30。");
       return;
     }
     updateProduct(product.id, { ...product, priceMode: "matrix", sizes: calculated.sizes, pricing: calculated.pricing });
@@ -4595,7 +4595,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
                     <input
                       value={matrixDrafts[p.id]?.basePrices || ""}
                       onChange={(e) => updateMatrixDraft(p.id, "basePrices", e.target.value)}
-                      placeholder="基本價，例如：33=87,34=90,35=94,40=114,裁碼=139"
+                      placeholder="按尺碼基本價，例如：21=93,22=93,30=128,裁碼=139"
                       style={{ width: "100%", padding: 7, marginBottom: 6, borderRadius: 7, border: "1px solid #B8C7D8", fontSize: 12, boxSizing: "border-box" }}
                     />
                     <input
