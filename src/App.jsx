@@ -4,7 +4,7 @@ import qrcode from "qrcode-generator";
 import { useLocation, useNavigate, Routes, Route, Navigate } from "react-router-dom";
 import { Plus, Minus, Trash2, Printer, Bluetooth, ChevronDown, ChevronUp, ChevronLeft, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown, X, ShoppingCart, Settings, ClipboardList, Check, AlertCircle, Upload, Download, School, Users, Eye, EyeOff, MapPin, GraduationCap, Search, QrCode } from "lucide-react";
 import { isSupabaseConfigured, isSupabaseAuthEnabled, supabase } from "./supabaseClient";
-import { logStartupCheck, getStartupErrorUI } from "./config/envValidation";
+import { logStartupCheck, getStartupErrorUI, validateAllEnvVars } from "./config/envValidation";
 import { getUserFriendlyError } from "./config/errorHandler";
 import { Alert } from "./components/common";
 const CustomerCheckinPage = lazy(() => import("./pages/CustomerCheckinPage"));
@@ -585,7 +585,7 @@ const smartImportRows = (rows, existingProducts) => {
       product.sizes.push({ size, length, price });
       addedSizes++;
     }
-    if (previewRows.length < 100) previewRows.push({ school: schoolKey, name, length, size, price, action });
+    previewRows.push({ school: schoolKey, name, length, size, price, action });
   });
   return { next, summary: { addedProducts, addedSizes, updatedSizes, rows: mappedRows.length }, errors, previewRows };
 };
@@ -612,16 +612,58 @@ const findSheetSchool = (rows) => {
   return rows.flat().map((cell) => String(cell || "").trim()).find((text) => /(?:中學|小學|幼稚園)$/.test(text)) || "";
 };
 const PRICE_LIST_PRODUCT_ALIASES = {
-  "V背心": "V領背心",
+  "底衫": "底衫",
+  "半腰裙": "深炭灰色半截校裙",
+  "男呔": "男呔",
+  "女呔": "女呔",
+  "男藍襪": "男藍襪",
+  "女灰長襪": "女灰長襪",
+  "女長恤": "女裝白色長袖恤衫",
+  "女生白色長袖恤衫": "女裝白色長袖恤衫",
+  "男生白色長袖恤衫": "男生白色長袖恤衫",
+  "男生白色短袖恤衫": "白色短袖恤衫",
+  "女生白色短袖恤衫": "白色短袖恤衫",
+  "校服白色長袖恤衫": "白色長袖恤衫",
+  "校服白色短袖恤衫": "白色短袖恤衫",
+  "白色長袖恤衫": "男生白色長袖恤衫",
+  "白色短袖恤衫": "白色短袖恤衫",
+  "校裙": "深炭灰色半截校裙",
+  "深炭灰色半截校裙": "深炭灰色半截校裙",
+  "深炭灰色校裙": "深炭灰色半截校裙",
+  "長西褲": "男生深炭灰色長西褲",
+  "男生長西褲": "男生深炭灰色長西褲",
+  "女生長西褲": "女生長西褲",
+  "黑色短西褲": "黑色短西褲",
+  "黑色長西褲": "男生黑色長西褲",
+  "深炭灰色長西褲": "男生深炭灰色長西褲",
+  "女西裝連背心": "女裝西裝褸配背心",
+  "女生西裝連背心": "女裝西裝褸配背心",
+  "男西裝連背心": "男生西裝褸配背心",
+  "男生西裝連背心": "男生西裝褸配背心",
+  "西裝連背心": "西裝褸配背心",
+  "女裝西裝褸配背心": "女裝西裝褸配背心",
+  "男生西裝褸配背心": "男生西裝褸配背心",
+  "深炭灰色西裝褸配厚抓毛背心": "深炭灰色西裝褸配厚抓毛背心",
+  "V背心": "V領背心冷衫",
+  "V領背心": "V領背心冷衫",
+  "V領背心冷衫": "V領背心冷衫",
+  "V長袖": "V領長袖冷衫",
   "V長": "V領長袖冷衫",
+  "V領長袖冷衫": "V領長袖冷衫",
   "冬運套": "冬天運動套裝",
+  "冬運單衣": "冬天運動單衫",
   "冬運單衫": "冬天運動單衫",
   "冬運單褲": "冬天運動單褲",
   "單衫": "冬天運動單衫",
+  "單衣": "冬天運動單衫",
   "單褲": "冬天運動單褲",
   "夏運衣": "運動上衣",
   "夏運褲": "運動褲",
   "夏季運動衣": "運動上衣",
+  "女裝夏季運動衣": "運動上衣",
+  "男裝夏季運動衣": "運動上衣",
+  "女裝夏季運動褲": "運動褲",
+  "男裝夏季運動褲": "運動褲",
   "夏季運動褲": "運動褲",
   "夏運動衣": "運動上衣",
   "夏運動褲": "運動褲",
@@ -631,9 +673,37 @@ const PRICE_LIST_PRODUCT_ALIASES = {
   "冷衫長袖": "V領長袖冷衫",
 };
 const normalizePriceListProductName = (value) => String(value || "").replace(/[\s　]/g, "").trim();
-const canonicalPriceListProductName = (value) => {
+const priceListSeasonForRow = (rows, rowIndex) => {
+  const nearbyRows = rows
+    .slice(Math.max(0, rowIndex - 3), rowIndex + 1)
+    .flat()
+    .map((value) => normalizePriceListProductName(value));
+  const nearbyText = nearbyRows.join("");
+  const nearbySeasons = new Set([
+    ...(nearbyText.includes("夏") ? ["夏"] : []),
+    ...(nearbyText.includes("冬") ? ["冬"] : []),
+  ]);
+  if (nearbySeasons.size === 1) return [...nearbySeasons][0];
+
+  const workbookText = rows
+    .slice(0, 5)
+    .flat()
+    .map((value) => normalizePriceListProductName(value))
+    .join("");
+  const workbookSeasons = new Set([
+    ...(workbookText.includes("夏") ? ["夏"] : []),
+    ...(workbookText.includes("冬") ? ["冬"] : []),
+  ]);
+  return workbookSeasons.size === 1 ? [...workbookSeasons][0] : "";
+};
+const canonicalPriceListProductName = (value, season = "") => {
   const rawName = String(value || "").replace(/\s+/g, " ").trim();
   const normalizedName = normalizePriceListProductName(rawName);
+  if (normalizedName === "占領恤") {
+    if (season === "夏") return "白色短袖恤衫";
+    if (season === "冬") return "男生白色長袖恤衫";
+    return rawName;
+  }
   return PRICE_LIST_PRODUCT_ALIASES[normalizedName] || rawName;
 };
 const looksLikeProductHeader = (value) => {
@@ -641,28 +711,39 @@ const looksLikeProductHeader = (value) => {
   if (Object.prototype.hasOwnProperty.call(PRICE_LIST_PRODUCT_ALIASES, text)) return true;
   return text && text.length <= 24
     && !/^(上圍|腰圍|褲長|裙長|尺碼|碼數|價錢|價格|數量|夏(?!運衣|運褲)|冬|長|短|\d|加\$?)/.test(text)
-    && /(?:裙|褲|恤衫|襯衫|恤|衫|棉褸|外套|冷衫|運衣|運動衣|運動褲|上衣|襪|皮帶|底衫|校徽|套裝|單衫|單褲|背心|長袖|西褲|3\/7)/.test(text);
+    && /(?:裙|褲|恤衫|襯衫|恤|衫|棉褸|外套|冷衫|運衣|運動衣|運動褲|上衣|襪|呔|皮帶|底衫|校徽|套裝|單衫|單衣|單褲|背心|長袖|西褲|3\/7)/.test(text);
 };
 const PRICE_LIST_TAILORED_SIZES = [
   { match: /(?:裙)/, values: ["42", "44", "46", "48", "50"], matrixDimension: "length" },
   { match: /(?:西褲|長褲)/, values: ["32", "34", "36", "38", "40", "42", "44", "46", "48", "50", "52"], matrixDimension: "length" },
-  { match: /(?:恤衫|襯衫|尖領恤|恤)/, values: ["16.5", "17", "17.5", "18", "18.5", "19", "19.5", "20"] },
-  { match: /(?:運動上衣|夏運衣)/, values: ["46", "48", "50", "52"] },
-  { match: /(?:運動褲|夏運褲)/, values: ["1碼", "2碼", "3碼"] },
+  { match: /(?:西裝.*背心|背心.*西裝|西裝褸.*背心)/, values: ["32", "34", "36", "38", "40", "42", "44", "46", "48", "50", "52"], matrixDimension: "length" },
+  { match: /(?:恤衫|襯衫|尖領恤|恤)/, values: ["16.5", "17", "17.5", "18", "18.5", "19", "19.5", "20", "21", "22"] },
+  { match: /(?:運動上衣|夏運衣|夏季運動衣|女裝夏季運動衣|男裝夏季運動衣|四社.*夏運衣)/, values: ["32", "34", "36", "38", "40", "裁碼"] },
+  { match: /(?:運動褲|夏運褲|夏季運動褲|女裝夏季運動褲|男裝夏季運動褲)/, values: ["裁碼"] },
   { match: /(?:3\/7冷衫)/, values: ["44", "46", "48", "50"] },
   { match: /(?:V領背心)/, values: ["44", "46", "48", "50"] },
   { match: /(?:V領長袖冷衫)/, values: ["44", "46", "48", "50"] },
   { match: /(?:冬天運動套裝)/, values: ["46", "48", "50", "52"] },
-  { match: /(?:冬天運動單衫|冬天運動單褲)/, values: ["46", "48", "50", "52"] },
+  { match: /(?:冬天運動單衫|冬天運動單褲|冬運單衣|冬運單衫|冬運單褲)/, values: ["46", "48", "50", "52"] },
 ];
 const expandTailoredPriceListValue = (name, value) => {
   if (String(value || "").trim() !== "裁碼" || /底裙/.test(name)) return [String(value || "").trim()];
+  if (/半腰裙|深炭灰色半截校裙/.test(name)) return ["裁碼"];
+  if (/夏季運動衣|夏運衣|女裝夏季運動衣|男裝夏季運動衣/.test(name)) return ["32", "34", "36", "38", "40", "裁碼"];
+  if (/夏季運動褲|夏運褲|女裝夏季運動褲|男裝夏季運動褲/.test(name)) return ["裁碼"];
   return PRICE_LIST_TAILORED_SIZES.find((rule) => rule.match.test(name))?.values || [String(value || "").trim()];
 };
 const expandPriceListSizeRange = (name, value) => {
   const text = String(value || "").trim();
   const numericRange = text.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)(?:碼)?$/);
-  if (numericRange) return [numericRange[1], numericRange[2]];
+  if (numericRange) {
+    const start = Number(numericRange[1]);
+    const end = Number(numericRange[2]);
+    if (Number.isFinite(start) && Number.isFinite(end) && end >= start && Number.isInteger(start) && Number.isInteger(end)) {
+      return Array.from({ length: end - start + 1 }, (_, index) => String(start + index));
+    }
+    return [numericRange[1], numericRange[2]];
+  }
   const alphaRange = text.match(/^(XS|S|M|L|XL|XXL)-(XS|S|M|L|XL|XXL)$/i);
   if (alphaRange) {
     const sizes = ["XS", "S", "M", "L", "XL", "XXL"];
@@ -729,7 +810,7 @@ const convertIrregularPriceList = (rows) => {
   rows.forEach((row, rowIndex) => {
     row.forEach((cell, columnIndex) => {
       const rawName = String(cell || "").replace(/\s+/g, " ").trim();
-      const name = canonicalPriceListProductName(rawName);
+      const name = canonicalPriceListProductName(rawName, priceListSeasonForRow(rows, rowIndex));
       if (!looksLikeProductHeader(rawName)) return;
       const standalonePrice = row
         .slice(columnIndex + 1)
@@ -743,12 +824,14 @@ const convertIrregularPriceList = (rows) => {
       let priceColumn = -1;
       const quantityMarker = String(row[columnIndex + 1] || "").trim().match(/^\d+(?:件|條|對|套|包)$/);
       if (quantityMarker) {
-        priceColumn = columnIndex;
         for (let candidate = columnIndex - 1; candidate >= 0; candidate--) {
           if (rows.slice(rowIndex + 1, rowIndex + 6).some((nextRow) => looksLikeSizeValue(nextRow?.[candidate]))) {
             sizeColumn = candidate;
             break;
           }
+        }
+        if (sizeColumn !== columnIndex) {
+          priceColumn = sizeColumn + 1;
         }
       }
       if (priceColumn < 0) {
@@ -796,12 +879,43 @@ const convertIrregularPriceList = (rows) => {
           priceColumn = row.findIndex((_, candidate) => candidate > sizeColumn && rows.slice(rowIndex + 1, rowIndex + 6).some((nextRow) => numericCell(nextRow?.[candidate]) !== null));
         }
       }
+      if (/(?:恤衫|襯衫|恤)/.test(name)) {
+        const shirtSizeColumns = [];
+        for (let candidate = Math.max(0, columnIndex - 1); candidate <= Math.min(row.length - 1, columnIndex + 2); candidate++) {
+          const values = rows.slice(rowIndex + 1, rowIndex + 8)
+            .map((nextRow) => numericCell(nextRow?.[candidate]))
+            .filter((value) => value !== null);
+          if (values.length >= 2 && values.every((value) => value >= 10 && value <= 22)) {
+            shirtSizeColumns.push(candidate);
+          }
+        }
+        const shirtSizeColumn = shirtSizeColumns.sort((first, second) => Math.abs(first - columnIndex) - Math.abs(second - columnIndex))[0];
+        if (shirtSizeColumn !== undefined && numericCell(rows[rowIndex + 1]?.[shirtSizeColumn + 1]) !== null) {
+          sizeColumn = shirtSizeColumn;
+          priceColumn = shirtSizeColumn + 1;
+        }
+      }
       if (priceColumn < 0) {
         warnings.push(`第${rowIndex + 1}行「${name}」未能確定尺碼及單價欄，請在預覽後補充。`);
         return;
       }
+      if (normalizePriceListProductName(rawName) === "單衣/褲") {
+        for (let dataRow = rowIndex + 1; dataRow < Math.min(rows.length, rowIndex + 15); dataRow += 1) {
+          const size = String(rows[dataRow]?.[sizeColumn] ?? "").trim();
+          const singleGarmentPrice = numericCell(rows[dataRow]?.[priceColumn + 1]);
+          if (!size || singleGarmentPrice === null) {
+            if (dataRow > rowIndex + 1 && rows[dataRow]?.every((value) => String(value || "").trim() === "")) break;
+            continue;
+          }
+          converted.push({ 學校: school, 款式名稱: "冬天運動上衣", 長度: "", 尺碼: size, 價錢: singleGarmentPrice });
+          converted.push({ 學校: school, 款式名稱: "冬天運動長褲", 長度: "", 尺碼: size, 價錢: singleGarmentPrice });
+        }
+        return;
+      }
       const rawEntries = [];
       for (let dataRow = rowIndex + 1; dataRow < Math.min(rows.length, rowIndex + 15); dataRow++) {
+        const hasBottomShirtHeader = rows[dataRow]?.some((value) => normalizePriceListProductName(value) === "底衫");
+        if (hasBottomShirtHeader && name !== "底衫") break;
         const size = String(rows[dataRow]?.[sizeColumn] ?? "").trim();
         const price = numericCell(rows[dataRow]?.[priceColumn]);
         if (!size || (!looksLikeSizeValue(size) && size !== "裁碼") || price === null) {
@@ -859,6 +973,88 @@ const convertIrregularPriceList = (rows) => {
   });
   if (!school) warnings.unshift("未能從價目表自動識別學校，匯入後會放入未分類。");
   return { rows: converted, warnings };
+};
+
+const noticeTextFromPdf = async (file) => {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const pdf = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
+  const pages = [];
+  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+    const page = await pdf.getPage(pageNumber);
+    const content = await page.getTextContent();
+    pages.push(content.items.map((item) => item.str || "").join(" "));
+  }
+  return pages.join("\n");
+};
+
+const noticeTextFromDocx = async (file) => {
+  const mammoth = await import("mammoth");
+  const result = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
+  return result.value;
+};
+
+const noticeTextFromImage = async (file) => {
+  const tesseract = await import("tesseract.js");
+  const result = await tesseract.recognize(file, "chi_tra+eng");
+  return result.data.text;
+};
+
+const analyzeNoticeText = (text, fileName) => {
+  const normalized = String(text || "").replace(/\s+/g, " ").trim();
+  const school = findSheetSchool([[normalized]]);
+  const season = normalized.includes("冬") ? "冬季" : normalized.includes("夏") ? "夏季" : "";
+  const yearMatch = normalized.match(/20\d{2}/);
+  const productKeywords = [
+    "女裝白色長袖恤衫", "白色長袖恤衫", "白色短袖恤衫", "女西裝連背心",
+    "男生深炭灰色長西褲", "長西褲", "冬天運動套裝", "冬天運動單衫",
+    "冬天運動單褲", "V領背心", "V領長袖冷衫", "校裙", "運動褲",
+  ];
+  const productsFound = productKeywords.filter((keyword) => normalized.includes(keyword));
+  return {
+    fileName,
+    text: normalized,
+    school,
+    season,
+    schoolYear: yearMatch ? yearMatch[0] : "",
+    productsFound,
+    warnings: normalized ? [] : ["文件未能抽取到文字，請改用較清晰的 PDF、Word 或圖片。"],
+  };
+};
+
+const normalizeNoticeProductName = (value) => {
+  const raw = String(value || "").trim();
+  const normalized = normalizePriceListProductName(raw)
+    .replace(/[（(].*?[）)]/g, "")
+    .replace(/男生|女生|男裝|女裝|校服|同學/g, "")
+    .replace(/\/|／|、|，|。/g, "");
+  const canonical = PRICE_LIST_PRODUCT_ALIASES[normalized] || normalized;
+  return String(canonical || "").replace(/\s+/g, "");
+};
+
+const buildNoticeImportFusion = (notice, importPreview) => {
+  const excelProducts = [...new Set((importPreview.previewRows || []).map((row) => String(row.name || "").trim()).filter(Boolean))];
+  const noticeProducts = notice.productsFound || [];
+  const matches = noticeProducts.map((noticeProduct) => {
+    const normalizedNotice = normalizeNoticeProductName(noticeProduct);
+    const matchedExcel = excelProducts.find((excelProduct) => {
+      const normalizedExcel = normalizeNoticeProductName(excelProduct);
+      return normalizedExcel === normalizedNotice
+        || normalizedExcel.includes(normalizedNotice)
+        || normalizedNotice.includes(normalizedExcel);
+    });
+    return { noticeProduct, matchedExcel: matchedExcel || "" };
+  });
+  const schoolMatch = !notice.school || !importPreview.previewRows?.length
+    ? "待確認"
+    : importPreview.previewRows.every((row) => !row.school || row.school === notice.school)
+      ? "符合"
+      : "有差異";
+  return {
+    schoolMatch,
+    matches,
+    unmatchedNotice: matches.filter((item) => !item.matchedExcel).map((item) => item.noticeProduct),
+    excelOnly: excelProducts.filter((excelProduct) => !matches.some((item) => item.matchedExcel === excelProduct)),
+  };
 };
 
 const BT_SERVICE = "000018f0-0000-1000-8000-00805f9b34fb";
@@ -1284,7 +1480,7 @@ export default function UniformPOS() {
 
   // 环境变量检查 - 应用启动时验证关键配置
   useEffect(() => {
-    const { errors: envErrors } = require("./config/envValidation").validateAllEnvVars();
+    const { errors: envErrors } = validateAllEnvVars();
     if (envErrors && envErrors.length > 0) {
       const errorUI = getStartupErrorUI(envErrors);
       setEnvError(errorUI);
@@ -3481,8 +3677,11 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   const [expanded, setExpanded] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
+  const [importPreviewSearch, setImportPreviewSearch] = useState("");
   const [importHistory, setImportHistory] = useState([]);
   const [showImportHistory, setShowImportHistory] = useState(false);
+  const [noticeAnalyzing, setNoticeAnalyzing] = useState(false);
+  const [noticePreview, setNoticePreview] = useState(null);
   const IMPORT_HISTORY_KEY = "import_history_v1";
 
   const saveSnapshotToCloud = async (snapshot) => {
@@ -3521,6 +3720,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   const activeSchool = selectedSchool;
 
   const fileInputRef = useRef(null);
+  const noticeInputRef = useRef(null);
   const [addingSchool, setAddingSchool] = useState(false);
   const [newSchoolName, setNewSchoolName] = useState("");
   const [newSchoolError, setNewSchoolError] = useState("");
@@ -3774,6 +3974,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
     const file = e.target.files && e.target.files[0];
     e.target.value = "";
     if (!file) return;
+    setImportPreviewSearch("");
     setImporting(true);
     try {
       const extension = file.name.toLowerCase().split(".").pop();
@@ -3839,6 +4040,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
       await saveProducts(importPreview.next);
       setImportResult({ summary: importPreview.summary, errors: importPreview.errors });
       setImportPreview(null);
+      setImportPreviewSearch("");
     } catch (error) {
       console.error("智能匯入保存失敗", error);
       setImportResult({ summary: null, errors: ["匯入分析成功，但保存商品資料失敗，請重試。"] });
@@ -3847,7 +4049,39 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
     }
   };
 
+  const handleNoticeFile = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    setNoticeAnalyzing(true);
+    try {
+      const extension = file.name.toLowerCase().split(".").pop();
+      let text = "";
+      if (extension === "pdf") text = await noticeTextFromPdf(file);
+      else if (extension === "docx") text = await noticeTextFromDocx(file);
+      else if (["jpg", "jpeg", "png", "webp"].includes(extension)) text = await noticeTextFromImage(file);
+      else throw new Error("只支援 PDF、DOCX、JPG、PNG 或 WEBP 通告。");
+      setNoticePreview(analyzeNoticeText(text, file.name));
+    } catch (error) {
+      console.error("通告分析失敗", error);
+      setNoticePreview({ fileName: file.name, warnings: [error.message || "通告分析失敗，請重試。"], text: "" });
+    } finally {
+      setNoticeAnalyzing(false);
+    }
+  };
+
   const visibleProducts = activeSchool ? products.filter((p) => schoolOf(p) === activeSchool) : [];
+  const filteredImportPreviewRows = importPreview
+    ? importPreview.previewRows.filter((row) => {
+        const query = importPreviewSearch.trim().toLowerCase();
+        if (!query) return true;
+        return [row.school, row.name, row.length, row.size, row.price, row.action]
+          .some((value) => String(value ?? "").toLowerCase().includes(query));
+      })
+    : [];
+  const noticeImportFusion = noticePreview && importPreview
+    ? buildNoticeImportFusion(noticePreview, importPreview)
+    : null;
 
   return (
     <div>
@@ -3872,6 +4106,44 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
       {/* 匯入 / 匯出 CSV（只有ADMIN先見到，管理員先可以做批量價格調整） */}
       {canImportExport && (
       <div style={{ background: "#F7F7F5", borderRadius: 12, padding: 14, marginBottom: 14 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>學校通告分析</div>
+        <div style={{ fontSize: 12, color: "#888", marginBottom: 10, lineHeight: 1.5 }}>
+          免費在本機瀏覽器分析 PDF、Word 或圖片通告；文件不會上傳。通告只提供學校、季節及產品背景，價格仍以 Excel 預覽為準。
+        </div>
+        <button
+          className="pos-btn"
+          onClick={() => noticeInputRef.current && noticeInputRef.current.click()}
+          disabled={noticeAnalyzing}
+          style={{ width: "100%", padding: "10px 0", borderRadius: 10, background: "#6B4F2A", color: "#fff", fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+        >
+          <Upload size={14} /> {noticeAnalyzing ? "分析通告緊…" : "匯入學校通告"}
+        </button>
+        <input
+          ref={noticeInputRef}
+          type="file"
+          accept=".pdf,.docx,.jpg,.jpeg,.png,.webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*"
+          onChange={handleNoticeFile}
+          style={{ display: "none" }}
+        />
+        {noticePreview && (
+          <div style={{ marginTop: 10, background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: 8, padding: 10, fontSize: 12 }}>
+            <div style={{ fontWeight: 700, color: "#7C2D12" }}>通告分析預覽：{noticePreview.fileName}</div>
+            {noticePreview.school && <div style={{ marginTop: 5 }}>學校：{noticePreview.school}</div>}
+            {noticePreview.schoolYear && <div>學年：{noticePreview.schoolYear}</div>}
+            {noticePreview.season && <div>季節：{noticePreview.season}</div>}
+            <div style={{ marginTop: 5 }}>識別到產品：{noticePreview.productsFound?.length ? noticePreview.productsFound.join("、") : "暫未識別"}</div>
+            {noticePreview.warnings?.map((warning, index) => <div key={index} style={{ color: "#B42318", marginTop: 5 }}>• {warning}</div>)}
+            {noticePreview.text && (
+              <details style={{ marginTop: 8 }}>
+                <summary style={{ cursor: "pointer", color: "#7C2D12" }}>查看抽取文字</summary>
+                <div style={{ marginTop: 5, maxHeight: 140, overflowY: "auto", whiteSpace: "pre-wrap", background: "#fff", padding: 6, borderRadius: 6 }}>{noticePreview.text}</div>
+              </details>
+            )}
+            <button className="pos-btn" onClick={() => setNoticePreview(null)} style={{ marginTop: 8, padding: "6px 10px", borderRadius: 7, background: "#fff", color: "#7C2D12", border: "1px solid #FDBA74" }}>清除通告預覽</button>
+          </div>
+        )}
+
+        <div style={{ borderTop: "1px solid #E5E5E0", marginTop: 14, paddingTop: 14 }}>
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>批量匯入 / 匯出</div>
         <div style={{ fontSize: 12, color: "#888", marginBottom: 10, lineHeight: 1.5 }}>
           支援 Excel／CSV。系統會自動識別學校、款式、長度／袖長、尺碼及價錢，先預覽分析結果，確認後才寫入。
@@ -3910,13 +4182,25 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
             <div style={{ marginTop: 4, color: "#52657A" }}>模式：{importPreview.conversionMode}</div>
             <div style={{ marginTop: 5 }}>讀取 {importPreview.summary.rows} 行；新增 {importPreview.summary.addedProducts} 款、新增 {importPreview.summary.addedSizes} 個尺碼、更新 {importPreview.summary.updatedSizes} 個價格。</div>
             {importPreview.previewRows.length > 0 && (
-              <div style={{ maxHeight: 180, overflowY: "auto", marginTop: 8, background: "#fff", borderRadius: 6, padding: 6 }}>
-                {importPreview.previewRows.map((row, index) => (
+              <>
+                <input
+                  value={importPreviewSearch}
+                  onChange={(event) => setImportPreviewSearch(event.target.value)}
+                  placeholder="搜尋款式、尺碼、長度或價錢"
+                  style={{ width: "100%", boxSizing: "border-box", marginTop: 8, padding: "7px 9px", border: "1px solid #CBD5E1", borderRadius: 6, fontSize: 12 }}
+                />
+                <div style={{ marginTop: 4, color: "#52657A" }}>
+                  顯示 {filteredImportPreviewRows.length} / {importPreview.previewRows.length} 筆
+                </div>
+                <div style={{ maxHeight: 180, overflowY: "auto", marginTop: 5, background: "#fff", borderRadius: 6, padding: 6 }}>
+                  {filteredImportPreviewRows.map((row, index) => (
                   <div key={index} style={{ padding: "3px 0", borderBottom: "1px solid #EEF2F7" }}>
                     {row.school} · {row.name} · {row.length ? `${row.length}/` : ""}{row.size} · ${row.price}（{row.action}）
                   </div>
-                ))}
-              </div>
+                  ))}
+                  {filteredImportPreviewRows.length === 0 && <div style={{ padding: "8px 3px", color: "#64748B" }}>找不到符合資料。</div>}
+                </div>
+              </>
             )}
             {importPreview.errors.length > 0 && (
               <div style={{ color: "#B42318", marginTop: 6 }}>
@@ -3927,7 +4211,39 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
             )}
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
               <button className="pos-btn" onClick={confirmImport} disabled={importing} style={{ flex: 1, padding: 8, background: "#28784B", color: "#fff", borderRadius: 7 }}>確認匯入</button>
-              <button className="pos-btn" onClick={() => setImportPreview(null)} disabled={importing} style={{ flex: 1, padding: 8, background: "#fff", color: "#475569", border: "1px solid #CBD5E1", borderRadius: 7 }}>取消</button>
+              <button className="pos-btn" onClick={() => { setImportPreview(null); setImportPreviewSearch(""); }} disabled={importing} style={{ flex: 1, padding: 8, background: "#fff", color: "#475569", border: "1px solid #CBD5E1", borderRadius: 7 }}>取消</button>
+            </div>
+          </div>
+        )}
+
+        {noticeImportFusion && (
+          <div style={{ marginTop: 10, background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 8, padding: 10, fontSize: 12 }}>
+            <div style={{ fontWeight: 700, color: "#166534" }}>通告＋Excel 融合預覽</div>
+            <div style={{ marginTop: 5 }}>學校配對：<strong>{noticeImportFusion.schoolMatch}</strong></div>
+            <div style={{ marginTop: 5 }}>季節：{noticePreview.season || "通告未能確定，請確認"}</div>
+            <div style={{ marginTop: 7, fontWeight: 600 }}>產品配對</div>
+            {noticeImportFusion.matches.length === 0 ? (
+              <div style={{ marginTop: 3, color: "#92400E" }}>通告未識別到產品名稱，不能自動配對。</div>
+            ) : (
+              noticeImportFusion.matches.map((item) => (
+                <div key={item.noticeProduct} style={{ marginTop: 3 }}>
+                  {item.noticeProduct} → {item.matchedExcel || "未能在 Excel 找到"}
+                </div>
+              ))
+            )}
+            {noticeImportFusion.unmatchedNotice.length > 0 && (
+              <div style={{ marginTop: 6, color: "#B42318" }}>
+                通告有但 Excel 沒有：{noticeImportFusion.unmatchedNotice.join("、")}
+              </div>
+            )}
+            {noticeImportFusion.excelOnly.length > 0 && (
+              <div style={{ marginTop: 4, color: "#92400E" }}>
+                Excel 有但通告未提及：{noticeImportFusion.excelOnly.slice(0, 12).join("、")}
+                {noticeImportFusion.excelOnly.length > 12 ? "…" : ""}
+              </div>
+            )}
+            <div style={{ marginTop: 8, padding: 7, background: "#fff", borderRadius: 6, color: "#166534" }}>
+              目前只係分析及配對預覽，未有寫入商品庫。確認名稱、學校及季節後，先按 Excel 預覽中的「確認匯入」。
             </div>
           </div>
         )}
@@ -4025,6 +4341,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
             </div>
           </div>
         )}
+        </div>
       </div>
       )}
 
