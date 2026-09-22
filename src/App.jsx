@@ -21,6 +21,7 @@ import { getHongKongDate, QUEUE_SERVICE, queueOrderService } from "./services/qu
 import baseSchoolCatalog from "./schoolCatalog.json";
 import workbookSchoolCatalog from "./workbookSchoolCatalog.json";
 import workbookSchoolOutlets from "./workbookSchoolOutlets.json";
+import databaseProductsSnapshot from "../database-products-snapshot.json";
 import { loadProducts, saveProducts as saveProductsToStore } from "./data/productsStore";
 
 
@@ -89,6 +90,8 @@ const DEFAULT_PRODUCTS = [
     ],
   },
 ];
+
+const PRODUCT_CATALOG_FALLBACK = databaseProductsSnapshot;
 
 const fmt = (n) => `$${Math.round(n).toLocaleString("en-HK")}`;
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -1815,7 +1818,7 @@ export default function UniformPOS() {
             storage: window.storage,
             supabase,
             isSupabaseAuthEnabled,
-            fallbackProducts: DEFAULT_PRODUCTS,
+            fallbackProducts: PRODUCT_CATALOG_FALLBACK,
           }).catch((error) => {
             console.error("載入產品失敗", error);
             return null;
@@ -1972,7 +1975,7 @@ export default function UniformPOS() {
           storage: window.storage,
           supabase,
           isSupabaseAuthEnabled,
-          fallbackProducts: DEFAULT_PRODUCTS,
+          fallbackProducts: PRODUCT_CATALOG_FALLBACK,
         });
         const s = isSupabaseAuthEnabled ? await loadSecureOrders() : await window.storage.get("sales-log", true).catch(() => null);
         const a = await window.storage.get("staff-accounts", true).catch(() => null);

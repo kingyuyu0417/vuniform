@@ -100,11 +100,12 @@ export const loadProducts = async ({ storage, supabase, isSupabaseAuthEnabled, f
     console.warn("loadProducts failed; using fallback", error);
   }
 
-  if (authoritativeStoreWasEmpty) {
-    return null;
+  const fallback = normalizeProducts(fallbackProducts);
+  if (authoritativeStoreWasEmpty && isKnownAuthoritativeProductSet(fallback)) {
+    console.warn("[productsStore] Using the bundled authoritative catalog while Supabase has no product rows.");
+    return fallback;
   }
 
-  const fallback = normalizeProducts(fallbackProducts);
   if (isDemoFallbackProductSet(fallbackProducts)) {
     warnSingleSourceFallback();
     return null;
