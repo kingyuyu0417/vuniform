@@ -610,6 +610,12 @@ const looksLikeSizeValue = (value) => {
   const text = String(value ?? "").trim();
   return Boolean(text) && (text === "裁碼" || /^\d+(?:\.\d+)?(?:-\d+(?:\.\d+)?)?(?:碼)?$/.test(text) || /^(?:XS|S|M|L|XL|XXL|均碼)(?:-(?:XS|S|M|L|XL|XXL))?$/i.test(text));
 };
+const looksLikeDimensionValue = (value) => {
+  const text = String(value ?? "").trim();
+  if (!looksLikeSizeValue(text)) return false;
+  const numbers = text.match(/\d+(?:\.\d+)?/g)?.map(Number) || [];
+  return numbers.length === 0 || numbers.every((number) => number <= 60);
+};
 const findSheetSchool = (rows) => {
   const catalogNames = Object.keys(schoolCatalog);
   for (const row of rows) {
@@ -627,7 +633,9 @@ const PRICE_LIST_PRODUCT_ALIASES = {
   "男呔": "男呔",
   "女呔": "女呔",
   "男藍襪": "男藍襪",
+  "男藍袜": "男藍襪",
   "女灰長襪": "女灰長襪",
+  "女灰長袜": "女灰長襪",
   "女長恤": "女裝白色長袖恤衫",
   "女生白色長袖恤衫": "女裝白色長袖恤衫",
   "男生白色長袖恤衫": "男生白色長袖恤衫",
@@ -651,9 +659,12 @@ const PRICE_LIST_PRODUCT_ALIASES = {
   "男西裝連背心": "男生西裝褸配背心",
   "男生西裝連背心": "男生西裝褸配背心",
   "西裝連背心": "西裝褸配背心",
+  "炭灰西裝連背心": "深炭灰色西裝褸配厚抓毛背心",
+  "炭灰西装連背心": "深炭灰色西裝褸配厚抓毛背心",
   "女裝西裝褸配背心": "女裝西裝褸配背心",
   "男生西裝褸配背心": "男生西裝褸配背心",
   "深炭灰色西裝褸配厚抓毛背心": "深炭灰色西裝褸配厚抓毛背心",
+  "撊棉長褸": "撊棉長褸",
   "V背心": "V領背心冷衫",
   "V領背心": "V領背心冷衫",
   "V領背心冷衫": "V領背心冷衫",
@@ -709,6 +720,8 @@ const priceListSeasonForRow = (rows, rowIndex) => {
 const canonicalPriceListProductName = (value, season = "") => {
   const rawName = String(value || "").replace(/\s+/g, " ").trim();
   const normalizedName = normalizePriceListProductName(rawName);
+  const tieName = normalizedName.match(/^(男呔|女呔)\d+$/)?.[1];
+  if (tieName) return PRICE_LIST_PRODUCT_ALIASES[tieName];
   if (normalizedName === "占領恤") {
     if (season === "夏") return "白色短袖恤衫";
     if (season === "冬") return "男生白色長袖恤衫";
@@ -721,12 +734,12 @@ const looksLikeProductHeader = (value) => {
   if (Object.prototype.hasOwnProperty.call(PRICE_LIST_PRODUCT_ALIASES, text)) return true;
   return text && text.length <= 24
     && !/^(上圍|腰圍|褲長|裙長|尺碼|碼數|價錢|價格|數量|夏(?!運衣|運褲)|冬|長|短|\d|加\$?)/.test(text)
-    && /(?:裙|褲|恤衫|襯衫|恤|衫|棉褸|外套|冷衫|運衣|運動衣|運動褲|上衣|襪|呔|皮帶|底衫|校徽|套裝|單衫|單衣|單褲|背心|長袖|西褲|3\/7)/.test(text);
+    && /(?:裙|褲|恤衫|襯衫|恤|衫|棉.*褸|棉.*褛|外套|冷衫|運衣|運動衣|運動褲|上衣|襪|袜|呔|皮帶|底衫|校徽|套裝|單衫|單衣|單褲|背心|長袖|西褲|3\/7)/.test(text);
 };
 const PRICE_LIST_TAILORED_SIZES = [
   { match: /(?:裙)/, values: ["42", "44", "46", "48", "50"], matrixDimension: "length" },
   { match: /(?:西褲|長褲)/, values: ["32", "34", "36", "38", "40", "42", "44", "46", "48", "50", "52"], matrixDimension: "length" },
-  { match: /(?:西裝.*背心|背心.*西裝|西裝褸.*背心)/, values: ["32", "34", "36", "38", "40", "42", "44", "46", "48", "50", "52"], matrixDimension: "length" },
+  { match: /(?:西裝.*背心|西装.*背心|背心.*西裝|背心.*西装|西裝褸.*背心|西装褸.*背心)/, values: ["32", "34", "36", "38", "40", "42", "44", "46", "48", "50", "52", "54", "56", "58", "60"], matrixDimension: "length" },
   { match: /(?:恤衫|襯衫|尖領恤|恤)/, values: ["16.5", "17", "17.5", "18", "18.5", "19", "19.5", "20", "21", "22"] },
   { match: /(?:運動上衣|夏運衣|夏季運動衣|女裝夏季運動衣|男裝夏季運動衣|四社.*夏運衣)/, values: ["32", "34", "36", "38", "40", "裁碼"] },
   { match: /(?:運動褲|夏運褲|夏季運動褲|女裝夏季運動褲|男裝夏季運動褲)/, values: ["裁碼"] },
@@ -830,12 +843,16 @@ const convertIrregularPriceList = (rows) => {
         converted.push({ 學校: school, 款式名稱: name, 長度: "", 尺碼: "均碼", 價錢: standalonePrice });
         return;
       }
+      if (/(?:呔|襪|袜)/.test(name) && standalonePrice !== undefined) {
+        converted.push({ 學校: school, 款式名稱: name, 長度: "", 尺碼: "均碼", 價錢: standalonePrice });
+        return;
+      }
       let sizeColumn = columnIndex;
       let priceColumn = -1;
       const quantityMarker = String(row[columnIndex + 1] || "").trim().match(/^\d+(?:件|條|對|套|包)$/);
       if (quantityMarker) {
         for (let candidate = columnIndex - 1; candidate >= 0; candidate--) {
-          if (rows.slice(rowIndex + 1, rowIndex + 6).some((nextRow) => looksLikeSizeValue(nextRow?.[candidate]))) {
+          if (rows.slice(rowIndex + 1, rowIndex + 6).some((nextRow) => looksLikeDimensionValue(nextRow?.[candidate]))) {
             sizeColumn = candidate;
             break;
           }
@@ -853,7 +870,7 @@ const convertIrregularPriceList = (rows) => {
         const groupEnd = headerColumns[headerColumns.indexOf(groupStart) + 1] ?? groupStart;
         const candidateSizeColumns = [];
         for (let candidate = Math.max(0, groupStart - 2); candidate <= groupEnd + 2; candidate++) {
-          if (rows.slice(rowIndex + 1, rowIndex + 6).some((nextRow) => looksLikeSizeValue(nextRow?.[candidate]))) {
+          if (rows.slice(rowIndex + 1, rowIndex + 6).some((nextRow) => looksLikeDimensionValue(nextRow?.[candidate]))) {
             candidateSizeColumns.push(candidate);
           }
         }
@@ -872,7 +889,7 @@ const convertIrregularPriceList = (rows) => {
       }
       for (let lookAhead = rowIndex + 1; lookAhead < Math.min(rows.length, rowIndex + 5); lookAhead++) {
         if (priceColumn >= 0) break;
-        if (looksLikeSizeValue(rows[lookAhead]?.[sizeColumn])) {
+        if (looksLikeDimensionValue(rows[lookAhead]?.[sizeColumn])) {
           for (let candidate = columnIndex + 1; candidate < Math.min(row.length, columnIndex + 6); candidate++) {
             if (numericCell(rows[lookAhead]?.[candidate]) !== null) {
               priceColumn = candidate;
@@ -883,7 +900,7 @@ const convertIrregularPriceList = (rows) => {
         }
       }
       if (priceColumn < 0) {
-        const nearbySizeColumn = row.findIndex((_, candidate) => rows.slice(rowIndex + 1, rowIndex + 6).some((nextRow) => looksLikeSizeValue(nextRow?.[candidate])));
+        const nearbySizeColumn = row.findIndex((_, candidate) => rows.slice(rowIndex + 1, rowIndex + 6).some((nextRow) => looksLikeDimensionValue(nextRow?.[candidate])));
         if (nearbySizeColumn >= 0) {
           sizeColumn = nearbySizeColumn;
           priceColumn = row.findIndex((_, candidate) => candidate > sizeColumn && rows.slice(rowIndex + 1, rowIndex + 6).some((nextRow) => numericCell(nextRow?.[candidate]) !== null));
@@ -928,7 +945,7 @@ const convertIrregularPriceList = (rows) => {
         if (hasBottomShirtHeader && name !== "底衫") break;
         const size = String(rows[dataRow]?.[sizeColumn] ?? "").trim();
         const price = numericCell(rows[dataRow]?.[priceColumn]);
-        if (!size || (!looksLikeSizeValue(size) && size !== "裁碼") || price === null) {
+        if (!size || (!looksLikeDimensionValue(size) && size !== "裁碼") || price === null) {
           if (dataRow > rowIndex + 1 && rows[dataRow]?.every((value) => String(value || "").trim() === "")) break;
           continue;
         }
