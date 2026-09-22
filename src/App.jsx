@@ -317,9 +317,11 @@ const seasonOf = (product) => {
   return "全年";
 };
 const listSchools = (products) => {
-  const knownSchoolNames = typeof schoolCatalog !== "undefined"
-    ? Object.keys(schoolCatalog)
-    : [...Object.keys(baseSchoolCatalog), ...Object.keys(workbookSchoolCatalog)];
+  const knownSchoolNames = [
+    ...Object.keys(baseSchoolCatalog),
+    ...Object.keys(workbookSchoolCatalog),
+    ...Object.keys(EXTRA_SCHOOL_CATALOG),
+  ];
 
   const set = new Set([
     ...products.map(schoolOf),
