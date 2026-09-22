@@ -1138,52 +1138,119 @@ const DEFAULT_ACCOUNTS = [
   { id: "acc-staff2", name: "店員B", role: ROLES.STAFF, pin: "3333" },
 ];
 
+const ENGLISH_RECEIPT_SCHOOL = "港青基信書院";
+const isEnglishReceiptSchool = (school) => String(school || "").trim() === ENGLISH_RECEIPT_SCHOOL;
+const receiptLanguageLabel = (language) => language === "en" ? "English" : "中文";
+const receiptProductUnit = (name, language) => {
+  const unit = productUnit(name);
+  if (language !== "en") return unit;
+  return { "件": "pcs", "對": "pairs", "包": "packs", "套": "sets", "條": "pcs", "個": "pcs" }[unit] || "pcs";
+};
+const receiptFieldLabels = (language) => language === "en" ? {
+  school: "School",
+  receiptNo: "Receipt No.",
+  sourceReceipt: "Source Receipt",
+  date: "Date",
+  customer: "Customer",
+  phone: "Last 4 digits",
+  outlet: "Outlet",
+  address: "Address",
+  telephone: "Telephone",
+  cashier: "Staff",
+  items: "Items",
+  quantity: "Qty",
+  itemCount: "Item count",
+  total: "Total due",
+  exchangeTotal: "Exchange difference",
+  cash: "Cash received",
+  refund: "Refund due",
+  change: "Change",
+  status: "Status",
+  completed: "Completed",
+  exchanged: "Exchange completed",
+  exchangeOut: "Exchange out: ",
+  returnPolicy: "Returns & exchanges: Within 30 days of purchase, present this receipt at the designated store to exchange the size, provided the item is unused, unwashed and unaltered.",
+  careTitle: "Care instructions:",
+  care: "Do not use bleach, colour bleach or bleaching products. Separate light and dark garments and hang them to dry promptly after washing.",
+  thanks: "Thank you for your purchase. We look forward to serving you again.",
+  qr: "This QR Code contains this electronic receipt.",
+} : {
+  school: "學校",
+  receiptNo: "收據編號",
+  sourceReceipt: "來源單據",
+  date: "交易日期",
+  customer: "客人",
+  phone: "電話尾4位",
+  outlet: "最近門店",
+  address: "門店地址",
+  telephone: "門店電話",
+  cashier: "服務員",
+  items: "商品明細",
+  quantity: "數量",
+  itemCount: "商品件數",
+  total: "應付總額",
+  exchangeTotal: "換貨差額",
+  cash: "實收現金",
+  refund: "應退客人",
+  change: "找續",
+  status: "交易狀態",
+  completed: "已完成",
+  exchanged: "換貨完成",
+  exchangeOut: "換出：",
+  returnPolicy: "退換條款：購貨後 30 天內，憑收據且商品未經使用、洗滌或改動，可親臨指定門市辦理更換尺碼。",
+  careTitle: "洗滌指引：",
+  care: "請勿使用含有漂白成份之洗衣產品、彩漂或漂白水。深淺色衣物必須分開洗滌，清洗後請即時晾曬，以免移色。",
+  thanks: "多謝惠顧，歡迎重臨",
+  qr: "此 QR Code 內容為本單電子收據",
+};
+
 // 每張單獨立嘅收據文字（用嚟印藍牙收據，亦係 QR code 嘅內容）
 // 加入學校名、單號短碼、負責開單員工，令收據睇落更似正式商業收據
-const buildReceiptLines = (order, shopName) => {
+const buildReceiptLines = (order, shopName, language = "zh") => {
+  const labels = receiptFieldLabels(language);
+  const english = language === "en";
   const lines = [];
-  lines.push("Victoria Uniform 校服銷售");
-  lines.push("電子銷售單 ELECTRONIC RECEIPT");
+  lines.push(english ? "Victoria Uniform" : "Victoria Uniform 校服銷售");
+  lines.push(english ? "ELECTRONIC RECEIPT" : "電子銷售單 ELECTRONIC RECEIPT");
   lines.push("================================");
-  lines.push(`收據編號：#${(order.id || "").toUpperCase()}`);
-  if (order.exchangeSourceReceiptId) lines.push(`來源單據：#${String(order.exchangeSourceReceiptId).toUpperCase()}`);
-  lines.push(`交易日期：${order.date || "-"} ${order.time || ""}`);
-  lines.push(`學校：${order.school || shopName || "-"}`);
+  lines.push(`${labels.receiptNo}: #${(order.id || "").toUpperCase()}`);
+  if (order.exchangeSourceReceiptId) lines.push(`${labels.sourceReceipt}: #${String(order.exchangeSourceReceiptId).toUpperCase()}`);
+  lines.push(`${labels.date}: ${order.date || "-"} ${order.time || ""}`);
+  lines.push(`${labels.school}: ${english && order.school === ENGLISH_RECEIPT_SCHOOL ? "YMCA of Hong Kong Christian College" : order.school || shopName || "-"}`);
   if (order.customerName || order.customerPhone) {
-    lines.push(`客人：${customerSurname(order.customerName) || "-"}`);
-    lines.push(`電話尾4位：${customerPhoneLast4(order.customerPhone) || "-"}`);
+    lines.push(`${labels.customer}: ${customerSurname(order.customerName) || "-"}`);
+    lines.push(`${labels.phone}: ${customerPhoneLast4(order.customerPhone) || "-"}`);
   }
   if (order.outletName) {
-    lines.push(`最近門店：${order.outletName}`);
-    lines.push(`門店地址：${order.outletAddress}`);
-    lines.push(`門店電話：${order.outletPhone}`);
+    lines.push(`${labels.outlet}: ${order.outletName}`);
+    lines.push(`${labels.address}: ${order.outletAddress}`);
+    lines.push(`${labels.telephone}: ${order.outletPhone}`);
   }
-  if (order.cashierName) lines.push(`服務員：${order.cashierName}`);
+  if (order.cashierName) lines.push(`${labels.cashier}: ${order.cashierName}`);
   lines.push("--------------------------------");
-  lines.push("商品明細");
+  lines.push(labels.items);
   order.items.forEach((it) => {
-    lines.push(`${it.exchangeReturn ? "換出：" : ""}${it.name}`);
+    lines.push(`${it.exchangeReturn ? labels.exchangeOut : ""}${it.name}`);
     lines.push(`  ${formatSizeForReceipt(it.name, it.size, it.length)}`);
-    lines.push(`  數量 ${it.qty}${productUnit(it.name)} x ${fmt(Math.abs(it.price))} = ${fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}`);
+    lines.push(`  ${labels.quantity} ${it.qty} ${receiptProductUnit(it.name, language)} x ${fmt(Math.abs(it.price))} = ${fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}`);
   });
   lines.push("--------------------------------");
-  lines.push(`商品件數：${order.itemCount || 0}`);
-  lines.push(`${order.exchangeSourceReceiptId ? "換貨差額" : "應付總額"}：${fmt(order.total)}`);
-  if (typeof order.cashReceived === "number") lines.push(`實收現金：${fmt(order.cashReceived)}`);
-  if (order.refundDue > 0) lines.push(`應退客人：${fmt(order.refundDue)}`);
-  else if (typeof order.changeDue === "number") lines.push(`找續：${fmt(order.changeDue)}`);
-  lines.push(order.exchangeSourceReceiptId ? "交易狀態：換貨完成" : "交易狀態：已完成");
+  lines.push(`${labels.itemCount}: ${order.itemCount || 0}`);
+  lines.push(`${order.exchangeSourceReceiptId ? labels.exchangeTotal : labels.total}: ${fmt(order.total)}`);
+  if (typeof order.cashReceived === "number") lines.push(`${labels.cash}: ${fmt(order.cashReceived)}`);
+  if (order.refundDue > 0) lines.push(`${labels.refund}: ${fmt(order.refundDue)}`);
+  else if (typeof order.changeDue === "number") lines.push(`${labels.change}: ${fmt(order.changeDue)}`);
+  lines.push(`${labels.status}: ${order.exchangeSourceReceiptId ? labels.exchanged : labels.completed}`);
   lines.push("--------------------------------");
-  lines.push("退換條款：購貨後 30 天內，憑收據且商品未經使用、洗滌或改動，可親臨指定門市辦理更換尺碼。");
-  lines.push("洗滌指引：");
-  lines.push("請勿使用含有漂白成份之洗衣產品、彩漂或漂白水。");
-  lines.push("深淺色衣物必須分開洗滌，清洗後請即時晾曬，以免移色。");
-  lines.push("多謝惠顧，歡迎重臨");
-  lines.push("此 QR Code 內容為本單電子收據");
+  lines.push(labels.returnPolicy);
+  lines.push(labels.careTitle);
+  lines.push(labels.care);
+  lines.push(labels.thanks);
+  lines.push(labels.qr);
   return lines;
 };
 
-const buildReceiptUrl = (order) => {
+const buildReceiptUrl = (order, language = "zh") => {
   const json = JSON.stringify(order);
   const bytes = new TextEncoder().encode(json);
   let binary = "";
@@ -1192,7 +1259,7 @@ const buildReceiptUrl = (order) => {
   });
   const encoded = btoa(binary);
   const publicUrl = (import.meta.env.VITE_PUBLIC_APP_URL || window.location.origin).replace(/\/$/, "");
-  return `${publicUrl}/receipt.html?data=${encodeURIComponent(encoded)}`;
+  return `${publicUrl}/receipt.html?lang=${language}&data=${encodeURIComponent(encoded)}`;
 };
 
 // ===================== 儲存層 =====================
@@ -1366,6 +1433,10 @@ export default function UniformPOS() {
   const [exchangeReplacementQueue, setExchangeReplacementQueue] = useState([]);
   const exchangeReplacementQueueRef = useRef([]);
   const [receipt, setReceipt] = useState(null);
+  const [receiptLanguage, setReceiptLanguage] = useState("zh");
+  useEffect(() => {
+    if (receipt) setReceiptLanguage("zh");
+  }, [receipt]);
   const [cashReceived, setCashReceived] = useState("");
   const [btStatus, setBtStatus] = useState({ state: "idle", msg: "" });
   const printAreaRef = useRef(null);
@@ -2586,7 +2657,7 @@ export default function UniformPOS() {
     window.print();
   };
 
-  const printBluetooth = async (order) => {
+  const printBluetooth = async (order, language = "zh") => {
     if (!navigator.bluetooth) {
       setBtStatus({ state: "error", msg: "呢部裝置／瀏覽器唔支援藍牙列印，請用「瀏覽器列印」或裝RawBT等打印橋接App。" });
       return;
@@ -2602,7 +2673,7 @@ export default function UniformPOS() {
       const service = await server.getPrimaryService(BT_SERVICE);
       const characteristic = await service.getCharacteristic(BT_CHAR);
 
-      const lines = buildReceiptLines(order, order.school || "校服銷售收據");
+      const lines = buildReceiptLines(order, order.school || "校服銷售收據", language);
       const text = lines.join("\n") + "\n\n\n";
 
       const ESC = 0x1b, GS = 0x1d;
@@ -3109,6 +3180,8 @@ export default function UniformPOS() {
       {receipt && (
         <ReceiptModal
           order={receipt}
+          language={receiptLanguage}
+          onLanguageChange={setReceiptLanguage}
           onClose={() => {
             setReceipt(null);
             setBtStatus({ state: "idle", msg: "" });
@@ -3122,8 +3195,8 @@ export default function UniformPOS() {
             return started;
           }}
           onExchange={startExchange}
-          onPrintBrowser={printBrowser}
-          onPrintBluetooth={() => printBluetooth(receipt)}
+          onPrintBrowser={() => printBrowser()}
+          onPrintBluetooth={(language) => printBluetooth(receipt, language)}
           btStatus={btStatus}
         />
       )}
@@ -3131,31 +3204,37 @@ export default function UniformPOS() {
       <div id="print-receipt" ref={printAreaRef} style={{ display: "none" }}>
         {receipt && (
           <div style={{ padding: 8, fontSize: 12, lineHeight: 1.5 }}>
-            <div style={{ textAlign: "center", fontWeight: 700 }}>Victoria Uniform 校服銷售</div>
-            <div style={{ textAlign: "center" }}>電子銷售單 ELECTRONIC RECEIPT</div>
-            <div>收據編號：#{(receipt.id || "").toUpperCase()}</div>
-            {receipt.exchangeSourceReceiptId && <div>來源單據：#{String(receipt.exchangeSourceReceiptId).toUpperCase()}</div>}
-            <div>交易日期：{receipt.date} {receipt.time}</div>
-            <div>學校：{receipt.school || "-"}</div>
-            <div>客人：{customerSurname(receipt.customerName) || "-"}</div>
-            <div>電話尾4位：{customerPhoneLast4(receipt.customerPhone) || "-"}</div>
+            {(() => {
+              const labels = receiptFieldLabels(receiptLanguage);
+              const english = receiptLanguage === "en";
+              return <>
+            <div style={{ textAlign: "center", fontWeight: 700 }}>{english ? "Victoria Uniform" : "Victoria Uniform 校服銷售"}</div>
+            <div style={{ textAlign: "center" }}>{english ? "ELECTRONIC RECEIPT" : "電子銷售單 ELECTRONIC RECEIPT"}</div>
+            <div>{labels.receiptNo}: #{(receipt.id || "").toUpperCase()}</div>
+            {receipt.exchangeSourceReceiptId && <div>{labels.sourceReceipt}: #{String(receipt.exchangeSourceReceiptId).toUpperCase()}</div>}
+            <div>{labels.date}: {receipt.date} {receipt.time}</div>
+            <div>{labels.school}: {english && receipt.school === ENGLISH_RECEIPT_SCHOOL ? "YMCA of Hong Kong Christian College" : receipt.school || "-"}</div>
+            <div>{labels.customer}: {customerSurname(receipt.customerName) || "-"}</div>
+            <div>{labels.phone}: {customerPhoneLast4(receipt.customerPhone) || "-"}</div>
             <div>--------------------------------</div>
-            <div>商品明細</div>
+            <div>{labels.items}</div>
             {receipt.items.map((it, i) => (
               <div key={i}>
-                <div>{it.name}</div>
+                <div>{it.exchangeReturn ? labels.exchangeOut : ""}{it.name}</div>
                 <div>  {formatSizeForReceipt(it.name, it.size, it.length)}</div>
-                <div>  數量 {it.qty}{productUnit(it.name)} x {fmt(it.price)} = {fmt(it.price * it.qty)}</div>
+                <div>  {labels.quantity} {it.qty} {receiptProductUnit(it.name, receiptLanguage)} x {fmt(it.price)} = {fmt((it.exchangeReturn ? -1 : 1) * it.price * it.qty)}</div>
               </div>
             ))}
             <div>--------------------------------</div>
-            <div>商品件數：{receipt.itemCount}</div>
-            <div style={{ fontWeight: 700 }}>應付總額：{fmt(receipt.total)}</div>
-            <div>交易狀態：已完成</div>
+            <div>{labels.itemCount}: {receipt.itemCount}</div>
+            <div style={{ fontWeight: 700 }}>{receipt.exchangeSourceReceiptId ? labels.exchangeTotal : labels.total}: {fmt(receipt.total)}</div>
+            <div>{labels.status}: {receipt.exchangeSourceReceiptId ? labels.exchanged : labels.completed}</div>
             <div style={{ marginTop: 8, color: "#555", whiteSpace: "pre-line" }}>
-              <strong>退換條款：</strong>購貨後 30 天內，憑收據且商品未經使用、洗滌或改動，可親臨指定門市辦理更換尺碼。{String.fromCharCode(10)}<strong>洗滌指引：</strong>{String.fromCharCode(10)}請勿使用含有漂白成份之洗衣產品、彩漂或漂白水。{String.fromCharCode(10)}深淺色衣物必須分開洗滌，清洗後請即時晾曬，以免移色。
+              <strong>{labels.returnPolicy}</strong>{String.fromCharCode(10)}<strong>{labels.careTitle}</strong>{String.fromCharCode(10)}{labels.care}
             </div>
-            <div style={{ textAlign: "center", marginTop: 8 }}>多謝惠顧，歡迎重臨</div>
+            <div style={{ textAlign: "center", marginTop: 8 }}>{labels.thanks}</div>
+              </>;
+            })()}
           </div>
         )}
       </div>
@@ -5127,10 +5206,10 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
   );
 }
 
-function ReceiptQR({ order }) {
+function ReceiptQR({ order, language = "zh" }) {
   const [status, setStatus] = useState("loading");
   const [modules, setModules] = useState(null);
-  const qrText = buildReceiptUrl(order);
+  const qrText = buildReceiptUrl(order, language);
 
   useEffect(() => {
     setStatus("loading");
@@ -5220,10 +5299,13 @@ function ReceiptQR({ order }) {
   );
 }
 
-function ReceiptModal({ order, onClose, onRedoSale, onExchange, onPrintBrowser, onPrintBluetooth, btStatus }) {
+function ReceiptModal({ order, language = "zh", onLanguageChange, onClose, onRedoSale, onExchange, onPrintBrowser, onPrintBluetooth, btStatus }) {
   const [exchangeSelection, setExchangeSelection] = useState(null);
+  const english = language === "en";
+  const labels = receiptFieldLabels(language);
+  const canTranslate = isEnglishReceiptSchool(order.school);
   const openCustomerReceipt = () => {
-    const receiptUrl = buildReceiptUrl(order);
+    const receiptUrl = buildReceiptUrl(order, language);
     const anchor = document.createElement("a");
     anchor.href = receiptUrl;
     anchor.target = "_blank";
@@ -5237,58 +5319,66 @@ function ReceiptModal({ order, onClose, onRedoSale, onExchange, onPrintBrowser, 
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 }}>
       <div style={{ background: "#fff", borderRadius: 14, maxWidth: 340, width: "100%", padding: 20, maxHeight: "85vh", overflowY: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <div style={{ fontSize: 16, fontWeight: 600 }}>交易完成</div>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>{english ? "Transaction completed" : "交易完成"}</div>
           <button className="pos-btn" onClick={onClose} style={{ background: "none" }}>
             <X size={18} />
           </button>
         </div>
 
-        <ReceiptQR order={order} />
+        <ReceiptQR order={order} language={language} />
 
         <div style={{ background: "#FAFAF8", border: "1px dashed #ccc", borderRadius: 8, padding: 12, fontFamily: "monospace", fontSize: 12, lineHeight: 1.6, marginBottom: 14 }}>
-          <div style={{ textAlign: "center", fontWeight: 700, fontSize: 13 }}>Victoria Uniform 校服銷售</div>
-          <div style={{ textAlign: "center", color: "#888", fontSize: 11 }}>電子銷售單 ELECTRONIC RECEIPT</div>
-          <div style={{ marginTop: 4 }}>收據編號：#{(order.id || "").toUpperCase()}</div>
-          {order.exchangeSourceReceiptId && <div>來源單據：#{String(order.exchangeSourceReceiptId).toUpperCase()}</div>}
-          <div>交易日期：{order.date} {order.time}</div>
-          <div>學校：{order.school || "-"}</div>
-          <div>客人：{customerSurname(order.customerName) || "-"}</div>
-          <div>電話尾4位：{customerPhoneLast4(order.customerPhone) || "-"}</div>
+          <div style={{ textAlign: "center", fontWeight: 700, fontSize: 13 }}>{english ? "Victoria Uniform" : "Victoria Uniform 校服銷售"}</div>
+          <div style={{ textAlign: "center", color: "#888", fontSize: 11 }}>{english ? "ELECTRONIC RECEIPT" : "電子銷售單 ELECTRONIC RECEIPT"}</div>
+          <div style={{ marginTop: 4 }}>{labels.receiptNo}: #{(order.id || "").toUpperCase()}</div>
+          {order.exchangeSourceReceiptId && <div>{labels.sourceReceipt}: #{String(order.exchangeSourceReceiptId).toUpperCase()}</div>}
+          <div>{labels.date}: {order.date} {order.time}</div>
+          <div>{labels.school}: {english ? "YMCA of Hong Kong Christian College" : order.school || "-"}</div>
+          <div>{labels.customer}: {customerSurname(order.customerName) || "-"}</div>
+          <div>{labels.phone}: {customerPhoneLast4(order.customerPhone) || "-"}</div>
           <div>--------------------------------</div>
-          <div>商品明細</div>
+          <div>{labels.items}</div>
           {order.items.map((it, i) => (
             <div key={i}>
-              <div>{it.exchangeReturn ? "換出：" : ""}{it.name}</div>
+              <div>{it.exchangeReturn ? labels.exchangeOut : ""}{it.name}</div>
               <div>  {formatSizeForReceipt(it.name, it.size, it.length)}</div>
-              <div>  數量 {it.qty}{productUnit(it.name)} x {fmt(Math.abs(it.price))} = {fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}</div>
+              <div>  {labels.quantity} {it.qty} {receiptProductUnit(it.name, language)} x {fmt(Math.abs(it.price))} = {fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}</div>
             </div>
           ))}
           <div>--------------------------------</div>
-          <div>商品件數：{order.itemCount}</div>
-          <div>{order.exchangeSourceReceiptId ? "換貨差額：" : "應付總額："}{fmt(order.total)}</div>
-          <div>實收現金：{fmt(order.cashReceived ?? order.total)}</div>
+          <div>{labels.itemCount}: {order.itemCount}</div>
+          <div>{order.exchangeSourceReceiptId ? labels.exchangeTotal : labels.total}: {fmt(order.total)}</div>
+          <div>{labels.cash}: {fmt(order.cashReceived ?? order.total)}</div>
           {order.refundDue > 0 ? (
-            <div style={{ fontWeight: 700, color: "#166534" }}>應退客人：{fmt(order.refundDue)}</div>
+            <div style={{ fontWeight: 700, color: "#166534" }}>{labels.refund}: {fmt(order.refundDue)}</div>
           ) : (
-            <div style={{ fontWeight: 700 }}>找續：{fmt(Math.max(order.changeDue ?? 0, 0))}</div>
+            <div style={{ fontWeight: 700 }}>{labels.change}: {fmt(Math.max(order.changeDue ?? 0, 0))}</div>
           )}
-          <div>交易狀態：{order.exchangeSourceReceiptId ? "換貨完成" : "已完成"}</div>
+          <div>{labels.status}: {order.exchangeSourceReceiptId ? labels.exchanged : labels.completed}</div>
           <div style={{ marginTop: 8, color: "#555", lineHeight: 1.5 }}>
-            <strong>退換條款：</strong>購貨後 30 天內，憑收據且商品未經使用、洗滌或改動，可親臨指定門市辦理更換尺碼。<br />
-            <strong>洗滌指引：</strong><br />
-            請勿使用含有漂白成份之洗衣產品、彩漂或漂白水。<br />
-            深淺色衣物必須分開洗滌，清洗後請即時晾曬，以免移色。
+            <strong>{labels.returnPolicy}</strong><br />
+            <strong>{labels.careTitle}</strong><br />
+            {labels.care}
           </div>
-          <div style={{ textAlign: "center", marginTop: 6, color: "#888" }}>多謝惠顧，歡迎重臨</div>
+          <div style={{ textAlign: "center", marginTop: 6, color: "#888" }}>{labels.thanks}</div>
         </div>
 
+        {canTranslate && (
+          <button
+            className="pos-btn"
+            onClick={() => onLanguageChange?.(english ? "zh" : "en")}
+            style={{ width: "100%", padding: "11px 0", borderRadius: 10, background: english ? "#EAF0F8" : "#FFF7ED", color: "#1F3A5F", border: "1px solid #B8CBE1", fontSize: 13, fontWeight: 700, marginBottom: 8 }}
+          >
+            {english ? "切換中文收據" : "轉換英文收據"}
+          </button>
+        )}
         <button
           className="pos-btn"
           onClick={openCustomerReceipt}
           title="打開客人可以掃描及查看的電子收據頁"
           style={{ width: "100%", padding: "13px 0", borderRadius: 10, background: "#1F3A5F", color: "#fff", fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 8 }}
         >
-          <QrCode size={16} /> 查看客人電子收據
+          <QrCode size={16} /> {english ? "View customer receipt" : "查看客人電子收據"}
         </button>
         <button
           className="pos-btn"
@@ -5296,7 +5386,7 @@ function ReceiptModal({ order, onClose, onRedoSale, onExchange, onPrintBrowser, 
           title="將此收據所有商品帶入銷售頁，重新進行退／換貨處理"
           style={{ width: "100%", padding: "13px 0", borderRadius: 10, background: "#FFF7ED", color: "#9A3412", border: "1px solid #FDBA74", fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 8 }}
         >
-          <ShoppingCart size={16} /> 退／換貨：重新進行此單銷售
+          <ShoppingCart size={16} /> {english ? "Return / exchange this sale" : "退／換貨：重新進行此單銷售"}
         </button>
         {exchangeSelection ? (
           <div style={{ background: "#FFF7ED", border: "1px solid #FDBA74", borderRadius: 10, padding: 12, marginBottom: 8 }}>
@@ -5335,7 +5425,7 @@ function ReceiptModal({ order, onClose, onRedoSale, onExchange, onPrintBrowser, 
         )}
         <button
           className="pos-btn"
-          onClick={onPrintBluetooth}
+          onClick={() => onPrintBluetooth?.(language)}
           title="只適用於支援 Web Bluetooth 的兼容打印機"
           style={{ width: "100%", padding: "12px 0", borderRadius: 10, background: "#fff", border: "1px solid #1F3A5F", color: "#1F3A5F", fontSize: 14, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
         >
