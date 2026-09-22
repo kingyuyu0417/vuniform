@@ -1782,7 +1782,11 @@ export default function UniformPOS() {
 
   useEffect(() => {
     if (!selectedSchool || !schools.includes(selectedSchool)) {
-      setSelectedSchool((prev) => prev || DESIGNATED_SCHOOL);
+      setSelectedSchool(() => (
+        schools.includes(DESIGNATED_SCHOOL)
+          ? DESIGNATED_SCHOOL
+          : (schools[0] || DESIGNATED_SCHOOL)
+      ));
     }
   }, [schools, selectedSchool]);
 
