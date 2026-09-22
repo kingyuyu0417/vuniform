@@ -1302,6 +1302,22 @@ export class AppErrorBoundary extends React.Component {
             <div style={{ fontSize: 14, color: "#475569", lineHeight: 1.6 }}>
               目前頁面無法正常載入，系統已自動切換到安全提示頁。請重新整理，若問題持續請檢查資料來源與網絡連線。
             </div>
+            {this.state.error && (
+              <pre style={{
+                margin: 0,
+                padding: 10,
+                overflowX: "auto",
+                textAlign: "left",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                borderRadius: 8,
+                background: "#fff7f7",
+                color: "#7f1d1d",
+                fontSize: 11,
+              }}>
+                {String(this.state.error.message || this.state.error)}
+              </pre>
+            )}
             <button
               onClick={() => window.location.reload()}
               style={{
