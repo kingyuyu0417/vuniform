@@ -1370,10 +1370,7 @@ export default function UniformPOS() {
 
   const [selectedSchool, setSelectedSchool] = useState(DESIGNATED_SCHOOL);
   const [schoolPanelOpen, setSchoolPanelOpen] = useState(false);
-  const customerSchools = [...new Set(products.map(schoolOf).filter(Boolean))]
-    .filter((school) => !deletedSchoolsRuntime.has(school))
-    .sort((a, b) => a.localeCompare(b, "zh-Hant"));
-  const schools = customerSchools;
+  const schools = listSchools(products);
 
   // 學校分類資料（階段/地區/18區），共用儲存，全部裝置見到同一份
   const [schoolMeta, setSchoolMeta] = useState({});
