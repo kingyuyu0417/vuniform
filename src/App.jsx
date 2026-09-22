@@ -318,9 +318,9 @@ const seasonOf = (product) => {
 };
 const listSchools = (products) => {
   const knownSchoolNames = [
-    ...Object.keys(baseSchoolCatalog),
-    ...Object.keys(workbookSchoolCatalog),
-    ...Object.keys(EXTRA_SCHOOL_CATALOG),
+    ...Object.keys(baseSchoolCatalog || {}),
+    ...Object.keys(workbookSchoolCatalog || {}),
+    ...(typeof EXTRA_SCHOOL_CATALOG !== "undefined" ? Object.keys(EXTRA_SCHOOL_CATALOG) : []),
   ];
 
   const set = new Set([
