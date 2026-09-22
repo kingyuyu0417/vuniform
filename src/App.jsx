@@ -1715,6 +1715,7 @@ export default function UniformPOS() {
 
   // 由雲端（共用儲存）攞返最新一份 products / sales-log
   const refreshFromCloud = async ({ skipProductsWhileEditing = true } = {}) => {
+    if (!authReady || (isSupabaseAuthEnabled && !session)) return;
     setSyncing(true);
     try {
       const skipProducts = skipProductsWhileEditing && (tabRef.current === "products" || productsSavePendingRef.current);
@@ -1867,7 +1868,11 @@ export default function UniformPOS() {
   };
 
   useEffect(() => {
-    if (!authReady) return; // Only run when authReady is true
+    if (!authReady) return;
+    if (isSupabaseAuthEnabled && !session) {
+      setLoaded(true);
+      return;
+    }
     
     (async () => {
       try {
@@ -1903,12 +1908,12 @@ export default function UniformPOS() {
         setLoaded(true);
       }
     })();
-  }, [authReady]);
+  }, [authReady, session]);
 
   // 第一次加載時自動刷新以確保從 Supabase 加載產品
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (loaded && products.length <= 20) {
+      if (loaded && authReady && (!isSupabaseAuthEnabled || session) && products.length <= 20) {
         // 如果只有默認產品或很少的產品，嘗試從 Supabase 重新加載
         refreshFromCloud({ skipProductsWhileEditing: false });
       }
