@@ -1370,6 +1370,7 @@ export default function UniformPOS() {
 
   const [selectedSchool, setSelectedSchool] = useState(DESIGNATED_SCHOOL);
   const [schoolPanelOpen, setSchoolPanelOpen] = useState(false);
+  const [schoolSettingsQuery, setSchoolSettingsQuery] = useState("");
   const customerSchools = [...new Set(products.map(schoolOf).filter(Boolean))]
     .filter((school) => !deletedSchoolsRuntime.has(school))
     .sort((a, b) => a.localeCompare(b, "zh-Hant"));
@@ -4468,59 +4469,75 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
               <div style={{ fontSize: 11, color: "#999", marginBottom: 8, lineHeight: 1.5 }}>
                 幫每間學校揀返分店、教育階段同所屬18區，「銷售」分頁揀學校時就可以逐層篩選，唔使成頁滾動搵。分店會先自動配對，你可以再手動更改；未設定嘅學校會歸類做「未分類」。
               </div>
-              {schools.map((sc) => {
-                const m = metaOf(schoolMeta, sc);
-                const region = m.region && HK_REGIONS.includes(m.region) ? m.region : "";
-                return (
-                  <div key={sc} style={{ display: "grid", gridTemplateColumns: "minmax(0, 2fr) repeat(4, minmax(0, 1fr))", gap: 6, alignItems: "center", padding: "8px 0", borderBottom: "1px solid #F0F0EC" }}>
-                    <div style={{ minWidth: 0, fontSize: 12, fontWeight: 500, overflowWrap: "anywhere" }}>{sc}</div>
-                    <select
-                    value={m.outletName || outletNameForSchool(sc, {})}
-                    onChange={(e) => saveSchoolMeta({ ...schoolMeta, [sc]: { ...m, outletName: e.target.value } })}
-                    style={{ width: "100%", minWidth: 0, padding: 5, borderRadius: 6, border: "1px solid #ccc", fontSize: 11, boxSizing: "border-box" }}
-                  >
-                    <option value="">分店？</option>
-                    {OUTLETS.map((outlet) => (
-                      <option key={outlet.name} value={outlet.name}>{outlet.name}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={m.level || ""}
-                      onChange={(e) => saveSchoolMeta({ ...schoolMeta, [sc]: { ...m, level: e.target.value } })}
-                      style={{ width: "100%", minWidth: 0, padding: 5, borderRadius: 6, border: "1px solid #ccc", fontSize: 11, boxSizing: "border-box" }}
-                    >
-                      <option value="">階段？</option>
-                      {SCHOOL_LEVELS.map((lv) => (
-                        <option key={lv} value={lv}>{lv}</option>
-                      ))}
-                    </select>
-                    <select
-                      value={region}
-                      onChange={(e) => {
-                        const r = e.target.value;
-                        saveSchoolMeta({ ...schoolMeta, [sc]: { ...m, region: r, district: HK_DISTRICTS[r] ? HK_DISTRICTS[r][0] : "" } });
-                      }}
-                      style={{ width: "100%", minWidth: 0, padding: 5, borderRadius: 6, border: "1px solid #ccc", fontSize: 11, boxSizing: "border-box" }}
-                    >
-                      <option value="">地區？</option>
-                      {HK_REGIONS.map((r) => (
-                        <option key={r} value={r}>{r}</option>
-                      ))}
-                    </select>
-                    <select
-                      value={m.district || ""}
-                      onChange={(e) => saveSchoolMeta({ ...schoolMeta, [sc]: { ...m, district: e.target.value } })}
-                      disabled={!region}
-                      style={{ width: "100%", minWidth: 0, padding: 5, borderRadius: 6, border: "1px solid #ccc", fontSize: 11, boxSizing: "border-box", background: region ? "#fff" : "#F0F0EC" }}
-                    >
-                      <option value="">18區？</option>
-                      {(HK_DISTRICTS[region] || []).map((d) => (
-                        <option key={d} value={d}>{d}</option>
-                      ))}
-                    </select>
-                  </div>
-                );
-              })}
+              <input
+                value={schoolSettingsQuery}
+                onChange={(e) => setSchoolSettingsQuery(e.target.value)}
+                placeholder="搜尋學校名稱…"
+                style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid #D5DDE5", boxSizing: "border-box", marginBottom: 10, fontSize: 12 }}
+              />
+              {(() => {
+                const q = schoolSettingsQuery.trim().toLowerCase();
+                const filteredSchools = q ? schools.filter((school) => school.toLowerCase().includes(q)) : [];
+                if (!q) {
+                  return <div style={{ fontSize: 12, color: "#6B7280" }}>輸入學校名稱後，才會顯示對應設定。</div>;
+                }
+                if (!filteredSchools.length) {
+                  return <div style={{ fontSize: 12, color: "#6B7280" }}>找不到相符學校。</div>;
+                }
+                return filteredSchools.map((sc) => {
+                  const m = metaOf(schoolMeta, sc);
+                  const region = m.region && HK_REGIONS.includes(m.region) ? m.region : "";
+                  return (
+                    <div key={sc} style={{ display: "grid", gridTemplateColumns: "minmax(0, 2fr) repeat(4, minmax(0, 1fr))", gap: 6, alignItems: "center", padding: "8px 0", borderBottom: "1px solid #F0F0EC" }}>
+                      <div style={{ minWidth: 0, fontSize: 12, fontWeight: 500, overflowWrap: "anywhere" }}>{sc}</div>
+                      <select
+                        value={m.outletName || outletNameForSchool(sc, {})}
+                        onChange={(e) => saveSchoolMeta({ ...schoolMeta, [sc]: { ...m, outletName: e.target.value } })}
+                        style={{ width: "100%", minWidth: 0, padding: 5, borderRadius: 6, border: "1px solid #ccc", fontSize: 11, boxSizing: "border-box" }}
+                      >
+                        <option value="">分店？</option>
+                        {OUTLETS.map((outlet) => (
+                          <option key={outlet.name} value={outlet.name}>{outlet.name}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={m.level || ""}
+                        onChange={(e) => saveSchoolMeta({ ...schoolMeta, [sc]: { ...m, level: e.target.value } })}
+                        style={{ width: "100%", minWidth: 0, padding: 5, borderRadius: 6, border: "1px solid #ccc", fontSize: 11, boxSizing: "border-box" }}
+                      >
+                        <option value="">階段？</option>
+                        {SCHOOL_LEVELS.map((lv) => (
+                          <option key={lv} value={lv}>{lv}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={region}
+                        onChange={(e) => {
+                          const r = e.target.value;
+                          saveSchoolMeta({ ...schoolMeta, [sc]: { ...m, region: r, district: HK_DISTRICTS[r] ? HK_DISTRICTS[r][0] : "" } });
+                        }}
+                        style={{ width: "100%", minWidth: 0, padding: 5, borderRadius: 6, border: "1px solid #ccc", fontSize: 11, boxSizing: "border-box" }}
+                      >
+                        <option value="">地區？</option>
+                        {HK_REGIONS.map((r) => (
+                          <option key={r} value={r}>{r}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={m.district || ""}
+                        onChange={(e) => saveSchoolMeta({ ...schoolMeta, [sc]: { ...m, district: e.target.value } })}
+                        disabled={!region}
+                        style={{ width: "100%", minWidth: 0, padding: 5, borderRadius: 6, border: "1px solid #ccc", fontSize: 11, boxSizing: "border-box", background: region ? "#fff" : "#F0F0EC" }}
+                      >
+                        <option value="">18區？</option>
+                        {(HK_DISTRICTS[region] || []).map((d) => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           )}
         </div>
