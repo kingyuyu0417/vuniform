@@ -2132,6 +2132,7 @@ export default function UniformPOS() {
   };
 
   useEffect(() => {
+    if (!authReady || (isSupabaseAuthEnabled && !session)) return undefined;
     let isMounted = true;
 
     const trackableStatuses = ["PENDING", "PREPARING", "READY"];
@@ -2222,7 +2223,7 @@ export default function UniformPOS() {
       isMounted = false;
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [authReady, session]);
 
   const handleGuestSubmit = (guest) => {
     setQueueVisits((prev) => [guest, ...prev]);
