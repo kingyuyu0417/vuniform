@@ -3828,6 +3828,29 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
     setMatrixDrafts((current) => ({ ...current, [productId]: { ...(current[productId] || {}), [field]: value } }));
   };
 
+  const calculateMatrixPrices = (sizes, draft, { preserveExistingPrices = false } = {}) => {
+    const baseByLength = {};
+    String(draft.basePrices || "").split(/[,\n，、]+/).map((entry) => entry.trim()).filter(Boolean).forEach((entry) => {
+      const match = entry.match(/^(.+?)\s*[=:]\s*(\d+(?:\.\d+)?)$/);
+      if (match) baseByLength[match[1].trim()] = Number(match[2]);
+    });
+    const surchargeRules = String(draft.surcharges || "").split(/[,\n，、]+/).map((entry) => entry.trim()).filter(Boolean).map((entry) => {
+      const match = entry.match(/^(\d+(?:\.\d+)?)\s*(\+)?\s*[=:]\s*\+?(\d+(?:\.\d+)?)$/);
+      return match ? { threshold: Number(match[1]), amount: Number(match[3]), minimum: Boolean(match[2]) } : null;
+    }).filter(Boolean).sort((first, second) => second.threshold - first.threshold);
+    if (!Object.keys(baseByLength).length || !surchargeRules.length) return null;
+    return {
+      sizes: sizes.map((item) => {
+        const base = baseByLength[item.length];
+        const lengthNumber = Number(String(item.length).replace(/[^\d.]/g, ""));
+        const rule = surchargeRules.find((candidate) => candidate.minimum ? lengthNumber >= candidate.threshold : lengthNumber === candidate.threshold);
+        if (preserveExistingPrices && isPricedSize(item)) return item;
+        return { ...item, price: Number.isFinite(Number(base)) && rule ? Number(base) + rule.amount : null };
+      }),
+      pricing: { baseByLength, surchargeRules },
+    };
+  };
+
   const applyMatrixDraft = (product) => {
     const draft = matrixDrafts[product.id] || {};
     const lengths = String(draft.lengths || "").split(/[,\s，、]+/).map((value) => value.trim()).filter(Boolean);
@@ -3861,34 +3884,25 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
 
     // Keep any other existing sizes that were not affected, preserving their prices
     const finalSizes = Array.from(existing.values());
-
-    updateProduct(product.id, { ...product, priceMode: "matrix", sizes: finalSizes });
+    const calculated = calculateMatrixPrices(finalSizes, draft, { preserveExistingPrices: true });
+    updateProduct(product.id, {
+      ...product,
+      priceMode: "matrix",
+      sizes: calculated ? calculated.sizes : finalSizes,
+      ...(calculated ? { pricing: calculated.pricing } : {}),
+    });
     updateMatrixDraft(product.id, "lengths", "");
     updateMatrixDraft(product.id, "sizes", "");
   };
 
   const applyMatrixPricing = (product) => {
     const draft = matrixDrafts[product.id] || {};
-    const baseByLength = {};
-    String(draft.basePrices || "").split(/[,\n，、]+/).map((entry) => entry.trim()).filter(Boolean).forEach((entry) => {
-      const match = entry.match(/^(.+?)\s*[=:]\s*(\d+(?:\.\d+)?)$/);
-      if (match) baseByLength[match[1].trim()] = Number(match[2]);
-    });
-    const surchargeRules = String(draft.surcharges || "").split(/[,\n，、]+/).map((entry) => entry.trim()).filter(Boolean).map((entry) => {
-      const match = entry.match(/^(\d+)\s*(\+)?\s*[=:]\s*\+?(\d+(?:\.\d+)?)$/);
-      return match ? { threshold: Number(match[1]), amount: Number(match[3]), minimum: Boolean(match[2]) } : null;
-    }).filter(Boolean).sort((first, second) => second.threshold - first.threshold);
-    if (!Object.keys(baseByLength).length || !surchargeRules.length) {
-      window.alert("請輸入基本價及加價規則，例如：33=87,34=90；32+=0,40=10,42=20,44+=30。");
+    const calculated = calculateMatrixPrices(product.sizes, draft);
+    if (!calculated) {
+      window.alert("請輸入基本價及長度加價規則，例如：30=87,32=90；40=10,41.5=20,43+=30。");
       return;
     }
-    const nextSizes = product.sizes.map((item) => {
-      const base = baseByLength[item.length];
-      const sizeNumber = Number(String(item.size).replace(/[^\d.]/g, ""));
-      const rule = surchargeRules.find((candidate) => candidate.minimum ? sizeNumber >= candidate.threshold : sizeNumber === candidate.threshold);
-      return { ...item, price: Number.isFinite(Number(base)) && rule ? Number(base) + rule.amount : null };
-    });
-    updateProduct(product.id, { ...product, priceMode: "matrix", sizes: nextSizes, pricing: { baseByLength, surchargeRules } });
+    updateProduct(product.id, { ...product, priceMode: "matrix", sizes: calculated.sizes, pricing: calculated.pricing });
   };
 
   const moveProduct = (id, direction) => {
@@ -4444,23 +4458,33 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
             style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#1F3A5F", background: "#EEF1F5", padding: "8px 12px", borderRadius: 8, width: "100%", justifyContent: "space-between" }}
           >
             <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <MapPin size={13} /> 學校分類設定（階段／地區／18區）
+              <MapPin size={13} /> 學校設定（分店／階段／地區／18區）
             </span>
             {showClassifyPanel ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
           {showClassifyPanel && (
             <div style={{ background: "#fff", border: "1px solid #E5E5E0", borderRadius: 10, marginTop: 6, padding: 10 }}>
               <div style={{ fontSize: 11, color: "#999", marginBottom: 8, lineHeight: 1.5 }}>
-                幫每間學校揀返教育階段同所屬18區，「銷售」分頁揀學校時就可以逐層篩選，唔使成頁滾動搵。未設定嘅學校會歸類做「未分類」。
+                幫每間學校揀返分店、教育階段同所屬18區，「銷售」分頁揀學校時就可以逐層篩選，唔使成頁滾動搵。分店會先自動配對，你可以再手動更改；未設定嘅學校會歸類做「未分類」。
               </div>
               {schools.map((sc) => {
                 const m = metaOf(schoolMeta, sc);
                 const region = m.region && HK_REGIONS.includes(m.region) ? m.region : "";
                 return (
-                  <div key={sc} style={{ display: "grid", gridTemplateColumns: "minmax(0, 2fr) repeat(3, minmax(0, 1fr))", gap: 6, alignItems: "center", padding: "8px 0", borderBottom: "1px solid #F0F0EC" }}>
+                  <div key={sc} style={{ display: "grid", gridTemplateColumns: "minmax(0, 2fr) repeat(4, minmax(0, 1fr))", gap: 6, alignItems: "center", padding: "8px 0", borderBottom: "1px solid #F0F0EC" }}>
                     <div style={{ minWidth: 0, fontSize: 12, fontWeight: 500, overflowWrap: "anywhere" }}>{sc}</div>
                     <select
-                      value={m.level || ""}
+                    value={m.outletName || outletNameForSchool(sc, {})}
+                    onChange={(e) => saveSchoolMeta({ ...schoolMeta, [sc]: { ...m, outletName: e.target.value } })}
+                    style={{ width: "100%", minWidth: 0, padding: 5, borderRadius: 6, border: "1px solid #ccc", fontSize: 11, boxSizing: "border-box" }}
+                  >
+                    <option value="">分店？</option>
+                    {OUTLETS.map((outlet) => (
+                      <option key={outlet.name} value={outlet.name}>{outlet.name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={m.level || ""}
                       onChange={(e) => saveSchoolMeta({ ...schoolMeta, [sc]: { ...m, level: e.target.value } })}
                       style={{ width: "100%", minWidth: 0, padding: 5, borderRadius: 6, border: "1px solid #ccc", fontSize: 11, boxSizing: "border-box" }}
                     >
@@ -4566,7 +4590,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
                   />
                   <button className="pos-btn" onClick={() => applyMatrixDraft(p)} style={{ padding: "7px 10px", borderRadius: 7, background: "#1F3A5F", color: "#fff", fontSize: 12 }}>建立組合（保留已有價格）</button>
                   <div style={{ borderTop: "1px solid #D9E2EC", marginTop: 9, paddingTop: 9 }}>
-                    <div style={{ fontSize: 11, color: "#52657A", marginBottom: 5 }}>可選：批量套用基本價及加價（未符合規則會保持待補價）</div>
+                    <div style={{ fontSize: 11, color: "#52657A", marginBottom: 5 }}>可選：自動套用基本價及長度加價；建立組合時只會填待補價，不會覆蓋已有價格</div>
                     <input
                       value={matrixDrafts[p.id]?.basePrices || ""}
                       onChange={(e) => updateMatrixDraft(p.id, "basePrices", e.target.value)}
@@ -4576,10 +4600,10 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
                     <input
                       value={matrixDrafts[p.id]?.surcharges || ""}
                       onChange={(e) => updateMatrixDraft(p.id, "surcharges", e.target.value)}
-                      placeholder={`上圍加價，例如：32+=0,40=10,42=20,44+=30`}
+                      placeholder={`長度／袖長加價，例如：40=10,41.5=20,43+=30`}
                       style={{ width: "100%", padding: 7, marginBottom: 6, borderRadius: 7, border: "1px solid #B8C7D8", fontSize: 12, boxSizing: "border-box" }}
                     />
-                    <button className="pos-btn" onClick={() => applyMatrixPricing(p)} style={{ padding: "7px 10px", borderRadius: 7, background: "#28784B", color: "#fff", fontSize: 12 }}>套用價格並保留每格最終價</button>
+                    <button className="pos-btn" onClick={() => applyMatrixPricing(p)} style={{ padding: "7px 10px", borderRadius: 7, background: "#28784B", color: "#fff", fontSize: 12 }}>重新套用價格（會更新每格價格）</button>
                   </div>
                 </div>
               )}
