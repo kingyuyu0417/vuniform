@@ -3844,8 +3844,9 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
         const base = baseByLength[item.length];
         const lengthNumber = Number(String(item.length).replace(/[^\d.]/g, ""));
         const rule = surchargeRules.find((candidate) => candidate.minimum ? lengthNumber >= candidate.threshold : lengthNumber === candidate.threshold);
+        const calculatedPrice = Number.isFinite(Number(base)) && rule ? Number(base) + rule.amount : null;
         if (preserveExistingPrices && isPricedSize(item)) return item;
-        return { ...item, price: Number.isFinite(Number(base)) && rule ? Number(base) + rule.amount : null };
+        return calculatedPrice === null ? item : { ...item, price: calculatedPrice };
       }),
       pricing: { baseByLength, surchargeRules },
     };
