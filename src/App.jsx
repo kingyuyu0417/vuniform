@@ -1370,7 +1370,6 @@ export default function UniformPOS() {
 
   const [selectedSchool, setSelectedSchool] = useState(DESIGNATED_SCHOOL);
   const [schoolPanelOpen, setSchoolPanelOpen] = useState(false);
-  const [schoolSettingsQuery, setSchoolSettingsQuery] = useState("");
   const customerSchools = [...new Set(products.map(schoolOf).filter(Boolean))]
     .filter((school) => !deletedSchoolsRuntime.has(school))
     .sort((a, b) => a.localeCompare(b, "zh-Hant"));
@@ -3760,6 +3759,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   const [newSchoolOutlet, setNewSchoolOutlet] = useState(OUTLETS[0].name);
   const newSchoolInputRef = useRef(null);
   const [showClassifyPanel, setShowClassifyPanel] = useState(false);
+  const [schoolSettingsQuery, setSchoolSettingsQuery] = useState("");
   const productsRef = useRef(products);
 
   const schools = listSchools(products);
