@@ -2047,6 +2047,12 @@ export default function UniformPOS() {
   };
 
   const saveProducts = (next, options = {}) => {
+    if (!Array.isArray(next) || next.length === 0) {
+      const message = "拒絕保存空商品清單，避免刪除整個商品庫。請先載入或匯入商品資料。";
+      setProductsSaveError(message);
+      setProductsSaveState("error");
+      return false;
+    }
     productsRef.current = next;
     setProducts(next);
     setProductsSaveError("");
@@ -2075,6 +2081,11 @@ export default function UniformPOS() {
       productsSaveTimerRef.current = null;
     }
     const next = productsRef.current;
+    if (!Array.isArray(next) || next.length === 0) {
+      setProductsSaveError("拒絕保存空商品清單，避免刪除整個商品庫。請先載入或匯入商品資料。");
+      setProductsSaveState("error");
+      return false;
+    }
     productsSavePendingRef.current = true;
     setProductsSaveError("");
     setProductsSaveState("saving");

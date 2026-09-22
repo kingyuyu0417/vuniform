@@ -60,6 +60,7 @@ const isKnownAuthoritativeProductSet = (products = []) => {
 };
 
 export const loadProducts = async ({ storage, supabase, isSupabaseAuthEnabled, fallbackProducts = [] }) => {
+  let authoritativeStoreWasEmpty = false;
   try {
     if (isSupabaseAuthEnabled && supabase) {
       const { data, error } = await supabase
@@ -70,6 +71,11 @@ export const loadProducts = async ({ storage, supabase, isSupabaseAuthEnabled, f
 
       if (!error && Array.isArray(data) && data.length > 0) {
         return normalizeProducts(data);
+      }
+
+      if (!error && Array.isArray(data) && data.length === 0) {
+        authoritativeStoreWasEmpty = true;
+        console.warn("[productsStore] Supabase products query returned no rows; preserving the current catalog.");
       }
 
       if (error) {
@@ -94,21 +100,28 @@ export const loadProducts = async ({ storage, supabase, isSupabaseAuthEnabled, f
     console.warn("loadProducts failed; using fallback", error);
   }
 
+  if (authoritativeStoreWasEmpty) {
+    return null;
+  }
+
   const fallback = normalizeProducts(fallbackProducts);
   if (isDemoFallbackProductSet(fallbackProducts)) {
     warnSingleSourceFallback();
-    return [];
+    return null;
   }
   if (fallbackProducts.length > 0 && !isKnownAuthoritativeProductSet(fallbackProducts)) {
     warnSingleSourceFallback();
-    return [];
+    return null;
   }
   warnSingleSourceFallback();
-  return fallback;
+  return fallback.length > 0 ? fallback : null;
 };
 
 export const saveProducts = async ({ products, storage, supabase, isSupabaseAuthEnabled }) => {
   const normalized = normalizeProducts(products);
+  if (normalized.length === 0) {
+    throw new Error("拒絕保存空商品清單，避免刪除整個商品庫。請先載入或匯入商品資料。");
+  }
   console.info("[productsStore] Saving authoritative product list to the configured single source.");
 
   if (isSupabaseAuthEnabled && supabase) {
