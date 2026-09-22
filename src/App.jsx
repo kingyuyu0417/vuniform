@@ -3838,17 +3838,31 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
       window.alert("請先輸入至少一個長度／袖長及一個腰圍／上圍。");
       return;
     }
-    const existing = new Map(product.sizes.map((item) => [`${item.length || ""}\u0000${item.size || ""}`, item]));
-    const nextSizes = uniqueLengths.flatMap((rawLength) => {
+
+    // Build a map of existing size entries so we can merge and preserve prices
+    const existing = new Map(product.sizes.map((item) => [`${item.length || ""}\u0000${item.size || ""}`, { ...item }]));
+
+    // Ensure every requested matrix combination exists; preserve previous entry (and price) when present
+    uniqueLengths.forEach((rawLength) => {
       const tailoredMatch = rawLength.match(/^裁碼\s*(.+)$/);
       const length = tailoredMatch ? tailoredMatch[1].trim() : rawLength;
       const isTailored = Boolean(tailoredMatch);
-      return uniqueSizes.map((size) => {
-        const previous = existing.get(`${length}\u0000${size}`);
-        return previous ? { ...previous, isTailored: previous.isTailored || isTailored } : { length, size, isTailored, price: null };
+      uniqueSizes.forEach((size) => {
+        const key = `${length}\u0000${size}`;
+        const previous = existing.get(key);
+        if (previous) {
+          // preserve price and mark tailored flag if either indicates tailored
+          existing.set(key, { ...previous, isTailored: Boolean(previous.isTailored) || isTailored });
+        } else {
+          existing.set(key, { length, size, isTailored, price: null });
+        }
       });
     });
-    updateProduct(product.id, { ...product, priceMode: "matrix", sizes: nextSizes });
+
+    // Keep any other existing sizes that were not affected, preserving their prices
+    const finalSizes = Array.from(existing.values());
+
+    updateProduct(product.id, { ...product, priceMode: "matrix", sizes: finalSizes });
     updateMatrixDraft(product.id, "lengths", "");
     updateMatrixDraft(product.id, "sizes", "");
   };
