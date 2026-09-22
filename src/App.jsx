@@ -537,6 +537,7 @@ const mergeCSVIntoProducts = (csvText, existingProducts) => {
 };
 
 const normalizeImportHeader = (value) => String(value || "").replace(/\s+/g, "").toLowerCase();
+const HIGH_CONFIDENCE_IMPORT_THRESHOLD = 0.95;
 const smartImportRows = (rows, existingProducts) => {
   const headerAliases = {
     school: ["學校", "学校", "school"],
@@ -588,6 +589,15 @@ const smartImportRows = (rows, existingProducts) => {
     previewRows.push({ school: schoolKey, name, length, size, price, action });
   });
   return { next, summary: { addedProducts, addedSizes, updatedSizes, rows: mappedRows.length }, errors, previewRows };
+};
+const isHighConfidenceImport = ({ analysis, confidence, conversionWarnings = [] }) => {
+  const errors = Array.isArray(analysis?.errors) ? analysis.errors : [];
+  const previewRows = Array.isArray(analysis?.previewRows) ? analysis.previewRows : [];
+  return Number(confidence) >= HIGH_CONFIDENCE_IMPORT_THRESHOLD
+    && previewRows.length > 0
+    && errors.length === 0
+    && conversionWarnings.length === 0
+    && previewRows.every((row) => row.school && row.school !== UNASSIGNED);
 };
 
 const asSheetRows = (workbook, xlsx) => xlsx.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, defval: "" });
@@ -3682,6 +3692,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   const [showImportHistory, setShowImportHistory] = useState(false);
   const [noticeAnalyzing, setNoticeAnalyzing] = useState(false);
   const [noticePreview, setNoticePreview] = useState(null);
+  const [autoApplyHighConfidence, setAutoApplyHighConfidence] = useState(true);
   const IMPORT_HISTORY_KEY = "import_history_v1";
 
   const saveSnapshotToCloud = async (snapshot) => {
@@ -3999,6 +4010,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
       confidence += Math.min(1, matchedRows / totalRows) * 0.6;
       if (isStandardFormat) confidence += 0.2;
       if (!converted.warnings || converted.warnings.length === 0) confidence += 0.2;
+      if (!isStandardFormat && converted.rows.length > 0 && (!converted.warnings || converted.warnings.length === 0)) confidence += 0.15;
       confidence = Math.max(0, Math.min(1, Number(confidence.toFixed(2))));
 
       const timestamp = new Date().toISOString();
@@ -4023,7 +4035,24 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
         console.warn("儲存匯入快照到雲端失敗", e);
       }
 
-      setImportPreview({ fileName: file.name, conversionMode: isStandardFormat ? "標準格式" : "價目表格式轉換", conversionWarnings: converted.warnings, ...analysis, errors: [...converted.warnings, ...analysis.errors], confidence, snapshotId: snapshot.id, timestamp });
+      const preview = { fileName: file.name, conversionMode: isStandardFormat ? "標準格式" : "價目表格式轉換", conversionWarnings: converted.warnings, ...analysis, errors: [...converted.warnings, ...analysis.errors], confidence, snapshotId: snapshot.id, timestamp };
+      setImportPreview(preview);
+
+      if (autoApplyHighConfidence && isHighConfidenceImport({ analysis, confidence, conversionWarnings: converted.warnings })) {
+        saveProducts(analysis.next);
+        const saved = await saveProductsNow();
+        if (saved) {
+          setImportResult({
+            summary: analysis.summary,
+            errors: [],
+            message: `已自動套用高信心匯入（信心分數 ${Math.round(confidence * 100)}%）。`,
+          });
+          setImportPreview(null);
+          setImportPreviewSearch("");
+        } else {
+          setImportResult({ summary: null, errors: ["分析符合自動匯入條件，但保存商品資料失敗；資料仍保留在預覽中，請重試。"] });
+        }
+      }
 
     } catch (err) {
       console.error(err);
@@ -4037,8 +4066,13 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
     if (!importPreview) return;
     setImporting(true);
     try {
-      await saveProducts(importPreview.next);
-      setImportResult({ summary: importPreview.summary, errors: importPreview.errors });
+      saveProducts(importPreview.next);
+      const saved = await saveProductsNow();
+      if (!saved) {
+        setImportResult({ summary: null, errors: ["匯入分析成功，但保存商品資料失敗，請重試。"] });
+        return;
+      }
+      setImportResult({ summary: importPreview.summary, errors: [] });
       setImportPreview(null);
       setImportPreviewSearch("");
     } catch (error) {
@@ -4146,8 +4180,16 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
         <div style={{ borderTop: "1px solid #E5E5E0", marginTop: 14, paddingTop: 14 }}>
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>批量匯入 / 匯出</div>
         <div style={{ fontSize: 12, color: "#888", marginBottom: 10, lineHeight: 1.5 }}>
-          支援 Excel／CSV。系統會自動識別學校、款式、長度／袖長、尺碼及價錢，先預覽分析結果，確認後才寫入。
+          支援 Excel／CSV。系統會自動識別學校、款式、長度／袖長、尺碼及價錢；高信心資料會直接寫入，其他資料仍然先預覽。
         </div>
+        <label style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10, fontSize: 12, color: "#475569", cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={autoApplyHighConfidence}
+            onChange={(event) => setAutoApplyHighConfidence(event.target.checked)}
+          />
+          高信心匯入自動落 production（信心至少 95%、零錯誤／警告）
+        </label>
         <div style={{ display: "flex", gap: 8 }}>
           <button
             className="pos-btn"
@@ -4250,6 +4292,12 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
 
         {importResult && (
           <div style={{ marginTop: 10, fontSize: 12, background: "#fff", borderRadius: 8, padding: 10, border: "1px solid #E5E5E0" }}>
+            {importResult.message && (
+              <div style={{ color: "#28784B", marginBottom: importResult.summary || importResult.errors.length ? 6 : 0, display: "flex", alignItems: "flex-start", gap: 6 }}>
+                <Check size={13} style={{ flexShrink: 0, marginTop: 1 }} />
+                <span>{importResult.message}</span>
+              </div>
+            )}
             {importResult.summary && (
               <div style={{ color: "#1F3A5F", marginBottom: importResult.errors.length ? 6 : 0, display: "flex", alignItems: "flex-start", gap: 6 }}>
                 <Check size={13} style={{ flexShrink: 0, marginTop: 1 }} />
