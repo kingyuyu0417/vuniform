@@ -1260,7 +1260,7 @@ if (!window.storage) {
   };
 }
 
-class AppErrorBoundary extends React.Component {
+export class AppErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
     this.state = { hasError: false, error: null };
