@@ -4476,15 +4476,25 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
                 style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid #D5DDE5", boxSizing: "border-box", marginBottom: 10, fontSize: 12 }}
               />
               {(() => {
-                const q = schoolSettingsQuery.trim().toLowerCase();
-                const filteredSchools = q ? schools.filter((school) => school.toLowerCase().includes(q)) : [];
-                if (!q) {
-                  return <div style={{ fontSize: 12, color: "#6B7280" }}>輸入學校名稱後，才會顯示對應設定。</div>;
+                const q = schoolSettingsQuery.trim().toLocaleLowerCase();
+                if (q.length < 2) {
+                  return <div style={{ fontSize: 12, color: "#6B7280" }}>請至少輸入 2 個中文字或英文字母，才會開始搜尋。</div>;
                 }
-                if (!filteredSchools.length) {
+                const matchingSchools = schools
+                  .map((school) => {
+                    const normalizedSchool = school.trim().toLocaleLowerCase();
+                    const score = normalizedSchool === q ? 0 : normalizedSchool.startsWith(q) ? 1 : normalizedSchool.includes(q) ? 2 : -1;
+                    return { school, score };
+                  })
+                  .filter(({ score }) => score >= 0)
+                  .sort((first, second) => first.score - second.score || first.school.localeCompare(second.school, "zh-Hant"));
+                if (!matchingSchools.length) {
                   return <div style={{ fontSize: 12, color: "#6B7280" }}>找不到相符學校。</div>;
                 }
-                return filteredSchools.map((sc) => {
+                const visibleSchools = matchingSchools.slice(0, 30);
+                return (
+                  <>
+                    {visibleSchools.map(({ school: sc }) => {
                   const m = metaOf(schoolMeta, sc);
                   const region = m.region && HK_REGIONS.includes(m.region) ? m.region : "";
                   return (
@@ -4536,7 +4546,14 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
                       </select>
                     </div>
                   );
-                });
+                      })}
+                      {matchingSchools.length > visibleSchools.length && (
+                        <div style={{ marginTop: 8, fontSize: 12, color: "#6B7280" }}>
+                          找到 {matchingSchools.length} 間學校，現只顯示最相關的 30 間；請輸入更多字元縮小結果。
+                        </div>
+                      )}
+                    </>
+                );
               })()}
             </div>
           )}
