@@ -247,7 +247,7 @@ const insertSalesOrderRecord = async (order, salesLog) => {
   }
 };
 
-// 攞晒目前所有學校名（去重、排序），未有分類嘅商品歸類做「未分類」
+// 只列出目前商品庫內實際有商品的學校，避免選到空商品學校
 const UNASSIGNED = "（未分類）";
 let deletedSchoolsRuntime = new Set();
 const schoolOf = (p) => (p.school && p.school.trim()) || UNASSIGNED;
@@ -320,15 +320,8 @@ const seasonOf = (product) => {
   return "全年";
 };
 const listSchools = (products) => {
-  const knownSchoolNames = [
-    ...Object.keys(baseSchoolCatalog || {}),
-    ...Object.keys(workbookSchoolCatalog || {}),
-    ...(typeof EXTRA_SCHOOL_CATALOG !== "undefined" ? Object.keys(EXTRA_SCHOOL_CATALOG) : []),
-  ];
-
   const set = new Set([
     ...products.map(schoolOf),
-    ...knownSchoolNames,
   ].filter((school) => school && !deletedSchoolsRuntime.has(school)));
 
   return Array.from(set).sort((a, b) => a.localeCompare(b, "zh-Hant"));
