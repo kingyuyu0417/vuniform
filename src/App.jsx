@@ -362,6 +362,15 @@ const normalizeProductState = (products) => {
     const productName = cleanProductName(product.name);
     const rawSizes = normalizeProductSizes(product.sizes);
     const sizes = /西褲/.test(productName) ? recoverUniformTrouserOffset(rawSizes) : rawSizes;
+    if (SIMPLE_SIZE_PRODUCT_NAMES.has(productName)) {
+      return {
+        ...product,
+        school: canonicalSchoolName(product.school),
+        name: productName,
+        sizes,
+        priceMode: sizes.some((size) => size.length) ? "matrix" : product.priceMode,
+      };
+    }
     const tailoredRule = PRICE_LIST_TAILORED_SIZES.find((rule) => rule.match.test(productName));
     const tailoredValues = tailoredRule?.values || [];
     const tailoredPriceByLength = tailoredRule?.matrixDimension === "length"
@@ -840,6 +849,11 @@ const PRICE_LIST_TAILORED_SIZES = [
   { match: /(?:冬天運動套裝)/, values: ["46", "48", "50", "52"] },
   { match: /(?:冬天運動單衫|冬天運動單褲|冬運單衣|冬運單衫|冬運單褲)/, values: ["46", "48", "50", "52"] },
 ];
+const SIMPLE_SIZE_PRODUCT_NAMES = new Set([
+  "深炭灰色西裝褸配厚抓毛背心",
+  "深炭灰色半截校裙",
+  "女裝西裝褸配背心",
+]);
 const LONG_TROUSER_LENGTHS = ["30", "31", "32", "33", "34", "35", "36", "37", "38.5", "40", "41.5", "43", "44.5", "46"];
 const DEFAULT_TROUSER_SURCHARGES = [
   { threshold: 43, amount: 30, minimum: true },
