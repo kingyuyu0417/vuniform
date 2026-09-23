@@ -2083,8 +2083,12 @@ export default function UniformPOS() {
 
       if (p && !productsSavePendingRef.current) {
         const authoritative = enforceAuthoritativeProducts(p);
-        setSourceIntegrityWarning(authoritative.length === 0 && p.length > 0 ? "產品資料來源不完整：目前只檢測到示範資料，已阻止當作正式產品庫。" : "");
-        setProducts(authoritative);
+        if (authoritative.length > 0) {
+          setSourceIntegrityWarning(p.length > 0 ? "" : "產品資料來源暫時沒有記錄，已保留目前商品資料。");
+          setProducts(authoritative);
+        } else if (p.length > 0) {
+          setSourceIntegrityWarning("產品資料來源不完整：目前只檢測到示範資料，已阻止當作正式產品庫。");
+        }
       }
       
       if (isSupabaseAuthEnabled ? Array.isArray(s) : s) {
@@ -2212,8 +2216,12 @@ export default function UniformPOS() {
         const sm = await window.storage.get("school-meta", true).catch(() => null);
         if (p) {
           const authoritative = enforceAuthoritativeProducts(p);
-          setSourceIntegrityWarning(authoritative.length === 0 && p.length > 0 ? "產品資料來源不完整：目前只檢測到示範資料，已阻止當作正式產品庫。" : "");
-          setProducts(authoritative);
+          if (authoritative.length > 0) {
+            setSourceIntegrityWarning(p.length > 0 ? "" : "產品資料來源暫時沒有記錄，已保留目前商品資料。");
+            setProducts(authoritative);
+          } else if (p.length > 0) {
+            setSourceIntegrityWarning("產品資料來源不完整：目前只檢測到示範資料，已阻止當作正式產品庫。");
+          }
         }
         if (isSupabaseAuthEnabled ? Array.isArray(s) : s) setSalesLog(isSupabaseAuthEnabled ? s : JSON.parse(s.value));
         if (a && a.value) {
