@@ -1008,7 +1008,7 @@ const convertIrregularPriceList = (rows) => {
       const isShirt = /(?:短恤|長恤|短袖恤|長袖恤|恤衫|襯衫|尖領恤|恤)/.test(name);
       const isBottomShirt = name === "底衫";
       const tailoredSizeRule = PRICE_LIST_TAILORED_SIZES.find((rule) => rule.matrixDimension === "size" && rule.match.test(name));
-      const isLongTrousers = /長西褲/.test(name) && Boolean(tailoredSizeRule);
+      const isLongTrousers = /西褲/.test(name) && Boolean(tailoredSizeRule);
       const shirtPriceAt12 = isShirt
         ? rawEntries.find(({ size }) => Number(size) === 12)?.price
         : undefined;
@@ -1041,7 +1041,18 @@ const convertIrregularPriceList = (rows) => {
         const matrixLengths = [...matrixLengthValues]
           .filter((value) => value !== "")
           .sort((first, second) => Number(first) - Number(second));
-        rawEntries.forEach(({ size: rawSize, price }) => {
+        const matrixEntries = [...rawEntries];
+        if (isLongTrousers) {
+          const tailoredEntry = rawEntries.find(({ size }) => size === "裁碼");
+          if (tailoredEntry) {
+            tailoredSizeRule.values.forEach((size) => {
+              if (!matrixEntries.some((entry) => entry.size === size)) {
+                matrixEntries.push({ size, price: tailoredEntry.price });
+              }
+            });
+          }
+        }
+        matrixEntries.forEach(({ size: rawSize, price }) => {
           const waistSizes = isLongTrousers && rawSize === "裁碼"
             ? tailoredSizeRule.values
             : expandTailoredPriceListValue(name, rawSize);
@@ -1069,6 +1080,28 @@ const convertIrregularPriceList = (rows) => {
           });
         });
       }
+    });
+  });
+  const trouserGroups = new Map();
+  converted.forEach((entry) => {
+    if (!/西褲/.test(entry.款式名稱) || entry.尺碼 !== "裁碼") return;
+    const key = `${entry.學校}\u0000${entry.款式名稱}`;
+    const group = trouserGroups.get(key) || new Map();
+    group.set(entry.長度 || "", entry.價錢);
+    trouserGroups.set(key, group);
+  });
+  trouserGroups.forEach((tailoredPrices, key) => {
+    const [school, name] = key.split("\u0000");
+    const existing = new Set(converted
+      .filter((entry) => entry.學校 === school && entry.款式名稱 === name)
+      .map((entry) => `${entry.長度 || ""}\u0000${entry.尺碼}`));
+    tailoredPrices.forEach((tailoredPrice, length) => {
+      const tailoredRule = PRICE_LIST_TAILORED_SIZES.find((rule) => rule.matrixDimension === "size" && rule.match.test(name));
+      (tailoredRule?.values || []).forEach((size) => {
+        const keyForEntry = `${length}\u0000${size}`;
+        if (existing.has(keyForEntry)) return;
+        converted.push({ 學校: school, 款式名稱: name, 長度: length, 尺碼: size, 價錢: tailoredPrice });
+      });
     });
   });
   if (!school) warnings.unshift("未能從價目表自動識別學校，匯入後會放入未分類。");
