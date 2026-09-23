@@ -945,6 +945,12 @@ const convertIrregularPriceList = (rows) => {
           priceColumn = row.findIndex((_, candidate) => candidate > sizeColumn && rows.slice(rowIndex + 1, rowIndex + 6).some((nextRow) => numericCell(nextRow?.[candidate]) !== null));
         }
       }
+      if (/(?:長西褲|西褲)/.test(name) && columnIndex > 0
+        && rows.slice(rowIndex + 1, rowIndex + 8).some((nextRow) => looksLikeDimensionValue(nextRow?.[columnIndex - 1]))
+        && rows.slice(rowIndex + 1, rowIndex + 8).some((nextRow) => numericCell(nextRow?.[columnIndex]) !== null)) {
+        sizeColumn = columnIndex - 1;
+        priceColumn = columnIndex;
+      }
       if (/(?:恤衫|襯衫|恤)/.test(name)) {
         const shirtSizeColumns = [];
         for (let candidate = Math.max(0, columnIndex - 1); candidate <= Math.min(row.length - 1, columnIndex + 2); candidate++) {
@@ -966,14 +972,13 @@ const convertIrregularPriceList = (rows) => {
         return;
       }
       const normalizedHeaderName = normalizePriceListProductName(rawName);
-      const isSportsSuitHeader = /運動套裝|運動套裝/.test(name) || normalizedHeaderName === "冬天運動套裝";
       const isSingleGarmentHeader = normalizedHeaderName === "單衣/褲";
       const hasSportsSuitHeader = row.some((value) => {
         const headerName = canonicalPriceListProductName(String(value || "").trim(), priceListSeasonForRow(rows, rowIndex));
         return /運動套裝/.test(headerName) || normalizePriceListProductName(value) === "冬天運動套裝";
       });
       if (isSingleGarmentHeader && hasSportsSuitHeader) return;
-      if (isSportsSuitHeader || isSingleGarmentHeader) {
+      if (isSingleGarmentHeader) {
         for (let dataRow = rowIndex + 1; dataRow < Math.min(rows.length, rowIndex + 15); dataRow += 1) {
           const size = String(rows[dataRow]?.[sizeColumn] ?? "").trim();
           const singleGarmentPrice = numericCell(rows[dataRow]?.[priceColumn + 1]);
