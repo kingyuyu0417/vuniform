@@ -351,26 +351,43 @@ const normalizeProductState = (products) => {
     const productName = cleanProductName(product.name);
     const tailoredRule = PRICE_LIST_TAILORED_SIZES.find((rule) => rule.match.test(productName));
     const tailoredValues = tailoredRule?.values || [];
+    const tailoredPriceByLength = tailoredRule?.matrixDimension === "length"
+      ? new Map(sizes.filter((item) => item.size === "裁碼").map((item) => [item.length || "", item.price]))
+      : new Map();
+    const tailoredPrice = tailoredRule?.matrixDimension !== "length"
+      ? sizes.find((item) => item.size === "裁碼")?.price
+      : undefined;
+    const pricedSizes = tailoredValues.length > 0
+      ? sizes.map((item) => {
+      const lengthPrice = tailoredPriceByLength.get(item.length || "");
+      const shouldUseTailoredPrice = item.size !== "裁碼"
+        && tailoredValues.includes(item.size)
+        && (tailoredRule?.matrixDimension === "length" ? lengthPrice !== undefined : tailoredPrice !== undefined);
+      return shouldUseTailoredPrice
+        ? { ...item, price: tailoredRule?.matrixDimension === "length" ? lengthPrice : tailoredPrice }
+        : item;
+      })
+      : sizes;
     const completedSizes = tailoredValues.length === 0
       ? sizes
       : tailoredRule.matrixDimension === "length"
-      ? [...sizes, ...tailoredValues.flatMap((length) => {
-        const baseSizes = sizes.filter((item) => !item.length);
+      ? [...pricedSizes, ...tailoredValues.flatMap((length) => {
+        const baseSizes = pricedSizes.filter((item) => !item.length);
         return baseSizes
-          .filter((item) => !sizes.some((existing) => existing.size === item.size && (existing.length || "") === length))
-          .map((item) => ({ size: item.size, length, price: item.price }));
+          .filter((item) => !pricedSizes.some((existing) => existing.size === item.size && (existing.length || "") === length))
+          .map((item) => ({ size: item.size, length, price: tailoredPriceByLength.get(length) ?? item.price }));
       })]
-      : [...sizes, ...[...new Set(sizes.map((item) => item.length || ""))].flatMap((length) => {
-        const entries = sizes.filter((item) => (item.length || "") === length);
+      : [...pricedSizes, ...[...new Set(pricedSizes.map((item) => item.length || ""))].flatMap((length) => {
+        const entries = pricedSizes.filter((item) => (item.length || "") === length);
         const reference = entries.find((item) => item.size === "裁碼")
           || [...entries].filter((item) => Number.isFinite(Number(item.size))).sort((first, second) => Number(second.size) - Number(first.size))[0]
-            || entries.find(isPricedSize);
-          return reference
-            ? tailoredValues
-              .filter((size) => !sizes.some((item) => item.size === size && (item.length || "") === length))
-              .map((size) => ({ size, length, price: reference.price }))
-            : [];
-        })];
+          || entries.find(isPricedSize);
+        return reference
+          ? tailoredValues
+            .filter((size) => !pricedSizes.some((item) => item.size === size && (item.length || "") === length))
+            .map((size) => ({ size, length, price: reference.price }))
+          : [];
+      })];
     return {
       ...product,
       school: canonicalSchoolName(product.school),
@@ -1076,6 +1093,7 @@ const convertIrregularPriceList = (rows) => {
           }
         }
         matrixEntries.forEach(({ size: rawSize, price }) => {
+          if (isLongTrousers && rawSize !== "裁碼" && rawEntries.some((entry) => entry.size === "裁碼") && tailoredSizeRule.values.includes(rawSize)) return;
           const waistSizes = isLongTrousers && rawSize === "裁碼"
             ? tailoredSizeRule.values
             : expandTailoredPriceListValue(name, rawSize);
