@@ -352,6 +352,11 @@ const normalizeProductState = (products) => {
     const tailoredSizeRule = PRICE_LIST_TAILORED_SIZES.find((rule) => rule.matrixDimension === "size" && rule.match.test(cleanProductName(product.name)));
     const tailoredSizes = tailoredSizeRule?.values || [];
     const lengths = new Set(sizes.map((size) => size.length || ""));
+    const isShirt = /(?:短恤|長恤|短袖恤|長袖恤|恤衫|襯衫|尖領恤|恤)/.test(cleanProductName(product.name));
+    const shirtTailoredRule = isShirt
+      ? PRICE_LIST_TAILORED_SIZES.find((rule) => rule.match.test(cleanProductName(product.name)))
+      : null;
+    const shirtTailoredSizes = shirtTailoredRule?.values || [];
     const completedSizes = isLongTrouser && tailoredSizes.length > 0
       ? [...sizes, ...[...lengths].flatMap((length) => {
         const entries = sizes.filter((size) => (size.length || "") === length);
@@ -364,6 +369,17 @@ const normalizeProductState = (products) => {
           .filter((size) => !sizes.some((item) => item.size === size && (item.length || "") === length))
           .map((size) => ({ size, length, price: reference.price }));
       })]
+      : isShirt && shirtTailoredSizes.length > 0
+        ? [...sizes, ...shirtTailoredSizes
+          .filter((size) => !sizes.some((item) => item.size === size && !item.length))
+          .map((size) => {
+            const reference = sizes.find((item) => item.size === "裁碼")
+              || [...sizes]
+                .filter((item) => !item.length && Number.isFinite(Number(item.size)))
+                .sort((first, second) => Number(second.size) - Number(first.size))[0];
+            return reference ? { size, length: "", price: reference.price } : null;
+          })
+          .filter(Boolean)]
       : sizes;
     return {
       ...product,
