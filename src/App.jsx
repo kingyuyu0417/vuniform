@@ -3587,6 +3587,7 @@ function SaleTab({
   const [directExchangeProductId, setDirectExchangeProductId] = useState("");
   const [directExchangeLength, setDirectExchangeLength] = useState("");
   const [directExchangeQuantityPrompt, setDirectExchangeQuantityPrompt] = useState(null);
+  const [directExchangeItems, setDirectExchangeItems] = useState([]);
   const schools = listSchools(products);
   const visibleProducts = (selectedSchool ? products.filter((p) => schoolOf(p) === selectedSchool) : products)
     .filter((product) => product.sizes.some(isPricedSize));
@@ -3666,24 +3667,36 @@ function SaleTab({
   };
 
   const startDirectExchange = (product, size, quantity = 1) => {
+    setDirectExchangeItems((current) => [
+      ...current.filter((item) => !(item.productId === product.id && item.size === size.size && item.length === (size.length || ""))),
+      {
+        productId: product.id,
+        name: product.name,
+        size: size.size,
+        length: size.length || "",
+        isTailored: Boolean(size.isTailored),
+        price: Number(size.price || 0),
+        qty: quantity,
+      },
+    ]);
+    setDirectExchangeQuantityPrompt(null);
+    setDirectExchangeProductId("");
+    setDirectExchangeLength("");
+  };
+
+  const confirmDirectExchange = () => {
+    if (directExchangeItems.length === 0) return;
     onExchange?.({
       id: "",
-      school: selectedSchool || schoolOf(product),
+      school: selectedSchool,
       customerName: "",
       customerPhone: "",
-    }, [{
-      productId: product.id,
-      name: product.name,
-      size: size.size,
-      length: size.length || "",
-      isTailored: Boolean(size.isTailored),
-      price: Number(size.price || 0),
-      qty: quantity,
-    }]);
+    }, directExchangeItems);
     setDirectExchangeQuantityPrompt(null);
     setDirectExchangeOpen(false);
     setDirectExchangeProductId("");
     setDirectExchangeLength("");
+    setDirectExchangeItems([]);
   };
 
   return (
@@ -3697,7 +3710,7 @@ function SaleTab({
       </button>
       <button
         className="pos-btn"
-        onClick={() => { setDirectExchangeOpen(true); setDirectExchangeProductId(""); setDirectExchangeLength(""); setDirectExchangeQuantityPrompt(null); }}
+        onClick={() => { setDirectExchangeOpen(true); setDirectExchangeProductId(""); setDirectExchangeLength(""); setDirectExchangeQuantityPrompt(null); setDirectExchangeItems([]); }}
         style={{ width: "100%", padding: "12px 0", borderRadius: 10, background: "#ECFDF3", color: "#166534", border: "1px solid #86EFAC", fontSize: 14, fontWeight: 700, marginBottom: 12 }}
       >
         遺失單據快速換貨（直接揀退回貨品）
@@ -3705,6 +3718,20 @@ function SaleTab({
       {directExchangeOpen && (
         <div style={{ background: "#ECFDF3", border: "1px solid #86EFAC", borderRadius: 10, padding: 12, marginBottom: 12 }}>
           <div style={{ color: "#166534", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>第一步：揀選客人退回的款式及尺碼</div>
+          {directExchangeItems.length > 0 && (
+            <div style={{ background: "#fff", border: "1px solid #86EFAC", borderRadius: 8, padding: 8, marginBottom: 10 }}>
+              <div style={{ color: "#166534", fontSize: 12, fontWeight: 800, marginBottom: 6 }}>已選退回貨品（{directExchangeItems.length}款）</div>
+              {directExchangeItems.map((item) => (
+                <div key={`${item.productId}-${item.size}-${item.length}`} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, padding: "4px 0", borderBottom: "1px solid #DCFCE7" }}>
+                  <span>{displayProductName(item.name)}（{sizeLabel(item)}）× {item.qty}{productUnit(item.name)}</span>
+                  <button className="pos-btn" onClick={() => setDirectExchangeItems((current) => current.filter((entry) => entry !== item))} style={{ padding: "2px 6px", background: "transparent", color: "#166534", fontSize: 11 }}>移除</button>
+                </div>
+              ))}
+              <button className="pos-btn" onClick={confirmDirectExchange} style={{ width: "100%", marginTop: 8, padding: 9, borderRadius: 8, background: "#166534", color: "#fff", fontWeight: 800 }}>
+                確定換貨（{directExchangeItems.length}款）
+              </button>
+            </div>
+          )}
           {!directExchangeProductId ? (
             <div className="sale-product-grid" style={{ maxHeight: 260, overflowY: "auto" }}>
               {visibleProducts.map((product) => (
@@ -3779,7 +3806,7 @@ function SaleTab({
               </div>
             );
           })()}
-          <button className="pos-btn" onClick={() => { setDirectExchangeOpen(false); setDirectExchangeQuantityPrompt(null); }} style={{ width: "100%", marginTop: 8, padding: 7, background: "transparent", color: "#166534" }}>取消</button>
+          <button className="pos-btn" onClick={() => { setDirectExchangeOpen(false); setDirectExchangeQuantityPrompt(null); setDirectExchangeItems([]); }} style={{ width: "100%", marginTop: 8, padding: 7, background: "transparent", color: "#166534" }}>取消</button>
         </div>
       )}
       {exchangePickerOpen && exchangeOrder === null && (
