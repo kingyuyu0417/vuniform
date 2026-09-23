@@ -90,7 +90,6 @@ const DEFAULT_PRODUCTS = [
     ],
   },
 ];
-const DEFAULT_TAILORED_WAIST_PREMIUM = 30;
 
 const PRODUCT_CATALOG_FALLBACK = databaseProductsSnapshot;
 
@@ -369,15 +368,9 @@ const normalizeProductState = (products) => {
       ? new Map(sizes.filter((item) => item.size === "裁碼").map((item) => [item.length || "", item.price]))
       : new Map();
     const isLongTrouser = /西褲/.test(productName);
-    const regularWaistPrice = isLongTrouser
-      ? sizes.find((item) => item.size === "30" && !item.length)?.price
-      : undefined;
-    const hasCollapsedTailoredWaists = isLongTrouser
-      && regularWaistPrice !== undefined
-      && tailoredValues.some((size) => sizes.some((item) => item.size === size && Number(item.price) === Number(regularWaistPrice)));
     const tailoredPrice = tailoredRule?.matrixDimension !== "length"
       ? sizes.find((item) => item.size === "裁碼")?.price
-        ?? (hasCollapsedTailoredWaists ? Number(regularWaistPrice) + DEFAULT_TAILORED_WAIST_PREMIUM : undefined)
+        ?? sizes.find((item) => item.isTailored && tailoredValues.includes(item.size))?.price
       : undefined;
     const hasExistingTailoredMatrix = sizes.some((item) => item.length) || sizes.some((item) => item.size === "裁碼");
     const pricedSizes = tailoredValues.length > 0
@@ -386,12 +379,6 @@ const normalizeProductState = (products) => {
       const shouldUseTailoredPrice = item.size !== "裁碼"
         && tailoredValues.includes(item.size)
         && (tailoredRule?.matrixDimension === "length" ? lengthPrice !== undefined : tailoredPrice !== undefined);
-      const collapsedWaistPrice = isLongTrouser
-        && !item.length
-        && tailoredValues.includes(item.size)
-        && hasCollapsedTailoredWaists
-        ? Number(regularWaistPrice) + DEFAULT_TAILORED_WAIST_PREMIUM
-        : undefined;
       const surcharge = /西褲/.test(productName) ? trouserLengthSurcharge(item.length) : 0;
       const sameSizeBase = surcharge > 0
         ? sizes
@@ -404,11 +391,9 @@ const normalizeProductState = (products) => {
       return shouldUseTailoredPrice
         ? {
           ...item,
-          price: (collapsedWaistPrice ?? (tailoredRule?.matrixDimension === "length" ? lengthPrice : tailoredPrice)) + surcharge,
+          price: (tailoredRule?.matrixDimension === "length" ? lengthPrice : tailoredPrice) + surcharge,
         }
-        : collapsedWaistPrice !== undefined
-          ? { ...item, price: collapsedWaistPrice + surcharge }
-          : { ...item, price: adjustedPrice };
+        : { ...item, price: adjustedPrice };
       })
       : sizes;
     const completedSizes = tailoredValues.length === 0
@@ -688,7 +673,7 @@ const smartImportRows = (rows, existingProducts) => {
       if (Number(existing.price) !== price) updatedSizes++;
       existing.price = price;
     } else {
-      product.sizes.push({ size, length, price });
+      product.sizes.push({ size, length, price, isTailored: Boolean(row.isTailored) });
       addedSizes++;
     }
     previewRows.push({ school: schoolKey, name, length, size, price, action });
@@ -1128,7 +1113,13 @@ const convertIrregularPriceList = (rows) => {
           lengths.forEach((length) => sizeRange.forEach((size) => {
             const sizeNumber = Number(size);
             const rule = skirtSurchargeRules.find((candidate) => candidate.minimum ? sizeNumber >= candidate.threshold : sizeNumber === candidate.threshold);
-            converted.push({ 學校: school, 款式名稱: name, 長度: length, 尺碼: size, 價錢: price + (rule?.amount || 0) });
+            converted.push({
+              學校: school,
+              款式名稱: name,
+              長度: length,
+              尺碼: size,
+              價錢: price + (rule?.amount || 0),
+            });
           }));
         });
       } else if (isTrousers && (lengthRange.length || isLongTrousers || PRICE_LIST_TAILORED_SIZES.some((rule) => rule.matrixDimension === "length" && rule.match.test(name)))) {
@@ -1163,7 +1154,14 @@ const convertIrregularPriceList = (rows) => {
             .forEach((size) => matrixLengths.forEach((length) => {
             const lengthNumber = Number(length);
             const rule = effectiveTrouserSurchargeRules.find((candidate) => candidate.minimum ? lengthNumber >= candidate.threshold : lengthNumber === candidate.threshold);
-            converted.push({ 學校: school, 款式名稱: name, 長度: length, 尺碼: size, 價錢: price + (rule?.amount || 0) });
+            converted.push({
+              學校: school,
+              款式名稱: name,
+              長度: length,
+              尺碼: size,
+              價錢: price + (rule?.amount || 0),
+              isTailored: isLongTrousers && rawSize === "裁碼",
+            });
           }));
         });
       } else {
@@ -1178,7 +1176,14 @@ const convertIrregularPriceList = (rows) => {
           expandTailoredPriceListValue(name, size)
             .flatMap((tailoredSize) => expandPriceListSizeRange(name, tailoredSize))
             .forEach((expandedSize) => {
-              converted.push({ 學校: school, 款式名稱: name, 長度: "", 尺碼: expandedSize, 價錢: price });
+              converted.push({
+                學校: school,
+                款式名稱: name,
+                長度: "",
+                尺碼: expandedSize,
+                價錢: price,
+                isTailored: String(size).trim() === "裁碼",
+              });
           });
         });
       }
