@@ -357,11 +357,41 @@ const recoverUniformTrouserOffset = (sizes) => {
       : item
   ));
 };
+const recoverMissingTailoredTrouserPrices = (productName, sizes) => {
+  if (productName !== "男生深炭灰色長西褲") return sizes;
+
+  const hasExplicitTailoredPrice = sizes.some((item) => item.size === "裁碼" || item.isTailored);
+
+  const regularByLength = new Map(
+    sizes
+      .filter((item) => String(item.size) === "30" && isPricedSize(item))
+      .map((item) => [item.length || "", item]),
+  );
+  const baseWaist = sizes.find((item) => !item.length && String(item.size) === "30" && isPricedSize(item));
+  if (!regularByLength.size && !baseWaist) return sizes;
+
+  return sizes.map((item) => {
+    const isTailoredSize = item.size === "裁碼"
+      || /^(?:32|34|36|38|40|42|44|46|48)$/.test(String(item.size));
+    if (!isTailoredSize) return item;
+    const base = regularByLength.get(item.length || "") || baseWaist;
+    if (!base) return item;
+    const isCollapsedPrice = Number(item.price) === Number(base.price);
+    if (hasExplicitTailoredPrice && !isCollapsedPrice) return item;
+    const surcharge = trouserLengthSurcharge(item.length);
+    return {
+      ...item,
+      price: Number(base.price) + 30 + surcharge,
+      isTailored: true,
+    };
+  });
+};
 const normalizeProductState = (products) => {
   const normalizedProducts = (Array.isArray(products) ? products : []).map((product) => {
     const productName = cleanProductName(product.name);
     const rawSizes = normalizeProductSizes(product.sizes);
-    const sizes = /西褲/.test(productName) ? recoverUniformTrouserOffset(rawSizes) : rawSizes;
+    const recoveredSizes = /西褲/.test(productName) ? recoverUniformTrouserOffset(rawSizes) : rawSizes;
+    const sizes = recoverMissingTailoredTrouserPrices(productName, recoveredSizes);
     if (SIMPLE_SIZE_PRODUCT_NAMES.has(productName)) {
       return {
         ...product,
