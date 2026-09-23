@@ -42,7 +42,7 @@ Auth 登入開關是 `VITE_USE_SUPABASE_AUTH`。只有在 Supabase 已建立 `st
 
 1. 在 Supabase SQL Editor 執行 `supabase/secure-migration.sql`。
 2. 在 Authentication → Users 建立員工帳戶。
-3. 將 User ID 加入 `staff_profiles`，並設定 `admin`、`manager` 或 `staff` 角色。
+3. 將 User ID 加入 `staff_profiles`，並設定 `admin`、`manager`、`sales` 或 `staff` 角色。
 4. 確認新帳戶可以登入後，在 `.env.local` 加入 `VITE_USE_SUPABASE_AUTH=true`。
 5. 重啟 Vite 並測試登入、查看紀錄及完成交易。
 

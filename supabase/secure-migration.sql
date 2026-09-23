@@ -1,10 +1,15 @@
 create table if not exists public.staff_profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   display_name text not null,
-  role text not null check (role in ('admin', 'manager', 'staff')) default 'staff',
+  role text not null check (role in ('admin', 'manager', 'sales', 'staff')) default 'staff',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.staff_profiles drop constraint if exists staff_profiles_role_check;
+alter table public.staff_profiles
+  add constraint staff_profiles_role_check
+  check (role in ('admin', 'manager', 'sales', 'staff'));
 
 create table if not exists public.products (
   id text primary key,
