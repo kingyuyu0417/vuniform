@@ -3724,6 +3724,12 @@ function SaleTab({
     setDirectExchangeLength("");
   };
 
+  const selectDirectExchangeProduct = (productId) => {
+    setDirectExchangeQuantityPrompt(null);
+    setDirectExchangeLength("");
+    setDirectExchangeProductId(productId);
+  };
+
   const confirmDirectExchange = () => {
     if (directExchangeItems.length === 0) return;
     onExchange?.({
@@ -3775,7 +3781,7 @@ function SaleTab({
           {!directExchangeProductId ? (
             <div className="sale-product-grid" style={{ maxHeight: 260, overflowY: "auto" }}>
               {visibleProducts.map((product) => (
-                <button key={product.id} className="pos-btn sale-product-button" onClick={() => setDirectExchangeProductId(product.id)} style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #86EFAC", color: "#166534", fontSize: 16, fontWeight: 700, textAlign: "left" }}>
+                <button key={product.id} className="pos-btn sale-product-button" onClick={() => selectDirectExchangeProduct(product.id)} style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #86EFAC", color: "#166534", fontSize: 16, fontWeight: 700, textAlign: "left" }}>
                   {displayProductName(product.name)}
                 </button>
               ))}
@@ -3789,7 +3795,7 @@ function SaleTab({
             const sizes = hasLengths && directExchangeLength ? pricedSizes.filter((size) => size.length === directExchangeLength) : pricedSizes;
             return (
               <div>
-                <button className="pos-btn" onClick={() => setDirectExchangeProductId("")} style={{ padding: "6px 8px", marginBottom: 8, background: "transparent", color: "#166534" }}>← 返回選款式</button>
+                <button className="pos-btn" onClick={() => { setDirectExchangeProductId(""); setDirectExchangeLength(""); setDirectExchangeQuantityPrompt(null); }} style={{ padding: "6px 8px", marginBottom: 8, background: "transparent", color: "#166534" }}>← 返回選款式</button>
                 <div style={{ fontSize: 12, color: "#166534", marginBottom: 6 }}>{displayProductName(product.name)}：揀{hasLengths ? `${lengthDimensionLabel(product)}及${sizeDimensionLabel(product)}` : "尺碼"}</div>
                 {directExchangeQuantityPrompt && (
                   <div style={{ background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 10, padding: 10, marginBottom: 10 }}>
@@ -6362,15 +6368,23 @@ function AuthStaffTab({ manageStaff, currentId }) {
       return;
     }
     setBusy(true);
-    const result = await manageStaff({ action: "create_password", email: email.trim(), display_name: name.trim(), password: temporaryPassword, role });
-    setMessage(result.error || "帳戶已建立，可以直接登入。");
-    if (!result.error) {
+    try {
+      const result = await manageStaff({ action: "create_password", email: email.trim(), display_name: name.trim(), password: temporaryPassword, role });
+      if (result.error) {
+        setMessage(`建立帳戶失敗：${result.error}`);
+        return;
+      }
+      setMessage("帳戶已建立，可以直接登入。");
       setEmail("");
       setName("");
       setTemporaryPassword("");
       await loadStaff();
+    } catch (error) {
+      console.error("建立員工帳戶失敗", error);
+      setMessage(`建立帳戶失敗：${error?.message || "無法連線至員工管理服務"}`);
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   };
 
   const changeRole = async (id, nextRole) => {
@@ -6405,7 +6419,7 @@ function AuthStaffTab({ manageStaff, currentId }) {
         <button className="pos-btn" onClick={invite} disabled={busy} style={{ width: "100%", padding: 10, borderRadius: 8, background: "#1F3A5F", color: "#fff", fontWeight: 600 }}>{busy ? "處理中…" : "發送員工邀請"}</button>
         <button className="pos-btn" onClick={createWithPassword} disabled={busy} style={{ width: "100%", padding: 10, borderRadius: 8, background: "#fff", color: "#1F3A5F", border: "1px solid #1F3A5F", fontWeight: 600, marginTop: 8 }}>直接建立帳戶（免電郵）</button>
       </div>
-      {message && <div style={{ fontSize: 12, color: message.includes("失敗") || message.includes("請") ? "#B42318" : "#28784B", marginBottom: 10 }}>{message}</div>}
+      {message && <div style={{ fontSize: 12, color: message.includes("失敗") || message.includes("請") || message.includes("無法") ? "#B42318" : "#28784B", marginBottom: 10 }}>{message}</div>}
       {staff.map((member) => (
         <div key={member.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", borderBottom: "1px solid #eee" }}>
           <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 600 }}>{member.display_name}</div><div style={{ fontSize: 10, color: "#999", overflow: "hidden", textOverflow: "ellipsis" }}>{member.id}</div></div>
