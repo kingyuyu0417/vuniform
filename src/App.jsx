@@ -345,11 +345,24 @@ const listSchools = (products) => {
 
   return Array.from(set).sort((a, b) => a.localeCompare(b, "zh-Hant"));
 };
-
+const recoverUniformTrouserOffset = (sizes) => {
+  const regular = sizes
+    .filter((item) => !item.length && /^(?:23|24|25|26|27|28|29|30)$/.test(String(item.size)))
+    .sort((first, second) => Number(first.size) - Number(second.size));
+  const values = new Map(regular.map((item) => [String(item.size), Number(item.price)]));
+  if (regular.length < 4 || values.get("30") < 130) return sizes;
+  if (values.get("30") - values.get("29") !== 7 || values.get("29") - values.get("28") !== 8) return sizes;
+  return sizes.map((item) => (
+    !item.length && /^(?:23|24|25|26|27|28|29|30)$/.test(String(item.size))
+      ? { ...item, price: Number(item.price) - 10 }
+      : item
+  ));
+};
 const normalizeProductState = (products) => {
   const normalizedProducts = (Array.isArray(products) ? products : []).map((product) => {
-    const sizes = normalizeProductSizes(product.sizes);
     const productName = cleanProductName(product.name);
+    const rawSizes = normalizeProductSizes(product.sizes);
+    const sizes = /西褲/.test(productName) ? recoverUniformTrouserOffset(rawSizes) : rawSizes;
     const tailoredRule = PRICE_LIST_TAILORED_SIZES.find((rule) => rule.match.test(productName));
     const tailoredValues = tailoredRule?.values || [];
     const tailoredPriceByLength = tailoredRule?.matrixDimension === "length"
