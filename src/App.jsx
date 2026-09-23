@@ -2948,6 +2948,7 @@ export default function UniformPOS() {
     exchangeReplacementQueueRef.current = remaining;
     setExchangeReplacementQueue(remaining);
     setPendingSaleProductId(remaining[0] || "");
+    setSelectedProduct(remaining[0] || null);
     return remaining[0] || "";
   };
 
