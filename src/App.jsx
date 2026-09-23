@@ -672,6 +672,7 @@ const smartImportRows = (rows, existingProducts) => {
     if (existing) {
       if (Number(existing.price) !== price) updatedSizes++;
       existing.price = price;
+      existing.isTailored = Boolean(existing.isTailored || row.isTailored);
     } else {
       product.sizes.push({ size, length, price, isTailored: Boolean(row.isTailored) });
       addedSizes++;
