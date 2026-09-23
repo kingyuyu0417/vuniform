@@ -1950,8 +1950,9 @@ export default function UniformPOS() {
     })();
   }, []);
 
-  // 檢查 URL 是否包含 school 參數，如果有則自動進入客人登記頁面
+  // 只有公開客人登記頁才使用遊客身份；員工頁面可帶 school_id 而不跳過登入。
   useEffect(() => {
+    if (window.location.pathname !== "/checkin") return;
     const params = new URLSearchParams(window.location.search);
     const schoolIdFromUrl = params.get("school_id");
     const schoolFromUrl = schoolIdFromUrl || params.get("school");
