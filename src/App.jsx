@@ -348,12 +348,24 @@ const listSchools = (products) => {
 const normalizeProductState = (products) => {
   const normalizedProducts = (Array.isArray(products) ? products : []).map((product) => {
     const sizes = normalizeProductSizes(product.sizes);
+    const isLongTrouser = /西褲/.test(cleanProductName(product.name));
+    const tailoredPrices = new Map(
+      sizes
+        .filter((size) => isLongTrouser && size.size === "裁碼")
+        .map((size) => [size.length || "", size.price])
+    );
+    const completedSizes = tailoredPrices.size > 0
+      ? [...sizes, ...[...tailoredPrices.entries()].flatMap(([length, price]) => PRICE_LIST_TAILORED_SIZES
+        .find((rule) => rule.matrixDimension === "size" && rule.match.test(cleanProductName(product.name)))?.values || [])
+        .filter((size) => !sizes.some((item) => item.size === size && (item.length || "") === length))
+        .map((size) => ({ size, length, price }))]
+      : sizes;
     return {
       ...product,
       school: canonicalSchoolName(product.school),
       name: cleanProductName(product.name),
-      priceMode: sizes.some((size) => size.length) ? "matrix" : product.priceMode,
-      sizes,
+      priceMode: completedSizes.some((size) => size.length) ? "matrix" : product.priceMode,
+      sizes: completedSizes,
     };
   });
 
