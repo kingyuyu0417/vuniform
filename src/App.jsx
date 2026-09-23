@@ -349,16 +349,21 @@ const normalizeProductState = (products) => {
   const normalizedProducts = (Array.isArray(products) ? products : []).map((product) => {
     const sizes = normalizeProductSizes(product.sizes);
     const isLongTrouser = /西褲/.test(cleanProductName(product.name));
-    const tailoredPrices = new Map(
-      sizes
-        .filter((size) => isLongTrouser && size.size === "裁碼")
-        .map((size) => [size.length || "", size.price])
-    );
-    const completedSizes = tailoredPrices.size > 0
-      ? [...sizes, ...[...tailoredPrices.entries()].flatMap(([length, price]) => PRICE_LIST_TAILORED_SIZES
-        .find((rule) => rule.matrixDimension === "size" && rule.match.test(cleanProductName(product.name)))?.values || [])
-        .filter((size) => !sizes.some((item) => item.size === size && (item.length || "") === length))
-        .map((size) => ({ size, length, price }))]
+    const tailoredSizeRule = PRICE_LIST_TAILORED_SIZES.find((rule) => rule.matrixDimension === "size" && rule.match.test(cleanProductName(product.name)));
+    const tailoredSizes = tailoredSizeRule?.values || [];
+    const lengths = new Set(sizes.map((size) => size.length || ""));
+    const completedSizes = isLongTrouser && tailoredSizes.length > 0
+      ? [...sizes, ...[...lengths].flatMap((length) => {
+        const entries = sizes.filter((size) => (size.length || "") === length);
+        const numericEntries = entries.filter((size) => Number.isFinite(Number(size.size)));
+        const reference = numericEntries.sort((first, second) => Number(second.size) - Number(first.size))[0]
+          || entries.find((size) => size.size === "裁碼")
+          || entries[0];
+        if (!reference) return [];
+        return tailoredSizes
+          .filter((size) => !sizes.some((item) => item.size === size && (item.length || "") === length))
+          .map((size) => ({ size, length, price: reference.price }));
+      })]
       : sizes;
     return {
       ...product,
