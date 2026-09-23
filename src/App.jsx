@@ -756,18 +756,29 @@ const PRICE_LIST_TAILORED_SIZES = [
   { match: /(?:裙)/, values: ["42", "44", "46", "48", "50"], matrixDimension: "length" },
   { match: /(?:西褲|長褲)/, values: ["32", "34", "36", "38", "40", "42", "44", "46", "48"], matrixDimension: "size" },
   { match: /(?:西裝.*背心|西装.*背心|背心.*西裝|背心.*西装|西裝褸.*背心|西装褸.*背心)/, values: ["32", "34", "36", "38", "40", "42", "44", "46", "48", "50", "52", "54", "56", "58", "60"], matrixDimension: "length" },
-  { match: /(?:恤衫|襯衫|尖領恤|恤)/, values: ["16.5", "17", "17.5", "18", "18.5", "19", "19.5", "20", "21", "22"] },
-  { match: /(?:運動上衣|夏運衣|夏季運動衣|女裝夏季運動衣|男裝夏季運動衣|四社.*夏運衣)/, values: ["32", "34", "36", "38", "40", "裁碼"] },
-  { match: /(?:運動褲|夏運褲|夏季運動褲|女裝夏季運動褲|男裝夏季運動褲)/, values: ["裁碼"] },
+  { match: /(?:短恤|長恤|短袖恤|長袖恤|恤衫|襯衫|尖領恤|恤)/, values: ["16.5", "17", "17.5", "18", "18.5", "19", "19.5", "20", "20.5", "21"] },
+  { match: /(?:運動上衣|夏運衣|夏季運動衣|女裝夏季運動衣|男裝夏季運動衣|四社.*夏運衣)/, values: ["32", "34", "36", "38", "40", "42", "44", "46", "48", "50", "52"], matrixDimension: "size" },
+  { match: /(?:運動褲|夏運褲|夏季運動褲|女裝夏季運動褲|男裝夏季運動褲)/, values: ["1碼", "2碼", "3碼"], matrixDimension: "size" },
   { match: /(?:3\/7冷衫)/, values: ["44", "46", "48", "50"] },
-  { match: /(?:V領背心)/, values: ["44", "46", "48", "50"] },
-  { match: /(?:V領長袖冷衫)/, values: ["44", "46", "48", "50"] },
+  { match: /(?:V領背心)/, values: ["44", "46", "48", "50", "52"], matrixDimension: "size" },
+  { match: /(?:V領長袖冷衫)/, values: ["44", "46", "48", "50", "52"], matrixDimension: "size" },
   { match: /(?:冬天運動套裝)/, values: ["46", "48", "50", "52"] },
   { match: /(?:冬天運動單衫|冬天運動單褲|冬運單衣|冬運單衫|冬運單褲)/, values: ["46", "48", "50", "52"] },
 ];
 const LONG_TROUSER_LENGTHS = ["30", "31", "32", "33", "34", "35", "36", "37", "38.5", "40", "41.5", "43", "44.5", "46"];
+const BOTTOM_SHIRT_SIZES = new Set(["16", "17", "18", "S", "M", "L", "XL"]);
 const expandTailoredPriceListValue = (name, value) => {
   if (String(value || "").trim() !== "裁碼" || /底裙/.test(name)) return [String(value || "").trim()];
+  const tailoredRule = PRICE_LIST_TAILORED_SIZES.find((rule) => rule.match.test(name));
+  if (tailoredRule?.matrixDimension !== "length" && /(?:短恤|長恤|短袖恤|長袖恤|恤衫|襯衫|尖領恤|恤)/.test(name)) {
+    return tailoredRule.values;
+  }
+  if (tailoredRule?.matrixDimension === "size" && /(?:夏運衣|夏季運動衣|運動上衣|夏運褲|夏季運動褲|運動褲)/.test(name)) {
+    return tailoredRule.values;
+  }
+  if (tailoredRule?.matrixDimension === "size" && /(?:V領背心|V領長袖冷衫)/.test(name)) {
+    return tailoredRule.values;
+  }
   return ["裁碼"];
 };
 const inferLowerTailoredSizes = (name, rawEntries) => {
@@ -954,7 +965,15 @@ const convertIrregularPriceList = (rows) => {
         warnings.push(`第${rowIndex + 1}行「${name}」未能確定尺碼及單價欄，請在預覽後補充。`);
         return;
       }
-      if (normalizePriceListProductName(rawName) === "單衣/褲") {
+      const normalizedHeaderName = normalizePriceListProductName(rawName);
+      const isSportsSuitHeader = /運動套裝|運動套裝/.test(name) || normalizedHeaderName === "冬天運動套裝";
+      const isSingleGarmentHeader = normalizedHeaderName === "單衣/褲";
+      const hasSportsSuitHeader = row.some((value) => {
+        const headerName = canonicalPriceListProductName(String(value || "").trim(), priceListSeasonForRow(rows, rowIndex));
+        return /運動套裝/.test(headerName) || normalizePriceListProductName(value) === "冬天運動套裝";
+      });
+      if (isSingleGarmentHeader && hasSportsSuitHeader) return;
+      if (isSportsSuitHeader || isSingleGarmentHeader) {
         for (let dataRow = rowIndex + 1; dataRow < Math.min(rows.length, rowIndex + 15); dataRow += 1) {
           const size = String(rows[dataRow]?.[sizeColumn] ?? "").trim();
           const singleGarmentPrice = numericCell(rows[dataRow]?.[priceColumn + 1]);
@@ -962,8 +981,8 @@ const convertIrregularPriceList = (rows) => {
             if (dataRow > rowIndex + 1 && rows[dataRow]?.every((value) => String(value || "").trim() === "")) break;
             continue;
           }
-          converted.push({ 學校: school, 款式名稱: "冬天運動上衣", 長度: "", 尺碼: size, 價錢: singleGarmentPrice });
-          converted.push({ 學校: school, 款式名稱: "冬天運動長褲", 長度: "", 尺碼: size, 價錢: singleGarmentPrice });
+          converted.push({ 學校: school, 款式名稱: "運動外套", 長度: "", 尺碼: size, 價錢: singleGarmentPrice });
+          converted.push({ 學校: school, 款式名稱: "運動長褲", 長度: "", 尺碼: size, 價錢: singleGarmentPrice });
         }
         return;
       }
@@ -981,8 +1000,16 @@ const convertIrregularPriceList = (rows) => {
       }
       const isSkirt = /裙/.test(name);
       const isTrousers = /(?:褲|西褲)/.test(name);
+      const isShirt = /(?:短恤|長恤|短袖恤|長袖恤|恤衫|襯衫|尖領恤|恤)/.test(name);
+      const isBottomShirt = name === "底衫";
       const tailoredSizeRule = PRICE_LIST_TAILORED_SIZES.find((rule) => rule.matrixDimension === "size" && rule.match.test(name));
       const isLongTrousers = /長西褲/.test(name) && Boolean(tailoredSizeRule);
+      const shirtPriceAt12 = isShirt
+        ? rawEntries.find(({ size }) => Number(size) === 12)?.price
+        : undefined;
+      const conversionEntries = isShirt && shirtPriceAt12 !== undefined
+        ? rawEntries.map((entry) => Number(entry.size) <= 12 ? { ...entry, price: shirtPriceAt12 } : entry)
+        : rawEntries;
       const sizeRange = isSkirt
         ? expandDimensionWithSurchargeRules(findDimensionRange(rows, rowIndex, /上圍|上围|上圉/), skirtSurchargeRules, 2)
         : [];
@@ -1022,10 +1049,14 @@ const convertIrregularPriceList = (rows) => {
           }));
         });
       } else {
-        inferLowerTailoredSizes(name, rawEntries).forEach(({ size, price }) => {
+        const exactEntries = isBottomShirt
+          ? conversionEntries.flatMap(({ size, price }) => expandPriceListSizeRange(name, size).map((expandedSize) => ({ size: expandedSize, price })))
+            .filter(({ size }) => BOTTOM_SHIRT_SIZES.has(size))
+          : conversionEntries;
+        inferLowerTailoredSizes(name, exactEntries).forEach(({ size, price }) => {
           converted.push({ 學校: school, 款式名稱: name, 長度: "", 尺碼: size, 價錢: price });
         });
-        rawEntries.forEach(({ size, price }) => {
+        exactEntries.forEach(({ size, price }) => {
           expandTailoredPriceListValue(name, size)
             .flatMap((tailoredSize) => expandPriceListSizeRange(name, tailoredSize))
             .forEach((expandedSize) => {
