@@ -364,9 +364,21 @@ const normalizeProductState = (products) => {
       const shouldUseTailoredPrice = item.size !== "裁碼"
         && tailoredValues.includes(item.size)
         && (tailoredRule?.matrixDimension === "length" ? lengthPrice !== undefined : tailoredPrice !== undefined);
+      const surcharge = /西褲/.test(productName) ? trouserLengthSurcharge(item.length) : 0;
+      const sameSizeBase = surcharge > 0
+        ? sizes
+          .filter((candidate) => candidate.size === item.size && Number(candidate.length) < 40 && isPricedSize(candidate))
+          .sort((first, second) => Number(second.length) - Number(first.length))[0]
+        : null;
+      const adjustedPrice = surcharge > 0 && sameSizeBase && Number(item.price) <= Number(sameSizeBase.price) + surcharge
+        ? Number(sameSizeBase.price) + surcharge
+        : item.price;
       return shouldUseTailoredPrice
-        ? { ...item, price: tailoredRule?.matrixDimension === "length" ? lengthPrice : tailoredPrice }
-        : item;
+        ? {
+          ...item,
+          price: (tailoredRule?.matrixDimension === "length" ? lengthPrice : tailoredPrice) + surcharge,
+        }
+        : { ...item, price: adjustedPrice };
       })
       : sizes;
     const completedSizes = tailoredValues.length === 0
@@ -377,7 +389,11 @@ const normalizeProductState = (products) => {
         const baseSizes = pricedSizes.filter((item) => !item.length);
         return baseSizes
           .filter((item) => !pricedSizes.some((existing) => existing.size === item.size && (existing.length || "") === length))
-          .map((item) => ({ size: item.size, length, price: tailoredPriceByLength.get(length) ?? item.price }));
+          .map((item) => ({
+            size: item.size,
+            length,
+            price: (tailoredPriceByLength.get(length) ?? item.price) + trouserLengthSurcharge(length),
+          }));
         })]
         : sizes)
       : [...pricedSizes, ...[...new Set(pricedSizes.map((item) => item.length || ""))].flatMap((length) => {
@@ -388,7 +404,7 @@ const normalizeProductState = (products) => {
         return reference
           ? tailoredValues
             .filter((size) => !pricedSizes.some((item) => item.size === size && (item.length || "") === length))
-            .map((size) => ({ size, length, price: reference.price }))
+            .map((size) => ({ size, length, price: reference.price + trouserLengthSurcharge(length) }))
           : [];
       })];
     return {
@@ -809,6 +825,17 @@ const PRICE_LIST_TAILORED_SIZES = [
   { match: /(?:冬天運動單衫|冬天運動單褲|冬運單衣|冬運單衫|冬運單褲)/, values: ["46", "48", "50", "52"] },
 ];
 const LONG_TROUSER_LENGTHS = ["30", "31", "32", "33", "34", "35", "36", "37", "38.5", "40", "41.5", "43", "44.5", "46"];
+const DEFAULT_TROUSER_SURCHARGES = [
+  { threshold: 43, amount: 30, minimum: true },
+  { threshold: 41.5, amount: 20, minimum: false },
+  { threshold: 40, amount: 10, minimum: false },
+];
+const trouserLengthSurcharge = (length, rules = DEFAULT_TROUSER_SURCHARGES) => {
+  const value = Number(length);
+  if (!Number.isFinite(value)) return 0;
+  const rule = rules.find((candidate) => candidate.minimum ? value >= candidate.threshold : value === candidate.threshold);
+  return rule?.amount || 0;
+};
 const BOTTOM_SHIRT_SIZES = new Set(["16", "17", "18", "S", "M", "L", "XL"]);
 const expandTailoredPriceListValue = (name, value) => {
   if (String(value || "").trim() !== "裁碼" || /底裙/.test(name)) return [String(value || "").trim()];
@@ -912,6 +939,7 @@ const convertIrregularPriceList = (rows) => {
   const warnings = [];
   const skirtSurchargeRules = findSurchargeRules(rows, /上圍|上围|上圉/);
   const trouserSurchargeRules = findSurchargeRules(rows, /褲長|裤长/);
+  const effectiveTrouserSurchargeRules = trouserSurchargeRules.length > 0 ? trouserSurchargeRules : DEFAULT_TROUSER_SURCHARGES;
   rows.forEach((row, rowIndex) => {
     row.forEach((cell, columnIndex) => {
       const rawName = String(cell || "").replace(/\s+/g, " ").trim();
@@ -1079,7 +1107,7 @@ const convertIrregularPriceList = (rows) => {
           ...LONG_TROUSER_LENGTHS,
           ...lengthRange,
           ...(tailoredLengthRule?.matrixDimension === "length" ? tailoredLengthRule.values : []),
-          ...trouserSurchargeRules.map((rule) => String(rule.threshold)),
+          ...effectiveTrouserSurchargeRules.map((rule) => String(rule.threshold)),
         ]);
         const matrixLengths = [...matrixLengthValues]
           .filter((value) => value !== "")
@@ -1104,7 +1132,7 @@ const convertIrregularPriceList = (rows) => {
             .flatMap((tailoredSize) => expandPriceListSizeRange(name, tailoredSize))
             .forEach((size) => matrixLengths.forEach((length) => {
             const lengthNumber = Number(length);
-            const rule = trouserSurchargeRules.find((candidate) => candidate.minimum ? lengthNumber >= candidate.threshold : lengthNumber === candidate.threshold);
+            const rule = effectiveTrouserSurchargeRules.find((candidate) => candidate.minimum ? lengthNumber >= candidate.threshold : lengthNumber === candidate.threshold);
             converted.push({ 學校: school, 款式名稱: name, 長度: length, 尺碼: size, 價錢: price + (rule?.amount || 0) });
           }));
         });
