@@ -1794,7 +1794,7 @@ export default function UniformPOS() {
     if (routeSchool && schools.includes(routeSchool) && routeSchool !== selectedSchool) {
       setSelectedSchool(routeSchool);
     }
-  }, [location.pathname, location.search, schools, selectedSchool]);
+  }, [location.pathname, location.search, schools]);
 
   useEffect(() => {
     if (!products.some((product) => product.id === selectedProduct)) {
@@ -1812,6 +1812,9 @@ export default function UniformPOS() {
     setStorageError("");
     setSchoolPanelOpen(false);
     window.storage.set("last-school", nextSchool, false).catch((e) => console.error("記住學校選擇失敗", e));
+    if (["/menu", "/sale", "/products"].includes(location.pathname)) {
+      navigate(`${location.pathname}?school_id=${encodeURIComponent(nextSchool)}`);
+    }
   };
 
   // 由雲端（共用儲存）攞返最新一份 products / sales-log
