@@ -1336,12 +1336,13 @@ const buildReceiptUrl = (order, language = "zh") => {
 // ===================== 儲存層 =====================
 // 有 Supabase 設定時使用雲端；未設定時保留 localStorage，方便本機試用。
 if (!window.storage) {
+  const cloudStorageKeys = new Set(["school-meta"]);
   const localStorageKey = (key, shared = false) => (shared ? `shared:${key}` : key);
 
   window.storage = {
     get: async (key, shared = false) => {
       const localKey = localStorageKey(key, shared);
-      if (shared && isSupabaseConfigured) {
+      if (shared && cloudStorageKeys.has(key) && isSupabaseConfigured) {
         try {
           const { data, error } = await supabase
             .from("app_storage")
@@ -1359,7 +1360,7 @@ if (!window.storage) {
     },
     set: async (key, value, shared = false) => {
       const localKey = localStorageKey(key, shared);
-      if (shared && isSupabaseConfigured) {
+      if (shared && cloudStorageKeys.has(key) && isSupabaseConfigured) {
         try {
           const { error } = await supabase.from("app_storage").upsert({
             key,
