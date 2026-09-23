@@ -3651,6 +3651,11 @@ function SaleTab({
   }, [selectedProduct]);
 
   useEffect(() => {
+    if (!exchangeMode || selectedProduct || exchangeReplacementQueue.length === 0) return;
+    setSelectedProduct(exchangeReplacementQueue[0]);
+  }, [exchangeMode, selectedProduct, exchangeReplacementQueue]);
+
+  useEffect(() => {
     setExchangePickerOpen(false);
     setExchangeOrder(null);
     setExchangeItems([]);
