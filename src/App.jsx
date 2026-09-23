@@ -4271,9 +4271,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   };
 
   const activeSchoolProducts = activeSchool ? products.filter((p) => schoolOf(p) === activeSchool) : [];
-  const visibleProducts = activeSchoolProducts.length > 0 || !products.length
-    ? activeSchoolProducts
-    : products;
+  const visibleProducts = activeSchoolProducts;
   const filteredImportPreviewRows = importPreview
     ? importPreview.previewRows.filter((row) => {
         const query = importPreviewSearch.trim().toLowerCase();
