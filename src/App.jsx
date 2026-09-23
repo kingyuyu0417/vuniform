@@ -3067,7 +3067,18 @@ export default function UniformPOS() {
     }
   };
 
-  const directoryIds = perms?.tabs || [];
+  const directoryIds = session?.role === ROLES.SALES
+    ? perms?.tabs || []
+    : [
+      "sale",
+      "guest",
+      "queue",
+      "track",
+      "fitting",
+      "pickup",
+      "cashier",
+      ...(perms?.tabs || []),
+    ];
 
   if (location.pathname === "/checkin") {
     return <Suspense fallback={<PageLoading />}><CustomerCheckinPage school={publicRouteSchool} schools={customerSchools} schoolMeta={schoolMeta} onSubmit={handleGuestSubmit} /></Suspense>;
