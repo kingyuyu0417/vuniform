@@ -386,6 +386,12 @@ const normalizeProductState = (products) => {
       const shouldUseTailoredPrice = item.size !== "裁碼"
         && tailoredValues.includes(item.size)
         && (tailoredRule?.matrixDimension === "length" ? lengthPrice !== undefined : tailoredPrice !== undefined);
+      const collapsedWaistPrice = isLongTrouser
+        && !item.length
+        && tailoredValues.includes(item.size)
+        && hasCollapsedTailoredWaists
+        ? Number(regularWaistPrice) + DEFAULT_TAILORED_WAIST_PREMIUM
+        : undefined;
       const surcharge = /西褲/.test(productName) ? trouserLengthSurcharge(item.length) : 0;
       const sameSizeBase = surcharge > 0
         ? sizes
@@ -398,9 +404,11 @@ const normalizeProductState = (products) => {
       return shouldUseTailoredPrice
         ? {
           ...item,
-          price: (tailoredRule?.matrixDimension === "length" ? lengthPrice : tailoredPrice) + surcharge,
+          price: (collapsedWaistPrice ?? (tailoredRule?.matrixDimension === "length" ? lengthPrice : tailoredPrice)) + surcharge,
         }
-        : { ...item, price: adjustedPrice };
+        : collapsedWaistPrice !== undefined
+          ? { ...item, price: collapsedWaistPrice + surcharge }
+          : { ...item, price: adjustedPrice };
       })
       : sizes;
     const completedSizes = tailoredValues.length === 0
