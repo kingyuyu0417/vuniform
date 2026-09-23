@@ -1460,7 +1460,11 @@ export default function UniformPOS() {
   const tabRef = useRef(tab);
   useEffect(() => { tabRef.current = tab; }, [tab]);
 
-  const [selectedSchool, setSelectedSchool] = useState(DESIGNATED_SCHOOL);
+  const [selectedSchool, setSelectedSchool] = useState(() => (
+    new URLSearchParams(location.search).get("school_id")
+    || new URLSearchParams(location.search).get("school")
+    || DESIGNATED_SCHOOL
+  ));
   const [schoolPanelOpen, setSchoolPanelOpen] = useState(false);
   const schools = listSchools(products);
   const customerSchools = schools;
@@ -1789,6 +1793,15 @@ export default function UniformPOS() {
       ));
     }
   }, [schools, selectedSchool]);
+
+  useEffect(() => {
+    if (!["/menu", "/sale", "/products"].includes(location.pathname)) return;
+    const routeSchool = new URLSearchParams(location.search).get("school_id")
+      || new URLSearchParams(location.search).get("school");
+    if (routeSchool && schools.includes(routeSchool) && routeSchool !== selectedSchool) {
+      setSelectedSchool(routeSchool);
+    }
+  }, [location.pathname, location.search, schools, selectedSchool]);
 
   useEffect(() => {
     if (!products.some((product) => product.id === selectedProduct)) {
@@ -2754,7 +2767,10 @@ export default function UniformPOS() {
       staff: "/staff",
     };
     if (routeMap[nextTab]) {
-      navigate(routeMap[nextTab]);
+      const schoolQuery = selectedSchool
+        ? `?school_id=${encodeURIComponent(selectedSchool)}`
+        : "";
+      navigate(`${routeMap[nextTab]}${schoolQuery}`);
     }
   };
 
@@ -3037,6 +3053,7 @@ export default function UniformPOS() {
                 setDeletedSchools={setDeletedSchools}
                 selectedSchool={selectedSchool}
                 setSelectedSchool={setSelectedSchool}
+                onPickSchool={pickSchool}
               />
             }
           />
@@ -3175,6 +3192,7 @@ export default function UniformPOS() {
                     setDeletedSchools={setDeletedSchools}
                     selectedSchool={selectedSchool}
                     setSelectedSchool={setSelectedSchool}
+                    onPickSchool={pickSchool}
                   />
                 )}
                 {tab === "records" && (
@@ -3819,7 +3837,7 @@ function SaleTab({
   );
 }
 
-function ProductsTab({ products, saveProducts, saveProductsNow, importResult, setImportResult, productsSaveError = "", productsSaveState = "saved", sourceIntegrityWarning = "", canManageSchools = true, canImportExport = true, schoolMeta = {}, saveSchoolMeta = async () => {}, setDeletedSchools = () => {}, selectedSchool = null, setSelectedSchool = () => {} }) {
+function ProductsTab({ products, saveProducts, saveProductsNow, importResult, setImportResult, productsSaveError = "", productsSaveState = "saved", sourceIntegrityWarning = "", canManageSchools = true, canImportExport = true, schoolMeta = {}, saveSchoolMeta = async () => {}, setDeletedSchools = () => {}, selectedSchool = null, setSelectedSchool = () => {}, onPickSchool = setSelectedSchool }) {
   const [expanded, setExpanded] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
@@ -4566,7 +4584,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
           schoolMeta={schoolMeta}
           selectedSchool={selectedSchool}
           onPick={(school) => {
-            if (school && school !== "all") setSelectedSchool(school);
+            if (school && school !== "all") onPickSchool(school);
           }}
         />
       </div>
