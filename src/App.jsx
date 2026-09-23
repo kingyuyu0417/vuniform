@@ -3969,6 +3969,15 @@ function SaleTab({
           </button>
           {(() => {
             const product = products.find((p) => p.id === selectedProduct);
+            return product ? (
+              <div style={{ background: "#1F3A5F", color: "#fff", borderRadius: 10, padding: "12px 14px", marginBottom: 12, boxShadow: "0 2px 6px rgba(31,58,95,0.18)" }}>
+                <div style={{ fontSize: 11, opacity: 0.8, marginBottom: 3 }}>目前選擇款式</div>
+                <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.35, overflowWrap: "anywhere" }}>{displayProductName(product.name)}</div>
+              </div>
+            ) : null;
+          })()}
+          {(() => {
+            const product = products.find((p) => p.id === selectedProduct);
             const categoryLabel = hasLengthOptions(product) ? `先揀${lengthDimensionLabel(product)}，再揀${sizeDimensionLabel(product)}：` : "揀尺碼：";
             return (
               <>
