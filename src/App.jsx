@@ -3585,6 +3585,7 @@ function SaleTab({
   const [directExchangeOpen, setDirectExchangeOpen] = useState(false);
   const [directExchangeProductId, setDirectExchangeProductId] = useState("");
   const [directExchangeLength, setDirectExchangeLength] = useState("");
+  const [directExchangeQuantityPrompt, setDirectExchangeQuantityPrompt] = useState(null);
   const schools = listSchools(products);
   const visibleProducts = (selectedSchool ? products.filter((p) => schoolOf(p) === selectedSchool) : products)
     .filter((product) => product.sizes.some(isPricedSize));
@@ -3657,7 +3658,7 @@ function SaleTab({
     setExchangeItems([]);
   };
 
-  const startDirectExchange = (product, size) => {
+  const startDirectExchange = (product, size, quantity = 1) => {
     onExchange?.({
       id: "",
       school: selectedSchool || schoolOf(product),
@@ -3670,8 +3671,9 @@ function SaleTab({
       length: size.length || "",
       isTailored: Boolean(size.isTailored),
       price: Number(size.price || 0),
-      qty: 1,
+      qty: quantity,
     }]);
+    setDirectExchangeQuantityPrompt(null);
     setDirectExchangeOpen(false);
     setDirectExchangeProductId("");
     setDirectExchangeLength("");
@@ -3688,7 +3690,7 @@ function SaleTab({
       </button>
       <button
         className="pos-btn"
-        onClick={() => { setDirectExchangeOpen(true); setDirectExchangeProductId(""); setDirectExchangeLength(""); }}
+        onClick={() => { setDirectExchangeOpen(true); setDirectExchangeProductId(""); setDirectExchangeLength(""); setDirectExchangeQuantityPrompt(null); }}
         style={{ width: "100%", padding: "12px 0", borderRadius: 10, background: "#ECFDF3", color: "#166534", border: "1px solid #86EFAC", fontSize: 14, fontWeight: 700, marginBottom: 12 }}
       >
         遺失單據快速換貨（直接揀退回貨品）
@@ -3715,13 +3717,54 @@ function SaleTab({
               <div>
                 <button className="pos-btn" onClick={() => setDirectExchangeProductId("")} style={{ padding: "6px 8px", marginBottom: 8, background: "transparent", color: "#166534" }}>← 返回選款式</button>
                 <div style={{ fontSize: 12, color: "#166534", marginBottom: 6 }}>{displayProductName(product.name)}：揀{hasLengths ? `${lengthDimensionLabel(product)}及${sizeDimensionLabel(product)}` : "尺碼"}</div>
+                {directExchangeQuantityPrompt && (
+                  <div style={{ background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 10, padding: 10, marginBottom: 10 }}>
+                    <div style={{ color: "#166534", fontSize: 13, fontWeight: 800 }}>需要換貨數量</div>
+                    <div style={{ color: "#166534", fontSize: 12, marginTop: 3 }}>{sizeLabel(directExchangeQuantityPrompt.size)}</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginTop: 8 }}>
+                      {[1, 2, 3].map((quantity) => (
+                        <button key={quantity} className="pos-btn" onClick={() => startDirectExchange(product, directExchangeQuantityPrompt.size, quantity)} style={{ padding: "10px 6px", borderRadius: 8, background: "#166534", border: "none", color: "#fff", fontWeight: 800 }}>
+                          {quantity}{productUnit(product.name)}
+                        </button>
+                      ))}
+                    </div>
+                    <button className="pos-btn" onClick={() => setDirectExchangeQuantityPrompt((current) => ({ ...current, custom: true, quantity: "" }))} style={{ width: "100%", marginTop: 6, padding: 8, borderRadius: 8, background: directExchangeQuantityPrompt.custom ? "#DCFCE7" : "#fff", border: "1px solid #86EFAC", color: "#166534", fontWeight: 800 }}>
+                      其他（4–99{productUnit(product.name)}）
+                    </button>
+                    {directExchangeQuantityPrompt.custom && (
+                      <>
+                        <input
+                          type="number"
+                          min="4"
+                          max="99"
+                          inputMode="numeric"
+                          autoFocus
+                          placeholder={`輸入數量（4–99${productUnit(product.name)}）`}
+                          value={directExchangeQuantityPrompt.quantity}
+                          onChange={(event) => setDirectExchangeQuantityPrompt((current) => ({ ...current, quantity: event.target.value }))}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              const quantity = Number(directExchangeQuantityPrompt.quantity);
+                              if (Number.isInteger(quantity) && quantity >= 4 && quantity <= 99) startDirectExchange(product, directExchangeQuantityPrompt.size, quantity);
+                            }
+                          }}
+                          style={{ width: "100%", boxSizing: "border-box", marginTop: 8, padding: "9px 10px", border: "1px solid #86EFAC", borderRadius: 8, fontSize: 17, fontWeight: 700 }}
+                        />
+                        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                          <button className="pos-btn" onClick={() => setDirectExchangeQuantityPrompt(null)} style={{ flex: 1, padding: 8, borderRadius: 8, background: "#fff", border: "1px solid #86EFAC", color: "#166534", fontWeight: 700 }}>取消</button>
+                          <button className="pos-btn" onClick={() => startDirectExchange(product, directExchangeQuantityPrompt.size, Number(directExchangeQuantityPrompt.quantity))} disabled={!Number.isInteger(Number(directExchangeQuantityPrompt.quantity)) || Number(directExchangeQuantityPrompt.quantity) < 4 || Number(directExchangeQuantityPrompt.quantity) > 99} style={{ flex: 1, padding: 8, borderRadius: 8, background: "#166534", border: "none", color: "#fff", fontWeight: 700 }}>確定換貨</button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
                 {hasLengths && !directExchangeLength ? (
                   <div className="sale-size-grid">
                     {lengths.map((length) => <button key={length} className="pos-btn sale-size-button" onClick={() => setDirectExchangeLength(length)} style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #86EFAC", color: "#166534", fontSize: 16, fontWeight: 700 }}>{lengthDimensionLabel(product)} {length}</button>)}
                   </div>
                 ) : <div className="sale-size-grid">
                   {sizes.map((size) => (
-                    <button key={`${size.size}-${size.length || ""}`} className="pos-btn sale-size-button" onClick={() => startDirectExchange(product, size)} style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #86EFAC", color: "#166534", fontSize: 16 }}>
+                    <button key={`${size.size}-${size.length || ""}`} className="pos-btn sale-size-button" onClick={() => setDirectExchangeQuantityPrompt({ size, custom: false, quantity: "" })} style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #86EFAC", color: "#166534", fontSize: 16 }}>
                       {sizeLabel(size)} · {fmt(size.price)}
                     </button>
                   ))}
@@ -3729,7 +3772,7 @@ function SaleTab({
               </div>
             );
           })()}
-          <button className="pos-btn" onClick={() => setDirectExchangeOpen(false)} style={{ width: "100%", marginTop: 8, padding: 7, background: "transparent", color: "#166534" }}>取消</button>
+          <button className="pos-btn" onClick={() => { setDirectExchangeOpen(false); setDirectExchangeQuantityPrompt(null); }} style={{ width: "100%", marginTop: 8, padding: 7, background: "transparent", color: "#166534" }}>取消</button>
         </div>
       )}
       {exchangePickerOpen && exchangeOrder === null && (
