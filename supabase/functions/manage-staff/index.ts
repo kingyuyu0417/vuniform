@@ -50,7 +50,7 @@ Deno.serve(async (request) => {
     const email = String(body.email || "").trim().toLowerCase();
     const displayName = String(body.display_name || "").trim();
     const role = String(body.role || "staff");
-    if (!email || !displayName || !["admin", "manager", "staff"].includes(role)) return json({ error: "Invalid staff details" }, 400);
+    if (!email || !displayName || !["admin", "manager", "sales", "staff"].includes(role)) return json({ error: "Invalid staff details" }, 400);
     const { data: users, error: listError } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
     if (listError) return json({ error: listError.message }, 400);
     const existingUser = users.users.find((candidate) => candidate.email?.toLowerCase() === email);
@@ -70,7 +70,7 @@ Deno.serve(async (request) => {
     const displayName = String(body.display_name || "").trim();
     const password = String(body.password || "");
     const role = String(body.role || "staff");
-    if (!email || !displayName || password.length < 8 || !["admin", "manager", "staff"].includes(role)) return json({ error: "請提供姓名、有效電郵、最少 8 字元密碼及角色" }, 400);
+    if (!email || !displayName || password.length < 8 || !["admin", "manager", "sales", "staff"].includes(role)) return json({ error: "請提供姓名、有效電郵、最少 8 字元密碼及角色" }, 400);
     const { data: users, error: listError } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
     if (listError) return json({ error: listError.message }, 400);
     const existingUser = users.users.find((candidate) => candidate.email?.toLowerCase() === email);
@@ -91,7 +91,7 @@ Deno.serve(async (request) => {
   if (action === "update_role") {
     const id = String(body.id || "");
     const role = String(body.role || "");
-    if (!id || !["admin", "manager", "staff"].includes(role)) return json({ error: "Invalid staff role" }, 400);
+    if (!id || !["admin", "manager", "sales", "staff"].includes(role)) return json({ error: "Invalid staff role" }, 400);
     if (id === user.id && role !== "admin") return json({ error: "You cannot remove your own admin role" }, 400);
     const { error } = await adminClient.from("staff_profiles").update({ role, updated_at: new Date().toISOString() }).eq("id", id);
     if (error) return json({ error: error.message }, 400);

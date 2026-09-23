@@ -1363,9 +1363,9 @@ const BT_SERVICE = "000018f0-0000-1000-8000-00805f9b34fb";
 const BT_CHAR = "00002af1-0000-1000-8000-00805f9b34fb";
 
 // ===================== 員工權限 =====================
-// 四種角色：admin（全權限）、manager（店長/當日負責人）、staff（店員）、guest（客人登記）
-const ROLES = { ADMIN: "admin", MANAGER: "manager", STAFF: "staff", GUEST: "guest" };
-const ROLE_LABEL = { admin: "管理員 ADMIN", manager: "店長／當日負責人", staff: "店員", guest: "客人" };
+// 五種角色：admin（全權限）、manager（店長/當日負責人）、sales（銷售）、staff（店員）、guest（客人登記）
+const ROLES = { ADMIN: "admin", MANAGER: "manager", SALES: "sales", STAFF: "staff", GUEST: "guest" };
+const ROLE_LABEL = { admin: "管理員 ADMIN", manager: "店長／當日負責人", sales: "銷售", staff: "店員", guest: "客人" };
 
 // 每個角色嘅權限表：邊啲分頁見到、邊啲操作准許
 const PERMISSIONS = {
@@ -1383,6 +1383,14 @@ const PERMISSIONS = {
     canManageSchools: false,
     canImportExport: false,
     canViewAllDates: false, // 只可以睇「當日／即時」
+    canExportSales: false,
+  },
+  [ROLES.SALES]: {
+    tabs: ["sale", "records"],
+    canEditProducts: false,
+    canManageSchools: false,
+    canImportExport: false,
+    canViewAllDates: false,
     canExportSales: false,
   },
   [ROLES.STAFF]: {
@@ -3059,16 +3067,7 @@ export default function UniformPOS() {
     }
   };
 
-  const directoryIds = [
-    "sale",
-    "guest",
-    "queue",
-    "track",
-    "fitting",
-    "pickup",
-    "cashier",
-    ...(perms?.tabs || []),
-  ];
+  const directoryIds = perms?.tabs || [];
 
   if (location.pathname === "/checkin") {
     return <Suspense fallback={<PageLoading />}><CustomerCheckinPage school={publicRouteSchool} schools={customerSchools} schoolMeta={schoolMeta} onSubmit={handleGuestSubmit} /></Suspense>;
@@ -6383,6 +6382,7 @@ function AuthStaffTab({ manageStaff, currentId }) {
         <input type="password" value={temporaryPassword} onChange={(e) => setTemporaryPassword(e.target.value)} placeholder="臨時密碼（最少 8 字元）" style={{ width: "100%", padding: 9, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box", marginBottom: 8 }} />
         <select value={role} onChange={(e) => setRole(e.target.value)} style={{ width: "100%", padding: 9, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box", marginBottom: 8 }}>
           <option value={ROLES.STAFF}>店員</option>
+          <option value={ROLES.SALES}>銷售</option>
           <option value={ROLES.MANAGER}>店長</option>
           <option value={ROLES.ADMIN}>管理員</option>
         </select>
@@ -6394,7 +6394,7 @@ function AuthStaffTab({ manageStaff, currentId }) {
         <div key={member.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", borderBottom: "1px solid #eee" }}>
           <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 600 }}>{member.display_name}</div><div style={{ fontSize: 10, color: "#999", overflow: "hidden", textOverflow: "ellipsis" }}>{member.id}</div></div>
           <select value={member.role} onChange={(e) => changeRole(member.id, e.target.value)} disabled={busy} style={{ padding: 6, borderRadius: 6, border: "1px solid #ccc" }}>
-            <option value={ROLES.ADMIN}>管理員</option><option value={ROLES.MANAGER}>店長</option><option value={ROLES.STAFF}>店員</option>
+            <option value={ROLES.ADMIN}>管理員</option><option value={ROLES.MANAGER}>店長</option><option value={ROLES.SALES}>銷售</option><option value={ROLES.STAFF}>店員</option>
           </select>
           <button className="pos-btn" onClick={() => disable(member.id)} disabled={busy || member.id === currentId} style={{ padding: "6px 8px", borderRadius: 6, background: "#fff", border: "1px solid #f0c0c0", color: "#c33" }}>停用</button>
         </div>
