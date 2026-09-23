@@ -3581,6 +3581,7 @@ function SaleTab({
   const [exchangePickerOpen, setExchangePickerOpen] = useState(false);
   const [exchangeOrder, setExchangeOrder] = useState(null);
   const [exchangeItems, setExchangeItems] = useState([]);
+  const [exchangeItemQuantities, setExchangeItemQuantities] = useState({});
   const [exchangeSearch, setExchangeSearch] = useState("");
   const [directExchangeOpen, setDirectExchangeOpen] = useState(false);
   const [directExchangeProductId, setDirectExchangeProductId] = useState("");
@@ -3623,6 +3624,7 @@ function SaleTab({
     setExchangePickerOpen(false);
     setExchangeOrder(null);
     setExchangeItems([]);
+    setExchangeItemQuantities({});
     setExchangeSearch("");
   }, [selectedSchool]);
 
@@ -3652,10 +3654,15 @@ function SaleTab({
 
   const confirmExchangeItems = () => {
     if (!exchangeOrder || exchangeItems.length === 0) return;
-    onExchange?.(exchangeOrder, exchangeItems);
+    const selectedWithQuantities = exchangeItems.map((item) => ({
+      ...item,
+      qty: Math.max(1, Math.min(Number(item.qty || 1), Number(exchangeItemQuantities[item._exchangeIndex] || 1))),
+    }));
+    onExchange?.(exchangeOrder, selectedWithQuantities);
     setExchangePickerOpen(false);
     setExchangeOrder(null);
     setExchangeItems([]);
+    setExchangeItemQuantities({});
   };
 
   const startDirectExchange = (product, size, quantity = 1) => {
@@ -3792,7 +3799,7 @@ function SaleTab({
                 if (!query) return true;
                 return String(order.id || "").toLowerCase().includes(query);
               }).slice(0, 20).map((order) => (
-                <button key={order.id} className="pos-btn" onClick={() => { setExchangeOrder(order); setExchangeItems([]); }} style={{ textAlign: "left", padding: "9px 10px", borderRadius: 8, background: "#fff", border: "1px solid #FDBA74", color: "#7C2D12" }}>
+                <button key={order.id} className="pos-btn" onClick={() => { setExchangeOrder(order); setExchangeItems([]); setExchangeItemQuantities({}); }} style={{ textAlign: "left", padding: "9px 10px", borderRadius: 8, background: "#fff", border: "1px solid #FDBA74", color: "#7C2D12" }}>
                   #{order.id} · {order.date} · {fmt(order.total)}
                 </button>
               ))}
@@ -3806,12 +3813,49 @@ function SaleTab({
         <div style={{ background: "#FFF7ED", border: "1px solid #FDBA74", borderRadius: 10, padding: 12, marginBottom: 12 }}>
           <div style={{ color: "#9A3412", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>揀選換貨貨品（可多選）</div>
           {exchangeOrder.items.map((item, index) => {
-            const selected = exchangeItems.includes(item);
+            const selected = exchangeItems.some((entry) => entry._exchangeIndex === index);
+            const selectedQuantity = Number(exchangeItemQuantities[index] || 1);
             return (
-              <label key={`${item.name}-${item.size}-${index}`} style={{ display: "flex", alignItems: "center", gap: 8, padding: 8, marginBottom: 6, borderRadius: 8, background: "#fff", border: "1px solid #FDBA74", color: "#7C2D12" }}>
-                <input type="checkbox" checked={selected} onChange={() => setExchangeItems((previous) => selected ? previous.filter((entry) => entry !== item) : [...previous, item])} />
-                <span>{item.name}（{sizeLabel(item)}）× {item.qty}{productUnit(item.name)}</span>
-              </label>
+              <div key={`${item.name}-${item.size}-${index}`} style={{ padding: 8, marginBottom: 6, borderRadius: 8, background: "#fff", border: "1px solid #FDBA74", color: "#7C2D12" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={selected}
+                    onChange={() => {
+                      setExchangeItems((previous) => selected
+                        ? previous.filter((entry) => entry._exchangeIndex !== index)
+                        : [...previous, { ...item, _exchangeIndex: index }]);
+                      setExchangeItemQuantities((previous) => {
+                        if (selected) {
+                          const next = { ...previous };
+                          delete next[index];
+                          return next;
+                        }
+                        return { ...previous, [index]: 1 };
+                      });
+                    }}
+                  />
+                  <span>{item.name}（{sizeLabel(item)}）× {item.qty}{productUnit(item.name)}</span>
+                </label>
+                {selected && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, paddingLeft: 24 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700 }}>本次換</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max={item.qty}
+                      inputMode="numeric"
+                      value={selectedQuantity}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        setExchangeItemQuantities((previous) => ({ ...previous, [index]: Number.isFinite(value) ? Math.max(1, Math.min(Number(item.qty), value)) : 1 }));
+                      }}
+                      style={{ width: 64, padding: "6px 8px", border: "1px solid #FDBA74", borderRadius: 6, fontSize: 16, fontWeight: 700 }}
+                    />
+                    <span style={{ fontSize: 12 }}>{productUnit(item.name)}（最多 {item.qty}）</span>
+                  </div>
+                )}
+              </div>
             );
           })}
           <button className="pos-btn" disabled={exchangeItems.length === 0} onClick={confirmExchangeItems} style={{ width: "100%", padding: 10, borderRadius: 8, background: "#166534", color: "#fff", fontWeight: 700 }}>確定換選貨品（{exchangeItems.length}款）</button>
