@@ -3856,7 +3856,69 @@ function SaleTab({
           {(() => {
             const product = products.find((p) => p.id === selectedProduct);
             const categoryLabel = hasLengthOptions(product) ? `先揀${lengthDimensionLabel(product)}，再揀${sizeDimensionLabel(product)}：` : "揀尺碼：";
-            return <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>{categoryLabel}</div>;
+            return (
+              <>
+                {quantityPrompt && (
+                  <div style={{ background: "#EAF4FF", border: "1px solid #B7D4F2", borderRadius: 12, padding: 14, marginBottom: 12 }}>
+                    <div style={{ color: "#1F3A5F", fontSize: 14, fontWeight: 800 }}>需要購買數量</div>
+                    <div style={{ color: "#64748B", fontSize: 12, marginTop: 4 }}>
+                      {displayProductName(quantityPrompt.product.name)}（{sizeLabel(quantityPrompt.size)}）
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 12 }}>
+                      {[1, 2, 3].map((quantity) => (
+                        <button
+                          key={quantity}
+                          className="pos-btn"
+                          onClick={() => confirmQuantity(quantity)}
+                          style={{ padding: "12px 8px", borderRadius: 8, background: "#1F3A5F", border: "none", color: "#fff", fontSize: 16, fontWeight: 800 }}
+                        >
+                          {quantity}{productUnit(quantityPrompt.product.name)}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      className="pos-btn"
+                      onClick={() => setQuantityPrompt((current) => ({ ...current, custom: true, quantity: "" }))}
+                      style={{ width: "100%", marginTop: 8, padding: "10px", borderRadius: 8, background: quantityPrompt.custom ? "#DCEEFF" : "#fff", border: "1px solid #9BC3EC", color: "#1F3A5F", fontWeight: 800 }}
+                    >
+                      其他（4–99{productUnit(quantityPrompt.product.name)}）
+                    </button>
+                    {!quantityPrompt.custom && (
+                      <button className="pos-btn" onClick={() => setQuantityPrompt(null)} style={{ width: "100%", marginTop: 8, padding: "9px 10px", borderRadius: 8, background: "#fff", border: "1px solid #CBD5E1", color: "#475569", fontWeight: 700 }}>
+                        取消
+                      </button>
+                    )}
+                    {quantityPrompt.custom && (
+                      <>
+                        <input
+                          type="number"
+                          min="4"
+                          max="99"
+                          inputMode="numeric"
+                          autoFocus
+                          placeholder={`輸入數量（4–99${productUnit(quantityPrompt.product.name)}）`}
+                          value={quantityPrompt.quantity}
+                          onChange={(event) => setQuantityPrompt((current) => ({ ...current, quantity: event.target.value }))}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") confirmQuantity();
+                          }}
+                          style={{ width: "100%", boxSizing: "border-box", marginTop: 10, padding: "10px 12px", border: "1px solid #9BC3EC", borderRadius: 8, fontSize: 18, fontWeight: 700 }}
+                        />
+                        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                          <button className="pos-btn" onClick={() => setQuantityPrompt(null)} style={{ flex: 1, padding: "9px 10px", borderRadius: 8, background: "#fff", border: "1px solid #CBD5E1", color: "#475569", fontWeight: 700 }}>
+                            取消
+                          </button>
+                          <button className="pos-btn" onClick={() => confirmQuantity()} disabled={!Number.isInteger(Number(quantityPrompt.quantity)) || Number(quantityPrompt.quantity) < 4 || Number(quantityPrompt.quantity) > 99} style={{ flex: 1, padding: "9px 10px", borderRadius: 8, background: "#1F3A5F", border: "none", color: "#fff", fontWeight: 700 }}>
+                            確定加入
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+                {!quantityPrompt && <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>{categoryLabel}</div>}
+              </>
+            );
           })()}
           {(() => {
             const product = products.find((p) => p.id === selectedProduct);
@@ -3912,65 +3974,6 @@ function SaleTab({
               </div>
             );
           })()}
-        </div>
-      )}
-
-      {quantityPrompt && (
-        <div style={{ background: "#EAF4FF", border: "1px solid #B7D4F2", borderRadius: 12, padding: 14, marginBottom: 16 }}>
-          <div style={{ color: "#1F3A5F", fontSize: 14, fontWeight: 800 }}>需要購買數量</div>
-          <div style={{ color: "#64748B", fontSize: 12, marginTop: 4 }}>
-            {displayProductName(quantityPrompt.product.name)}（{sizeLabel(quantityPrompt.size)}）
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 12 }}>
-            {[1, 2, 3].map((quantity) => (
-              <button
-                key={quantity}
-                className="pos-btn"
-                onClick={() => confirmQuantity(quantity)}
-                style={{ padding: "12px 8px", borderRadius: 8, background: "#1F3A5F", border: "none", color: "#fff", fontSize: 16, fontWeight: 800 }}
-              >
-                {quantity}{productUnit(quantityPrompt.product.name)}
-              </button>
-            ))}
-          </div>
-          <button
-            className="pos-btn"
-            onClick={() => setQuantityPrompt((current) => ({ ...current, custom: true, quantity: "" }))}
-            style={{ width: "100%", marginTop: 8, padding: "10px", borderRadius: 8, background: quantityPrompt.custom ? "#DCEEFF" : "#fff", border: "1px solid #9BC3EC", color: "#1F3A5F", fontWeight: 800 }}
-          >
-            其他（4–99{productUnit(quantityPrompt.product.name)}）
-          </button>
-          {!quantityPrompt.custom && (
-            <button className="pos-btn" onClick={() => setQuantityPrompt(null)} style={{ width: "100%", marginTop: 8, padding: "9px 10px", borderRadius: 8, background: "#fff", border: "1px solid #CBD5E1", color: "#475569", fontWeight: 700 }}>
-              取消
-            </button>
-          )}
-          {quantityPrompt.custom && (
-            <>
-              <input
-                type="number"
-                min="4"
-                max="99"
-                inputMode="numeric"
-                autoFocus
-                placeholder={`輸入數量（4–99${productUnit(quantityPrompt.product.name)}）`}
-                value={quantityPrompt.quantity}
-                onChange={(event) => setQuantityPrompt((current) => ({ ...current, quantity: event.target.value }))}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") confirmQuantity();
-                }}
-                style={{ width: "100%", boxSizing: "border-box", marginTop: 10, padding: "10px 12px", border: "1px solid #9BC3EC", borderRadius: 8, fontSize: 18, fontWeight: 700 }}
-              />
-              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <button className="pos-btn" onClick={() => setQuantityPrompt(null)} style={{ flex: 1, padding: "9px 10px", borderRadius: 8, background: "#fff", border: "1px solid #CBD5E1", color: "#475569", fontWeight: 700 }}>
-                  取消
-                </button>
-                <button className="pos-btn" onClick={() => confirmQuantity()} disabled={!Number.isInteger(Number(quantityPrompt.quantity)) || Number(quantityPrompt.quantity) < 4 || Number(quantityPrompt.quantity) > 99} style={{ flex: 1, padding: "9px 10px", borderRadius: 8, background: "#1F3A5F", border: "none", color: "#fff", fontWeight: 700 }}>
-                  確定加入
-                </button>
-              </div>
-            </>
-          )}
         </div>
       )}
 
