@@ -2948,6 +2948,7 @@ export default function UniformPOS() {
     exchangeReplacementQueueRef.current = remaining;
     setExchangeReplacementQueue(remaining);
     setPendingSaleProductId(remaining[0] || "");
+    return remaining[0] || "";
   };
 
   const printBrowser = () => {
@@ -3642,7 +3643,8 @@ function SaleTab({
     setSelectedProduct(null);
     setSelectedLength("");
     if (exchangeMode && exchangeReplacementQueue.length > 0) {
-      onExchangeReplacementAdded?.();
+      const nextProductId = onExchangeReplacementAdded?.();
+      if (nextProductId) setSelectedProduct(nextProductId);
     }
   };
 
