@@ -749,10 +749,21 @@ const PRICE_LIST_TAILORED_SIZES = [
 ];
 const expandTailoredPriceListValue = (name, value) => {
   if (String(value || "").trim() !== "裁碼" || /底裙/.test(name)) return [String(value || "").trim()];
-  if (/半腰裙|深炭灰色半截校裙/.test(name)) return ["裁碼"];
-  if (/夏季運動衣|夏運衣|女裝夏季運動衣|男裝夏季運動衣/.test(name)) return ["32", "34", "36", "38", "40", "裁碼"];
-  if (/夏季運動褲|夏運褲|女裝夏季運動褲|男裝夏季運動褲/.test(name)) return ["裁碼"];
-  return PRICE_LIST_TAILORED_SIZES.find((rule) => rule.match.test(name))?.values || [String(value || "").trim()];
+  return ["裁碼"];
+};
+const inferLowerTailoredSizes = (name, rawEntries) => {
+  if (!rawEntries.some(({ size }) => size === "裁碼")) return [];
+  const tailoredRule = PRICE_LIST_TAILORED_SIZES.find((rule) => rule.match.test(name));
+  if (!tailoredRule) return [];
+  const numericEntries = rawEntries
+    .map(({ size, price }) => ({ size: Number(size), price }))
+    .filter(({ size, price }) => Number.isFinite(size) && Number.isFinite(price));
+  if (!numericEntries.length) return [];
+  const lowestListedSize = Math.min(...numericEntries.map(({ size }) => size));
+  const lowestListedPrice = numericEntries.find(({ size }) => size === lowestListedSize)?.price;
+  return tailoredRule.values
+    .filter((size) => Number(size) < lowestListedSize)
+    .map((size) => ({ size, price: lowestListedPrice }));
 };
 const expandPriceListSizeRange = (name, value) => {
   const text = String(value || "").trim();
@@ -986,6 +997,9 @@ const convertIrregularPriceList = (rows) => {
           }));
         });
       } else {
+        inferLowerTailoredSizes(name, rawEntries).forEach(({ size, price }) => {
+          converted.push({ 學校: school, 款式名稱: name, 長度: "", 尺碼: size, 價錢: price });
+        });
         rawEntries.forEach(({ size, price }) => {
           expandTailoredPriceListValue(name, size)
             .flatMap((tailoredSize) => expandPriceListSizeRange(name, tailoredSize))
