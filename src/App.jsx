@@ -348,39 +348,29 @@ const listSchools = (products) => {
 const normalizeProductState = (products) => {
   const normalizedProducts = (Array.isArray(products) ? products : []).map((product) => {
     const sizes = normalizeProductSizes(product.sizes);
-    const isLongTrouser = /西褲/.test(cleanProductName(product.name));
-    const tailoredSizeRule = PRICE_LIST_TAILORED_SIZES.find((rule) => rule.matrixDimension === "size" && rule.match.test(cleanProductName(product.name)));
-    const tailoredSizes = tailoredSizeRule?.values || [];
-    const lengths = new Set(sizes.map((size) => size.length || ""));
-    const isShirt = /(?:短恤|長恤|短袖恤|長袖恤|恤衫|襯衫|尖領恤|恤)/.test(cleanProductName(product.name));
-    const shirtTailoredRule = isShirt
-      ? PRICE_LIST_TAILORED_SIZES.find((rule) => rule.match.test(cleanProductName(product.name)))
-      : null;
-    const shirtTailoredSizes = shirtTailoredRule?.values || [];
-    const completedSizes = isLongTrouser && tailoredSizes.length > 0
-      ? [...sizes, ...[...lengths].flatMap((length) => {
-        const entries = sizes.filter((size) => (size.length || "") === length);
-        const numericEntries = entries.filter((size) => Number.isFinite(Number(size.size)));
-        const reference = numericEntries.sort((first, second) => Number(second.size) - Number(first.size))[0]
-          || entries.find((size) => size.size === "裁碼")
-          || entries[0];
-        if (!reference) return [];
-        return tailoredSizes
-          .filter((size) => !sizes.some((item) => item.size === size && (item.length || "") === length))
-          .map((size) => ({ size, length, price: reference.price }));
+    const productName = cleanProductName(product.name);
+    const tailoredRule = PRICE_LIST_TAILORED_SIZES.find((rule) => rule.match.test(productName));
+    const tailoredValues = tailoredRule?.values || [];
+    const completedSizes = tailoredValues.length === 0
+      ? sizes
+      : tailoredRule.matrixDimension === "length"
+      ? [...sizes, ...tailoredValues.flatMap((length) => {
+        const baseSizes = sizes.filter((item) => !item.length);
+        return baseSizes
+          .filter((item) => !sizes.some((existing) => existing.size === item.size && (existing.length || "") === length))
+          .map((item) => ({ size: item.size, length, price: item.price }));
       })]
-      : isShirt && shirtTailoredSizes.length > 0
-        ? [...sizes, ...shirtTailoredSizes
-          .filter((size) => !sizes.some((item) => item.size === size && !item.length))
-          .map((size) => {
-            const reference = sizes.find((item) => item.size === "裁碼")
-              || [...sizes]
-                .filter((item) => !item.length && Number.isFinite(Number(item.size)))
-                .sort((first, second) => Number(second.size) - Number(first.size))[0];
-            return reference ? { size, length: "", price: reference.price } : null;
-          })
-          .filter(Boolean)]
-      : sizes;
+      : [...sizes, ...[...new Set(sizes.map((item) => item.length || ""))].flatMap((length) => {
+        const entries = sizes.filter((item) => (item.length || "") === length);
+        const reference = entries.find((item) => item.size === "裁碼")
+          || [...entries].filter((item) => Number.isFinite(Number(item.size))).sort((first, second) => Number(second.size) - Number(first.size))[0]
+            || entries.find(isPricedSize);
+          return reference
+            ? tailoredValues
+              .filter((size) => !sizes.some((item) => item.size === size && (item.length || "") === length))
+              .map((size) => ({ size, length, price: reference.price }))
+            : [];
+        })];
     return {
       ...product,
       school: canonicalSchoolName(product.school),
