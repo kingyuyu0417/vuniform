@@ -148,13 +148,25 @@ const formatSizeForReceipt = (itemName, size, length) => {
 const naturalSizeSort = (first, second) => {
   const firstText = String(first ?? "").trim();
   const secondText = String(second ?? "").trim();
-  if (firstText === "裁碼" || secondText === "裁碼") {
+  const isTailored = (value) => /^裁碼(?:\s|$)/.test(value);
+  if (isTailored(firstText) || isTailored(secondText)) {
     if (firstText === secondText) return 0;
-    return firstText === "裁碼" ? 1 : -1;
+    return isTailored(firstText) ? 1 : -1;
   }
+  const firstHasLetters = /^[A-Za-z]/.test(firstText);
+  const secondHasLetters = /^[A-Za-z]/.test(secondText);
   const firstNumber = Number.parseFloat(first);
   const secondNumber = Number.parseFloat(second);
-  if (Number.isFinite(firstNumber) && Number.isFinite(secondNumber) && firstNumber !== secondNumber) return firstNumber - secondNumber;
+  if (firstHasLetters || secondHasLetters) {
+    if (!firstHasLetters) return 1;
+    if (!secondHasLetters) return -1;
+    return firstText.localeCompare(secondText, "en", { numeric: true });
+  }
+  if (Number.isFinite(firstNumber) || Number.isFinite(secondNumber)) {
+    if (!Number.isFinite(firstNumber)) return 1;
+    if (!Number.isFinite(secondNumber)) return -1;
+    if (firstNumber !== secondNumber) return firstNumber - secondNumber;
+  }
   const alphaOrder = ["XS", "S", "M", "L", "XL", "XXL"];
   const firstAlpha = alphaOrder.indexOf(firstText.toUpperCase());
   const secondAlpha = alphaOrder.indexOf(secondText.toUpperCase());
@@ -165,10 +177,15 @@ const naturalSizeSort = (first, second) => {
   }
   return firstText.localeCompare(secondText, "zh-Hant", { numeric: true });
 };
-const sizeEntrySort = (first, second) => (
-  naturalSizeSort(first.length || (first.isTailored ? "裁碼" : ""), second.length || (second.isTailored ? "裁碼" : ""))
-  || naturalSizeSort(first.size, second.size)
-);
+const sizeEntrySort = (first, second) => {
+  const firstTailored = Boolean(first.isTailored) || /^裁碼(?:\s|$)/.test(String(first.size || "").trim()) || /^裁碼(?:\s|$)/.test(String(first.length || "").trim());
+  const secondTailored = Boolean(second.isTailored) || /^裁碼(?:\s|$)/.test(String(second.size || "").trim()) || /^裁碼(?:\s|$)/.test(String(second.length || "").trim());
+  if (firstTailored || secondTailored) {
+    if (firstTailored === secondTailored) return 0;
+    return firstTailored ? 1 : -1;
+  }
+  return naturalSizeSort(first.length || "", second.length || "") || naturalSizeSort(first.size, second.size);
+};
 const localReceiptId = (salesLog) => {
   const prefix = `VU-${todayStr().replaceAll("-", "")}-`;
   const numbers = salesLog
