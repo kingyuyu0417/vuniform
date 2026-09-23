@@ -46,6 +46,14 @@
     const text = (value, fallback = "-") => escapeHtml(value == null || value === "" ? fallback : value);
     const customerSurname = (name) => String(name || "").trim().replace(/\s+/g, "").slice(0, 1);
     const customerPhoneLast4 = (phone) => String(phone || "").replace(/\D/g, "").slice(-4);
+    const englishTime = (value) => {
+      const match = String(value || "").match(/^(上午|下午)\s*(\d{1,2}):(\d{2})$/);
+      if (!match) return value;
+      const hour = Number(match[2]);
+      const isPm = match[1] === "下午";
+      const hour12 = hour % 12 || 12;
+      return `${hour12}:${match[3]} ${isPm ? "PM" : "AM"}`;
+    };
     const sizeLabel = (item) => item.length ? `${item.size}／${item.length}` : item.size;
     const dimensionLabels = (productName) => {
       const name = String(productName || "").replace(/\s+/g, "");
@@ -63,14 +71,57 @@
       if (/書包|背囊|袋|筆袋/.test(name)) return "個";
       return "件";
     };
-    const formatSizeDisplay = (productName, size, length) => {
+    const englishProductName = (productName) => {
+      const name = String(productName || "").trim();
+      const exact = {
+        "男生白色長袖恤衫": "Boys' White Long-sleeve Shirt",
+        "男生白色短袖恤衫": "Boys' White Short-sleeve Shirt",
+        "女生白色長袖恤衫": "Girls' White Long-sleeve Shirt",
+        "女生白色短袖恤衫": "Girls' White Short-sleeve Shirt",
+        "深炭灰色半截校裙": "Dark Charcoal Grey Half-length Skirt",
+        "男生深炭灰色長西褲": "Boys' Dark Charcoal Grey Long Trousers",
+        "男生西裝褸配背心": "Boys' Blazer with Waistcoat",
+        "女裝西裝褸配背心": "Girls' Blazer with Waistcoat",
+        "深炭灰色西裝褸配厚抓毛背心": "Dark Charcoal Grey Blazer with Fleece Waistcoat",
+        "男女生 - 運動衫": "Unisex Sports Shirt",
+        "男女生 - 運動套裝": "Unisex Sports Set",
+        "男女生 - 冷衫": "Unisex Jumper",
+        "男女生 - 混合毛冷衫": "Unisex Wool-blend Jumper",
+      };
+      if (exact[name]) return exact[name];
+      return name
+        .replace(/^男生\s*/, "Boys' ")
+        .replace(/^女生\s*/, "Girls' ")
+        .replace(/^男女生\s*[-－—:]?\s*/, "Unisex ")
+        .replace(/白色/g, "White ")
+        .replace(/深炭灰色/g, "Dark Charcoal Grey ")
+        .replace(/長袖/g, "Long-sleeve ")
+        .replace(/短袖/g, "Short-sleeve ")
+        .replace(/恤衫/g, "Shirt")
+        .replace(/半截校裙/g, "Half-length Skirt")
+        .replace(/校裙/g, "Skirt")
+        .replace(/長西褲/g, "Long Trousers")
+        .replace(/西褲/g, "Trousers")
+        .replace(/西裝褸配背心/g, "Blazer with Waistcoat")
+        .replace(/西裝褸/g, "Blazer")
+        .replace(/背心/g, "Waistcoat")
+        .replace(/運動套裝/g, "Sports Set")
+        .replace(/運動衫/g, "Sports Shirt")
+        .replace(/冷衫/g, "Jumper")
+        .replace(/\s+/g, " ")
+        .trim();
+    };
+    const formatSizeDisplay = (productName, size, length, english = false) => {
       const labels = dimensionLabels(productName);
+      const translatedLabels = english
+        ? { length: labels.length === "裙長" ? "Skirt length" : labels.length === "袖長" ? "Sleeve length" : labels.length === "褲長" ? "Trouser length" : "", size: labels.size === "上圍" ? "Chest" : labels.size === "領圍" ? "Collar" : labels.size === "腰圍" ? "Waist" : "Size" }
+        : labels;
       if (length && size) {
-        return `${labels.length}：${text(length)}（${labels.size}：${text(size)}）`;
+        return `${translatedLabels.length}: ${text(length)} (${translatedLabels.size}: ${text(size)})`;
       } else if (length) {
-        return `${labels.length}：${text(length)}`;
+        return `${translatedLabels.length}: ${text(length)}`;
       } else {
-        return `${labels.size}：${text(size)}`;
+        return `${translatedLabels.size}: ${text(size)}`;
       }
     };
     const sourceReceiptId = (order) => order.exchangeSourceReceiptId || order.exchange_source_receipt_id || order.sourceReceiptId || "";
@@ -102,7 +153,7 @@
           <dl>
             <dt>${labels.receiptNo}</dt><dd>#${text(order.id).toUpperCase()}</dd>
             ${sourceReceiptId(order) ? `<dt>${labels.source}</dt><dd>#${text(sourceReceiptId(order)).toUpperCase()}</dd>` : ""}
-            <dt>${labels.date}</dt><dd>${text(order.date)} ${text(order.time, "")}</dd>
+            <dt>${labels.date}</dt><dd>${text(order.date)} ${text(english ? englishTime(order.time) : order.time, "")}</dd>
             <dt>${labels.school}</dt><dd>${text(english ? "YMCA of Hong Kong Christian College" : order.school)}</dd>
             <dt>${labels.customer}</dt><dd>${text(customerSurname(order.customerName))}</dd>
             <dt>${labels.phone}</dt><dd>${text(customerPhoneLast4(order.customerPhone))}</dd>
@@ -110,7 +161,7 @@
           <div class="items">
               ${items.map((item) => {
                 const sign = item.exchangeReturn ? -1 : 1;
-                return `<div class="item"><div class="item-main"><span>${item.exchangeReturn ? (english ? "Exchange out: " : "換出：") : ""}${text(item.name)}</span><span>${money(sign * Number(item.price) * Number(item.qty))}</span></div><div class="item-sub"><span>${formatSizeDisplay(item.name, item.size, item.length)}</span></div><div class="item-sub"><span>${labels.quantity}</span><span>${text(item.qty, "0")} ${english ? "pcs" : productUnit(item.name)} × ${money(item.price)}</span></div></div>`;
+                return `<div class="item"><div class="item-main"><span>${item.exchangeReturn ? (english ? "Exchange out: " : "換出：") : ""}${text(english ? englishProductName(item.name) : item.name)}</span><span>${money(sign * Number(item.price) * Number(item.qty))}</span></div><div class="item-sub"><span>${formatSizeDisplay(item.name, item.size, item.length, english)}</span></div><div class="item-sub"><span>${labels.quantity}</span><span>${text(item.qty, "0")} ${english ? "pcs" : productUnit(item.name)} × ${money(item.price)}</span></div></div>`;
               }).join("")}
           </div>
           <div class="summary">
@@ -122,7 +173,7 @@
           <div class="policy"><strong>${labels.returnPolicy}</strong><br><strong>${labels.careTitle}</strong><br>${labels.care}</div>
           <footer>${labels.thanks}</footer>
         </section>
-        <div class="actions"><button onclick="window.print()">列印／另存為 PDF</button><button class="secondary" onclick="window.close()">關閉</button></div>`;
+        <div class="actions"><button onclick="window.print()">${english ? "Print / Save as PDF" : "列印／另存為 PDF"}</button><button class="secondary" onclick="window.close()">${english ? "Close" : "關閉"}</button></div>`;
     };
     try {
       const value = new URLSearchParams(location.search).get("data");
