@@ -146,11 +146,29 @@ const formatSizeForReceipt = (itemName, size, length) => {
   }
 };
 const naturalSizeSort = (first, second) => {
+  const firstText = String(first ?? "").trim();
+  const secondText = String(second ?? "").trim();
+  if (firstText === "裁碼" || secondText === "裁碼") {
+    if (firstText === secondText) return 0;
+    return firstText === "裁碼" ? 1 : -1;
+  }
   const firstNumber = Number.parseFloat(first);
   const secondNumber = Number.parseFloat(second);
   if (Number.isFinite(firstNumber) && Number.isFinite(secondNumber) && firstNumber !== secondNumber) return firstNumber - secondNumber;
-  return String(first).localeCompare(String(second), "zh-Hant", { numeric: true });
+  const alphaOrder = ["XS", "S", "M", "L", "XL", "XXL"];
+  const firstAlpha = alphaOrder.indexOf(firstText.toUpperCase());
+  const secondAlpha = alphaOrder.indexOf(secondText.toUpperCase());
+  if (firstAlpha >= 0 || secondAlpha >= 0) {
+    if (firstAlpha < 0) return 1;
+    if (secondAlpha < 0) return -1;
+    if (firstAlpha !== secondAlpha) return firstAlpha - secondAlpha;
+  }
+  return firstText.localeCompare(secondText, "zh-Hant", { numeric: true });
 };
+const sizeEntrySort = (first, second) => (
+  naturalSizeSort(first.length || (first.isTailored ? "裁碼" : ""), second.length || (second.isTailored ? "裁碼" : ""))
+  || naturalSizeSort(first.size, second.size)
+);
 const localReceiptId = (salesLog) => {
   const prefix = `VU-${todayStr().replaceAll("-", "")}-`;
   const numbers = salesLog
@@ -736,7 +754,7 @@ const looksLikeProductHeader = (value) => {
 };
 const PRICE_LIST_TAILORED_SIZES = [
   { match: /(?:裙)/, values: ["42", "44", "46", "48", "50"], matrixDimension: "length" },
-  { match: /(?:西褲|長褲)/, values: ["32", "34", "36", "38", "40", "42", "44", "46", "48", "50", "52"], matrixDimension: "length" },
+  { match: /(?:西褲|長褲)/, values: ["32", "34", "36", "38", "40", "42", "44", "46", "48"], matrixDimension: "size" },
   { match: /(?:西裝.*背心|西装.*背心|背心.*西裝|背心.*西装|西裝褸.*背心|西装褸.*背心)/, values: ["32", "34", "36", "38", "40", "42", "44", "46", "48", "50", "52", "54", "56", "58", "60"], matrixDimension: "length" },
   { match: /(?:恤衫|襯衫|尖領恤|恤)/, values: ["16.5", "17", "17.5", "18", "18.5", "19", "19.5", "20", "21", "22"] },
   { match: /(?:運動上衣|夏運衣|夏季運動衣|女裝夏季運動衣|男裝夏季運動衣|四社.*夏運衣)/, values: ["32", "34", "36", "38", "40", "裁碼"] },
@@ -747,6 +765,7 @@ const PRICE_LIST_TAILORED_SIZES = [
   { match: /(?:冬天運動套裝)/, values: ["46", "48", "50", "52"] },
   { match: /(?:冬天運動單衫|冬天運動單褲|冬運單衣|冬運單衫|冬運單褲)/, values: ["46", "48", "50", "52"] },
 ];
+const LONG_TROUSER_LENGTHS = ["30", "31", "32", "33", "34", "35", "36", "37", "38.5", "40", "41.5", "43", "44.5", "46"];
 const expandTailoredPriceListValue = (name, value) => {
   if (String(value || "").trim() !== "裁碼" || /底裙/.test(name)) return [String(value || "").trim()];
   return ["裁碼"];
@@ -962,6 +981,8 @@ const convertIrregularPriceList = (rows) => {
       }
       const isSkirt = /裙/.test(name);
       const isTrousers = /(?:褲|西褲)/.test(name);
+      const tailoredSizeRule = PRICE_LIST_TAILORED_SIZES.find((rule) => rule.matrixDimension === "size" && rule.match.test(name));
+      const isLongTrousers = /長西褲/.test(name) && Boolean(tailoredSizeRule);
       const sizeRange = isSkirt
         ? expandDimensionWithSurchargeRules(findDimensionRange(rows, rowIndex, /上圍|上围|上圉/), skirtSurchargeRules, 2)
         : [];
@@ -977,18 +998,22 @@ const convertIrregularPriceList = (rows) => {
             converted.push({ 學校: school, 款式名稱: name, 長度: length, 尺碼: size, 價錢: price + (rule?.amount || 0) });
           }));
         });
-      } else if (isTrousers && (lengthRange.length || PRICE_LIST_TAILORED_SIZES.some((rule) => rule.matrixDimension === "length" && rule.match.test(name)))) {
+      } else if (isTrousers && (lengthRange.length || isLongTrousers || PRICE_LIST_TAILORED_SIZES.some((rule) => rule.matrixDimension === "length" && rule.match.test(name)))) {
         const tailoredLengthRule = PRICE_LIST_TAILORED_SIZES.find((rule) => rule.matrixDimension === "length" && rule.match.test(name));
         const matrixLengthValues = new Set([
+          ...LONG_TROUSER_LENGTHS,
           ...lengthRange,
-          ...(tailoredLengthRule?.values || []),
+          ...(tailoredLengthRule?.matrixDimension === "length" ? tailoredLengthRule.values : []),
           ...trouserSurchargeRules.map((rule) => String(rule.threshold)),
         ]);
         const matrixLengths = [...matrixLengthValues]
           .filter((value) => value !== "")
           .sort((first, second) => Number(first) - Number(second));
         rawEntries.forEach(({ size: rawSize, price }) => {
-          expandTailoredPriceListValue(name, rawSize)
+          const waistSizes = isLongTrousers && rawSize === "裁碼"
+            ? tailoredSizeRule.values
+            : expandTailoredPriceListValue(name, rawSize);
+          waistSizes
             .flatMap((tailoredSize) => expandPriceListSizeRange(name, tailoredSize))
             .forEach((size) => matrixLengths.forEach((length) => {
             const lengthNumber = Number(length);
@@ -3609,7 +3634,7 @@ function SaleTab({
             const hasLengths = hasLengthOptions(product);
             if (!hasLengths) return (
               <div className="sale-size-grid">
-                {product.sizes.filter(isPricedSize).map((s) => (
+                {[...product.sizes].filter(isPricedSize).sort(sizeEntrySort).map((s) => (
                   <button
                     key={`${selectedProduct}-${s.size}`}
                     className="pos-btn sale-size-button"
@@ -4795,7 +4820,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
                   尚有 {p.sizes.filter((size) => !isPricedSize(size)).length} 個組合待補價，未補價格不可銷售。
                 </div>
               )}
-              {p.sizes.map((s, i) => (
+              {p.sizes.map((s, i) => ({ s, i })).sort((a, b) => sizeEntrySort(a.s, b.s)).map(({ s, i }) => (
                 <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
                   {hasLengthOptions(p) && (
                     <>
