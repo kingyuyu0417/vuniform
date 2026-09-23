@@ -4102,6 +4102,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   };
 
   const updateProduct = (id, next) => {
+    const scrollPosition = window.scrollY;
     const currentProducts = productsRef.current;
     const current = currentProducts.find((product) => product.id === id);
     if (!current) return;
@@ -4110,6 +4111,9 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
       merged.priceMode = merged.sizes?.some((size) => size?.length) ? "matrix" : "simple";
     }
     saveProducts(currentProducts.map((product) => (product.id === id ? merged : product)));
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: scrollPosition, left: window.scrollX, behavior: "auto" });
+    });
   };
 
   const addProductLength = (product, suppliedLength) => {
@@ -4489,6 +4493,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
       )}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <button
+          type="button"
           className="pos-btn"
           onClick={saveProductsNow}
           disabled={productsSaveState === "saving"}
@@ -5001,6 +5006,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
                     style={{ flex: 1, padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 13 }}
                   />
                   <button
+                    type="button"
                     className="pos-btn"
                     onClick={() => {
                       const sizes = p.sizes.filter((_, idx) => idx !== i);
