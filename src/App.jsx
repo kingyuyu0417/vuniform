@@ -3687,18 +3687,23 @@ function SaleTab({
   };
 
   const startDirectExchange = (product, size, quantity = 1) => {
-    setDirectExchangeItems((current) => [
-      ...current.filter((item) => !(item.productId === product.id && item.size === size.size && item.length === (size.length || ""))),
-      {
-        productId: product.id,
-        name: product.name,
-        size: size.size,
-        length: size.length || "",
-        isTailored: Boolean(size.isTailored),
-        price: Number(size.price || 0),
-        qty: quantity,
-      },
-    ]);
+    setDirectExchangeItems((current) => {
+      const itemKey = (item) => `${item.productId}::${item.size}::${item.length || ""}`;
+      const newItem = {
+          productId: product.id,
+          name: product.name,
+          size: size.size,
+          length: size.length || "",
+          isTailored: Boolean(size.isTailored),
+          price: Number(size.price || 0),
+          qty: quantity,
+        };
+      const existingIndex = current.findIndex((item) => itemKey(item) === itemKey(newItem));
+      if (existingIndex < 0) return [...current, newItem];
+      const next = [...current];
+      next[existingIndex] = { ...next[existingIndex], qty: Math.min(99, Number(next[existingIndex].qty || 0) + quantity) };
+      return next;
+    });
     setDirectExchangeQuantityPrompt(null);
     setDirectExchangeProductId("");
     setDirectExchangeLength("");
@@ -3730,7 +3735,7 @@ function SaleTab({
       </button>
       <button
         className="pos-btn"
-        onClick={() => { setDirectExchangeOpen(true); setDirectExchangeProductId(""); setDirectExchangeLength(""); setDirectExchangeQuantityPrompt(null); setDirectExchangeItems([]); }}
+        onClick={() => { setDirectExchangeOpen(true); setDirectExchangeProductId(""); setDirectExchangeLength(""); setDirectExchangeQuantityPrompt(null); }}
         style={{ width: "100%", padding: "12px 0", borderRadius: 10, background: "#ECFDF3", color: "#166534", border: "1px solid #86EFAC", fontSize: 14, fontWeight: 700, marginBottom: 12 }}
       >
         遺失單據快速換貨（直接揀退回貨品）
