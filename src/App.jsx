@@ -357,6 +357,7 @@ const normalizeProductState = (products) => {
     const tailoredPrice = tailoredRule?.matrixDimension !== "length"
       ? sizes.find((item) => item.size === "裁碼")?.price
       : undefined;
+    const hasExistingTailoredMatrix = sizes.some((item) => item.length) || sizes.some((item) => item.size === "裁碼");
     const pricedSizes = tailoredValues.length > 0
       ? sizes.map((item) => {
       const lengthPrice = tailoredPriceByLength.get(item.length || "");
@@ -371,12 +372,14 @@ const normalizeProductState = (products) => {
     const completedSizes = tailoredValues.length === 0
       ? sizes
       : tailoredRule.matrixDimension === "length"
-      ? [...pricedSizes, ...tailoredValues.flatMap((length) => {
+      ? (hasExistingTailoredMatrix
+        ? [...pricedSizes, ...tailoredValues.flatMap((length) => {
         const baseSizes = pricedSizes.filter((item) => !item.length);
         return baseSizes
           .filter((item) => !pricedSizes.some((existing) => existing.size === item.size && (existing.length || "") === length))
           .map((item) => ({ size: item.size, length, price: tailoredPriceByLength.get(length) ?? item.price }));
-      })]
+        })]
+        : sizes)
       : [...pricedSizes, ...[...new Set(pricedSizes.map((item) => item.length || ""))].flatMap((length) => {
         const entries = pricedSizes.filter((item) => (item.length || "") === length);
         const reference = entries.find((item) => item.size === "裁碼")
