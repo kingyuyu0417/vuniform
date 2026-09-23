@@ -90,6 +90,7 @@ const DEFAULT_PRODUCTS = [
     ],
   },
 ];
+const DEFAULT_TAILORED_WAIST_PREMIUM = 30;
 
 const PRODUCT_CATALOG_FALLBACK = databaseProductsSnapshot;
 
@@ -354,8 +355,16 @@ const normalizeProductState = (products) => {
     const tailoredPriceByLength = tailoredRule?.matrixDimension === "length"
       ? new Map(sizes.filter((item) => item.size === "裁碼").map((item) => [item.length || "", item.price]))
       : new Map();
+    const isLongTrouser = /西褲/.test(productName);
+    const regularWaistPrice = isLongTrouser
+      ? sizes.find((item) => item.size === "30" && !item.length)?.price
+      : undefined;
+    const hasCollapsedTailoredWaists = isLongTrouser
+      && regularWaistPrice !== undefined
+      && tailoredValues.some((size) => sizes.some((item) => item.size === size && Number(item.price) === Number(regularWaistPrice)));
     const tailoredPrice = tailoredRule?.matrixDimension !== "length"
       ? sizes.find((item) => item.size === "裁碼")?.price
+        ?? (hasCollapsedTailoredWaists ? Number(regularWaistPrice) + DEFAULT_TAILORED_WAIST_PREMIUM : undefined)
       : undefined;
     const hasExistingTailoredMatrix = sizes.some((item) => item.length) || sizes.some((item) => item.size === "裁碼");
     const pricedSizes = tailoredValues.length > 0
