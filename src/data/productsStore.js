@@ -65,7 +65,7 @@ export const loadProducts = async ({ storage, supabase, isSupabaseAuthEnabled, f
     if (isSupabaseAuthEnabled && supabase) {
       const { data, error } = await supabase
         .from("products")
-        .select("id, school, name, sizes, display_order")
+        .select("id, school, name, sizes, display_order, branch_id")
         .order("display_order", { ascending: true, nullsFirst: false })
         .order("name");
 

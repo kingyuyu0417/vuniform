@@ -10,6 +10,7 @@ alter table public.staff_profiles drop constraint if exists staff_profiles_role_
 alter table public.staff_profiles
   add constraint staff_profiles_role_check
   check (role in ('admin', 'manager', 'sales', 'staff'));
+alter table public.staff_profiles add column if not exists branch_id text;
 
 create table if not exists public.products (
   id text primary key,
@@ -89,10 +90,11 @@ begin
   returning last_number into receipt_number;
   receipt_id := format('VU-%s-%s', to_char(current_receipt_date, 'YYYYMMDD'), lpad(receipt_number::text, 4, '0'));
 
-  insert into public.orders (id, school, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, refund_due, cashier_id, cashier_name, total, item_count, created_at)
+  insert into public.orders (id, school, branch_id, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, refund_due, cashier_id, cashier_name, total, item_count, created_at)
   values (
     receipt_id,
     coalesce(order_data ->> 'school', ''),
+    nullif(order_data ->> 'branch_id', ''),
     nullif(order_data ->> 'outletName', ''),
     nullif(order_data ->> 'outletAddress', ''),
     nullif(order_data ->> 'outletPhone', ''),
