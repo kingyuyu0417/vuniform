@@ -58,10 +58,14 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
     items: getOrderItems(order).map((item) => ({
       productName: item.product_name || item.productName || item.name || "未知產品",
       size: item.size || "",
+      length: item.length || "",
+      isTailored: Boolean(item.isTailored || item.is_tailored),
       quantity: Number(item.quantity || 1),
       price: Number(item.price || products
         .find((product) => product.name === (item.product_name || item.productName))?.sizes
-        ?.find((sizeOption) => String(sizeOption.size) === String(item.size) && String(sizeOption.length || "") === String(item.length || ""))?.price || 0),
+        ?.find((sizeOption) => String(sizeOption.size) === String(item.size)
+          && String(sizeOption.length || "") === String(item.length || "")
+          && Boolean(sizeOption.isTailored) === Boolean(item.isTailored || item.is_tailored))?.price || 0),
     })),
   });
 

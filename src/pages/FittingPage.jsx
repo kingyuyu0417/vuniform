@@ -285,10 +285,12 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
     }
   };
 
-  const selectSize = (index, size) => {
+  const selectSize = (index, sizeOption) => {
     const currentItem = selection[index];
+    const size = typeof sizeOption === "object" ? sizeOption.size : sizeOption;
+    const isTailored = typeof sizeOption === "object" && Boolean(sizeOption.isTailored);
     const nextSize = currentItem?.size === size ? "" : size;
-    updateSelection(index, { size: nextSize });
+    updateSelection(index, { size: nextSize, isTailored: nextSize ? isTailored : false });
     if (nextSize && index === selection.length - 1) {
       setSelection((prev) => [...prev, { ...emptySelection }]);
     }
@@ -427,7 +429,10 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       const selectedSize = Array.isArray(product?.sizes) ? product.sizes.find((sizeOption) => {
         const size = typeof sizeOption === "object" ? sizeOption.size : sizeOption;
         const length = typeof sizeOption === "object" ? sizeOption.length || "" : "";
-        return String(size) === String(row.size) && length === (row.length || "");
+        const isTailored = typeof sizeOption === "object" && Boolean(sizeOption.isTailored);
+        return String(size) === String(row.size)
+          && length === (row.length || "")
+          && isTailored === Boolean(row.isTailored || row.is_tailored);
       }) : null;
 
       return {
@@ -435,6 +440,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
         product_name: product?.name || "未知產品",
         size: row.size,
         length: row.length || "",
+        isTailored: Boolean(row.isTailored || row.is_tailored),
         price: Number(selectedSize?.price || 0),
         quantity: Number(row.quantity || 1),
       };
@@ -603,6 +609,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
             const selectedSize = selectedProduct?.sizes?.find((sizeOption) =>
               String(typeof sizeOption === "object" ? sizeOption.size : sizeOption) === String(item.size)
               && String(typeof sizeOption === "object" ? sizeOption.length || "" : "") === String(item.length || "")
+              && Boolean(typeof sizeOption === "object" && sizeOption.isTailored) === Boolean(item.isTailored || item.is_tailored)
             );
             if (item.productId && item.size) {
               return (
@@ -684,12 +691,13 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
                             if (!size) return null;
                             return (
                               <button
-                                key={`${selectedProduct.id}-${item.length || "all"}-${size}`}
+                                key={`${selectedProduct.id}-${item.length || "all"}-${size}-${typeof sizeOption === "object" && sizeOption.isTailored ? "tailored" : "regular"}`}
                                 className="pos-btn"
-                                onClick={() => selectSize(index, size)}
-                                style={{ ...styles.sizeBtn, background: item.size === size ? "#1f3a5f" : "#fff", color: item.size === size ? "#fff" : "#24364d", borderColor: item.size === size ? "#1f3a5f" : "#dfe7f1" }}
+                                onClick={() => selectSize(index, sizeOption)}
+                                style={{ ...styles.sizeBtn, background: item.size === size && Boolean(item.isTailored) === Boolean(typeof sizeOption === "object" && sizeOption.isTailored) ? "#1f3a5f" : "#fff", color: item.size === size && Boolean(item.isTailored) === Boolean(typeof sizeOption === "object" && sizeOption.isTailored) ? "#fff" : "#24364d", borderColor: item.size === size && Boolean(item.isTailored) === Boolean(typeof sizeOption === "object" && sizeOption.isTailored) ? "#1f3a5f" : "#dfe7f1" }}
                               >
                                 <div>{typeof sizeOption === "object" ? sizeOption.size : size}</div>
+                                {typeof sizeOption === "object" && sizeOption.isTailored && <div style={{ fontSize: 11 }}>裁碼</div>}
                                 {typeof sizeOption === "object" && sizeOption.price != null && <div style={styles.sizePrice}>${Number(sizeOption.price).toLocaleString("en-HK")}</div>}
                               </button>
                             );
