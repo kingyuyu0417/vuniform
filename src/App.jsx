@@ -374,13 +374,13 @@ const listSchools = (products) => {
 };
 const recoverUniformTrouserOffset = (sizes) => {
   const regular = sizes
-    .filter((item) => !item.length && /^(?:23|24|25|26|27|28|29|30)$/.test(String(item.size)))
+  .filter((item) => !isTailoredSize(item) && !item.length && /^(?:23|24|25|26|27|28|29|30)$/.test(String(item.size)))
     .sort((first, second) => Number(first.size) - Number(second.size));
   const values = new Map(regular.map((item) => [String(item.size), Number(item.price)]));
   if (regular.length < 4 || values.get("30") < 130) return sizes;
   if (values.get("30") - values.get("29") !== 7 || values.get("29") - values.get("28") !== 8) return sizes;
   return sizes.map((item) => (
-    !item.length && /^(?:23|24|25|26|27|28|29|30)$/.test(String(item.size))
+    !isTailoredSize(item) && !item.length && /^(?:23|24|25|26|27|28|29|30)$/.test(String(item.size))
       ? { ...item, price: Number(item.price) - 10 }
       : item
   ));
@@ -395,13 +395,11 @@ const recoverMissingTailoredTrouserPrices = (productName, sizes) => {
       .filter((item) => String(item.size) === "30" && isPricedSize(item))
       .map((item) => [item.length || "", item]),
   );
-  const baseWaist = sizes.find((item) => !item.length && String(item.size) === "30" && isPricedSize(item));
+  const baseWaist = sizes.find((item) => !isTailoredSize(item) && !item.length && String(item.size) === "30" && isPricedSize(item));
   if (!regularByLength.size && !baseWaist) return sizes;
 
   return sizes.map((item) => {
-    const isTailoredSize = item.size === "裁碼"
-      || /^(?:32|34|36|38|40|42|44|46|48)$/.test(String(item.size));
-    if (!isTailoredSize) return item;
+    if (!isTailoredSize(item)) return item;
     const base = regularByLength.get(item.length || "") || baseWaist;
     if (!base) return item;
     const isCollapsedPrice = Number(item.price) === Number(base.price);
@@ -4432,10 +4430,17 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
       sizes = product.sizes.map((size) => ({ ...size, length: normalizedLength }));
     } else {
       const existingKeys = new Set(product.sizes.map(sizeIdentityKey));
-      const existingSizes = [...new Set(product.sizes.map((size) => size.size))];
+      const existingSizes = product.sizes.filter((size, index, all) => (
+        all.findIndex((candidate) => sizeIdentityKey(candidate) === sizeIdentityKey(size)) === index
+      ));
       const additions = existingSizes
-        .filter((size) => !existingKeys.has(sizeIdentityKey({ size, length: normalizedLength })))
-        .map((size) => ({ size, length: normalizedLength, price: product.sizes.find((item) => item.size === size)?.price ?? null }));
+        .filter((size) => !existingKeys.has(sizeIdentityKey({ ...size, length: normalizedLength })))
+        .map((size) => ({
+          size: size.size,
+          length: normalizedLength,
+          isTailored: isTailoredSize(size),
+          price: size.price ?? null,
+        }));
       sizes = [...product.sizes, ...additions];
     }
     updateProduct(product.id, { ...product, sizes });
