@@ -4563,9 +4563,10 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   };
 
   const deleteProduct = (id) => {
-    const target = products.find((p) => p.id === id);
+    const currentProducts = productsRef.current;
+    const target = currentProducts.find((p) => p.id === id);
     if (target && !window.confirm(`確定要刪除「${target.name}」呢個款式？呢個動作唔可以復原。`)) return;
-    saveProducts(products.filter((p) => p.id !== id));
+    saveProducts(currentProducts.filter((p) => p.id !== id));
   };
 
   const deleteSchool = () => {
@@ -4573,7 +4574,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
     const schoolProductCount = visibleProducts.length;
     const confirmed = window.confirm(`確定要刪除學校「${activeSchool}」？\n\n將會刪除 ${schoolProductCount} 個款式及該校分類資料。\n此動作不能復原，請先確認。`);
     if (!confirmed) return;
-    saveProducts(products.filter((p) => schoolOf(p) !== activeSchool));
+    saveProducts(productsRef.current.filter((p) => schoolOf(p) !== activeSchool));
     const nextMeta = { ...schoolMeta };
     delete nextMeta[activeSchool];
     saveSchoolMeta(nextMeta);
