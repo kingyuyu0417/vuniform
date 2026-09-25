@@ -162,6 +162,22 @@ export const saveProducts = async ({ products, storage, supabase, isSupabaseAuth
     })));
 
     if (error) throw error;
+
+    const { data: savedProducts, error: verifyError } = await supabase
+      .from("products")
+      .select("id, school, name, sizes")
+      .in("id", uniqueProducts.map((product) => product.id));
+    if (verifyError) throw verifyError;
+    const savedById = new Map((savedProducts || []).map((product) => [product.id, product]));
+    const hasMismatch = uniqueProducts.some((expected) => {
+      const saved = savedById.get(expected.id);
+      if (!saved || saved.school !== (expected.school || "") || saved.name !== expected.name) return true;
+      const expectedSizes = new Map((expected.sizes || []).map((size) => [`${size.length || ""}\u0000${size.size || ""}`, size.price]));
+      const savedSizes = new Map((saved.sizes || []).map((size) => [`${size.length || ""}\u0000${size.size || ""}`, size.price]));
+      if (expectedSizes.size !== savedSizes.size) return true;
+      return [...expectedSizes].some(([key, price]) => Number(savedSizes.get(key)) !== Number(price));
+    });
+    if (hasMismatch) throw new Error("雲端商品資料驗證不一致，修改未被完整保存。");
   }
 
   if (storage) {

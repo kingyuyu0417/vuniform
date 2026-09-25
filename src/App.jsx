@@ -1677,6 +1677,7 @@ export default function UniformPOS() {
   const productsPersistQueueRef = useRef(Promise.resolve());
   const productsSavePendingRef = useRef(false);
   const productsSaveGenerationRef = useRef(0);
+  const productsSaveBlockedRef = useRef(false);
   const productsRef = useRef(products);
   const tabRef = useRef(tab);
   useEffect(() => { tabRef.current = tab; }, [tab]);
@@ -2104,7 +2105,7 @@ export default function UniformPOS() {
       ]);
       setBranchSchoolIds(branchMap);
 
-      if (p && !productsSavePendingRef.current && refreshGeneration === productsSaveGenerationRef.current) {
+      if (p && !productsSavePendingRef.current && !productsSaveBlockedRef.current && refreshGeneration === productsSaveGenerationRef.current) {
         const authoritative = enforceAuthoritativeProducts(p);
         if (authoritative.length > 0) {
           setSourceIntegrityWarning(p.length > 0 ? "" : "產品資料來源暫時沒有記錄，已保留目前商品資料。");
@@ -2338,6 +2339,7 @@ export default function UniformPOS() {
     setProductsSaveError("");
     setProductsSaveState("pending");
     productsSavePendingRef.current = true;
+    productsSaveBlockedRef.current = false;
     const saveGeneration = ++productsSaveGenerationRef.current;
     if (productsSaveTimerRef.current) clearTimeout(productsSaveTimerRef.current);
     productsSaveTimerRef.current = setTimeout(() => {
@@ -2347,6 +2349,7 @@ export default function UniformPOS() {
         .catch((error) => {
           const detail = error?.message || error?.code || "未知錯誤";
           if (saveGeneration === productsSaveGenerationRef.current) {
+            productsSaveBlockedRef.current = true;
             setProductsSaveError(`商品未能保存：${detail}`);
             setProductsSaveState("error");
           }
@@ -2377,6 +2380,7 @@ export default function UniformPOS() {
     productsSavePendingRef.current = true;
     setProductsSaveError("");
     setProductsSaveState("saving");
+    productsSaveBlockedRef.current = false;
     productsPersistQueueRef.current = productsPersistQueueRef.current
       .catch(() => {})
       .then(() => persistProducts(next));
@@ -2387,6 +2391,7 @@ export default function UniformPOS() {
     } catch (error) {
       const detail = error?.message || error?.code || "未知錯誤";
       if (saveGeneration === productsSaveGenerationRef.current) {
+        productsSaveBlockedRef.current = true;
         setProductsSaveError(`商品未能保存：${detail}`);
         setProductsSaveState("error");
       }
