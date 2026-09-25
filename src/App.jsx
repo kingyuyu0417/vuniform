@@ -2273,7 +2273,11 @@ export default function UniformPOS() {
         setBranchSchoolIds(branchMap);
         if (p) {
           const authoritative = enforceAuthoritativeProducts(p)
-            .filter((product) => !isSupabaseAuthEnabled || !session?.branchId || session.role === ROLES.ADMIN || product.branch_id === session.branchId);
+            .filter((product) => !isSupabaseAuthEnabled
+              || !session?.branchId
+              || session.role === ROLES.ADMIN
+              || product.branch_id === session.branchId
+              || branchMap[schoolOf(product)] === session.branchId);
           if (authoritative.length > 0) {
             setSourceIntegrityWarning(p.length > 0 ? "" : "產品資料來源暫時沒有記錄，已保留目前商品資料。");
             setProducts(authoritative);
