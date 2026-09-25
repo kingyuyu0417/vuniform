@@ -1746,7 +1746,11 @@ export default function UniformPOS() {
     || DESIGNATED_SCHOOL
   ));
   const [schoolPanelOpen, setSchoolPanelOpen] = useState(false);
-  const schools = listSchools(products);
+  const [branchSchoolIds, setBranchSchoolIds] = useState({});
+  const accessibleProducts = !isSupabaseAuthEnabled || session?.role === ROLES.ADMIN
+    ? products
+    : products.filter((product) => product.branch_id === session?.branchId || branchSchoolIds[schoolOf(product)] === session?.branchId);
+  const schools = listSchools(accessibleProducts);
   const customerSchools = schools;
 
   // 學校分類資料（階段/地區/18區），共用儲存，全部裝置見到同一份
@@ -2115,12 +2119,12 @@ export default function UniformPOS() {
       // 各個加載函數都應該返回有效數據或空陣列/null，不應拋出異常
       const loadProductsSafe = skipProducts 
         ? Promise.resolve(null)
-        : loadProducts({
+        : (isSupabaseAuthEnabled ? loadSecureProducts() : loadProducts({
             storage: window.storage,
             supabase,
             isSupabaseAuthEnabled,
             fallbackProducts: PRODUCT_CATALOG_FALLBACK,
-          }).catch((error) => {
+          })).catch((error) => {
             console.error("載入產品失敗", error);
             return null;
           });
@@ -2144,13 +2148,19 @@ export default function UniformPOS() {
         console.error("載入學校元數據失敗", error);
         return null;
       });
+      const loadBranchSchoolMapSafe = loadBranchSchoolMap().catch((error) => {
+        console.error("載入分店學校分配失敗", error);
+        return {};
+      });
 
-      const [p, s, a, sm] = await Promise.all([
+      const [p, s, a, sm, branchMap] = await Promise.all([
         loadProductsSafe,
         loadOrdersSafe,
         loadAccountsSafe,
         loadSchoolMetaSafe,
+        loadBranchSchoolMapSafe,
       ]);
+      setBranchSchoolIds(branchMap);
 
       if (p && !productsSavePendingRef.current) {
         const authoritative = enforceAuthoritativeProducts(p);
@@ -2264,6 +2274,13 @@ export default function UniformPOS() {
     return data || [];
   };
 
+  const loadBranchSchoolMap = async () => {
+    if (!supabase || !isSupabaseAuthEnabled || !session || session.role === ROLES.ADMIN) return {};
+    const { data, error } = await supabase.from("school_branches").select("school, branch_id");
+    if (error) throw error;
+    return Object.fromEntries((data || []).map((entry) => [entry.school, entry.branch_id]));
+  };
+
   useEffect(() => {
     if (!authReady) return;
     if (isSupabaseAuthEnabled && !session) {
@@ -2277,15 +2294,19 @@ export default function UniformPOS() {
         const deletedList = deleted && deleted.value ? JSON.parse(deleted.value) : [];
         deletedSchoolsRuntime = new Set(Array.isArray(deletedList) ? deletedList : []);
         setDeletedSchools([...deletedSchoolsRuntime]);
-        const p = await loadProducts({
-          storage: window.storage,
-          supabase,
-          isSupabaseAuthEnabled,
-          fallbackProducts: PRODUCT_CATALOG_FALLBACK,
-        });
+        const p = isSupabaseAuthEnabled
+          ? await loadSecureProducts()
+          : await loadProducts({
+            storage: window.storage,
+            supabase,
+            isSupabaseAuthEnabled,
+            fallbackProducts: PRODUCT_CATALOG_FALLBACK,
+          });
         const s = isSupabaseAuthEnabled ? await loadSecureOrders() : await window.storage.get("sales-log", true).catch(() => null);
         const a = await window.storage.get("staff-accounts", true).catch(() => null);
         const sm = await window.storage.get("school-meta", true).catch(() => null);
+        const branchMap = await loadBranchSchoolMap();
+        setBranchSchoolIds(branchMap);
         if (p) {
           const authoritative = enforceAuthoritativeProducts(p)
             .filter((product) => !isSupabaseAuthEnabled || !session?.branchId || session.role === ROLES.ADMIN || product.branch_id === session.branchId);
@@ -5970,7 +5991,8 @@ function StoreSchoolSwitcher({ schools, schoolMeta, selectedSchool, onPick }) {
     return schoolType === "其他" ? !["幼稚園", "小學", "中學"].includes(level) : level === schoolType;
   }) : [];
   const matchedSchools = query.trim() ? typedSchools.filter((school) => school.includes(query.trim())) : typedSchools;
-  if (!selectedOutlet) return <div style={{ marginTop: 12, paddingBottom: 4 }}><div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginBottom: 6 }}>第一步：揀門店</div><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{OUTLETS.map((outlet) => <SchoolChip key={outlet.name} label={outlet.name} sub={`${schools.filter((school) => outletNameForSchool(school, schoolMeta) === outlet.name).length}間學校`} selected={false} onClick={() => { setSelectedOutlet(outlet.name); setSchoolType(null); setQuery(""); }} />)}</div></div>;
+  const availableOutlets = OUTLETS.filter((outlet) => schools.some((school) => outletNameForSchool(school, schoolMeta) === outlet.name));
+  if (!selectedOutlet) return <div style={{ marginTop: 12, paddingBottom: 4 }}><div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginBottom: 6 }}>第一步：揀門店</div><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{availableOutlets.map((outlet) => <SchoolChip key={outlet.name} label={outlet.name} sub={`${schools.filter((school) => outletNameForSchool(school, schoolMeta) === outlet.name).length}間學校`} selected={false} onClick={() => { setSelectedOutlet(outlet.name); setSchoolType(null); setQuery(""); }} />)}</div></div>;
   if (!schoolType) return <div style={{ marginTop: 12, paddingBottom: 4 }}><button className="pos-btn" onClick={() => setSelectedOutlet(null)} style={{ background: "none", color: "rgba(255,255,255,0.75)", fontSize: 11, padding: 0, marginBottom: 8 }}>更改分店</button><div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginBottom: 6 }}>第二步：揀學校類別</div><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{schoolTypes.map((type) => <SchoolChip key={type} label={type} sub={`${visibleSchools.filter((school) => { const level = metaOf(schoolMeta, school).level; return type === "其他" ? !schoolTypes.slice(0, 3).includes(level) : level === type; }).length}間學校`} selected={false} onClick={() => { setSchoolType(type); setQuery(""); }} />)}</div></div>;
   return <div style={{ marginTop: 12, paddingBottom: 4 }}><button className="pos-btn" onClick={() => { setSchoolType(null); setQuery(""); }} style={{ background: "none", color: "rgba(255,255,255,0.75)", fontSize: 11, padding: 0, marginBottom: 8 }}>更改學校類別</button>{typedSchools.length > 6 && <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜尋學校名稱…" style={{ width: "100%", padding: 8, borderRadius: 8, border: "1px solid rgba(255,255,255,0.35)", background: "rgba(255,255,255,0.12)", color: "#fff", fontSize: 13, boxSizing: "border-box", marginBottom: 10 }} />}<div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginBottom: 6 }}>第三步：揀學校（{typedSchools.length}間）</div><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{matchedSchools.length ? matchedSchools.map((school) => <SchoolChip key={school} label={school} selected={selectedSchool === school} onClick={() => onPick(school)} />) : <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>此分類沒有學校。</div>}</div></div>;
 }
@@ -6013,7 +6035,7 @@ function SchoolSwitcher({ schools, schoolMeta, selectedSchool, onPick }) {
     <div style={{ marginBottom: 10 }}>
       <div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginBottom: 6 }}>第一步：揀門店</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        {OUTLETS.map((outlet) => {
+        {OUTLETS.filter((outlet) => schools.some((school) => outletNameForSchool(school, schoolMeta) === outlet.name)).map((outlet) => {
           const count = schools.filter((school) => outletNameForSchool(school, schoolMeta) === outlet.name).length;
           return <SchoolChip key={outlet.name} label={outlet.name} sub={`${count}間學校`} selected={false} onClick={() => { setSelectedOutlet(outlet.name); setSchoolType(null); setQuery(""); }} />;
         })}
