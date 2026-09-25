@@ -98,10 +98,12 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
     return readyOrders.reduce((acc, order) => {
       const items = Array.isArray(order.tailor_info?.items) ? order.tailor_info.items : [];
       items.forEach((item) => {
-        const key = `${item.product_name || "未知產品"}::${item.size || ""}`;
+        const key = `${item.product_name || "未知產品"}::${item.length || ""}::${item.size || ""}::${item.isTailored || item.is_tailored ? "tailored" : "regular"}`;
         acc[key] = acc[key] || {
           product: item.product_name || "未知產品",
           size: item.size || "",
+          length: item.length || "",
+          isTailored: Boolean(item.isTailored || item.is_tailored),
           quantity: 0,
         };
         acc[key].quantity += Number(item.quantity || 1);

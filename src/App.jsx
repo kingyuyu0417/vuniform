@@ -2738,11 +2738,14 @@ export default function UniformPOS() {
   const handleHandover = (ticket) => {
     const orderItems = ticket.items.map((item) => {
       const product = products.find((p) => p.name === item.productName);
-      const sizeEntry = product?.sizes?.find((s) => String(s.size) === String(item.size));
-      const price = Number(sizeEntry?.price || 0);
+      const sizeEntry = product?.sizes?.find((s) => sizeIdentityKey(s) === sizeIdentityKey(item))
+        || product?.sizes?.find((s) => String(s.size) === String(item.size) && isTailoredSize(s) === isTailoredSize(item));
+      const price = Number(item.price || sizeEntry?.price || 0);
       return {
         productName: item.productName,
         size: item.size,
+        length: item.length || "",
+        isTailored: Boolean(item.isTailored || item.is_tailored || sizeEntry?.isTailored),
         quantity: item.quantity,
         price,
       };
@@ -2794,7 +2797,8 @@ export default function UniformPOS() {
       const product = products.find((p) => p.id === productId || p.name === productName) || null;
       const size = item.size || "";
       const length = item.length || "";
-      const matchedSize = product?.sizes?.find((s) => String(s.size) === String(size) && String(s.length || "") === String(length));
+      const isTailored = Boolean(item.isTailored || item.is_tailored);
+      const matchedSize = product?.sizes?.find((s) => sizeIdentityKey(s) === sizeIdentityKey({ size, length, isTailored }));
       const price = Number(item.price || matchedSize?.price || 0);
       const qty = Number(item.quantity || item.qty || 1);
       return {
@@ -2803,6 +2807,7 @@ export default function UniformPOS() {
         name: productName,
         size,
         length,
+        isTailored,
         price,
         qty,
         sourceOrderId: order.id || "",
@@ -2837,6 +2842,7 @@ export default function UniformPOS() {
               name: item.productName,
               size: item.size,
               length: item.length || "",
+              isTailored: Boolean(item.isTailored || item.is_tailored),
               price: Number(item.price || 0),
               qty: Number(item.quantity || item.qty || 1),
             })),
@@ -2908,7 +2914,7 @@ export default function UniformPOS() {
       id: "",
       date: todayStr(),
       time: now.toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit" }),
-      items: cart.map(({ name, size, length, price, qty, exchangeReturn, exchangeSourceReceiptId }) => ({ name, size, length, price, qty, exchangeReturn, exchangeSourceReceiptId })),
+      items: cart.map(({ name, size, length, isTailored, price, qty, exchangeReturn, exchangeSourceReceiptId }) => ({ name, size, length, isTailored, price, qty, exchangeReturn, exchangeSourceReceiptId })),
       total: cartTotal,
       cashReceived: received,
       changeDue: exchangeMode ? Math.max(cartTotal - received, 0) : Math.max(received - cartTotal, 0),
@@ -3867,7 +3873,7 @@ function SaleTab({
                   </div>
                 ) : <div className="sale-size-grid">
                   {sizes.map((size) => (
-                    <button key={`${size.size}-${size.length || ""}`} className="pos-btn sale-size-button" onClick={() => setDirectExchangeQuantityPrompt({ size, custom: false, quantity: "" })} style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #86EFAC", color: "#166534", fontSize: 16 }}>
+                    <button key={`${size.size}-${size.length || ""}-${size.isTailored ? "tailored" : "regular"}`} className="pos-btn sale-size-button" onClick={() => setDirectExchangeQuantityPrompt({ size, custom: false, quantity: "" })} style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #86EFAC", color: "#166534", fontSize: 16 }}>
                       {sizeLabel(size)} · {fmt(size.price)}
                     </button>
                   ))}

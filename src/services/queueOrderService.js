@@ -631,10 +631,12 @@ export const aggregatePreparingItems = (orders = []) => {
   return orders.filter((order) => order.status === ORDER_STATUS.PREPARING).reduce((result, order) => {
     const items = Array.isArray(order.tailor_info?.items) ? order.tailor_info.items : [];
     items.forEach((item) => {
-      const key = `${item.product_name || item.productName || ""}::${item.size || ""}`;
+      const key = `${item.product_name || item.productName || ""}::${item.length || ""}::${item.size || ""}::${item.isTailored || item.is_tailored ? "tailored" : "regular"}`;
       result[key] = {
         product: item.product_name || item.productName || "未知產品",
         size: item.size || "",
+        length: item.length || "",
+        isTailored: Boolean(item.isTailored || item.is_tailored),
         quantity: (result[key]?.quantity || 0) + Number(item.quantity || 1),
       };
     });
