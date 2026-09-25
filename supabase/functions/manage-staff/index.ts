@@ -71,18 +71,13 @@ Deno.serve(async (request) => {
     const password = String(body.password || "");
     const role = String(body.role || "staff");
     if (!email || !displayName || password.length < 8 || !["admin", "manager", "sales", "staff"].includes(role)) return json({ error: "請提供姓名、有效電郵、最少 8 字元密碼及角色" }, 400);
-    const { data: users, error: listError } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
-    if (listError) return json({ error: listError.message }, 400);
-    const existingUser = users.users.find((candidate) => candidate.email?.toLowerCase() === email);
-    let userId = existingUser?.id;
-    if (userId) {
-      const { error } = await adminClient.auth.admin.updateUserById(userId, { password, email_confirm: true, ban_duration: "none" });
-      if (error) return json({ error: error.message }, 400);
-    } else {
-      const { data, error } = await adminClient.auth.admin.createUser({ email, password, email_confirm: true });
-      if (error || !data.user) return json({ error: error?.message || "Unable to create user" }, 400);
-      userId = data.user.id;
+    const { data, error } = await adminClient.auth.admin.createUser({ email, password, email_confirm: true });
+    if (error || !data.user) {
+      const message = error?.message || "Unable to create user";
+      if (/already|registered|exists/i.test(message)) return json({ error: "此電郵已經有帳戶，請使用其他電郵。" }, 409);
+      return json({ error: message }, 400);
     }
+    const userId = data.user.id;
     const { error: profileError } = await adminClient.from("staff_profiles").upsert({ id: userId, display_name: displayName, role });
     if (profileError) return json({ error: profileError.message }, 400);
     return json({ id: userId, display_name: displayName, role });
