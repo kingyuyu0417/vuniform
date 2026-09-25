@@ -1379,7 +1379,7 @@ const PERMISSIONS = {
     canExportSales: true,
   },
   [ROLES.MANAGER]: {
-    tabs: ["sale", "products", "records", "staff"],
+    tabs: ["sale", "products", "records"],
     canEditProducts: true,
     canManageSchools: false,
     canImportExport: false,
@@ -1746,8 +1746,8 @@ export default function UniformPOS() {
     || DESIGNATED_SCHOOL
   ));
   const [schoolPanelOpen, setSchoolPanelOpen] = useState(false);
-  const [branchSchoolIds, setBranchSchoolIds] = useState({});
-  const customerSchools = listSchools(products);
+  const schools = listSchools(products);
+  const customerSchools = schools;
 
   // 學校分類資料（階段/地區/18區），共用儲存，全部裝置見到同一份
   const [schoolMeta, setSchoolMeta] = useState({});
@@ -1762,16 +1762,10 @@ export default function UniformPOS() {
 
   // 員工帳號（共用，ADMIN可管理）同目前呢部裝置嘅登入狀態（個人，唔跨裝置）
   const [accounts, setAccounts] = useState(DEFAULT_ACCOUNTS);
-  const [session, setSession] = useState(null); // { id, name, role } | null
+  const [session, setSession] = useState(null); // { id, name, role, branchId } | null
   const [authReady, setAuthReady] = useState(!isSupabaseAuthEnabled); // Wait for auth before loading protected data
   const [passwordSetupRequired, setPasswordSetupRequired] = useState(false);
   const perms = session ? (PERMISSIONS[session.role] || PERMISSIONS[ROLES.STAFF]) : null;
-  const accessibleProducts = !isSupabaseAuthEnabled || session?.role === ROLES.ADMIN
-    ? products
-    : session?.branchId
-      ? products.filter((product) => product.branch_id === session.branchId || branchSchoolIds[schoolOf(product)] === session.branchId)
-      : [];
-  const schools = listSchools(accessibleProducts);
 
   useEffect(() => {
     window.storage.get("held-sales", false).then((saved) => {
@@ -1998,7 +1992,7 @@ export default function UniformPOS() {
   }, []);
 
   const login = (account) => {
-    const s = { id: account.id, name: account.name, role: account.role };
+    const s = { id: account.id, name: account.name, role: account.role, branchId: account.branchId || "" };
     setSession(s);
     window.storage.set("current-session", JSON.stringify(s), false).catch((e) => console.error("記住登入狀態失敗", e));
     navigate("/menu");
@@ -2010,7 +2004,7 @@ export default function UniformPOS() {
     if (error) return { error: "登入失敗，請檢查電郵及密碼。" };
     const { data: profile, error: profileError } = await supabase
       .from("staff_profiles")
-      .select("id, display_name, role")
+      .select("id, display_name, role, branch_id")
       .eq("id", data.user.id)
       .maybeSingle();
     if (profileError || !profile) {
@@ -2060,16 +2054,6 @@ export default function UniformPOS() {
       }
     }
     return { data, error: functionError || error?.message || "" };
-  };
-
-  const loadBranchSchoolMap = async () => {
-    if (!supabase || !isSupabaseAuthEnabled) return {};
-    const { data, error } = await supabase.from("school_branches").select("school, branch_id");
-    if (error) {
-      console.error("載入分店學校分配失敗", error);
-      return {};
-    }
-    return Object.fromEntries((data || []).map((entry) => [entry.school, entry.branch_id]));
   };
 
   const saveAccounts = async (next) => {
@@ -2161,12 +2145,11 @@ export default function UniformPOS() {
         return null;
       });
 
-      const [p, s, a, sm, branchMap] = await Promise.all([
+      const [p, s, a, sm] = await Promise.all([
         loadProductsSafe,
         loadOrdersSafe,
         loadAccountsSafe,
         loadSchoolMetaSafe,
-        loadBranchSchoolMap(),
       ]);
 
       if (p && !productsSavePendingRef.current) {
@@ -2201,7 +2184,6 @@ export default function UniformPOS() {
         } catch (parseError) {
           console.error("解析學校元數據失敗", parseError);
         }
-        setBranchSchoolIds(branchMap);
       }
       
       setLastSync(new Date());
@@ -2304,12 +2286,15 @@ export default function UniformPOS() {
         const s = isSupabaseAuthEnabled ? await loadSecureOrders() : await window.storage.get("sales-log", true).catch(() => null);
         const a = await window.storage.get("staff-accounts", true).catch(() => null);
         const sm = await window.storage.get("school-meta", true).catch(() => null);
-        const branchMap = await loadBranchSchoolMap();
         if (p) {
-          const authoritative = enforceAuthoritativeProducts(p);
+          const authoritative = enforceAuthoritativeProducts(p)
+            .filter((product) => !isSupabaseAuthEnabled || !session?.branchId || session.role === ROLES.ADMIN || product.branch_id === session.branchId);
           if (authoritative.length > 0) {
             setSourceIntegrityWarning(p.length > 0 ? "" : "產品資料來源暫時沒有記錄，已保留目前商品資料。");
             setProducts(authoritative);
+            if (session?.branchId && session.role !== ROLES.ADMIN && selectedSchool && !authoritative.some((product) => schoolOf(product) === selectedSchool)) {
+              setSelectedSchool(schoolOf(authoritative[0]) || "");
+            }
           } else if (p.length > 0) {
             setSourceIntegrityWarning("產品資料來源不完整：目前只檢測到示範資料，已阻止當作正式產品庫。");
           }
@@ -2321,7 +2306,6 @@ export default function UniformPOS() {
           await window.storage.set("staff-accounts", JSON.stringify(DEFAULT_ACCOUNTS), true).catch(() => {});
         }
         if (sm && sm.value) setSchoolMeta(JSON.parse(sm.value));
-        setBranchSchoolIds(branchMap);
         setLastSync(new Date());
       } catch (e) {
         console.error("載入資料失敗", e);
@@ -3323,7 +3307,7 @@ export default function UniformPOS() {
                 guest={selectedGuest}
                 currentSchoolId={selectedSchool || publicRouteSchool}
                 selectedOrderId={routeId || selectedGuest?.id || ""}
-                products={selectedSchool ? accessibleProducts.filter((p) => schoolOf(p) === selectedSchool) : accessibleProducts}
+                products={selectedSchool ? products.filter((p) => schoolOf(p) === selectedSchool) : products}
                 schoolName={selectedSchool}
                 onGenerateTicket={handleGenerateTicket}
                 onStatusChange={handleFittingStatusChange}
@@ -3340,7 +3324,7 @@ export default function UniformPOS() {
           />
           <Route
             path="/cashier"
-            element={<CashierVerifyPage currentSchoolId={selectedSchool || publicRouteSchool} products={accessibleProducts.filter((p) => schoolOf(p) === (selectedSchool || publicRouteSchool))} onConfirmPayment={handleConfirmPayment} onReadyForSale={handleReadyForSale} />}
+            element={<CashierVerifyPage currentSchoolId={selectedSchool || publicRouteSchool} products={products.filter((p) => schoolOf(p) === (selectedSchool || publicRouteSchool))} onConfirmPayment={handleConfirmPayment} onReadyForSale={handleReadyForSale} />}
           />
           <Route
             path="/track"
@@ -3358,7 +3342,7 @@ export default function UniformPOS() {
             path="/products"
             element={
               <ProductsTab
-                products={accessibleProducts}
+                products={products}
                 saveProducts={saveProducts}
                 importResult={importResult}
                 setImportResult={setImportResult}
@@ -3391,7 +3375,7 @@ export default function UniformPOS() {
           />
           <Route
             path="/staff"
-            element={isSupabaseAuthEnabled ? <AuthStaffTab manageStaff={manageStaff} currentId={session.id} currentRole={session.role} /> : <StaffTab accounts={accounts} saveAccounts={saveAccounts} currentId={session.id} />}
+            element={isSupabaseAuthEnabled ? <AuthStaffTab manageStaff={manageStaff} currentId={session.id} /> : <StaffTab accounts={accounts} saveAccounts={saveAccounts} currentId={session.id} />}
           />
           <Route
             path="/menu"
@@ -3401,7 +3385,7 @@ export default function UniformPOS() {
             path="/sale"
             element={
               <SaleTab
-                products={accessibleProducts}
+                products={products}
                 selectedProduct={selectedProduct}
                 setSelectedProduct={setSelectedProduct}
                 addToCart={addToCart}
@@ -3438,7 +3422,7 @@ export default function UniformPOS() {
               <>
                 {tab === "sale" && (
                   <SaleTab
-                    products={accessibleProducts}
+                    products={products}
                     selectedProduct={selectedProduct}
                     setSelectedProduct={setSelectedProduct}
                     addToCart={addToCart}
@@ -3497,7 +3481,7 @@ export default function UniformPOS() {
                 )}
                 {tab === "products" && (
                   <ProductsTab
-                    products={accessibleProducts}
+                    products={products}
                     saveProducts={saveProducts}
                     importResult={importResult}
                     setImportResult={setImportResult}
@@ -6353,8 +6337,9 @@ function LoginScreen({ accounts, onLogin, onAuthLogin, useSupabaseAuth = false }
   );
 }
 
-function AuthStaffTab({ manageStaff, currentId, currentRole }) {
+function AuthStaffTab({ manageStaff, currentId }) {
   const [staff, setStaff] = useState([]);
+  const [branches, setBranches] = useState([]);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [temporaryPassword, setTemporaryPassword] = useState("");
@@ -6362,19 +6347,23 @@ function AuthStaffTab({ manageStaff, currentId, currentRole }) {
   const [branchId, setBranchId] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const [branches, setBranches] = useState([]);
 
   const loadStaff = async () => {
     const result = await manageStaff({ action: "list" });
     if (result.error) setMessage("讀取員工失敗：" + result.error);
-    else {
-      setStaff(result.data?.staff || []);
-      setBranches(result.data?.branches || []);
-      if (result.data?.branches?.length === 1) setBranchId(result.data.branches[0].id);
-    }
+    else setStaff(result.data?.staff || []);
   };
 
   useEffect(() => { loadStaff(); }, []);
+  useEffect(() => {
+    manageStaff({ action: "list_branches" }).then((result) => {
+      if (result.error) setMessage("讀取分店失敗：" + result.error);
+      else {
+        setBranches(result.data?.branches || []);
+        if (!branchId && result.data?.branches?.length === 1) setBranchId(result.data.branches[0].id);
+      }
+    });
+  }, []);
 
   const invite = async () => {
     if (!email.trim() || !name.trim()) {
@@ -6419,8 +6408,16 @@ function AuthStaffTab({ manageStaff, currentId, currentRole }) {
 
   const changeRole = async (id, nextRole) => {
     setBusy(true);
-    const result = await manageStaff({ action: "update_role", id, role: nextRole, branch_id: staff.find((member) => member.id === id)?.branch_id || "" });
+    const result = await manageStaff({ action: "update_role", id, role: nextRole });
     setMessage(result.error || "角色已更新。");
+    if (!result.error) await loadStaff();
+    setBusy(false);
+  };
+
+  const changeBranch = async (id, nextBranchId) => {
+    setBusy(true);
+    const result = await manageStaff({ action: "update_role", id, role: staff.find((member) => member.id === id)?.role || ROLES.STAFF, branch_id: nextBranchId });
+    setMessage(result.error || "分店已更新。");
     if (!result.error) await loadStaff();
     setBusy(false);
   };
@@ -6440,15 +6437,15 @@ function AuthStaffTab({ manageStaff, currentId, currentRole }) {
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="員工姓名" style={{ width: "100%", padding: 9, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box", marginBottom: 8 }} />
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="員工電郵" style={{ width: "100%", padding: 9, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box", marginBottom: 8 }} />
         <input type="password" value={temporaryPassword} onChange={(e) => setTemporaryPassword(e.target.value)} placeholder="臨時密碼（最少 8 字元）" style={{ width: "100%", padding: 9, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box", marginBottom: 8 }} />
-        <select value={branchId} onChange={(e) => setBranchId(e.target.value)} disabled={currentRole !== ROLES.ADMIN} style={{ width: "100%", padding: 9, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box", marginBottom: 8 }}>
-          <option value="">選擇分店</option>
-          {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
-        </select>
         <select value={role} onChange={(e) => setRole(e.target.value)} style={{ width: "100%", padding: 9, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box", marginBottom: 8 }}>
           <option value={ROLES.STAFF}>店員</option>
           <option value={ROLES.SALES}>銷售</option>
-          {currentRole === ROLES.ADMIN && <option value={ROLES.MANAGER}>店長</option>}
-          {currentRole === ROLES.ADMIN && <option value={ROLES.ADMIN}>管理員</option>}
+          <option value={ROLES.MANAGER}>店長</option>
+          <option value={ROLES.ADMIN}>管理員</option>
+        </select>
+        <select value={branchId} onChange={(e) => setBranchId(e.target.value)} style={{ width: "100%", padding: 9, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box", marginBottom: 8 }}>
+          <option value="">選擇分店</option>
+          {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
         </select>
         <button className="pos-btn" onClick={invite} disabled={busy} style={{ width: "100%", padding: 10, borderRadius: 8, background: "#1F3A5F", color: "#fff", fontWeight: 600 }}>{busy ? "處理中…" : "發送員工邀請"}</button>
         <button className="pos-btn" onClick={createWithPassword} disabled={busy} style={{ width: "100%", padding: 10, borderRadius: 8, background: "#fff", color: "#1F3A5F", border: "1px solid #1F3A5F", fontWeight: 600, marginTop: 8 }}>直接建立帳戶（免電郵）</button>
@@ -6458,7 +6455,11 @@ function AuthStaffTab({ manageStaff, currentId, currentRole }) {
         <div key={member.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", borderBottom: "1px solid #eee" }}>
           <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 600 }}>{member.display_name}</div><div style={{ fontSize: 10, color: "#999", overflow: "hidden", textOverflow: "ellipsis" }}>{member.id}</div></div>
           <select value={member.role} onChange={(e) => changeRole(member.id, e.target.value)} disabled={busy} style={{ padding: 6, borderRadius: 6, border: "1px solid #ccc" }}>
-            {currentRole === ROLES.ADMIN && <option value={ROLES.ADMIN}>管理員</option>}<option value={ROLES.MANAGER}>店長</option><option value={ROLES.SALES}>銷售</option><option value={ROLES.STAFF}>店員</option>
+            <option value={ROLES.ADMIN}>管理員</option><option value={ROLES.MANAGER}>店長</option><option value={ROLES.SALES}>銷售</option><option value={ROLES.STAFF}>店員</option>
+          </select>
+          <select value={member.branch_id || ""} onChange={(e) => changeBranch(member.id, e.target.value)} disabled={busy} style={{ maxWidth: 110, padding: 6, borderRadius: 6, border: "1px solid #ccc", fontSize: 11 }}>
+            <option value="">未分配分店</option>
+            {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
           </select>
           <button className="pos-btn" onClick={() => disable(member.id)} disabled={busy || member.id === currentId} style={{ padding: "6px 8px", borderRadius: 6, background: "#fff", border: "1px solid #f0c0c0", color: "#c33" }}>停用</button>
         </div>

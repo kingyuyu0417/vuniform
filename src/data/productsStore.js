@@ -152,12 +152,13 @@ export const saveProducts = async ({ products, storage, supabase, isSupabaseAuth
       if (deleteError) throw deleteError;
     }
 
-    const { error } = await supabase.from("products").upsert(uniqueProducts.map(({ id, school, name, sizes, priceMode }, index) => ({
+    const { error } = await supabase.from("products").upsert(uniqueProducts.map(({ id, school, name, sizes, priceMode, branch_id: branchId }, index) => ({
       id,
       school: school || "",
       name,
       sizes: sizes.map((size) => ({ ...size, __priceMode: priceMode })),
       display_order: index,
+      branch_id: branchId || null,
     })));
 
     if (error) throw error;

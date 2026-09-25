@@ -64,9 +64,15 @@ supabase functions deploy manage-staff
 
 如果 Supabase 顯示 email rate limit exceeded，可在 POS 輸入員工資料及最少 8 個字元的臨時密碼，按「直接建立帳戶（免電郵）」；之後用安全方式將臨時密碼交給員工，員工登入後應立即更改密碼。
 
-## 分店資料隔離
+## 分店權限隔離
 
-如要讓店長、店員及銷售只看到所屬分店，先執行 `supabase/branch-isolation-migration.sql`。此 migration 會建立分店、學校分店對應及分店欄位，並更新 products、orders 及 staff_profiles 的 RLS。完成後重新部署 `manage-staff` Edge Function；管理員在員工頁面選擇分店，店長只能管理自己分店的員工。
+如需讓店長／店員只查看所屬分店，先在 Supabase SQL Editor 執行 `supabase/branch-isolation-migration.sql`。此 migration 會建立分店、員工分店欄位、學校分店對應及分店 RLS；現有 `school-meta` 內有 `outletName` 的學校會自動分配，其他學校需由管理員在 `school_branches` 補上對應。
+
+執行 migration 後，再部署：
+
+```bash
+npx supabase@latest functions deploy manage-staff --project-ref vfoogstzhderqcjrghzh
+```
 
 舊 `app_storage` 仍保留作為資料備份；完成學校分類資料遷移及測試後，才可移除其匿名政策。
 
