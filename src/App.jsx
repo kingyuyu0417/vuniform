@@ -1676,6 +1676,7 @@ export default function UniformPOS() {
   const productsSaveTimerRef = useRef(null);
   const productsPersistQueueRef = useRef(Promise.resolve());
   const productsSavePendingRef = useRef(false);
+  const productsSaveGenerationRef = useRef(0);
   const productsRef = useRef(products);
   const tabRef = useRef(tab);
   useEffect(() => { tabRef.current = tab; }, [tab]);
@@ -2054,6 +2055,7 @@ export default function UniformPOS() {
     if (!authReady || (isSupabaseAuthEnabled && !session)) return;
     setSyncing(true);
     try {
+      const refreshGeneration = productsSaveGenerationRef.current;
       const skipProducts = skipProductsWhileEditing && (tabRef.current === "products" || productsSavePendingRef.current);
       
       // 各個加載函數都應該返回有效數據或空陣列/null，不應拋出異常
@@ -2102,7 +2104,7 @@ export default function UniformPOS() {
       ]);
       setBranchSchoolIds(branchMap);
 
-      if (p && !productsSavePendingRef.current) {
+      if (p && !productsSavePendingRef.current && refreshGeneration === productsSaveGenerationRef.current) {
         const authoritative = enforceAuthoritativeProducts(p);
         if (authoritative.length > 0) {
           setSourceIntegrityWarning(p.length > 0 ? "" : "產品資料來源暫時沒有記錄，已保留目前商品資料。");
@@ -2336,6 +2338,7 @@ export default function UniformPOS() {
     setProductsSaveError("");
     setProductsSaveState("pending");
     productsSavePendingRef.current = true;
+    const saveGeneration = ++productsSaveGenerationRef.current;
     if (productsSaveTimerRef.current) clearTimeout(productsSaveTimerRef.current);
     productsSaveTimerRef.current = setTimeout(() => {
       productsPersistQueueRef.current = productsPersistQueueRef.current
@@ -2343,12 +2346,18 @@ export default function UniformPOS() {
         .then(() => persistProducts(next, options))
         .catch((error) => {
           const detail = error?.message || error?.code || "未知錯誤";
-          setProductsSaveError(`商品未能保存：${detail}`);
-          setProductsSaveState("error");
+          if (saveGeneration === productsSaveGenerationRef.current) {
+            setProductsSaveError(`商品未能保存：${detail}`);
+            setProductsSaveState("error");
+          }
           throw error;
         })
-        .then(() => setProductsSaveState("saved"))
-        .finally(() => { productsSavePendingRef.current = false; });
+        .then(() => {
+          if (saveGeneration === productsSaveGenerationRef.current) setProductsSaveState("saved");
+        })
+        .finally(() => {
+          if (saveGeneration === productsSaveGenerationRef.current) productsSavePendingRef.current = false;
+        });
       productsSaveTimerRef.current = null;
     }, 500);
   };
@@ -2364,6 +2373,7 @@ export default function UniformPOS() {
       setProductsSaveState("error");
       return false;
     }
+    const saveGeneration = ++productsSaveGenerationRef.current;
     productsSavePendingRef.current = true;
     setProductsSaveError("");
     setProductsSaveState("saving");
@@ -2372,15 +2382,17 @@ export default function UniformPOS() {
       .then(() => persistProducts(next));
     try {
       await productsPersistQueueRef.current;
-      setProductsSaveState("saved");
+      if (saveGeneration === productsSaveGenerationRef.current) setProductsSaveState("saved");
       return true;
     } catch (error) {
       const detail = error?.message || error?.code || "未知錯誤";
-      setProductsSaveError(`商品未能保存：${detail}`);
-      setProductsSaveState("error");
+      if (saveGeneration === productsSaveGenerationRef.current) {
+        setProductsSaveError(`商品未能保存：${detail}`);
+        setProductsSaveState("error");
+      }
       return false;
     } finally {
-      productsSavePendingRef.current = false;
+      if (saveGeneration === productsSaveGenerationRef.current) productsSavePendingRef.current = false;
     }
   };
 
