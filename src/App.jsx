@@ -408,8 +408,8 @@ const normalizeProductState = (products) => {
   const normalizedProducts = (Array.isArray(products) ? products : []).map((product) => {
     const productName = cleanProductName(product.name);
     const rawSizes = normalizeProductSizes(product.sizes);
-    const recoveredSizes = /西褲/.test(productName) ? recoverUniformTrouserOffset(rawSizes) : rawSizes;
-    const sizes = recoverMissingTailoredTrouserPrices(productName, recoveredSizes);
+    // Prices are authoritative data. Never recalculate or overwrite them while loading.
+    const sizes = rawSizes;
     if (SIMPLE_SIZE_PRODUCT_NAMES.has(productName)) {
       return {
         ...product,
@@ -419,72 +419,12 @@ const normalizeProductState = (products) => {
         priceMode: sizes.some((size) => size.length) ? "matrix" : product.priceMode,
       };
     }
-    const tailoredRule = PRICE_LIST_TAILORED_SIZES.find((rule) => rule.match.test(productName));
-    const tailoredValues = tailoredRule?.values || [];
-    const tailoredPriceByLength = tailoredRule?.matrixDimension === "length"
-      ? new Map(sizes.filter((item) => item.size === "裁碼").map((item) => [item.length || "", item.price]))
-      : new Map();
-    const isLongTrouser = /西褲/.test(productName);
-    const tailoredPrice = tailoredRule?.matrixDimension !== "length"
-      ? sizes.find((item) => item.size === "裁碼")?.price
-        ?? sizes.find((item) => item.isTailored && tailoredValues.includes(item.size))?.price
-      : undefined;
-    const hasExistingTailoredMatrix = sizes.some((item) => item.length) || sizes.some((item) => item.size === "裁碼");
-    const pricedSizes = tailoredValues.length > 0
-      ? sizes.map((item) => {
-      const lengthPrice = tailoredPriceByLength.get(item.length || "");
-      const shouldUseTailoredPrice = item.size !== "裁碼"
-        && tailoredValues.includes(item.size)
-        && (tailoredRule?.matrixDimension === "length" ? lengthPrice !== undefined : tailoredPrice !== undefined);
-      const surcharge = /西褲/.test(productName) ? trouserLengthSurcharge(item.length) : 0;
-      const sameSizeBase = surcharge > 0
-        ? sizes
-          .filter((candidate) => candidate.size === item.size && Number(candidate.length) < 40 && isPricedSize(candidate))
-          .sort((first, second) => Number(second.length) - Number(first.length))[0]
-        : null;
-      const adjustedPrice = surcharge > 0 && sameSizeBase && Number(item.price) <= Number(sameSizeBase.price) + surcharge
-        ? Number(sameSizeBase.price) + surcharge
-        : item.price;
-      return shouldUseTailoredPrice
-        ? {
-          ...item,
-          price: (tailoredRule?.matrixDimension === "length" ? lengthPrice : tailoredPrice) + surcharge,
-        }
-        : { ...item, price: adjustedPrice };
-      })
-      : sizes;
-    const completedSizes = tailoredValues.length === 0
-      ? sizes
-      : tailoredRule.matrixDimension === "length"
-      ? (hasExistingTailoredMatrix
-        ? [...pricedSizes, ...tailoredValues.flatMap((length) => {
-        const baseSizes = pricedSizes.filter((item) => !item.length);
-        return baseSizes
-          .filter((item) => !pricedSizes.some((existing) => existing.size === item.size && (existing.length || "") === length))
-          .map((item) => ({
-            size: item.size,
-            length,
-            price: (tailoredPriceByLength.get(length) ?? item.price) + trouserLengthSurcharge(length),
-          }));
-        })]
-        : sizes)
-      : [...pricedSizes, ...[...new Set(pricedSizes.map((item) => item.length || ""))].flatMap((length) => {
-        const entries = pricedSizes.filter((item) => (item.length || "") === length);
-        const reference = entries.find((item) => item.size === "裁碼")
-          || [...entries].filter((item) => Number.isFinite(Number(item.size))).sort((first, second) => Number(second.size) - Number(first.size))[0]
-          || entries.find(isPricedSize);
-        return reference
-          ? tailoredValues
-            .filter((size) => !pricedSizes.some((item) => item.size === size && (item.length || "") === length))
-            .map((size) => ({ size, length, price: reference.price + trouserLengthSurcharge(length) }))
-          : [];
-      })];
     return {
       ...product,
       school: canonicalSchoolName(product.school),
       name: cleanProductName(product.name),
-      priceMode: completedSizes.some((size) => size.length) ? "matrix" : product.priceMode,
-      sizes: completedSizes,
+      priceMode: sizes.some((size) => size.length) ? "matrix" : product.priceMode,
+      sizes,
     };
   });
 
