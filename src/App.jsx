@@ -306,7 +306,7 @@ const cleanProductName = (name) => {
   return cleaned;
 };
 const normalizeProductSizes = (sizes = []) => sizes.map((size) => ({ ...size }));
-const productIdentityParts = (school, name) => {
+const productIdentityParts = (school, name, branchId = "") => {
   const cleaned = cleanProductName(name);
   const genderMatch = cleaned.match(/^(男生|女生|男女生)\s*[-–—:：]?\s*/);
   const gender = genderMatch ? genderMatch[1] : "";
@@ -315,11 +315,11 @@ const productIdentityParts = (school, name) => {
     .replace(/[（(][^）)]*[）)]/g, "")
     .replace(/[／/、，,\s]/g, "")
     .trim();
-  return { school, name: cleanedName, gender };
+  return { school, name: cleanedName, gender, branchId: branchId || "" };
 };
-const productIdentityKey = (school, name) => {
-  const { school: schoolName, name: productName } = productIdentityParts(school, name);
-  return `${schoolName}\u0000${productName}`;
+const productIdentityKey = (school, name, branchId = "") => {
+  const { school: schoolName, name: productName, branchId: productBranchId } = productIdentityParts(school, name, branchId);
+  return `${productBranchId}\u0000${schoolName}\u0000${productName}`;
 };
 const compatibleProductGenders = (first, second) => !first || !second || first === second || first === "男女生" || second === "男女生";
 const SCHOOL_NAME_ALIASES = {
@@ -429,10 +429,10 @@ const normalizeProductState = (products) => {
   });
 
   return normalizedProducts.reduce((result, product) => {
-    const productParts = productIdentityParts(schoolOf(product), product.name);
+    const productParts = productIdentityParts(schoolOf(product), product.name, product.branch_id);
     const duplicate = result.find((item) => {
-      const itemParts = productIdentityParts(schoolOf(item), item.name);
-      return productIdentityKey(itemParts.school, item.name) === productIdentityKey(productParts.school, product.name)
+      const itemParts = productIdentityParts(schoolOf(item), item.name, item.branch_id);
+      return productIdentityKey(itemParts.school, item.name, item.branch_id) === productIdentityKey(productParts.school, product.name, productParts.branchId)
         && compatibleProductGenders(itemParts.gender, productParts.gender);
     });
 
@@ -446,8 +446,13 @@ const normalizeProductState = (products) => {
     }
     const sizes = [...(duplicate.sizes || [])];
     (product.sizes || []).forEach((size) => {
-      const exists = sizes.some((item) => item.size === size.size && (item.length || "") === (size.length || ""));
-      if (!exists) sizes.push(size);
+      const existingIndex = sizes.findIndex((item) => item.size === size.size && (item.length || "") === (size.length || ""));
+      if (existingIndex < 0) {
+        sizes.push(size);
+        return;
+      }
+      const incomingPrice = Number(size.price);
+      if (Number.isFinite(incomingPrice)) sizes[existingIndex] = { ...sizes[existingIndex], ...size };
     });
     duplicate.sizes = sizes;
     return result;
@@ -591,6 +596,7 @@ const mergeCSVIntoProducts = (csvText, existingProducts) => {
   let addedProducts = 0;
   let addedSizes = 0;
   let updatedSizes = 0;
+  const importedPrices = new Map();
 
   parsed.data.forEach((row, idx) => {
     const school = (row["學校"] || "").trim();
@@ -604,6 +610,13 @@ const mergeCSVIntoProducts = (csvText, existingProducts) => {
       return;
     }
     const schoolKey = school || UNASSIGNED;
+    const importKey = `${schoolKey}\u0000${name}\u0000${length}\u0000${size}`;
+    const previousImportPrice = importedPrices.get(importKey);
+    if (previousImportPrice !== undefined && previousImportPrice !== price) {
+      errors.push(`第${idx + 2}行：「${name}」${length ? `${length}/` : ""}${size} 出現衝突價格 $${previousImportPrice} 和 $${price}，已停止自動覆蓋。`);
+      return;
+    }
+    importedPrices.set(importKey, price);
     let product = next.find((p) => schoolOf(p) === schoolKey && p.name === name);
     if (!product) {
       product = { id: uid(), school: schoolKey === UNASSIGNED ? "" : schoolKey, name, sizes: [] };
@@ -638,6 +651,7 @@ const smartImportRows = (rows, existingProducts) => {
   const previewRows = [];
   const errors = [];
   const next = existingProducts.map((p) => ({ ...p, sizes: p.sizes.map((s) => ({ ...s })) }));
+  const importedPrices = new Map();
   let addedProducts = 0;
   let addedSizes = 0;
   let updatedSizes = 0;
@@ -658,6 +672,13 @@ const smartImportRows = (rows, existingProducts) => {
       return;
     }
     const schoolKey = school || UNASSIGNED;
+    const importKey = `${schoolKey}\u0000${name}\u0000${length}\u0000${size}`;
+    const previousImportPrice = importedPrices.get(importKey);
+    if (previousImportPrice !== undefined && previousImportPrice !== price) {
+      errors.push(`第${index + 2}行：「${name}」${length ? `${length}/` : ""}${size} 出現衝突價格 $${previousImportPrice} 和 $${price}，已停止自動覆蓋。`);
+      return;
+    }
+    importedPrices.set(importKey, price);
     let product = next.find((item) => schoolOf(item) === schoolKey && item.name === name);
     if (!product) {
       product = { id: uid(), school: schoolKey === UNASSIGNED ? "" : schoolKey, name, sizes: [] };
