@@ -462,7 +462,17 @@ const normalizeProductState = (products) => {
         return;
       }
       const incomingPrice = Number(size.price);
-      if (Number.isFinite(incomingPrice)) sizes[existingIndex] = { ...sizes[existingIndex], ...size };
+      if (!Number.isFinite(incomingPrice)) return;
+      const existingPrice = Number(sizes[existingIndex].price);
+      if (Number.isFinite(existingPrice) && existingPrice !== incomingPrice) {
+        console.error("[products] Conflicting prices detected; preserving the existing value instead of overwriting it.", {
+          product: duplicate.name,
+          size,
+          existing: sizes[existingIndex],
+        });
+        return;
+      }
+      sizes[existingIndex] = { ...sizes[existingIndex], ...size };
     });
     duplicate.sizes = sizes;
     return result;

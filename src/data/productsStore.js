@@ -11,6 +11,23 @@ const normalizeSize = (size = {}) => {
   return normalized;
 };
 const sizeIdentityKey = (size = {}) => `${size.isTailored ? "tailored" : "regular"}\u0000${size.length || ""}\u0000${size.size || ""}`;
+const assertNoConflictingSizePrices = (products = []) => {
+  products.forEach((product) => {
+    const pricesByKey = new Map();
+    (product.sizes || []).forEach((size) => {
+      const key = sizeIdentityKey(size);
+      const price = size.price === null || size.price === undefined ? null : Number(size.price);
+      if (!pricesByKey.has(key)) {
+        pricesByKey.set(key, price);
+        return;
+      }
+      const previousPrice = pricesByKey.get(key);
+      if (previousPrice !== null && price !== null && previousPrice !== price) {
+        throw new Error(`拒絕保存「${product.name}」：${size.isTailored ? "裁碼" : "普通"}尺碼 ${size.size || size.length} 存在互相衝突的價格。請先修正資料，避免裁碼價格覆蓋普通尺碼。`);
+      }
+    });
+  });
+};
 
 export const normalizeProducts = (products = []) => {
   if (!Array.isArray(products)) return [];
@@ -126,6 +143,7 @@ export const loadProducts = async ({ storage, supabase, isSupabaseAuthEnabled, f
 
 export const saveProducts = async ({ products, storage, supabase, isSupabaseAuthEnabled }) => {
   const normalized = normalizeProducts(products);
+  assertNoConflictingSizePrices(normalized);
   if (normalized.length === 0) {
     throw new Error("拒絕保存空商品清單，避免刪除整個商品庫。請先載入或匯入商品資料。");
   }
