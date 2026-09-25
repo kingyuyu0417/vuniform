@@ -33,15 +33,21 @@ create table if not exists public.school_branches (
 );
 
 insert into public.school_branches (school, branch_id)
-select school, b.id
-from public.products p
-join public.branches b on b.name = (
-  select meta.value ->> 'outletName'
-  from public.app_storage s
-  cross join lateral jsonb_each(s.value::jsonb) meta
-  where s.key = 'school-meta' and meta.key = p.school
-)
-where coalesce(school, '') <> ''
+select source.school, b.id
+from (
+  select distinct on (p.school)
+    p.school,
+    (
+      select meta.value ->> 'outletName'
+      from public.app_storage s
+      cross join lateral jsonb_each(s.value::jsonb) meta
+      where s.key = 'school-meta' and meta.key = p.school
+    ) as outlet_name
+  from public.products p
+  where coalesce(p.school, '') <> ''
+  order by p.school
+) source
+join public.branches b on b.name = source.outlet_name
 on conflict (school) do update set branch_id = excluded.branch_id;
 
 update public.products p
