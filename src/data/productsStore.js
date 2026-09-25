@@ -5,6 +5,7 @@ const normalizeSize = (size = {}) => {
   if (normalized.price === undefined) normalized.price = null;
   return normalized;
 };
+const sizeIdentityKey = (size = {}) => `${size.isTailored ? "tailored" : "regular"}\u0000${size.length || ""}\u0000${size.size || ""}`;
 
 export const normalizeProducts = (products = []) => {
   if (!Array.isArray(products)) return [];
@@ -135,7 +136,7 @@ export const saveProducts = async ({ products, storage, supabase, isSupabaseAuth
 
       const sizes = [...(duplicate.sizes || [])];
       (product.sizes || []).forEach((size) => {
-        const exists = sizes.some((item) => item.size === size.size && (item.length || "") === (size.length || ""));
+        const exists = sizes.some((item) => sizeIdentityKey(item) === sizeIdentityKey(size));
         if (!exists) sizes.push(size);
       });
       duplicate.sizes = sizes;
@@ -179,8 +180,8 @@ export const saveProducts = async ({ products, storage, supabase, isSupabaseAuth
     const hasMismatch = uniqueProducts.some((expected) => {
       const saved = savedById.get(expected.id);
       if (!saved || saved.school !== (expected.school || "") || saved.name !== expected.name) return true;
-      const expectedSizes = new Map((expected.sizes || []).map((size) => [`${size.length || ""}\u0000${size.size || ""}`, size.price]));
-      const savedSizes = new Map((saved.sizes || []).map((size) => [`${size.length || ""}\u0000${size.size || ""}`, size.price]));
+      const expectedSizes = new Map((expected.sizes || []).map((size) => [sizeIdentityKey(size), size.price]));
+      const savedSizes = new Map((saved.sizes || []).map((size) => [sizeIdentityKey(size), size.price]));
       if (expectedSizes.size !== savedSizes.size) return true;
       return [...expectedSizes].some(([key, price]) => Number(savedSizes.get(key)) !== Number(price));
     });

@@ -103,6 +103,13 @@ const PRICE_MODE_LABELS = {
 };
 const productPriceMode = (product) => PRICE_MODE_LABELS[product?.priceMode] ? product.priceMode : (hasLengthOptions(product || {}) ? "matrix" : "simple");
 const isPricedSize = (size) => size && size.price !== null && size.price !== undefined && Number.isFinite(Number(size.price)) && Number(size.price) >= 0;
+const isTailoredSize = (size = {}) => Boolean(
+  size.isTailored
+  || String(size.size || "").trim() === "裁碼"
+  || /^裁碼(?:\s|$)/.test(String(size.length || "").trim()),
+);
+const isTailoredFlag = (value) => value === true || ["true", "1", "yes", "是", "裁碼"].includes(String(value || "").trim().toLowerCase());
+const sizeIdentityKey = (size = {}) => `${isTailoredSize(size) ? "tailored" : "regular"}\u0000${String(size.length || "").replace(/^裁碼\s*/, "")}\u0000${size.size || ""}`;
 const customerSurname = (name = "") => String(name || "").trim().replace(/\s+/g, "").slice(0, 1);
 const customerPhoneLast4 = (phone = "") => String(phone || "").replace(/\D/g, "").slice(-4);
 const sizeLabel = (size) => size.length ? `${size.isTailored ? "裁碼 " : ""}${size.length}／${size.size}` : size.size;
@@ -446,7 +453,7 @@ const normalizeProductState = (products) => {
     }
     const sizes = [...(duplicate.sizes || [])];
     (product.sizes || []).forEach((size) => {
-      const existingIndex = sizes.findIndex((item) => item.size === size.size && (item.length || "") === (size.length || ""));
+      const existingIndex = sizes.findIndex((item) => sizeIdentityKey(item) === sizeIdentityKey(size));
       if (existingIndex < 0) {
         sizes.push(size);
         return;
@@ -610,7 +617,9 @@ const mergeCSVIntoProducts = (csvText, existingProducts) => {
       return;
     }
     const schoolKey = school || UNASSIGNED;
-    const importKey = `${schoolKey}\u0000${name}\u0000${length}\u0000${size}`;
+    const tailored = isTailoredFlag(row.isTailored) || size === "裁碼" || /^裁碼(?:\s|$)/.test(length);
+    const normalizedLength = length.replace(/^裁碼\s*/, "");
+    const importKey = `${schoolKey}\u0000${name}\u0000${tailored ? "tailored" : "regular"}\u0000${normalizedLength}\u0000${size}`;
     const previousImportPrice = importedPrices.get(importKey);
     if (previousImportPrice !== undefined && previousImportPrice !== price) {
       errors.push(`第${idx + 2}行：「${name}」${length ? `${length}/` : ""}${size} 出現衝突價格 $${previousImportPrice} 和 $${price}，已停止自動覆蓋。`);
@@ -623,12 +632,12 @@ const mergeCSVIntoProducts = (csvText, existingProducts) => {
       next.push(product);
       addedProducts++;
     }
-    const sizeEntry = product.sizes.find((s) => s.size === size && (s.length || "") === length);
+    const sizeEntry = product.sizes.find((s) => sizeIdentityKey(s) === sizeIdentityKey({ size, length: normalizedLength, isTailored: tailored }));
     if (sizeEntry) {
       if (sizeEntry.price !== price) updatedSizes++;
       sizeEntry.price = price;
     } else {
-      product.sizes.push({ size, length, price });
+      product.sizes.push({ size, length: normalizedLength, price, isTailored: tailored });
       addedSizes++;
     }
   });
@@ -672,7 +681,9 @@ const smartImportRows = (rows, existingProducts) => {
       return;
     }
     const schoolKey = school || UNASSIGNED;
-    const importKey = `${schoolKey}\u0000${name}\u0000${length}\u0000${size}`;
+    const tailored = isTailoredFlag(row.isTailored) || size === "裁碼" || /^裁碼(?:\s|$)/.test(length);
+    const normalizedLength = length.replace(/^裁碼\s*/, "");
+    const importKey = `${schoolKey}\u0000${name}\u0000${tailored ? "tailored" : "regular"}\u0000${normalizedLength}\u0000${size}`;
     const previousImportPrice = importedPrices.get(importKey);
     if (previousImportPrice !== undefined && previousImportPrice !== price) {
       errors.push(`第${index + 2}行：「${name}」${length ? `${length}/` : ""}${size} 出現衝突價格 $${previousImportPrice} 和 $${price}，已停止自動覆蓋。`);
@@ -685,14 +696,14 @@ const smartImportRows = (rows, existingProducts) => {
       next.push(product);
       addedProducts++;
     }
-    const existing = product.sizes.find((item) => item.size === size && (item.length || "") === length);
+    const existing = product.sizes.find((item) => sizeIdentityKey(item) === sizeIdentityKey({ size, length: normalizedLength, isTailored: tailored }));
     const action = existing ? (Number(existing.price) === price ? "無變更" : "更新價格") : "新增尺碼";
     if (existing) {
       if (Number(existing.price) !== price) updatedSizes++;
       existing.price = price;
       existing.isTailored = Boolean(existing.isTailored || row.isTailored);
     } else {
-      product.sizes.push({ size, length, price, isTailored: Boolean(row.isTailored) });
+      product.sizes.push({ size, length: normalizedLength, price, isTailored: tailored });
       addedSizes++;
     }
     previewRows.push({ school: schoolKey, name, length, size, price, action });
@@ -1162,14 +1173,13 @@ const convertIrregularPriceList = (rows) => {
           const tailoredEntry = rawEntries.find(({ size }) => size === "裁碼");
           if (tailoredEntry) {
             tailoredSizeRule.values.forEach((size) => {
-              if (!matrixEntries.some((entry) => entry.size === size)) {
-                matrixEntries.push({ size, price: tailoredEntry.price });
+              if (!matrixEntries.some((entry) => entry.size === size && entry.isTailored)) {
+                matrixEntries.push({ size, price: tailoredEntry.price, isTailored: true });
               }
             });
           }
         }
-        matrixEntries.forEach(({ size: rawSize, price }) => {
-          if (isLongTrousers && rawSize !== "裁碼" && rawEntries.some((entry) => entry.size === "裁碼") && tailoredSizeRule.values.includes(rawSize)) return;
+        matrixEntries.forEach(({ size: rawSize, price, isTailored: rawIsTailored = false }) => {
           const waistSizes = isLongTrousers && rawSize === "裁碼"
             ? tailoredSizeRule.values
             : expandTailoredPriceListValue(name, rawSize);
@@ -1184,7 +1194,7 @@ const convertIrregularPriceList = (rows) => {
               長度: length,
               尺碼: size,
               價錢: price + (rule?.amount || 0),
-              isTailored: isLongTrousers && rawSize === "裁碼",
+              isTailored: isLongTrousers && (rawSize === "裁碼" || rawIsTailored),
             });
           }));
         });
@@ -2488,7 +2498,9 @@ export default function UniformPOS() {
   const addToCart = (product, sizeObj, quantity = 1) => {
     const qty = Math.max(1, Math.min(99, Number(quantity) || 1));
     setCart((prev) => {
-      const idx = prev.findIndex((c) => !c.exchangeReturn && c.productId === product.id && c.size === sizeObj.size && c.length === (sizeObj.length || ""));
+      const idx = prev.findIndex((c) => !c.exchangeReturn
+        && c.productId === product.id
+        && sizeIdentityKey(c) === sizeIdentityKey(sizeObj));
       if (idx >= 0) {
         const next = [...prev];
         next[idx] = { ...next[idx], qty: next[idx].qty + qty };
@@ -2512,8 +2524,8 @@ export default function UniformPOS() {
     const items = Array.isArray(selectedItems) ? selectedItems : [selectedItems];
     const exchangeItems = items.map((item) => {
       const product = products.find((candidate) => candidate.name === item.name || candidate.id === item.productId);
-      const originalSize = product?.sizes?.find((size) => String(size.size) === String(item.size) && String(size.length || "") === String(item.length || ""))
-        || product?.sizes?.find((size) => String(size.size) === String(item.size));
+      const originalSize = product?.sizes?.find((size) => sizeIdentityKey(size) === sizeIdentityKey(item))
+        || product?.sizes?.find((size) => String(size.size) === String(item.size) && isTailoredSize(size) === Boolean(item.isTailored));
       return { item, product, originalSize };
     });
     if (exchangeItems.some(({ product }) => !product)) {
@@ -3714,7 +3726,7 @@ function SaleTab({
 
   const startDirectExchange = (product, size, quantity = 1) => {
     setDirectExchangeItems((current) => {
-      const itemKey = (item) => `${item.productId}::${item.size}::${item.length || ""}`;
+      const itemKey = (item) => `${item.productId}::${sizeIdentityKey(item)}`;
       const newItem = {
           productId: product.id,
           name: product.name,
@@ -4400,10 +4412,10 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
     if (!hasLengths) {
       sizes = product.sizes.map((size) => ({ ...size, length: normalizedLength }));
     } else {
-      const existingKeys = new Set(product.sizes.map((size) => `${size.size}\u0000${size.length || ""}`));
+      const existingKeys = new Set(product.sizes.map(sizeIdentityKey));
       const existingSizes = [...new Set(product.sizes.map((size) => size.size))];
       const additions = existingSizes
-        .filter((size) => !existingKeys.has(`${size}\u0000${normalizedLength}`))
+        .filter((size) => !existingKeys.has(sizeIdentityKey({ size, length: normalizedLength })))
         .map((size) => ({ size, length: normalizedLength, price: product.sizes.find((item) => item.size === size)?.price ?? null }));
       sizes = [...product.sizes, ...additions];
     }
@@ -4458,7 +4470,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
     }
 
     // Build a map of existing size entries so we can merge and preserve prices
-    const existing = new Map(product.sizes.map((item) => [`${item.length || ""}\u0000${item.size || ""}`, { ...item }]));
+    const existing = new Map(product.sizes.map((item) => [sizeIdentityKey(item), { ...item }]));
 
     // Ensure every requested matrix combination exists; preserve previous entry (and price) when present
     uniqueLengths.forEach((rawLength) => {
@@ -4466,7 +4478,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
       const length = tailoredMatch ? tailoredMatch[1].trim() : rawLength;
       const isTailored = Boolean(tailoredMatch);
       uniqueSizes.forEach((size) => {
-        const key = `${length}\u0000${size}`;
+        const key = sizeIdentityKey({ length, size, isTailored });
         const previous = existing.get(key);
         if (previous) {
           // preserve price and mark tailored flag if either indicates tailored
