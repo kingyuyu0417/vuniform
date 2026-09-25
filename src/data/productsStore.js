@@ -3,6 +3,11 @@ const normalizeSize = (size = {}) => {
   if (normalized.size === undefined || normalized.size === null) normalized.size = "";
   if (normalized.length === undefined || normalized.length === null) normalized.length = "";
   if (normalized.price === undefined) normalized.price = null;
+  normalized.isTailored = Boolean(
+    normalized.isTailored
+    || String(normalized.size || "").trim() === "裁碼"
+    || /^裁碼(?:\s|$)/.test(String(normalized.length || "").trim()),
+  );
   return normalized;
 };
 const sizeIdentityKey = (size = {}) => `${size.isTailored ? "tailored" : "regular"}\u0000${size.length || ""}\u0000${size.size || ""}`;
