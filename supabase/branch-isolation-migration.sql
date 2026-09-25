@@ -67,6 +67,27 @@ from public.school_branches mapping
 where mapping.school = order_record.school
   and order_record.branch_id is null;
 
+create or replace function public.assign_order_branch()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.branch_id is null then
+    select branch_id into new.branch_id
+    from public.staff_profiles
+    where id = new.cashier_id;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists orders_assign_branch on public.orders;
+create trigger orders_assign_branch
+before insert on public.orders
+for each row execute function public.assign_order_branch();
+
 create or replace function public.current_staff_branch_id()
 returns text
 language sql
