@@ -4358,7 +4358,9 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
     if (!PRICE_MODE_LABELS[merged.priceMode]) {
       merged.priceMode = merged.sizes?.some((size) => size?.length) ? "matrix" : "simple";
     }
-    saveProducts(currentProducts.map((product) => (product.id === id ? merged : product)));
+    const nextProducts = currentProducts.map((product) => (product.id === id ? merged : product));
+    productsRef.current = nextProducts;
+    saveProducts(nextProducts);
     requestAnimationFrame(() => {
       window.scrollTo({ top: scrollPosition, left: window.scrollX, behavior: "auto" });
     });

@@ -168,6 +168,13 @@ export const saveProducts = async ({ products, storage, supabase, isSupabaseAuth
       .select("id, school, name, sizes")
       .in("id", uniqueProducts.map((product) => product.id));
     if (verifyError) throw verifyError;
+    const { data: remainingDeletedProducts, error: deleteVerifyError } = deletedIds.length > 0
+      ? await supabase.from("products").select("id").in("id", deletedIds)
+      : { data: [], error: null };
+    if (deleteVerifyError) throw deleteVerifyError;
+    if ((remainingDeletedProducts || []).length > 0) {
+      throw new Error("雲端仍保留已刪除商品，修改未被完整保存。");
+    }
     const savedById = new Map((savedProducts || []).map((product) => [product.id, product]));
     const hasMismatch = uniqueProducts.some((expected) => {
       const saved = savedById.get(expected.id);
