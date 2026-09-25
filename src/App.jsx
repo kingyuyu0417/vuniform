@@ -1204,7 +1204,7 @@ const convertIrregularPriceList = (rows) => {
             .filter(({ size }) => BOTTOM_SHIRT_SIZES.has(size))
           : conversionEntries;
         inferLowerTailoredSizes(name, exactEntries).forEach(({ size, price }) => {
-          converted.push({ 學校: school, 款式名稱: name, 長度: "", 尺碼: size, 價錢: price });
+          converted.push({ 學校: school, 款式名稱: name, 長度: "", 尺碼: size, 價錢: price, isTailored: true });
         });
         exactEntries.forEach(({ size, price }) => {
           expandTailoredPriceListValue(name, size)
@@ -1235,13 +1235,13 @@ const convertIrregularPriceList = (rows) => {
     const [school, name] = key.split("\u0000");
     const existing = new Set(converted
       .filter((entry) => entry.學校 === school && entry.款式名稱 === name)
-      .map((entry) => `${entry.長度 || ""}\u0000${entry.尺碼}`));
+      .map((entry) => `${entry.isTailored ? "tailored" : "regular"}\u0000${entry.長度 || ""}\u0000${entry.尺碼}`));
     tailoredPrices.forEach((tailoredPrice, length) => {
       const tailoredRule = PRICE_LIST_TAILORED_SIZES.find((rule) => rule.matrixDimension === "size" && rule.match.test(name));
       (tailoredRule?.values || []).forEach((size) => {
-        const keyForEntry = `${length}\u0000${size}`;
+        const keyForEntry = `tailored\u0000${length}\u0000${size}`;
         if (existing.has(keyForEntry)) return;
-        converted.push({ 學校: school, 款式名稱: name, 長度: length, 尺碼: size, 價錢: tailoredPrice });
+        converted.push({ 學校: school, 款式名稱: name, 長度: length, 尺碼: size, 價錢: tailoredPrice, isTailored: true });
       });
     });
   });
