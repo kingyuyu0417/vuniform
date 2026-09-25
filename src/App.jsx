@@ -1747,11 +1747,7 @@ export default function UniformPOS() {
   ));
   const [schoolPanelOpen, setSchoolPanelOpen] = useState(false);
   const [branchSchoolIds, setBranchSchoolIds] = useState({});
-  const accessibleProducts = !isSupabaseAuthEnabled || session?.role === ROLES.ADMIN
-    ? products
-    : products.filter((product) => product.branch_id === session?.branchId || branchSchoolIds[schoolOf(product)] === session?.branchId);
-  const schools = listSchools(accessibleProducts);
-  const customerSchools = schools;
+  const customerSchools = listSchools(products);
 
   // 學校分類資料（階段/地區/18區），共用儲存，全部裝置見到同一份
   const [schoolMeta, setSchoolMeta] = useState({});
@@ -1770,6 +1766,10 @@ export default function UniformPOS() {
   const [authReady, setAuthReady] = useState(!isSupabaseAuthEnabled); // Wait for auth before loading protected data
   const [passwordSetupRequired, setPasswordSetupRequired] = useState(false);
   const perms = session ? (PERMISSIONS[session.role] || PERMISSIONS[ROLES.STAFF]) : null;
+  const accessibleProducts = !isSupabaseAuthEnabled || session?.role === ROLES.ADMIN
+    ? products
+    : products.filter((product) => product.branch_id === session?.branchId || branchSchoolIds[schoolOf(product)] === session?.branchId);
+  const schools = listSchools(accessibleProducts);
 
   useEffect(() => {
     window.storage.get("held-sales", false).then((saved) => {
