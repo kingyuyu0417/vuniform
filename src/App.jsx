@@ -4336,7 +4336,8 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
     const currentProducts = productsRef.current;
     const current = currentProducts.find((product) => product.id === id);
     if (!current) return;
-    const merged = { ...current, ...next };
+    const patch = typeof next === "function" ? next(current) : next;
+    const merged = { ...current, ...patch };
     if (!PRICE_MODE_LABELS[merged.priceMode]) {
       merged.priceMode = merged.sizes?.some((size) => size?.length) ? "matrix" : "simple";
     }
@@ -5205,9 +5206,11 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
                       <input
                         value={s.length || ""}
                         onChange={(e) => {
-                          const sizes = [...p.sizes];
-                          sizes[i] = { ...sizes[i], length: e.target.value.replace(/^裁碼\s*/, ""), isTailored: s.isTailored };
-                          updateProduct(p.id, { ...p, sizes });
+                          updateProduct(p.id, (current) => ({
+                            sizes: current.sizes.map((size, index) => index === i
+                              ? { ...size, length: e.target.value.replace(/^裁碼\s*/, ""), isTailored: s.isTailored }
+                              : size),
+                          }));
                         }}
                         placeholder={lengthDimensionLabel(p)}
                         style={{ width: 70, padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 13 }}
@@ -5217,9 +5220,11 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
                   <input
                     value={s.size}
                     onChange={(e) => {
-                      const sizes = [...p.sizes];
-                      sizes[i] = { ...sizes[i], size: e.target.value };
-                      updateProduct(p.id, { ...p, sizes });
+                      updateProduct(p.id, (current) => ({
+                        sizes: current.sizes.map((size, index) => index === i
+                          ? { ...size, size: e.target.value }
+                          : size),
+                      }));
                     }}
                     placeholder={hasLengthOptions(p) ? sizeDimensionLabel(p) : "尺碼"}
                     style={{ width: 70, padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 13 }}
@@ -5228,9 +5233,11 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
                     type="number"
                     value={s.price ?? ""}
                     onChange={(e) => {
-                      const sizes = [...p.sizes];
-                      sizes[i] = { ...sizes[i], price: e.target.value === "" ? null : Number(e.target.value) };
-                      updateProduct(p.id, { ...p, sizes });
+                      updateProduct(p.id, (current) => ({
+                        sizes: current.sizes.map((size, index) => index === i
+                          ? { ...size, price: e.target.value === "" ? null : Number(e.target.value) }
+                          : size),
+                      }));
                     }}
                     placeholder="價錢（待補）"
                     style={{ flex: 1, padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 13 }}
@@ -5239,8 +5246,9 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
                     type="button"
                     className="pos-btn"
                     onClick={() => {
-                      const sizes = p.sizes.filter((_, idx) => idx !== i);
-                      updateProduct(p.id, { ...p, sizes });
+                      updateProduct(p.id, (current) => ({
+                        sizes: current.sizes.filter((_, index) => index !== i),
+                      }));
                     }}
                     style={{ width: 34, borderRadius: 8, background: "#fff", border: "1px solid #eee", color: "#c33" }}
                   >
@@ -5250,7 +5258,9 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
               ))}
               <button
                 className="pos-btn"
-                onClick={() => updateProduct(p.id, { ...p, sizes: [...p.sizes, { size: "", length: "", price: null }] })}
+                onClick={() => updateProduct(p.id, (current) => ({
+                  sizes: [...current.sizes, { size: "", length: "", price: null }],
+                }))}
                 style={{ fontSize: 12, padding: "6px 10px", borderRadius: 8, background: "#F0F0EC", border: "1px solid #ddd", marginTop: 2 }}
               >
                 + 加碼數
