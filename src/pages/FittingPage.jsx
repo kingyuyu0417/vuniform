@@ -81,7 +81,7 @@ const naturalSizeSort = (first, second) => {
   return firstText.localeCompare(secondText, "zh-Hant", { numeric: true });
 };
 
-export default function FittingPage({ currentSchoolId = "", products = defaultProducts, selectedOrderId = "", onStatusChange }) {
+export default function FittingPage({ currentSchoolId = "", products = defaultProducts, selectedOrderId = "", onStatusChange, onComplete }) {
   const safeProducts = Array.isArray(products) ? products.filter(Boolean) : [];
   const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -482,8 +482,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       writeDrafts(drafts);
 
       setSelection([{ ...emptySelection }]);
-      const remaining = (Array.isArray(orders) ? orders : []).filter((order) => order && order.id !== current.id && order.status === ORDER_STATUS.PENDING);
-      safeSetSelectedOrder(remaining[0] ? getSafeOrder(remaining[0]) : null);
+      onComplete?.(result);
     } catch (error) {
       console.error("FittingPage submit failed", error);
       try {
@@ -645,17 +644,17 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
                   )}
                 </div>
 
-                <div style={styles.productGrid}>
+                <div className="sale-product-grid" style={styles.productGrid}>
                   {safeProducts.map((product) => (
                     <button
                       key={product.id}
-                      className="pos-btn"
+                      className="pos-btn sale-product-button"
                       onClick={() => updateSelection(index, { productId: item.productId === product.id ? "" : product.id, size: "" })}
                       style={{
                         ...styles.productBtn,
-                        background: item.productId === product.id ? "#D97757" : "#f8fafc",
-                        color: item.productId === product.id ? "#fff" : "#24364d",
-                        borderColor: item.productId === product.id ? "#D97757" : "#dfe7f1",
+                        background: item.productId === product.id ? "#D97757" : "#fff",
+                        color: item.productId === product.id ? "#fff" : "#222",
+                        borderColor: item.productId === product.id ? "#D97757" : "#ddd",
                       }}
                     >
                       {displayProductName(product.name)}
@@ -666,15 +665,15 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
                 {selectedProduct && (
                   <div>
                     {hasLengthOptions(selectedProduct) && (
-                      <div style={styles.sizeGrid}>
+                      <div className="sale-size-grid">
                         {[...new Set(selectedProduct.sizes.map((size) => size.length).filter(Boolean))]
                           .sort(naturalSizeSort)
                           .map((length) => (
                             <button
                               key={`${selectedProduct.id}-length-${length}`}
-                              className="pos-btn"
+                              className="pos-btn sale-size-button"
                               onClick={() => updateSelection(index, { length: item.length === length ? "" : length, size: "" })}
-                              style={{ ...styles.sizeBtn, background: item.length === length ? "#1F3A5F" : "#fff", color: item.length === length ? "#fff" : "#24364d", borderColor: item.length === length ? "#1F3A5F" : "#dfe7f1" }}
+                              style={{ ...styles.sizeBtn, background: item.length === length ? "#1F3A5F" : "#fff", color: item.length === length ? "#fff" : "#1F3A5F", borderColor: item.length === length ? "#1F3A5F" : "#1F3A5F", fontSize: 16 }}
                             >
                               長度 {length}
                             </button>
@@ -682,7 +681,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
                       </div>
                     )}
                     {(!hasLengthOptions(selectedProduct) || item.length) && (
-                      <div style={styles.sizeGrid}>
+                      <div className="sale-size-grid">
                         {(Array.isArray(selectedProduct.sizes) ? selectedProduct.sizes : [])
                           .filter((sizeOption) => !hasLengthOptions(selectedProduct) || sizeOption.length === item.length)
                           .sort((first, second) => naturalSizeSort(first.size, second.size))
@@ -692,9 +691,9 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
                             return (
                               <button
                                 key={`${selectedProduct.id}-${item.length || "all"}-${size}-${typeof sizeOption === "object" && sizeOption.isTailored ? "tailored" : "regular"}`}
-                                className="pos-btn"
+                                className="pos-btn sale-size-button"
                                 onClick={() => selectSize(index, sizeOption)}
-                                style={{ ...styles.sizeBtn, background: item.size === size && Boolean(item.isTailored) === Boolean(typeof sizeOption === "object" && sizeOption.isTailored) ? "#1f3a5f" : "#fff", color: item.size === size && Boolean(item.isTailored) === Boolean(typeof sizeOption === "object" && sizeOption.isTailored) ? "#fff" : "#24364d", borderColor: item.size === size && Boolean(item.isTailored) === Boolean(typeof sizeOption === "object" && sizeOption.isTailored) ? "#1f3a5f" : "#dfe7f1" }}
+                                style={{ ...styles.sizeBtn, background: item.size === size && Boolean(item.isTailored) === Boolean(typeof sizeOption === "object" && sizeOption.isTailored) ? "#1f3a5f" : "#fff", color: item.size === size && Boolean(item.isTailored) === Boolean(typeof sizeOption === "object" && sizeOption.isTailored) ? "#fff" : "#24364d", borderColor: item.size === size && Boolean(item.isTailored) === Boolean(typeof sizeOption === "object" && sizeOption.isTailored) ? "#1f3a5f" : "#ccc", fontSize: 16 }}
                               >
                                 <div>{typeof sizeOption === "object" ? sizeOption.size : size}</div>
                                 {typeof sizeOption === "object" && sizeOption.isTailored && <div style={{ fontSize: 11 }}>裁碼</div>}
@@ -870,8 +869,8 @@ const styles = {
     fontWeight: 600,
   },
   itemCard: {
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
+    background: "#F7F7F5",
+    border: "1px solid #e5e5e0",
     borderRadius: 14,
     padding: 12,
     display: "grid",
@@ -911,23 +910,23 @@ const styles = {
     placeItems: "center",
     cursor: "pointer",
   },
-  productGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8 },
+  productGrid: { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 },
   productBtn: {
-    border: "1px solid #dfe7f1",
+    border: "1px solid #ddd",
     borderRadius: 10,
-    padding: "10px 8px",
-    fontSize: 12,
+    padding: "12px 10px",
+    fontSize: 16,
     fontWeight: 700,
     cursor: "pointer",
     textAlign: "left",
+    minHeight: 76,
   },
-  sizeGrid: { display: "flex", flexWrap: "wrap", gap: 8 },
   sizeBtn: {
-    border: "1px solid #dfe7f1",
+    border: "1px solid #ccc",
     borderRadius: 10,
-    padding: "8px 10px",
+    padding: "10px 8px",
     fontWeight: 700,
-    fontSize: 12,
+    fontSize: 16,
     cursor: "pointer",
   },
   qtyRow: { display: "grid", gap: 8, marginTop: 2 },

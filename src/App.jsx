@@ -2712,6 +2712,14 @@ export default function UniformPOS() {
     setSelectedGuest((prev) => (prev && prev.id === updatedOrder.id ? null : prev));
   };
 
+  const handleFittingComplete = () => {
+    setSelectedGuest(null);
+    setTab("queue");
+    const school = selectedSchool || publicRouteSchool;
+    const schoolQuery = school ? `?school_id=${encodeURIComponent(school)}` : "";
+    navigate(`/queue${schoolQuery}`, { replace: true });
+  };
+
   const handleAssignGuest = (guest) => {
     if (!guest) return;
     
@@ -3384,6 +3392,7 @@ export default function UniformPOS() {
                 schoolName={selectedSchool}
                 onGenerateTicket={handleGenerateTicket}
                 onStatusChange={handleFittingStatusChange}
+                onComplete={handleFittingComplete}
               />
             }
           />
@@ -3393,7 +3402,7 @@ export default function UniformPOS() {
           />
           <Route
             path="/pickup"
-            element={<PickupPage currentSchoolId={selectedSchool || publicRouteSchool} onReadyForSale={handleReadyForSale} />}
+            element={<PickupPage currentSchoolId={selectedSchool || publicRouteSchool} />}
           />
           <Route
             path="/cashier"
@@ -3539,10 +3548,11 @@ export default function UniformPOS() {
                     schoolName={selectedSchool}
                     onGenerateTicket={handleGenerateTicket}
                     onStatusChange={handleFittingStatusChange}
+                    onComplete={handleFittingComplete}
                   />
                 )}
                 {tab === "pickup" && (
-                  <PickupPage currentSchoolId={selectedSchool || publicRouteSchool} onReadyForSale={handleReadyForSale} />
+                  <PickupPage currentSchoolId={selectedSchool || publicRouteSchool} />
                 )}
                 {tab === "cashier" && (
                   <CashierVerifyPage currentSchoolId={selectedSchool || publicRouteSchool} products={products.filter((p) => schoolOf(p) === (selectedSchool || publicRouteSchool))} onConfirmPayment={handleConfirmPayment} onReadyForSale={handleReadyForSale} />
