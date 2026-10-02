@@ -1353,7 +1353,7 @@ const ROLE_LABEL = { admin: "管理員 ADMIN", manager: "店長／當日負責�
 // 每個角色嘅權限表：邊啲分頁見到、邊啲操作准許
 const PERMISSIONS = {
   [ROLES.ADMIN]: {
-    tabs: ["sale", "products", "records", "staff", "qrcode", "track"],
+    tabs: ["sale", "guest", "queue", "track", "fitting", "pickup", "cashier", "products", "records", "staff"],
     canEditProducts: true, // 改價/改碼數
     canManageSchools: true, // 新增/刪除學校、款式
     canImportExport: true, // CSV 匯入匯出
@@ -1361,7 +1361,7 @@ const PERMISSIONS = {
     canExportSales: true,
   },
   [ROLES.MANAGER]: {
-    tabs: ["sale", "products", "records"],
+    tabs: ["sale", "guest", "queue", "track", "fitting", "pickup", "cashier", "products", "records"],
     canEditProducts: true,
     canManageSchools: false,
     canImportExport: false,
@@ -1377,7 +1377,7 @@ const PERMISSIONS = {
     canExportSales: false,
   },
   [ROLES.STAFF]: {
-    tabs: ["sale"],
+    tabs: ["sale", "guest", "queue", "track", "fitting", "pickup", "cashier"],
     canEditProducts: false,
     canManageSchools: false,
     canImportExport: false,
@@ -1397,16 +1397,31 @@ const PERMISSIONS = {
 const STAFF_PERMISSION_ROLES = [ROLES.ADMIN, ROLES.MANAGER, ROLES.SALES, ROLES.STAFF];
 const STAFF_PERMISSION_TAB_LABELS = {
   sale: "銷售",
+  guest: "客人登記",
+  queue: "排隊",
+  track: "查單",
+  fitting: "度身",
+  pickup: "執貨",
+  cashier: "收銀",
   products: "商品",
-  records: "銷售記錄",
-  staff: "員工管理",
-  qrcode: "QR Code",
-  track: "訂單追蹤",
+  records: "記錄",
+  staff: "員工",
+};
+const STAFF_ROUTE_TABS = {
+  "/sale": "sale",
+  "/products": "products",
+  "/records": "records",
+  "/staff": "staff",
+  "/track": "track",
+  "/queue": "queue",
+  "/fitting": "fitting",
+  "/pickup": "pickup",
+  "/cashier": "cashier",
 };
 
 function StaffRolePermissionsTable() {
   const rows = [
-    { label: "可使用分頁", value: (permissions) => permissions.tabs.map((tab) => STAFF_PERMISSION_TAB_LABELS[tab]).join("、") || "—" },
+    { label: "可使用分頁", value: (permissions) => permissions.tabs.map((tab) => STAFF_PERMISSION_TAB_LABELS[tab]) },
     { label: "編輯商品價格及尺碼", value: (permissions) => permissions.canEditProducts ? "可以" : "—" },
     { label: "管理學校及款式", value: (permissions) => permissions.canManageSchools ? "可以" : "—" },
     { label: "商品 CSV 匯入／匯出", value: (permissions) => permissions.canImportExport ? "可以" : "—" },
@@ -1438,11 +1453,20 @@ function StaffRolePermissionsTable() {
                 <th scope="row" style={{ padding: "8px 10px", borderBottom: "1px solid #EEF0F2", fontWeight: 600, whiteSpace: "nowrap" }}>
                   {row.label}
                 </th>
-                {STAFF_PERMISSION_ROLES.map((role) => (
-                  <td key={role} style={{ padding: "8px 10px", borderBottom: "1px solid #EEF0F2", color: "#444" }}>
-                    {row.value(PERMISSIONS[role], role)}
-                  </td>
-                ))}
+                {STAFF_PERMISSION_ROLES.map((role) => {
+                  const value = row.value(PERMISSIONS[role], role);
+                  return (
+                    <td key={role} style={{ padding: "8px 10px", borderBottom: "1px solid #EEF0F2", color: "#444" }}>
+                      {Array.isArray(value)
+                        ? value.map((label) => (
+                          <span key={label} style={{ display: "inline-block", margin: "1px 4px 1px 0", padding: "2px 5px", borderRadius: 4, background: "#EEF3F8", whiteSpace: "nowrap" }}>
+                            {label}
+                          </span>
+                        ))
+                        : value}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
@@ -1757,6 +1781,7 @@ const PageLoading = () => (
 export default function UniformPOS() {
   const navigate = useNavigate();
   const location = useLocation();
+  const routeTab = STAFF_ROUTE_TABS[location.pathname];
   const [loaded, setLoaded] = useState(false); // 啟用正確的初始化以從 Supabase 加載產品
   const [products, setProducts] = useState(() => enforceAuthoritativeProducts(DEFAULT_PRODUCTS));
   const [deletedSchools, setDeletedSchools] = useState([]);
@@ -2003,13 +2028,10 @@ export default function UniformPOS() {
     };
   }, []);
 
-  // 目前登入角色見唔到嘅分頁，自動跳去佢見到嘅第一個（例如店員唔應停留喺「商品」）
+  // Keep direct URLs and the directory menu subject to the same role permissions.
   useEffect(() => {
-    const newTabsAlwaysAllowed = ["guest", "queue", "fitting", "pickup", "cashier"];
-    if (session && !newTabsAlwaysAllowed.includes(tab) && !perms.tabs.includes(tab)) {
-      setTab(perms.tabs[0]);
-    }
-  }, [perms, session, tab]);
+    if (session && routeTab && perms.tabs.includes(routeTab)) setTab(routeTab);
+  }, [perms, routeTab, session]);
 
   // 讀返呢部裝置上次揀嘅學校（個人儲存，唔係共用）
   useEffect(() => {
@@ -3247,18 +3269,7 @@ export default function UniformPOS() {
     }
   };
 
-  const directoryIds = session?.role === ROLES.SALES
-    ? perms?.tabs || []
-    : [
-      "sale",
-      "guest",
-      "queue",
-      "track",
-      "fitting",
-      "pickup",
-      "cashier",
-      ...(perms?.tabs || []),
-    ];
+  const directoryIds = perms?.tabs || [];
 
   if (location.pathname === "/checkin") {
     return <Suspense fallback={<PageLoading />}><CustomerCheckinPage school={publicRouteSchool} schools={customerSchools} schoolMeta={schoolMeta} onSubmit={handleGuestSubmit} /></Suspense>;
@@ -3298,6 +3309,10 @@ export default function UniformPOS() {
 
   if (!session) {
     return <LoginScreen accounts={accounts} onLogin={login} onAuthLogin={loginWithAuth} useSupabaseAuth={isSupabaseAuthEnabled} />;
+  }
+
+  if (routeTab && !perms.tabs.includes(routeTab)) {
+    return <Navigate to="/menu" replace />;
   }
 
   return (
