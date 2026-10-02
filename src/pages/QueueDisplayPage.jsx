@@ -61,6 +61,7 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
   const lastAnnouncedCallRef = useRef("");
   const chimeAudioRef = useRef(null);
   const refreshInFlightRef = useRef(false);
+  const refreshPendingRef = useRef(false);
 
   useEffect(() => {
     const audio = new Audio("/audio/queue-chime.mpeg");
@@ -75,7 +76,11 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
   useEffect(() => {
     let active = true;
     const refreshPublicDisplay = async () => {
-      if (!active || refreshInFlightRef.current) return;
+      if (!active) return;
+      if (refreshInFlightRef.current) {
+        refreshPendingRef.current = true;
+        return;
+      }
       refreshInFlightRef.current = true;
       try {
         const next = await queueOrderService.getPublicQueueDisplay({
@@ -100,15 +105,27 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
         console.warn("public queue display refresh failed", error);
       } finally {
         refreshInFlightRef.current = false;
+        if (active && refreshPendingRef.current) {
+          refreshPendingRef.current = false;
+          window.setTimeout(refreshPublicDisplay, 0);
+        }
       }
     };
     refreshPublicDisplay();
+    const subscription = queueOrderService.subscribePublicQueueDisplay({
+      schoolId: schoolName,
+      outletName,
+      counterName: laneCounterName,
+      serviceType,
+      onChange: refreshPublicDisplay,
+    });
     // Keep the public display nearly real-time while retaining polling as a
     // reliable fallback when Realtime is unavailable on the display device.
     const timer = window.setInterval(refreshPublicDisplay, 1000);
     return () => {
       active = false;
       window.clearInterval(timer);
+      subscription.unsubscribe();
     };
   }, [schoolName, outletName, laneCounterName, serviceType]);
 

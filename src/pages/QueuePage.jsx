@@ -31,6 +31,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
   useEffect(() => {
     const audio = new Audio("/audio/queue-chime.mpeg");
     audio.preload = "auto";
+    audio.load();
     chimeAudioRef.current = audio;
     return () => {
       audio.pause();
@@ -103,12 +104,15 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
   const callNext = async () => {
     setCalling(true);
     setCallError("");
+    if (rows.length > 0) playCallChime();
     try {
       const next = serviceType === QUEUE_SERVICE.PICKUP
         ? await queueOrderService.callNextPickup({ schoolId: currentSchoolId, outletName, calledBy })
         : await queueOrderService.callNextFitting({ schoolId: currentSchoolId, outletName, calledBy });
       setCounter(next);
-      if (next?.current_queue_number) playCallChime();
+      if (next?.current_queue_number) {
+        queueOrderService.notifyPublicQueueDisplay({ schoolId: currentSchoolId, outletName, counterName, serviceType });
+      }
     } catch (error) {
       setCallError(error.message || "叫號失敗，請先執行 queue-counter.sql");
     } finally {
@@ -163,6 +167,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     setCalling(true);
     setCallError("");
     const targetStatus = serviceType === QUEUE_SERVICE.PICKUP ? ORDER_STATUS.READY : ORDER_STATUS.PENDING;
+    playCallChime();
     try {
       await queueOrderService.updateStatus(visit.id, targetStatus, {}, currentSchoolId, ORDER_STATUS.SKIPPED);
       setSyncedVisits((previous) => (previous || []).map((order) => (
@@ -178,7 +183,9 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
         calledBy,
       });
       setCounter(next);
-      if (next?.current_queue_number) playCallChime();
+      if (next?.current_queue_number) {
+        queueOrderService.notifyPublicQueueDisplay({ schoolId: currentSchoolId, outletName, counterName, serviceType });
+      }
     } catch (error) {
       setCallError(error.message || "重新叫過號失敗");
     } finally {
@@ -212,12 +219,15 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
   const recallCurrentCall = async () => {
     setCalling(true);
     setCallError("");
+    if (counter?.current_queue_number) playCallChime();
     try {
-        const next = serviceType === QUEUE_SERVICE.PICKUP
-          ? await queueOrderService.recallPickup({ schoolId: currentSchoolId, outletName })
-          : await queueOrderService.recallFitting({ schoolId: currentSchoolId, outletName });
+      const next = serviceType === QUEUE_SERVICE.PICKUP
+        ? await queueOrderService.recallPickup({ schoolId: currentSchoolId, outletName })
+        : await queueOrderService.recallFitting({ schoolId: currentSchoolId, outletName });
       setCounter(next);
-      if (next?.current_queue_number) playCallChime();
+      if (next?.current_queue_number) {
+        queueOrderService.notifyPublicQueueDisplay({ schoolId: currentSchoolId, outletName, counterName, serviceType });
+      }
     } catch (error) {
       setCallError(error.message || "重叫失敗");
     } finally {

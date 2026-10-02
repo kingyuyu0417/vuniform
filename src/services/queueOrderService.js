@@ -51,6 +51,8 @@ const writeQueueCache = (rows) => {
 };
 
 const counterKey = (schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING) => `${safeSchoolId(schoolId)}::${outletName || "default-outlet"}::${counterName || "main"}::${serviceType}`;
+const publicQueueDisplayTopic = (schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING) =>
+  `public-queue-display-${encodeURIComponent(counterKey(schoolId, outletName, counterName, serviceType))}`;
 const readCounterCache = () => {
   if (typeof window === "undefined") return {};
   try {
@@ -179,6 +181,29 @@ export const queueOrderService = {
     });
     if (error) throw error;
     return data || null;
+  },
+
+  subscribePublicQueueDisplay({ schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING, onChange }) {
+    if (!isSupabaseConfigured || !supabase) return { unsubscribe() {} };
+    const channel = supabase
+      .channel(publicQueueDisplayTopic(schoolId, outletName, counterName, serviceType))
+      .on("broadcast", { event: "counter-updated" }, () => onChange?.())
+      .subscribe();
+    return { unsubscribe() { void supabase.removeChannel(channel); } };
+  },
+
+  notifyPublicQueueDisplay({ schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING } = {}) {
+    if (!isSupabaseConfigured || !supabase) return;
+    const channel = supabase.channel(publicQueueDisplayTopic(schoolId, outletName, counterName, serviceType));
+    channel.subscribe((status) => {
+      if (status !== "SUBSCRIBED") return;
+      void channel.send({ type: "broadcast", event: "counter-updated", payload: {} })
+        .then((result) => {
+          if (result !== "ok") console.warn("public queue display update broadcast failed", result);
+        })
+        .catch((error) => console.warn("public queue display update broadcast failed", error))
+        .finally(() => { void supabase.removeChannel(channel); });
+    });
   },
 
   async createOrder(payload) {
