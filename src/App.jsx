@@ -6828,20 +6828,28 @@ function AuthStaffTab({ manageStaff, currentId }) {
       return;
     }
     setBusy(true);
-    const result = await manageStaff({
-      action: "update_profile",
-      id: member.id,
-      display_name: staffEdit.display_name.trim(),
-      email: staffEdit.email.trim(),
-      password: staffEdit.password,
-    });
-    setMessage(result.error || "員工帳戶資料已更新。");
-    if (!result.error) {
+    try {
+      const result = await manageStaff({
+        action: "update_profile",
+        id: member.id,
+        display_name: staffEdit.display_name.trim(),
+        email: staffEdit.email.trim(),
+        password: staffEdit.password,
+      });
+      if (result.error) {
+        setMessage(`儲存帳戶設定失敗：${result.error}`);
+        return;
+      }
+      setMessage("員工帳戶資料已更新。");
       setExpandedStaffId(null);
       setStaffEdit(null);
       await loadStaff();
+    } catch (error) {
+      console.error("儲存員工帳戶設定失敗", error);
+      setMessage(`儲存帳戶設定失敗：${error instanceof Error ? error.message : "無法連線至員工管理服務"}`);
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   };
 
   const disable = async (id) => {
