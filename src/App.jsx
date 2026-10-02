@@ -514,6 +514,19 @@ const OUTLETS = [
   { name: "屯門（鳴琴）分店", address: "屯門建群街3號永發工業大廈4樓B室（近輕鐵鳴琴站／建安站）", phone: "3691 9897", region: "新界區", districts: ["屯門區"] },
   { name: "沙田分店", address: "沙田石門安群街3號京瑞廣場一期5樓A室（近屯馬線石門站C出口）", phone: "2637 3313", region: "新界區", districts: ["沙田區", "北區", "西貢區", "葵青區", "離島區"] },
 ];
+const BRANCH_OUTLET_NAMES = {
+  "sheung-wan": "上環分店",
+  "fortress-hill": "炮台山分店",
+  "prince-edward": "太子分店",
+  rainbow: "彩虹分店",
+  "kowloon-city": "九龍城分店",
+  "tsuen-wan": "荃灣分店",
+  "tai-po": "大埔分店",
+  "yuen-long": "元朗分店",
+  "tuen-mun-butterfly": "屯門（蝴蝶）分店",
+  "tuen-mun-ming-kum": "屯門（鳴琴）分店",
+  "sha-tin": "沙田分店",
+};
 
 const explicitOutletNameForSchool = (school, schoolMeta = {}) => (
   schoolMeta[school]?.outletName
@@ -1853,7 +1866,14 @@ export default function UniformPOS() {
   const accessibleProducts = !isSupabaseAuthEnabled || session?.role === ROLES.ADMIN
     ? products
     : products.filter((product) => product.branch_id === session?.branchId || branchSchoolIds[schoolOf(product)] === session?.branchId);
-  const schools = listSchools(accessibleProducts);
+  const branchAssignedSchools = isSupabaseAuthEnabled && session?.role !== ROLES.ADMIN
+    ? Object.entries(branchSchoolIds)
+      .filter(([, branchId]) => branchId === session?.branchId)
+      .map(([school]) => school)
+    : [];
+  const schools = Array.from(new Set([...listSchools(accessibleProducts), ...branchAssignedSchools]))
+    .filter((school) => school && !deletedSchoolsRuntime.has(school))
+    .sort((a, b) => a.localeCompare(b, "zh-Hant"));
 
   useEffect(() => {
     window.storage.get("held-sales", false).then((saved) => {
@@ -3488,6 +3508,7 @@ export default function UniformPOS() {
           <StoreSchoolSwitcher
             schools={schools}
             schoolMeta={schoolMeta}
+            branchSchoolIds={branchSchoolIds}
             selectedSchool={selectedSchool}
             onPick={pickSchool}
           />
@@ -6293,18 +6314,19 @@ function SchoolChip({ label, selected, onClick, sub }) {
   );
 }
 
-function StoreSchoolSwitcher({ schools, schoolMeta, selectedSchool, onPick }) {
+function StoreSchoolSwitcher({ schools, schoolMeta, branchSchoolIds = {}, selectedSchool, onPick }) {
   const [selectedOutlet, setSelectedOutlet] = useState(null);
   const [schoolType, setSchoolType] = useState(null);
   const [query, setQuery] = useState("");
-  const visibleSchools = selectedOutlet ? schools.filter((school) => outletNameForSchool(school, schoolMeta) === selectedOutlet) : [];
+  const outletForSchool = (school) => BRANCH_OUTLET_NAMES[branchSchoolIds[school]] || outletNameForSchool(school, schoolMeta);
+  const visibleSchools = selectedOutlet ? schools.filter((school) => outletForSchool(school) === selectedOutlet) : [];
   const schoolTypes = ["幼稚園", "小學", "中學", "其他"];
   const typedSchools = schoolType ? visibleSchools.filter((school) => {
     const level = metaOf(schoolMeta, school).level;
     return schoolType === "其他" ? !["幼稚園", "小學", "中學"].includes(level) : level === schoolType;
   }) : [];
   const matchedSchools = query.trim() ? typedSchools.filter((school) => school.includes(query.trim())) : typedSchools;
-  const availableOutlets = OUTLETS.filter((outlet) => schools.some((school) => outletNameForSchool(school, schoolMeta) === outlet.name));
+  const availableOutlets = OUTLETS.filter((outlet) => schools.some((school) => outletForSchool(school) === outlet.name));
   if (!selectedOutlet) return <div style={{ marginTop: 12, paddingBottom: 4 }}><div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginBottom: 6 }}>第一步：揀門店</div><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{availableOutlets.map((outlet) => <SchoolChip key={outlet.name} label={outlet.name} sub={`${schools.filter((school) => outletNameForSchool(school, schoolMeta) === outlet.name).length}間學校`} selected={false} onClick={() => { setSelectedOutlet(outlet.name); setSchoolType(null); setQuery(""); }} />)}</div></div>;
   if (!schoolType) return <div style={{ marginTop: 12, paddingBottom: 4 }}><button className="pos-btn" onClick={() => setSelectedOutlet(null)} style={{ background: "none", color: "rgba(255,255,255,0.75)", fontSize: 11, padding: 0, marginBottom: 8 }}>更改分店</button><div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginBottom: 6 }}>第二步：揀學校類別</div><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{schoolTypes.map((type) => <SchoolChip key={type} label={type} sub={`${visibleSchools.filter((school) => { const level = metaOf(schoolMeta, school).level; return type === "其他" ? !schoolTypes.slice(0, 3).includes(level) : level === type; }).length}間學校`} selected={false} onClick={() => { setSchoolType(type); setQuery(""); }} />)}</div></div>;
   return <div style={{ marginTop: 12, paddingBottom: 4 }}><button className="pos-btn" onClick={() => { setSchoolType(null); setQuery(""); }} style={{ background: "none", color: "rgba(255,255,255,0.75)", fontSize: 11, padding: 0, marginBottom: 8 }}>更改學校類別</button>{typedSchools.length > 6 && <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜尋學校名稱…" style={{ width: "100%", padding: 8, borderRadius: 8, border: "1px solid rgba(255,255,255,0.35)", background: "rgba(255,255,255,0.12)", color: "#fff", fontSize: 13, boxSizing: "border-box", marginBottom: 10 }} />}<div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginBottom: 6 }}>第三步：揀學校（{typedSchools.length}間）</div><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{matchedSchools.length ? matchedSchools.map((school) => <SchoolChip key={school} label={school} selected={selectedSchool === school} onClick={() => onPick(school)} />) : <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>此分類沒有學校。</div>}</div></div>;
