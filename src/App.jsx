@@ -1522,7 +1522,9 @@ const buildReceiptUrl = (order, language = "zh") => {
     binary += String.fromCharCode(byte);
   });
   const encoded = btoa(binary);
-  const publicUrl = (import.meta.env.VITE_PUBLIC_APP_URL || window.location.origin).replace(/\/$/, "");
+  const publicUrl = (import.meta.env.PROD
+    ? "https://uniform-pos-app-current.pages.dev"
+    : import.meta.env.VITE_PUBLIC_APP_URL || window.location.origin).replace(/\/$/, "");
   return `${publicUrl}/receipt.html?lang=${language}&data=${encodeURIComponent(encoded)}`;
 };
 

@@ -4,6 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>電子收據</title>
+  <script>
+    if (
+      location.hostname === "main.uniform-pos-app-current.pages.dev"
+      && (location.pathname === "/receipt" || location.pathname === "/receipt.html")
+    ) {
+      location.replace(`https://uniform-pos-app-current.pages.dev${location.pathname}${location.search}${location.hash}`);
+    }
+  </script>
   <style>
     :root { color: #17212b; font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif; }
     body { margin: 0; background: #eef1f5; }
