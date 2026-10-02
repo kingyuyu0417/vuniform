@@ -6819,8 +6819,8 @@ function AuthStaffTab({ manageStaff, currentId }) {
 
   const saveStaffDetails = async (member) => {
     if (!staffEdit || staffEdit.id !== member.id) return;
-    if (!staffEdit.display_name.trim() || !staffEdit.email.trim()) {
-      setMessage("請輸入員工姓名及電郵。");
+    if (!staffEdit.display_name.trim()) {
+      setMessage("請輸入員工姓名。");
       return;
     }
     if (staffEdit.password && staffEdit.password.length < 8) {
@@ -6892,8 +6892,9 @@ function AuthStaffTab({ manageStaff, currentId }) {
           {expandedStaffId === member.id && staffEdit?.id === member.id && (
             <div style={{ marginTop: 10, padding: 12, borderRadius: 8, background: "#F7F9FC", display: "grid", gap: 8 }}>
               <input aria-label="員工姓名" value={staffEdit.display_name} onChange={(e) => setStaffEdit({ ...staffEdit, display_name: e.target.value })} placeholder="員工姓名／角色名稱" style={{ width: "100%", padding: 9, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box" }} />
-              <input aria-label="員工電郵" type="email" value={staffEdit.email} onChange={(e) => setStaffEdit({ ...staffEdit, email: e.target.value })} placeholder="員工電郵" style={{ width: "100%", padding: 9, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box" }} />
+              <input aria-label="員工電郵" type="email" value={staffEdit.email} onChange={(e) => setStaffEdit({ ...staffEdit, email: e.target.value })} placeholder="輸入新電郵（留空不更改）" style={{ width: "100%", padding: 9, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box" }} />
               <input aria-label="設定新密碼" type="password" value={staffEdit.password} onChange={(e) => setStaffEdit({ ...staffEdit, password: e.target.value })} placeholder="設定新密碼（留空不更改；最少 8 字元）" autoComplete="new-password" style={{ width: "100%", padding: 9, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box" }} />
+              {!staffEdit.email && <div style={{ color: "#667085", fontSize: 11 }}>目前暫時無法從 Auth 讀取電郵；員工清單不受影響。</div>}
               <div style={{ color: "#667085", fontSize: 11 }}>現有密碼經加密儲存，無法查看；如需更改請輸入新密碼。</div>
               <button className="pos-btn" type="button" onClick={() => saveStaffDetails(member)} disabled={busy} style={{ padding: 9, borderRadius: 8, background: "#1F3A5F", color: "#fff", fontWeight: 700 }}>
                 {busy ? "儲存中…" : "儲存帳戶設定"}

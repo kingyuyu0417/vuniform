@@ -48,13 +48,7 @@ Deno.serve(async (request) => {
     ]);
     if (staffResult.error) return json({ error: staffResult.error.message }, 400);
     if (branchResult.error) return json({ error: branchResult.error.message }, 400);
-    const staff = await Promise.all((staffResult.data || []).map(async (member) => {
-      const { data, error } = await adminClient.auth.admin.getUserById(member.id);
-      if (error) return { error: error.message };
-      return { ...member, email: data.user.email || "" };
-    }));
-    const staffError = staff.find((member) => "error" in member);
-    if (staffError && "error" in staffError) return json({ error: staffError.error }, 400);
+    const staff = (staffResult.data || []).map((member) => ({ ...member, email: "" }));
     return json({ staff, branches: branchResult.data || [] });
   }
 
@@ -130,7 +124,7 @@ Deno.serve(async (request) => {
     const displayName = String(body.display_name || "").trim();
     const email = String(body.email || "").trim().toLowerCase();
     const password = String(body.password || "");
-    if (!id || !displayName || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!id || !displayName || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
       return json({ error: "請提供有效的員工姓名及電郵。" }, 400);
     }
     if (password && password.length < 8) return json({ error: "新密碼最少需要 8 個字元。" }, 400);
@@ -143,19 +137,20 @@ Deno.serve(async (request) => {
     if (targetError) return json({ error: targetError.message }, 400);
     if (!target) return json({ error: "找不到員工帳戶。" }, 404);
 
-    const { error: authUpdateError } = await adminClient.auth.admin.updateUserById(id, {
-      email,
-      email_confirm: true,
-      ...(password ? { password } : {}),
-    });
-    if (authUpdateError) return json({ error: authUpdateError.message }, 400);
+    if (email || password) {
+      const { error: authUpdateError } = await adminClient.auth.admin.updateUserById(id, {
+        ...(email ? { email, email_confirm: true } : {}),
+        ...(password ? { password } : {}),
+      });
+      if (authUpdateError) return json({ error: authUpdateError.message }, 400);
+    }
 
     const { error: profileUpdateError } = await adminClient
       .from("staff_profiles")
       .update({ display_name: displayName, updated_at: new Date().toISOString() })
       .eq("id", id);
     if (profileUpdateError) {
-      return json({ error: `電郵／密碼已更新，但儲存員工姓名失敗：${profileUpdateError.message}` }, 400);
+      return json({ error: `帳戶設定已更新，但儲存員工姓名失敗：${profileUpdateError.message}` }, 400);
     }
     return json({ ok: true });
   }
