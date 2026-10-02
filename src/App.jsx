@@ -6723,6 +6723,8 @@ function LoginScreen({ accounts, onLogin, onAuthLogin, useSupabaseAuth = false }
 function AuthStaffTab({ manageStaff, currentId }) {
   const [staff, setStaff] = useState([]);
   const [branches, setBranches] = useState([]);
+  const [expandedStaffId, setExpandedStaffId] = useState(null);
+  const [staffEdit, setStaffEdit] = useState(null);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [temporaryPassword, setTemporaryPassword] = useState("");
@@ -6800,6 +6802,48 @@ function AuthStaffTab({ manageStaff, currentId }) {
     setBusy(false);
   };
 
+  const toggleStaffDetails = (member) => {
+    if (expandedStaffId === member.id) {
+      setExpandedStaffId(null);
+      setStaffEdit(null);
+      return;
+    }
+    setExpandedStaffId(member.id);
+    setStaffEdit({
+      id: member.id,
+      display_name: member.display_name || "",
+      email: member.email || "",
+      password: "",
+    });
+  };
+
+  const saveStaffDetails = async (member) => {
+    if (!staffEdit || staffEdit.id !== member.id) return;
+    if (!staffEdit.display_name.trim() || !staffEdit.email.trim()) {
+      setMessage("請輸入員工姓名及電郵。");
+      return;
+    }
+    if (staffEdit.password && staffEdit.password.length < 8) {
+      setMessage("新密碼最少需要 8 個字元。");
+      return;
+    }
+    setBusy(true);
+    const result = await manageStaff({
+      action: "update_profile",
+      id: member.id,
+      display_name: staffEdit.display_name.trim(),
+      email: staffEdit.email.trim(),
+      password: staffEdit.password,
+    });
+    setMessage(result.error || "員工帳戶資料已更新。");
+    if (!result.error) {
+      setExpandedStaffId(null);
+      setStaffEdit(null);
+      await loadStaff();
+    }
+    setBusy(false);
+  };
+
   const disable = async (id) => {
     if (id === currentId || !window.confirm("確定停用這位員工？")) return;
     setBusy(true);
@@ -6828,16 +6872,34 @@ function AuthStaffTab({ manageStaff, currentId }) {
       </div>
       {message && <div style={{ fontSize: 12, color: message.includes("失敗") || message.includes("請") || message.includes("無法") ? "#B42318" : "#28784B", marginBottom: 10 }}>{message}</div>}
       {staff.map((member) => (
-        <div key={member.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", borderBottom: "1px solid #eee" }}>
-          <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 600 }}>{member.display_name}</div><div style={{ fontSize: 10, color: "#999", overflow: "hidden", textOverflow: "ellipsis" }}>{member.id}</div></div>
-          <select value={member.role} onChange={(e) => changeRole(member.id, e.target.value)} disabled={busy} style={{ padding: 6, borderRadius: 6, border: "1px solid #ccc" }}>
-            {STAFF_PERMISSION_ROLES.map((staffRole) => <option key={staffRole} value={staffRole}>{ROLE_LABEL[staffRole] || staffRole}</option>)}
-          </select>
-          <select value={member.branch_id || ""} onChange={(e) => changeBranch(member.id, e.target.value)} disabled={busy} style={{ maxWidth: 110, padding: 6, borderRadius: 6, border: "1px solid #ccc", fontSize: 11 }}>
-            <option value="">未分配分店</option>
-            {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
-          </select>
-          <button className="pos-btn" onClick={() => disable(member.id)} disabled={busy || member.id === currentId} style={{ padding: "6px 8px", borderRadius: 6, background: "#fff", border: "1px solid #f0c0c0", color: "#c33" }}>停用</button>
+        <div key={member.id} style={{ padding: "10px 0", borderBottom: "1px solid #eee" }}>
+          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+            <div style={{ flex: "1 1 130px", minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>{member.display_name}</div>
+            </div>
+            <select aria-label={`${member.display_name}角色`} value={member.role} onChange={(e) => changeRole(member.id, e.target.value)} disabled={busy} style={{ padding: 6, borderRadius: 6, border: "1px solid #ccc" }}>
+              {STAFF_PERMISSION_ROLES.map((staffRole) => <option key={staffRole} value={staffRole}>{ROLE_LABEL[staffRole] || staffRole}</option>)}
+            </select>
+            <select aria-label={`${member.display_name}分店`} value={member.branch_id || ""} onChange={(e) => changeBranch(member.id, e.target.value)} disabled={busy} style={{ maxWidth: 130, padding: 6, borderRadius: 6, border: "1px solid #ccc", fontSize: 11 }}>
+              <option value="">未分配分店</option>
+              {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+            </select>
+            <button className="pos-btn" type="button" onClick={() => toggleStaffDetails(member)} disabled={busy} aria-expanded={expandedStaffId === member.id} style={{ padding: "6px 8px", borderRadius: 6, background: "#EEF3F8", color: "#1F3A5F", whiteSpace: "nowrap" }}>
+              {expandedStaffId === member.id ? "收起" : "帳戶設定"}
+            </button>
+            <button className="pos-btn" onClick={() => disable(member.id)} disabled={busy || member.id === currentId} style={{ padding: "6px 8px", borderRadius: 6, background: "#fff", border: "1px solid #f0c0c0", color: "#c33" }}>停用</button>
+          </div>
+          {expandedStaffId === member.id && staffEdit?.id === member.id && (
+            <div style={{ marginTop: 10, padding: 12, borderRadius: 8, background: "#F7F9FC", display: "grid", gap: 8 }}>
+              <input aria-label="員工姓名" value={staffEdit.display_name} onChange={(e) => setStaffEdit({ ...staffEdit, display_name: e.target.value })} placeholder="員工姓名／角色名稱" style={{ width: "100%", padding: 9, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box" }} />
+              <input aria-label="員工電郵" type="email" value={staffEdit.email} onChange={(e) => setStaffEdit({ ...staffEdit, email: e.target.value })} placeholder="員工電郵" style={{ width: "100%", padding: 9, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box" }} />
+              <input aria-label="設定新密碼" type="password" value={staffEdit.password} onChange={(e) => setStaffEdit({ ...staffEdit, password: e.target.value })} placeholder="設定新密碼（留空不更改；最少 8 字元）" autoComplete="new-password" style={{ width: "100%", padding: 9, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box" }} />
+              <div style={{ color: "#667085", fontSize: 11 }}>現有密碼經加密儲存，無法查看；如需更改請輸入新密碼。</div>
+              <button className="pos-btn" type="button" onClick={() => saveStaffDetails(member)} disabled={busy} style={{ padding: 9, borderRadius: 8, background: "#1F3A5F", color: "#fff", fontWeight: 700 }}>
+                {busy ? "儲存中…" : "儲存帳戶設定"}
+              </button>
+            </div>
+          )}
         </div>
       ))}
     </div>

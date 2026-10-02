@@ -42,13 +42,20 @@ Deno.serve(async (request) => {
 
   if (action === "list") {
     const query = adminClient.from("staff_profiles").select("id, display_name, role, branch_id, created_at").order("created_at");
-    const [staffResult, branchResult] = await Promise.all([
+    const [staffResult, branchResult, usersResult] = await Promise.all([
       actor.role === "admin" ? query : query.eq("branch_id", actor.branch_id),
       adminClient.from("branches").select("id, name, address, phone").eq("active", true).order("name"),
+      adminClient.auth.admin.listUsers({ perPage: 1000 }),
     ]);
     if (staffResult.error) return json({ error: staffResult.error.message }, 400);
     if (branchResult.error) return json({ error: branchResult.error.message }, 400);
-    return json({ staff: staffResult.data || [], branches: branchResult.data || [] });
+    if (usersResult.error) return json({ error: usersResult.error.message }, 400);
+    const emailsById = new Map(usersResult.data.users.map((account) => [account.id, account.email || ""]));
+    const staff = (staffResult.data || []).map((member) => ({
+      ...member,
+      email: emailsById.get(member.id) || "",
+    }));
+    return json({ staff, branches: branchResult.data || [] });
   }
 
   if (action === "list_branches") {
@@ -115,6 +122,41 @@ Deno.serve(async (request) => {
     if (actor.role !== "admin" && branchId && branchId !== actor.branch_id) return json({ error: "Invalid staff branch" }, 400);
     const { error } = await adminClient.from("staff_profiles").update({ role, ...(branchId ? { branch_id: branchId } : {}), updated_at: new Date().toISOString() }).eq("id", id);
     if (error) return json({ error: error.message }, 400);
+    return json({ ok: true });
+  }
+
+  if (action === "update_profile") {
+    const id = String(body.id || "").trim();
+    const displayName = String(body.display_name || "").trim();
+    const email = String(body.email || "").trim().toLowerCase();
+    const password = String(body.password || "");
+    if (!id || !displayName || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return json({ error: "請提供有效的員工姓名及電郵。" }, 400);
+    }
+    if (password && password.length < 8) return json({ error: "新密碼最少需要 8 個字元。" }, 400);
+
+    const { data: target, error: targetError } = await adminClient
+      .from("staff_profiles")
+      .select("id")
+      .eq("id", id)
+      .maybeSingle();
+    if (targetError) return json({ error: targetError.message }, 400);
+    if (!target) return json({ error: "找不到員工帳戶。" }, 404);
+
+    const { error: authUpdateError } = await adminClient.auth.admin.updateUserById(id, {
+      email,
+      email_confirm: true,
+      ...(password ? { password } : {}),
+    });
+    if (authUpdateError) return json({ error: authUpdateError.message }, 400);
+
+    const { error: profileUpdateError } = await adminClient
+      .from("staff_profiles")
+      .update({ display_name: displayName, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (profileUpdateError) {
+      return json({ error: `電郵／密碼已更新，但儲存員工姓名失敗：${profileUpdateError.message}` }, 400);
+    }
     return json({ ok: true });
   }
 
