@@ -94,6 +94,8 @@
         "男生西裝褸配背心": "Boys' Blazer with Waistcoat",
         "女裝西裝褸配背心": "Girls' Blazer with Waistcoat",
         "深炭灰色西裝褸配厚抓毛背心": "Dark Charcoal Grey Blazer with Fleece Waistcoat",
+        "V領長冷": "V-neck Long-sleeve Jumper",
+        "男呔": "Boys' Tie",
         "男女生 - 運動衫": "Unisex Sports Shirt",
         "男女生 - 運動套裝": "Unisex Sports Set",
         "男女生 - 冷衫": "Unisex Jumper",
@@ -170,17 +172,23 @@
         ? { text: exactSchoolTranslations[name], translated: true }
         : { text: name, translated: !/[\u3400-\u9fff]/.test(name) };
     };
+    const englishSizeValue = (value) => {
+      const size = String(value == null ? "" : value).trim();
+      if (size === "均碼") return "One size";
+      return size.replace(/^(\d+)\s*碼$/, "$1");
+    };
     const formatSizeDisplay = (productName, size, length, english = false) => {
       const labels = dimensionLabels(productName);
+      const displayedSize = english ? englishSizeValue(size) : size;
       const translatedLabels = english
         ? { length: labels.length === "裙長" ? "Skirt length" : labels.length === "袖長" ? "Sleeve length" : labels.length === "褲長" ? "Trouser length" : "Length", size: labels.size === "上圍" ? "Chest" : labels.size === "領圍" ? "Collar" : labels.size === "腰圍" ? "Waist" : "Size" }
         : labels;
       if (length && size) {
-        return `${translatedLabels.length}: ${text(english ? translateAttribute(length) : length)} (${translatedLabels.size}: ${text(english ? translateAttribute(size) : size)})`;
+        return `${translatedLabels.length}: ${text(english ? translateAttribute(length) : length)} (${translatedLabels.size}: ${text(english ? translateAttribute(displayedSize) : size)})`;
       } else if (length) {
         return `${translatedLabels.length}: ${text(english ? translateAttribute(length) : length)}`;
       } else {
-        return `${translatedLabels.size}: ${text(english ? translateAttribute(size) : size)}`;
+        return `${translatedLabels.size}: ${text(english ? translateAttribute(displayedSize) : size)}`;
       }
     };
     const translateAttribute = (value) => {
