@@ -42,11 +42,13 @@ Deno.serve(async (request) => {
 
   if (action === "list") {
     const query = adminClient.from("staff_profiles").select("id, display_name, role, branch_id, created_at").order("created_at");
-    const { data, error } = actor.role === "admin"
-      ? await query
-      : await query.eq("branch_id", actor.branch_id);
-    if (error) return json({ error: error.message }, 400);
-    return json({ staff: data || [] });
+    const [staffResult, branchResult] = await Promise.all([
+      actor.role === "admin" ? query : query.eq("branch_id", actor.branch_id),
+      adminClient.from("branches").select("id, name, address, phone").eq("active", true).order("name"),
+    ]);
+    if (staffResult.error) return json({ error: staffResult.error.message }, 400);
+    if (branchResult.error) return json({ error: branchResult.error.message }, 400);
+    return json({ staff: staffResult.data || [], branches: branchResult.data || [] });
   }
 
   if (action === "list_branches") {

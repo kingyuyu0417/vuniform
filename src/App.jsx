@@ -2045,7 +2045,21 @@ export default function UniformPOS() {
 
   const manageStaff = async (payload) => {
     if (!supabase) return { error: "Supabase 未設定" };
-    const { data, error } = await supabase.functions.invoke("manage-staff", { body: payload });
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) return { error: sessionError.message };
+    let authSession = sessionData.session;
+    if (!authSession) return { error: "登入已失效，請重新登入後再試。" };
+    if ((authSession.expires_at || 0) <= Math.floor(Date.now() / 1000) + 60) {
+      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !refreshed.session) {
+        return { error: refreshError?.message || "登入已失效，請重新登入後再試。" };
+      }
+      authSession = refreshed.session;
+    }
+    const { data, error } = await supabase.functions.invoke("manage-staff", {
+      body: payload,
+      headers: { Authorization: `Bearer ${authSession.access_token}` },
+    });
     let functionError = data?.error || "";
     if (!functionError && error?.context) {
       try {
@@ -6596,19 +6610,14 @@ function AuthStaffTab({ manageStaff, currentId }) {
   const loadStaff = async () => {
     const result = await manageStaff({ action: "list" });
     if (result.error) setMessage("讀取員工失敗：" + result.error);
-    else setStaff(result.data?.staff || []);
+    else {
+      setStaff(result.data?.staff || []);
+      setBranches(result.data?.branches || []);
+      if (!branchId && result.data?.branches?.length === 1) setBranchId(result.data.branches[0].id);
+    }
   };
 
   useEffect(() => { loadStaff(); }, []);
-  useEffect(() => {
-    manageStaff({ action: "list_branches" }).then((result) => {
-      if (result.error) setMessage("讀取分店失敗：" + result.error);
-      else {
-        setBranches(result.data?.branches || []);
-        if (!branchId && result.data?.branches?.length === 1) setBranchId(result.data.branches[0].id);
-      }
-    });
-  }, []);
 
   const invite = async () => {
     if (!email.trim() || !name.trim()) {
