@@ -42,19 +42,19 @@ Deno.serve(async (request) => {
 
   if (action === "list") {
     const query = adminClient.from("staff_profiles").select("id, display_name, role, branch_id, created_at").order("created_at");
-    const [staffResult, branchResult, usersResult] = await Promise.all([
+    const [staffResult, branchResult] = await Promise.all([
       actor.role === "admin" ? query : query.eq("branch_id", actor.branch_id),
       adminClient.from("branches").select("id, name, address, phone").eq("active", true).order("name"),
-      adminClient.auth.admin.listUsers({ perPage: 1000 }),
     ]);
     if (staffResult.error) return json({ error: staffResult.error.message }, 400);
     if (branchResult.error) return json({ error: branchResult.error.message }, 400);
-    if (usersResult.error) return json({ error: usersResult.error.message }, 400);
-    const emailsById = new Map(usersResult.data.users.map((account) => [account.id, account.email || ""]));
-    const staff = (staffResult.data || []).map((member) => ({
-      ...member,
-      email: emailsById.get(member.id) || "",
+    const staff = await Promise.all((staffResult.data || []).map(async (member) => {
+      const { data, error } = await adminClient.auth.admin.getUserById(member.id);
+      if (error) return { error: error.message };
+      return { ...member, email: data.user.email || "" };
     }));
+    const staffError = staff.find((member) => "error" in member);
+    if (staffError && "error" in staffError) return json({ error: staffError.error }, 400);
     return json({ staff, branches: branchResult.data || [] });
   }
 
