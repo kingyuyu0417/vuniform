@@ -1390,7 +1390,7 @@ const PERMISSIONS = {
     canExportSales: false,
   },
   [ROLES.STAFF]: {
-    tabs: ["sale", "guest", "queue", "track", "fitting", "pickup", "cashier"],
+    tabs: ["sale", "guest", "queue", "track", "fitting", "pickup", "cashier", "records"],
     canEditProducts: false,
     canManageSchools: false,
     canImportExport: false,
@@ -5801,11 +5801,12 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canVoidSales = f
   const effectiveDate = canViewAllDates ? date : todayStr();
   const normalizedPhoneSearch = phoneSearch.replace(/\D/g, "").slice(-4);
   const normalizedReceiptSearch = receiptSearch.trim().toLowerCase().replace(/^#/, "");
+  const visibleOrders = canViewAllDates ? salesLog : salesLog.filter((order) => order.date === effectiveDate);
   const dateOrders = normalizedReceiptSearch
-    ? salesLog.filter((o) => String(o.id || "").toLowerCase().includes(normalizedReceiptSearch))
+    ? visibleOrders.filter((o) => String(o.id || "").toLowerCase().includes(normalizedReceiptSearch))
     : normalizedPhoneSearch.length === 4
-      ? salesLog.filter((o) => customerPhoneLast4(o.customerPhone || o.phone) === normalizedPhoneSearch)
-      : salesLog.filter((o) => o.date === effectiveDate);
+      ? visibleOrders.filter((o) => customerPhoneLast4(o.customerPhone || o.phone) === normalizedPhoneSearch)
+      : visibleOrders.filter((o) => o.date === effectiveDate);
   const outletForOrder = (order) => {
     const configuredOutlet = outletNameForSchool(order.school, schoolMeta);
     if (configuredOutlet !== "未指定門店") return configuredOutlet;
@@ -5921,7 +5922,7 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canVoidSales = f
           onChange={(e) => setPhoneSearch(e.target.value.replace(/\D/g, "").slice(-4))}
           inputMode="numeric"
           maxLength={4}
-          placeholder="電話尾4位搜尋全部記錄"
+          placeholder={canViewAllDates ? "電話尾4位搜尋全部記錄" : "電話尾4位搜尋今日記錄"}
           aria-label="電話最後4位搜尋"
           style={{ padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 14, width: 170 }}
         />
@@ -5941,7 +5942,7 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canVoidSales = f
           />
         ) : (
           <div style={{ fontSize: 13, background: "#EEF1F5", padding: "8px 12px", borderRadius: 8, color: "#1F3A5F", fontWeight: 500 }}>
-            {normalizedReceiptSearch || normalizedPhoneSearch.length === 4 ? "搜尋全部歷史記錄" : `即時銷售紀錄（${todayStr()}）`}
+            {normalizedReceiptSearch || normalizedPhoneSearch.length === 4 ? `搜尋今日記錄（${todayStr()}）` : `即時銷售紀錄（${todayStr()}）`}
           </div>
         )}
         <select value={outletFilter} onChange={(e) => { setOutletFilter(e.target.value); setSchoolFilter(""); }} style={{ padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 14, maxWidth: "100%" }}>
