@@ -3622,6 +3622,7 @@ export default function UniformPOS() {
                 setSelectedSchool={setSelectedSchool}
                 branchSchoolIds={branchSchoolIds}
                 branchId={session.role === ROLES.ADMIN ? "" : session.branchId}
+                availableSchools={schools}
                 onPickSchool={pickSchool}
               />
             }
@@ -3766,6 +3767,7 @@ export default function UniformPOS() {
                     setSelectedSchool={setSelectedSchool}
                     branchSchoolIds={branchSchoolIds}
                     branchId={session.role === ROLES.ADMIN ? "" : session.branchId}
+                    availableSchools={schools}
                     onPickSchool={pickSchool}
                   />
                 )}
@@ -4556,7 +4558,7 @@ function SaleTab({
   );
 }
 
-function ProductsTab({ products, saveProducts, saveProductsNow, importResult, setImportResult, productsSaveError = "", productsSaveState = "saved", sourceIntegrityWarning = "", canManageSchools = true, canImportExport = true, schoolMeta = {}, saveSchoolMeta = async () => {}, setDeletedSchools = () => {}, selectedSchool = null, setSelectedSchool = () => {}, branchSchoolIds = {}, branchId = "", onPickSchool = setSelectedSchool }) {
+function ProductsTab({ products, saveProducts, saveProductsNow, importResult, setImportResult, productsSaveError = "", productsSaveState = "saved", sourceIntegrityWarning = "", canManageSchools = true, canImportExport = true, schoolMeta = {}, saveSchoolMeta = async () => {}, setDeletedSchools = () => {}, selectedSchool = null, setSelectedSchool = () => {}, branchSchoolIds = {}, branchId = "", availableSchools, onPickSchool = setSelectedSchool }) {
   const [expanded, setExpanded] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
@@ -4618,7 +4620,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   const [schoolSettingsQuery, setSchoolSettingsQuery] = useState("");
   const productsRef = useRef(products);
 
-  const schools = listSchools(products);
+  const schools = availableSchools || listSchools(products);
   const schoolSuggestions = newSchoolName.trim().length >= 2
     ? Object.keys(schoolCatalog)
       .filter((school) => {
