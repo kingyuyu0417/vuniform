@@ -53,8 +53,8 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
   const [refreshFailed, setRefreshFailed] = useState(false);
   const isPickup = serviceType === QUEUE_SERVICE.PICKUP;
   const laneTheme = isPickup
-    ? { accent: "#fb923c", border: "#9a3412", background: "#2a160e", soft: "#fed7aa", glow: "rgba(249,115,22,.2)" }
-    : { accent: "#38bdf8", border: "#1e5a85", background: "#0b2038", soft: "#bae6fd", glow: "rgba(14,165,233,.18)" };
+    ? { accent: "#fb923c", border: "#9a3412", background: "#2a160e", soft: "#fed7aa", glow: "rgba(249,115,22,.2)", numberGlow: "0 0 14px rgba(251,146,60,.5), 0 0 32px rgba(249,115,22,.28)" }
+    : { accent: "#38bdf8", border: "#1e5a85", background: "#0b2038", soft: "#bae6fd", glow: "rgba(14,165,233,.18)", numberGlow: "0 0 14px rgba(56,189,248,.5), 0 0 32px rgba(14,165,233,.28)" };
   const serviceTitle = isPickup ? "取貨叫號" : "度身叫號";
   const destination = isPickup ? "請前往取貨區辦理取貨及付款" : "請前往度身區辦理度身";
   const hasLoadedCounterRef = useRef(false);
@@ -203,7 +203,7 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
         <div style={{ color: laneTheme.accent, fontSize: "clamp(14px, 2vw, 22px)", fontWeight: 800, marginTop: 16 }}>
           {destination}
         </div>
-        <div aria-label={currentQueueNumber ? `現正叫號 ${currentQueueNumber}` : "暫無叫號"} key={`${currentQueueNumber || "empty"}-${counter?.updated_at || ""}`} style={{ ...styles.queueNumber, ...(embedded ? styles.embeddedQueueNumber : {}), ...(!currentQueueNumber ? { fontSize: "clamp(32px, 6vw, 64px)", letterSpacing: 0, color: laneTheme.soft } : {}), ...(isCalling ? styles.queueNumberCalling : {}) }}>
+        <div aria-label={currentQueueNumber ? `現正叫號 ${currentQueueNumber}` : "暫無叫號"} key={`${currentQueueNumber || "empty"}-${counter?.updated_at || ""}`} style={{ ...styles.queueNumber, ...(embedded ? styles.embeddedQueueNumber : {}), ...(!currentQueueNumber ? { fontSize: "clamp(32px, 6vw, 64px)", letterSpacing: 0, color: laneTheme.soft } : {}), ...(isCalling ? { ...styles.queueNumberCalling, textShadow: laneTheme.numberGlow } : {}) }}>
           {currentQueueNumber || "暫無叫號"}
         </div>
         <div style={{ ...styles.counter, color: isCalling ? "#fde68a" : laneTheme.soft, ...(isCalling ? styles.counterCalling : {}) }}>
@@ -286,7 +286,7 @@ const styles = {
   label: { color: "#bae6fd", fontSize: "clamp(18px, 3vw, 32px)", fontWeight: 700 },
   queueNumber: { margin: "10px 0", fontSize: "clamp(92px, 20vw, 260px)", lineHeight: .9, fontWeight: 950, letterSpacing: 8, color: "#fff" },
   embeddedQueueNumber: { fontSize: "clamp(72px, 10vw, 180px)", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  queueNumberCalling: { animation: "queue-call-flash 0.8s steps(2, end) infinite, queue-call-pop 0.8s ease-in-out infinite alternate", color: "#fef08a", textShadow: "0 0 18px #facc15, 0 0 42px #f59e0b" },
+  queueNumberCalling: { animation: "queue-call-flash 0.8s steps(2, end) infinite, queue-call-pop 0.8s ease-in-out infinite alternate", color: "#fef08a" },
   counter: { color: "#a8b8cc", fontSize: "clamp(16px, 2vw, 25px)" },
   counterCalling: { color: "#fde68a", fontWeight: 900 },
   announceButton: { marginTop: 22, display: "inline-flex", alignItems: "center", gap: 8, border: "1px solid #38bdf8", borderRadius: 8, padding: "10px 16px", background: "transparent", color: "#bae6fd", fontWeight: 800, cursor: "pointer" },
