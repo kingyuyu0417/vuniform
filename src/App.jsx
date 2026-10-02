@@ -1407,7 +1407,16 @@ const PERMISSIONS = {
   },
 };
 
-const STAFF_PERMISSION_ROLES = [ROLES.ADMIN, ROLES.MANAGER, ROLES.SALES, ROLES.STAFF];
+const NO_PERMISSIONS = {
+  tabs: [],
+  canEditProducts: false,
+  canManageSchools: false,
+  canImportExport: false,
+  canViewAllDates: false,
+  canExportSales: false,
+};
+const permissionsForRole = (role) => PERMISSIONS[role] || NO_PERMISSIONS;
+const STAFF_PERMISSION_ROLES = Object.values(ROLES).filter((role) => role !== ROLES.GUEST);
 const STAFF_PERMISSION_TAB_LABELS = {
   sale: "銷售",
   guest: "客人登記",
@@ -1455,7 +1464,7 @@ function StaffRolePermissionsTable() {
               <th style={{ padding: "8px 10px", borderBottom: "1px solid #E5E9ED" }}>權限</th>
               {STAFF_PERMISSION_ROLES.map((role) => (
                 <th key={role} style={{ padding: "8px 10px", borderBottom: "1px solid #E5E9ED", whiteSpace: "nowrap" }}>
-                  {ROLE_LABEL[role]}
+                  {ROLE_LABEL[role] || role}
                 </th>
               ))}
             </tr>
@@ -1467,7 +1476,7 @@ function StaffRolePermissionsTable() {
                   {row.label}
                 </th>
                 {STAFF_PERMISSION_ROLES.map((role) => {
-                  const value = row.value(PERMISSIONS[role], role);
+                  const value = row.value(permissionsForRole(role), role);
                   return (
                     <td key={role} style={{ padding: "8px 10px", borderBottom: "1px solid #EEF0F2", color: "#444" }}>
                       {Array.isArray(value)
@@ -1862,7 +1871,7 @@ export default function UniformPOS() {
   const [session, setSession] = useState(null); // { id, name, role, branchId } | null
   const [authReady, setAuthReady] = useState(!isSupabaseAuthEnabled); // Wait for auth before loading protected data
   const [passwordSetupRequired, setPasswordSetupRequired] = useState(false);
-  const perms = session ? (PERMISSIONS[session.role] || PERMISSIONS[ROLES.STAFF]) : null;
+  const perms = session ? permissionsForRole(session.role) : null;
   const accessibleProducts = !isSupabaseAuthEnabled || session?.role === ROLES.ADMIN
     ? products
     : products.filter((product) => product.branch_id === session?.branchId || branchSchoolIds[schoolOf(product)] === session?.branchId);
@@ -2437,7 +2446,7 @@ export default function UniformPOS() {
     if (!supabase || !isSupabaseAuthEnabled || !session || session.role === ROLES.ADMIN) return {};
     const { data, error } = await supabase.from("school_branches").select("school, branch_id");
     if (error) throw error;
-    return Object.fromEntries((data || []).map((entry) => [entry.school, entry.branch_id]));
+    return Object.fromEntries((data || []).map((entry) => [canonicalSchoolName(entry.school), entry.branch_id]));
   };
 
   useEffect(() => {
@@ -3461,8 +3470,14 @@ export default function UniformPOS() {
           ) : (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div>
-                <div style={{ fontSize: 18, fontWeight: 600 }}>校服銷售</div>
-              <div style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>{todayStr()}</div>
+                <div style={{ fontSize: 18, fontWeight: 600 }}>
+                  {session.role !== ROLES.ADMIN ? "暫無可選學校" : "校服銷售"}
+                </div>
+                <div style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>
+                  {session.role !== ROLES.ADMIN
+                    ? (session.branchId ? "請管理員確認此分店的學校分配" : "請管理員為此帳戶指派分店")
+                    : todayStr()}
+                </div>
               </div>
             </div>
           )}
@@ -3509,6 +3524,7 @@ export default function UniformPOS() {
             schools={schools}
             schoolMeta={schoolMeta}
             branchSchoolIds={branchSchoolIds}
+            branchId={session.role === ROLES.ADMIN ? "" : session.branchId}
             selectedSchool={selectedSchool}
             onPick={pickSchool}
           />
@@ -3604,6 +3620,8 @@ export default function UniformPOS() {
                 setDeletedSchools={setDeletedSchools}
                 selectedSchool={selectedSchool}
                 setSelectedSchool={setSelectedSchool}
+                branchSchoolIds={branchSchoolIds}
+                branchId={session.role === ROLES.ADMIN ? "" : session.branchId}
                 onPickSchool={pickSchool}
               />
             }
@@ -3746,6 +3764,8 @@ export default function UniformPOS() {
                     setDeletedSchools={setDeletedSchools}
                     selectedSchool={selectedSchool}
                     setSelectedSchool={setSelectedSchool}
+                    branchSchoolIds={branchSchoolIds}
+                    branchId={session.role === ROLES.ADMIN ? "" : session.branchId}
                     onPickSchool={pickSchool}
                   />
                 )}
@@ -4536,7 +4556,7 @@ function SaleTab({
   );
 }
 
-function ProductsTab({ products, saveProducts, saveProductsNow, importResult, setImportResult, productsSaveError = "", productsSaveState = "saved", sourceIntegrityWarning = "", canManageSchools = true, canImportExport = true, schoolMeta = {}, saveSchoolMeta = async () => {}, setDeletedSchools = () => {}, selectedSchool = null, setSelectedSchool = () => {}, onPickSchool = setSelectedSchool }) {
+function ProductsTab({ products, saveProducts, saveProductsNow, importResult, setImportResult, productsSaveError = "", productsSaveState = "saved", sourceIntegrityWarning = "", canManageSchools = true, canImportExport = true, schoolMeta = {}, saveSchoolMeta = async () => {}, setDeletedSchools = () => {}, selectedSchool = null, setSelectedSchool = () => {}, branchSchoolIds = {}, branchId = "", onPickSchool = setSelectedSchool }) {
   const [expanded, setExpanded] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
@@ -5297,6 +5317,8 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
         <StoreSchoolSwitcher
           schools={schools}
           schoolMeta={schoolMeta}
+          branchSchoolIds={branchSchoolIds}
+          branchId={branchId}
           selectedSchool={selectedSchool}
           onPick={(school) => {
             if (school && school !== "all") onPickSchool(school);
@@ -6314,11 +6336,13 @@ function SchoolChip({ label, selected, onClick, sub }) {
   );
 }
 
-function StoreSchoolSwitcher({ schools, schoolMeta, branchSchoolIds = {}, selectedSchool, onPick }) {
+function StoreSchoolSwitcher({ schools, schoolMeta, branchSchoolIds = {}, branchId = "", selectedSchool, onPick }) {
   const [selectedOutlet, setSelectedOutlet] = useState(null);
   const [schoolType, setSchoolType] = useState(null);
   const [query, setQuery] = useState("");
-  const outletForSchool = (school) => BRANCH_OUTLET_NAMES[branchSchoolIds[school]] || outletNameForSchool(school, schoolMeta);
+  const outletForSchool = (school) => BRANCH_OUTLET_NAMES[branchId]
+    || BRANCH_OUTLET_NAMES[branchSchoolIds[school]]
+    || outletNameForSchool(school, schoolMeta);
   const visibleSchools = selectedOutlet ? schools.filter((school) => outletForSchool(school) === selectedOutlet) : [];
   const schoolTypes = ["幼稚園", "小學", "中學", "其他"];
   const typedSchools = schoolType ? visibleSchools.filter((school) => {
@@ -6327,7 +6351,7 @@ function StoreSchoolSwitcher({ schools, schoolMeta, branchSchoolIds = {}, select
   }) : [];
   const matchedSchools = query.trim() ? typedSchools.filter((school) => school.includes(query.trim())) : typedSchools;
   const availableOutlets = OUTLETS.filter((outlet) => schools.some((school) => outletForSchool(school) === outlet.name));
-  if (!selectedOutlet) return <div style={{ marginTop: 12, paddingBottom: 4 }}><div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginBottom: 6 }}>第一步：揀門店</div><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{availableOutlets.map((outlet) => <SchoolChip key={outlet.name} label={outlet.name} sub={`${schools.filter((school) => outletNameForSchool(school, schoolMeta) === outlet.name).length}間學校`} selected={false} onClick={() => { setSelectedOutlet(outlet.name); setSchoolType(null); setQuery(""); }} />)}</div></div>;
+  if (!selectedOutlet) return <div style={{ marginTop: 12, paddingBottom: 4 }}><div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginBottom: 6 }}>第一步：揀門店</div><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{availableOutlets.map((outlet) => <SchoolChip key={outlet.name} label={outlet.name} sub={`${schools.filter((school) => outletForSchool(school) === outlet.name).length}間學校`} selected={false} onClick={() => { setSelectedOutlet(outlet.name); setSchoolType(null); setQuery(""); }} />)}</div></div>;
   if (!schoolType) return <div style={{ marginTop: 12, paddingBottom: 4 }}><button className="pos-btn" onClick={() => setSelectedOutlet(null)} style={{ background: "none", color: "rgba(255,255,255,0.75)", fontSize: 11, padding: 0, marginBottom: 8 }}>更改分店</button><div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginBottom: 6 }}>第二步：揀學校類別</div><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{schoolTypes.map((type) => <SchoolChip key={type} label={type} sub={`${visibleSchools.filter((school) => { const level = metaOf(schoolMeta, school).level; return type === "其他" ? !schoolTypes.slice(0, 3).includes(level) : level === type; }).length}間學校`} selected={false} onClick={() => { setSchoolType(type); setQuery(""); }} />)}</div></div>;
   return <div style={{ marginTop: 12, paddingBottom: 4 }}><button className="pos-btn" onClick={() => { setSchoolType(null); setQuery(""); }} style={{ background: "none", color: "rgba(255,255,255,0.75)", fontSize: 11, padding: 0, marginBottom: 8 }}>更改學校類別</button>{typedSchools.length > 6 && <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜尋學校名稱…" style={{ width: "100%", padding: 8, borderRadius: 8, border: "1px solid rgba(255,255,255,0.35)", background: "rgba(255,255,255,0.12)", color: "#fff", fontSize: 13, boxSizing: "border-box", marginBottom: 10 }} />}<div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginBottom: 6 }}>第三步：揀學校（{typedSchools.length}間）</div><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{matchedSchools.length ? matchedSchools.map((school) => <SchoolChip key={school} label={school} selected={selectedSchool === school} onClick={() => onPick(school)} />) : <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>此分類沒有學校。</div>}</div></div>;
 }
@@ -6791,10 +6815,7 @@ function AuthStaffTab({ manageStaff, currentId }) {
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="員工電郵" style={{ width: "100%", padding: 9, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box", marginBottom: 8 }} />
         <input type="password" value={temporaryPassword} onChange={(e) => setTemporaryPassword(e.target.value)} placeholder="臨時密碼（最少 8 字元）" style={{ width: "100%", padding: 9, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box", marginBottom: 8 }} />
         <select value={role} onChange={(e) => setRole(e.target.value)} style={{ width: "100%", padding: 9, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box", marginBottom: 8 }}>
-          <option value={ROLES.STAFF}>店員</option>
-          <option value={ROLES.SALES}>銷售</option>
-          <option value={ROLES.MANAGER}>店長</option>
-          <option value={ROLES.ADMIN}>管理員</option>
+          {STAFF_PERMISSION_ROLES.map((staffRole) => <option key={staffRole} value={staffRole}>{ROLE_LABEL[staffRole] || staffRole}</option>)}
         </select>
         <select value={branchId} onChange={(e) => setBranchId(e.target.value)} style={{ width: "100%", padding: 9, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box", marginBottom: 8 }}>
           <option value="">選擇分店</option>
@@ -6808,7 +6829,7 @@ function AuthStaffTab({ manageStaff, currentId }) {
         <div key={member.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", borderBottom: "1px solid #eee" }}>
           <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 14, fontWeight: 600 }}>{member.display_name}</div><div style={{ fontSize: 10, color: "#999", overflow: "hidden", textOverflow: "ellipsis" }}>{member.id}</div></div>
           <select value={member.role} onChange={(e) => changeRole(member.id, e.target.value)} disabled={busy} style={{ padding: 6, borderRadius: 6, border: "1px solid #ccc" }}>
-            <option value={ROLES.ADMIN}>管理員</option><option value={ROLES.MANAGER}>店長</option><option value={ROLES.SALES}>銷售</option><option value={ROLES.STAFF}>店員</option>
+            {STAFF_PERMISSION_ROLES.map((staffRole) => <option key={staffRole} value={staffRole}>{ROLE_LABEL[staffRole] || staffRole}</option>)}
           </select>
           <select value={member.branch_id || ""} onChange={(e) => changeBranch(member.id, e.target.value)} disabled={busy} style={{ maxWidth: 110, padding: 6, borderRadius: 6, border: "1px solid #ccc", fontSize: 11 }}>
             <option value="">未分配分店</option>
@@ -6881,9 +6902,7 @@ function StaffTab({ accounts, saveAccounts, currentId }) {
                 onChange={(e) => updateAccount(a.id, { ...a, role: e.target.value })}
                 style={{ width: "100%", padding: 8, marginBottom: 10, borderRadius: 8, border: "1px solid #ccc", fontSize: 14, boxSizing: "border-box" }}
               >
-                <option value={ROLES.ADMIN}>{ROLE_LABEL[ROLES.ADMIN]}</option>
-                <option value={ROLES.MANAGER}>{ROLE_LABEL[ROLES.MANAGER]}</option>
-                <option value={ROLES.STAFF}>{ROLE_LABEL[ROLES.STAFF]}</option>
+                {STAFF_PERMISSION_ROLES.map((staffRole) => <option key={staffRole} value={staffRole}>{ROLE_LABEL[staffRole] || staffRole}</option>)}
               </select>
               <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>PIN（登入用）</div>
               <div style={{ position: "relative", marginBottom: 10 }}>
