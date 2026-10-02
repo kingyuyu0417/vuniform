@@ -179,7 +179,7 @@
     };
     const sourceReceiptId = (order) => order.exchangeSourceReceiptId || order.exchange_source_receipt_id || order.sourceReceiptId || "";
     const render = (order) => {
-      const english = new URLSearchParams(location.search).get("lang") === "en" && order.school === "港青基信書院";
+      const english = new URLSearchParams(location.search).get("lang") === "en";
       const labels = english ? {
         school: "School", receiptNo: "Receipt No.", source: "Source Receipt", date: "Date", customer: "Customer", phone: "Last 4 digits",
         items: "Items", quantity: "Qty", itemCount: "Item count", total: "Total due", exchangeTotal: "Exchange difference",
@@ -207,7 +207,7 @@
             <dt>${labels.receiptNo}</dt><dd>#${text(order.id).toUpperCase()}</dd>
             ${sourceReceiptId(order) ? `<dt>${labels.source}</dt><dd>#${text(sourceReceiptId(order)).toUpperCase()}</dd>` : ""}
             <dt>${labels.date}</dt><dd>${text(order.date)} ${text(english ? englishTime(order.time) : order.time, "")}</dd>
-            <dt>${labels.school}</dt><dd>${text(english ? "YMCA of Hong Kong Christian College" : order.school)}</dd>
+            <dt>${labels.school}</dt><dd>${text(english && order.school === "港青基信書院" ? "YMCA of Hong Kong Christian College" : order.school)}</dd>
             <dt>${labels.customer}</dt><dd>${text(customerSurname(order.customerName))}</dd>
             <dt>${labels.phone}</dt><dd>${text(customerPhoneLast4(order.customerPhone))}</dd>
           </dl>
@@ -226,7 +226,7 @@
           <div class="policy"><strong>${labels.returnPolicy}</strong><br><strong>${labels.careTitle}</strong><br>${labels.care}</div>
           <footer>${labels.thanks}</footer>
         </section>
-        <div class="actions"><button onclick="window.print()">${english ? "Print / Save as PDF" : "列印／另存為 PDF"}</button><button class="secondary" onclick="window.close()">${english ? "Close" : "關閉"}</button></div>`;
+        <div class="actions"><button onclick="const params = new URLSearchParams(location.search); params.set('lang', params.get('lang') === 'en' ? 'zh' : 'en'); location.search = params.toString()">${english ? "切換中文收據" : "Convert to English"}</button><button onclick="window.print()">${english ? "Print / Save as PDF" : "列印／另存為 PDF"}</button><button class="secondary" onclick="window.close()">${english ? "Close" : "關閉"}</button></div>`;
     };
     try {
       const value = new URLSearchParams(location.search).get("data");

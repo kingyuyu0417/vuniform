@@ -52,6 +52,8 @@ Auth 模式的銷售交易會用 `create_order_with_items` 一次寫入 `orders`
 
 收據編號由 Supabase 每日流水號自動產生，格式為 `VU-YYYYMMDD-0001`。啟用新編號前，請先在 Supabase 執行最新的 `supabase/secure-migration.sql`，它會建立每日流水號及更新交易 RPC。
 
+銷售記錄作廢只供管理員操作，需重新輸入管理員密碼並填寫原因。作廢會保留原單及稽核記錄，但不計入收入、件數或客人統計。啟用前須在 Supabase SQL Editor 執行 `supabase/void-sales-order.sql`；資料庫 RPC 亦會驗證管理員角色及最近 5 分鐘內的重新登入憑證。
+
 ## Auth 員工管理功能
 
 員工管理功能使用 Supabase Edge Function，service key 只放在 Supabase server-side secrets，不可放入 `.env.local`：

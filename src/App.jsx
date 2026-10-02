@@ -3,7 +3,7 @@ import Papa from "papaparse";
 import qrcode from "qrcode-generator";
 import { useLocation, useNavigate, Routes, Route, Navigate } from "react-router-dom";
 import { Plus, Minus, Trash2, Printer, Bluetooth, ChevronDown, ChevronUp, ChevronLeft, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown, X, ShoppingCart, Settings, ClipboardList, Check, AlertCircle, Upload, Download, School, Users, Eye, EyeOff, MapPin, GraduationCap, Search, QrCode } from "lucide-react";
-import { isSupabaseConfigured, isSupabaseAuthEnabled, supabase } from "./supabaseClient";
+import { isSupabaseConfigured, isSupabaseAuthEnabled, supabase, createPasswordVerificationClient } from "./supabaseClient";
 import { logStartupCheck, getStartupErrorUI, validateAllEnvVars } from "./config/envValidation";
 import { getUserFriendlyError } from "./config/errorHandler";
 import { Alert } from "./components/common";
@@ -1403,7 +1403,6 @@ const DEFAULT_ACCOUNTS = [
 ];
 
 const ENGLISH_RECEIPT_SCHOOL = "港青基信書院";
-const isEnglishReceiptSchool = (school) => String(school || "").trim() === ENGLISH_RECEIPT_SCHOOL;
 const receiptLanguageLabel = (language) => language === "en" ? "English" : "中文";
 const receiptProductUnit = (name, language) => {
   const unit = productUnit(name);
@@ -1604,6 +1603,19 @@ export class AppErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     console.error("App error boundary caught a runtime error", error, errorInfo);
+    if (!/failed to fetch dynamically imported module|importing a module script failed|error loading dynamically imported module/i.test(String(error?.message || ""))) {
+      return;
+    }
+
+    const failedModule = String(error?.message || "").match(/https?:\/\/\S+/)?.[0]?.replace(/[),.;]+$/, "") || window.location.pathname;
+    const retryKey = `uniform-pos-module-reload:${failedModule}`;
+    try {
+      if (window.sessionStorage.getItem(retryKey)) return;
+      window.sessionStorage.setItem(retryKey, "1");
+      window.location.reload();
+    } catch (storageError) {
+      console.warn("Unable to retry the page after a stale module load", storageError);
+    }
   }
 
   render() {
@@ -2044,6 +2056,41 @@ export default function UniformPOS() {
     return { data, error: functionError || error?.message || "" };
   };
 
+  const voidSaleOrder = async ({ orderId, reason, password }) => {
+    if (!isSupabaseAuthEnabled || !supabase || session?.role !== ROLES.ADMIN) {
+      throw new Error("只有管理員可以作廢單據");
+    }
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError) throw userError;
+    if (!user?.email || user.id !== session.id) throw new Error("無法確認目前管理員帳戶，請重新登入");
+
+    const verificationClient = createPasswordVerificationClient();
+    if (!verificationClient) throw new Error("Supabase 未設定，無法驗證管理員密碼");
+    try {
+      const { data: authData, error: passwordError } = await verificationClient.auth.signInWithPassword({
+        email: user.email,
+        password,
+      });
+      if (passwordError) throw new Error("管理員密碼不正確，未作廢單據");
+      if (authData.user?.id !== session.id) throw new Error("驗證帳戶不符，未作廢單據");
+
+      const { data, error } = await verificationClient.rpc("void_sales_order", {
+        p_order_id: orderId,
+        p_reason: reason,
+      });
+      if (error) throw error;
+      if (data?.order_id !== orderId || !data?.voided_at) throw new Error("作廢結果未能確認，請重新整理記錄");
+
+      setSalesLog((previous) => previous.map((order) => order.id === orderId
+        ? { ...order, voidedAt: data.voided_at, voidedBy: session.id, voidReason: reason.trim() }
+        : order));
+      return data;
+    } finally {
+      const { error: signOutError } = await verificationClient.auth.signOut();
+      if (signOutError) console.warn("管理員密碼驗證工作階段未能清除", signOutError);
+    }
+  };
+
   const saveAccounts = async (next) => {
     setAccounts(next);
     try {
@@ -2195,7 +2242,7 @@ export default function UniformPOS() {
     try {
       let { data, error } = await supabase
         .from("orders")
-        .select("id, school, branch_id, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, refund_due, cashier_id, cashier_name, total, item_count, created_at, order_items(name, size, length, price, qty)")
+        .select("id, school, branch_id, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, refund_due, voided_at, voided_by, void_reason, cashier_id, cashier_name, total, item_count, created_at, order_items(name, size, length, price, qty)")
         .order("created_at", { ascending: false });
       
       if (error?.code === "42703") {
@@ -2240,6 +2287,9 @@ export default function UniformPOS() {
             customerName: order.customer_surname || "",
             customerPhone: order.customer_phone_last4 || "",
             exchangeSourceReceiptId: order.exchange_source_receipt_id || order.exchangeSourceReceiptId || order.source_receipt_id || "",
+            voidedAt: order.voided_at || "",
+            voidedBy: order.voided_by || "",
+            voidReason: order.void_reason || "",
           };
         } catch (mapError) {
           console.error("轉換訂單數據失敗", mapError, order);
@@ -3352,7 +3402,7 @@ export default function UniformPOS() {
           />
           <Route
             path="/pickup"
-            element={<PickupPage currentSchoolId={selectedSchool || publicRouteSchool} onReadyForSale={handleReadyForSale} />}
+            element={<PickupPage currentSchoolId={selectedSchool || publicRouteSchool} />}
           />
           <Route
             path="/cashier"
@@ -3399,6 +3449,8 @@ export default function UniformPOS() {
                 salesLog={salesLog}
                 selectedSchool={selectedSchool || publicRouteSchool}
                 onReprint={(o) => setReceipt(o)}
+                canVoidSales={isSupabaseAuthEnabled && session?.role === ROLES.ADMIN}
+                onVoidSale={voidSaleOrder}
                 canViewAllDates={perms.canViewAllDates}
                 canExportSales={perms.canExportSales}
                 schoolMeta={schoolMeta}
@@ -3501,7 +3553,7 @@ export default function UniformPOS() {
                   />
                 )}
                 {tab === "pickup" && (
-                  <PickupPage currentSchoolId={selectedSchool || publicRouteSchool} onReadyForSale={handleReadyForSale} />
+                  <PickupPage currentSchoolId={selectedSchool || publicRouteSchool} />
                 )}
                 {tab === "cashier" && (
                   <CashierVerifyPage currentSchoolId={selectedSchool || publicRouteSchool} products={products.filter((p) => schoolOf(p) === (selectedSchool || publicRouteSchool))} onConfirmPayment={handleConfirmPayment} onReadyForSale={handleReadyForSale} />
@@ -3535,6 +3587,8 @@ export default function UniformPOS() {
                     salesLog={salesLog}
                     selectedSchool={selectedSchool || publicRouteSchool}
                     onReprint={(o) => setReceipt(o)}
+                    canVoidSales={isSupabaseAuthEnabled && session?.role === ROLES.ADMIN}
+                    onVoidSale={voidSaleOrder}
                     canViewAllDates={perms.canViewAllDates}
                     canExportSales={perms.canExportSales}
                     schoolMeta={schoolMeta}
@@ -5542,12 +5596,17 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   );
 }
 
-function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates, canExportSales, schoolMeta = {} }) {
+function RecordsTab({ salesLog, selectedSchool = "", onReprint, canVoidSales = false, onVoidSale, canViewAllDates, canExportSales, schoolMeta = {} }) {
   const [date, setDate] = useState(todayStr());
   const [outletFilter, setOutletFilter] = useState("");
   const [schoolFilter, setSchoolFilter] = useState("");
   const [phoneSearch, setPhoneSearch] = useState("");
   const [receiptSearch, setReceiptSearch] = useState("");
+  const [voidTarget, setVoidTarget] = useState(null);
+  const [voidPassword, setVoidPassword] = useState("");
+  const [voidReason, setVoidReason] = useState("");
+  const [voidError, setVoidError] = useState("");
+  const [voidSubmitting, setVoidSubmitting] = useState(false);
   const effectiveDate = canViewAllDates ? date : todayStr();
   const normalizedPhoneSearch = phoneSearch.replace(/\D/g, "").slice(-4);
   const normalizedReceiptSearch = receiptSearch.trim().toLowerCase().replace(/^#/, "");
@@ -5574,15 +5633,16 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
   const availableSchools = Array.from(new Set(dateOrders.filter(outletMatches).map((o) => o.school).filter(Boolean)))
     .sort((a, b) => a.localeCompare(b, "zh-Hant"));
   const dayOrders = dateOrders.filter((o) => outletMatches(o) && (!schoolFilter || o.school === schoolFilter));
-  const dayTotal = dayOrders.reduce((s, o) => s + netOrderTotal(o), 0);
-  const dayItems = dayOrders.reduce((s, o) => s + o.itemCount, 0);
-  const knownCustomerPhones = new Set(dayOrders.map((o) => customerPhoneLast4(o.customerPhone || o.phone)).filter(Boolean));
+  const activeDayOrders = dayOrders.filter((order) => !order.voidedAt);
+  const dayTotal = activeDayOrders.reduce((s, o) => s + netOrderTotal(o), 0);
+  const dayItems = activeDayOrders.reduce((s, o) => s + o.itemCount, 0);
+  const knownCustomerPhones = new Set(activeDayOrders.map((o) => customerPhoneLast4(o.customerPhone || o.phone)).filter(Boolean));
   const customerCount = knownCustomerPhones.size;
-  const missingCustomerPhoneCount = dayOrders.filter((o) => !customerPhoneLast4(o.customerPhone || o.phone)).length;
+  const missingCustomerPhoneCount = activeDayOrders.filter((o) => !customerPhoneLast4(o.customerPhone || o.phone)).length;
 
   const byOutlet = {};
   const bySchool = {};
-  dayOrders.forEach((o) => {
+  activeDayOrders.forEach((o) => {
     const outlet = outletForOrder(o);
     const school = o.school || "（未指定學校）";
     if (!byOutlet[outlet]) byOutlet[outlet] = { total: 0, count: 0 };
@@ -5594,7 +5654,7 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
   });
 
   const byCashier = {};
-  dayOrders.forEach((o) => {
+  activeDayOrders.forEach((o) => {
     const key = o.cashierName || "（未記名）";
     if (!byCashier[key]) byCashier[key] = { total: 0, count: 0 };
     byCashier[key].total += netOrderTotal(o);
@@ -5602,7 +5662,7 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
   });
 
   const handleExportCSV = () => {
-    const rows = [["日期", "時間", "單號", "開單員工", "學校", "門店", "單據件數", "單據總額", "款式", "尺碼", "長度", "數量", "單價", "款式小計"]];
+    const rows = [["日期", "時間", "單號", "狀態", "作廢原因", "開單員工", "學校", "門店", "單據件數", "單據總額", "款式", "尺碼", "長度", "數量", "單價", "款式小計"]];
     dateOrders.forEach((o) => {
       const items = Array.isArray(o.items) ? o.items : [];
       items.forEach((item) => {
@@ -5610,6 +5670,8 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
           o.date,
           o.time,
           o.id,
+          o.voidedAt ? "已作廢" : "有效",
+          o.voidReason || "",
           o.cashierName || "",
           o.school || "",
           o.outletName || outletNameForSchool(o.school, schoolMeta),
@@ -5625,6 +5687,39 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
       });
     });
     downloadCSV(Papa.unparse(rows), `銷售紀錄_${todayStr()}.csv`);
+  };
+
+  const closeVoidDialog = () => {
+    if (voidSubmitting) return;
+    setVoidTarget(null);
+    setVoidPassword("");
+    setVoidReason("");
+    setVoidError("");
+  };
+
+  const submitVoid = async (event) => {
+    event.preventDefault();
+    if (!voidTarget || !canVoidSales || voidSubmitting) return;
+    if (!voidReason.trim()) {
+      setVoidError("請填寫作廢原因。");
+      return;
+    }
+    if (!voidPassword) {
+      setVoidError("請輸入管理員密碼。");
+      return;
+    }
+    setVoidSubmitting(true);
+    setVoidError("");
+    try {
+      await onVoidSale({ orderId: voidTarget.id, reason: voidReason, password: voidPassword });
+      setVoidTarget(null);
+      setVoidPassword("");
+      setVoidReason("");
+    } catch (error) {
+      setVoidError(error?.message || "作廢失敗，請重試。");
+    } finally {
+      setVoidSubmitting(false);
+    }
   };
 
   return (
@@ -5712,7 +5807,7 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
           ))}
         </div>
       )}
-      <div style={{ fontSize: 13, color: "#666", marginBottom: 8 }}>{dayOrders.length} 張單</div>
+      <div style={{ fontSize: 13, color: "#666", marginBottom: 8 }}>{dayOrders.length} 張單（有效 {activeDayOrders.length} 張）</div>
       {dayOrders.length === 0 && <div style={{ fontSize: 13, color: "#999" }}>呢日未有交易記錄</div>}
       {dayOrders.map((o) => (
         <div
@@ -5726,11 +5821,15 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
               onReprint(o);
             }
           }}
-          style={{ background: "#fff", border: "1px solid #E5E5E0", borderRadius: 10, padding: "10px 14px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, cursor: "pointer" }}
-          title="按此查看單據記錄"
+          style={{ background: o.voidedAt ? "#F8F8F8" : "#fff", border: `1px solid ${o.voidedAt ? "#D6D3D1" : "#E5E5E0"}`, borderRadius: 10, padding: "10px 14px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, cursor: "pointer", opacity: o.voidedAt ? 0.78 : 1 }}
+          title={o.voidedAt ? "此單已作廢，仍保留作稽核記錄" : "按此查看單據記錄"}
         >
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, overflowWrap: "anywhere" }}>{o.time} · {o.itemCount}件 · #{(o.id || "").toUpperCase()}</div>
+            <div style={{ fontSize: 13, fontWeight: 500, overflowWrap: "anywhere" }}>
+              {o.time} · {o.itemCount}件 · #{(o.id || "").toUpperCase()}
+              {o.voidedAt && <span style={{ marginLeft: 8, color: "#B42318", fontWeight: 800 }}>已作廢</span>}
+            </div>
+            {o.voidedAt && <div style={{ fontSize: 11, color: "#B42318", marginTop: 3 }}>作廢原因：{o.voidReason || "未提供"}</div>}
             {o.exchangeSourceReceiptId && <div style={{ fontSize: 12, color: "#9A3412", fontWeight: 600 }}>來源單據：#{String(o.exchangeSourceReceiptId).toUpperCase()}</div>}
             <div style={{ fontSize: 12, color: "#888" }}>{o.items.map((it) => `${it.name}(${sizeLabel({ size: it.size, length: it.length })})x${it.qty}`).join("、")}</div>
             {o.cashierName && <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>開單：{o.cashierName}</div>}
@@ -5740,9 +5839,49 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canViewAllDates,
             <button className="pos-btn" onClick={(event) => { event.stopPropagation(); onReprint(o); }} style={{ fontSize: 10, color: "#64748B", background: "none", marginTop: 2, padding: "2px 4px" }}>
               重印
             </button>
+            {canVoidSales && !o.voidedAt && (
+              <button
+                className="pos-btn"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setVoidTarget(o);
+                  setVoidPassword("");
+                  setVoidReason("");
+                  setVoidError("");
+                }}
+                style={{ display: "block", marginLeft: "auto", marginTop: 5, padding: "5px 9px", borderRadius: 7, background: "#FFF1F0", border: "1px solid #F0B8B5", color: "#B42318", fontSize: 11, fontWeight: 700 }}
+              >
+                作廢單據
+              </button>
+            )}
           </div>
         </div>
       ))}
+      {voidTarget && (
+        <div role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeVoidDialog(); }} style={{ position: "fixed", inset: 0, zIndex: 100, display: "grid", placeItems: "center", padding: 16, background: "rgba(15,23,42,.55)" }}>
+          <form onSubmit={submitVoid} role="dialog" aria-modal="true" aria-labelledby="void-order-title" style={{ width: "min(100%, 420px)", boxSizing: "border-box", padding: 20, borderRadius: 14, background: "#fff", boxShadow: "0 18px 48px rgba(15,23,42,.25)", display: "grid", gap: 12 }}>
+            <div>
+              <div id="void-order-title" style={{ color: "#B42318", fontSize: 18, fontWeight: 800 }}>管理員確認作廢</div>
+              <div style={{ marginTop: 5, color: "#475569", fontSize: 13, lineHeight: 1.5 }}>
+                單據 #{String(voidTarget.id || "").toUpperCase()} 作廢後會從收入及件數統計排除，但仍會保留單據和操作稽核記錄。
+              </div>
+            </div>
+            <label style={{ display: "grid", gap: 5, fontSize: 13, fontWeight: 700, color: "#334155" }}>
+              作廢原因
+              <textarea value={voidReason} onChange={(event) => setVoidReason(event.target.value)} maxLength={500} rows={3} required placeholder="請簡述作廢原因" style={{ boxSizing: "border-box", width: "100%", resize: "vertical", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1", font: "inherit", fontWeight: 400 }} />
+            </label>
+            <label style={{ display: "grid", gap: 5, fontSize: 13, fontWeight: 700, color: "#334155" }}>
+              管理員密碼
+              <input type="password" value={voidPassword} onChange={(event) => setVoidPassword(event.target.value)} autoComplete="current-password" required style={{ boxSizing: "border-box", width: "100%", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1", fontSize: 16 }} />
+            </label>
+            {voidError && <div role="alert" style={{ padding: 10, borderRadius: 8, background: "#FEF2F2", color: "#B42318", fontSize: 13 }}>{voidError}</div>}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 2 }}>
+              <button type="button" className="pos-btn" onClick={closeVoidDialog} disabled={voidSubmitting} style={{ padding: "9px 14px", borderRadius: 8, background: "#F1F5F9", color: "#334155", fontWeight: 700 }}>取消</button>
+              <button type="submit" className="pos-btn" disabled={voidSubmitting} style={{ padding: "9px 14px", borderRadius: 8, background: "#B42318", color: "#fff", fontWeight: 800, opacity: voidSubmitting ? 0.7 : 1 }}>{voidSubmitting ? "驗證及作廢中…" : "確認作廢"}</button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
@@ -5844,7 +5983,6 @@ function ReceiptModal({ order, language = "zh", onLanguageChange, onClose, onRed
   const [exchangeSelection, setExchangeSelection] = useState(null);
   const english = language === "en";
   const labels = receiptFieldLabels(language);
-  const canTranslate = isEnglishReceiptSchool(order.school);
   const openCustomerReceipt = () => {
     const receiptUrl = buildReceiptUrl(order, language);
     const anchor = document.createElement("a");
@@ -5859,9 +5997,16 @@ function ReceiptModal({ order, language = "zh", onLanguageChange, onClose, onRed
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 }}>
       <div style={{ background: "#fff", borderRadius: 14, maxWidth: 340, width: "100%", padding: 20, maxHeight: "85vh", overflowY: "auto" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <div style={{ position: "sticky", top: -20, zIndex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", margin: "-20px -20px 10px", padding: "10px 12px 6px 20px", background: "#fff" }}>
           <div style={{ fontSize: 16, fontWeight: 600 }}>{english ? "Transaction completed" : "交易完成"}</div>
-          <button className="pos-btn" onClick={onClose} style={{ background: "none" }}>
+          <button
+            className="pos-btn"
+            type="button"
+            onClick={onClose}
+            aria-label="關閉電子收據"
+            title="關閉"
+            style={{ width: 44, height: 44, minWidth: 44, minHeight: 44, display: "grid", placeItems: "center", flexShrink: 0, borderRadius: 10, background: "none", color: "#1f2937" }}
+          >
             <X size={18} />
           </button>
         </div>
@@ -5904,15 +6049,13 @@ function ReceiptModal({ order, language = "zh", onLanguageChange, onClose, onRed
           <div style={{ textAlign: "center", marginTop: 6, color: "#888" }}>{labels.thanks}</div>
         </div>
 
-        {canTranslate && (
-          <button
-            className="pos-btn"
-            onClick={() => onLanguageChange?.(english ? "zh" : "en")}
-            style={{ width: "100%", padding: "11px 0", borderRadius: 10, background: english ? "#EAF0F8" : "#FFF7ED", color: "#1F3A5F", border: "1px solid #B8CBE1", fontSize: 13, fontWeight: 700, marginBottom: 8 }}
-          >
-            {english ? "切換中文收據" : "轉換英文收據"}
-          </button>
-        )}
+        <button
+          className="pos-btn"
+          onClick={() => onLanguageChange?.(english ? "zh" : "en")}
+          style={{ width: "100%", padding: "11px 0", borderRadius: 10, background: english ? "#EAF0F8" : "#FFF7ED", color: "#1F3A5F", border: "1px solid #B8CBE1", fontSize: 13, fontWeight: 700, marginBottom: 8 }}
+        >
+          {english ? "切換中文收據" : "轉換英文收據"}
+        </button>
         <button
           className="pos-btn"
           onClick={openCustomerReceipt}

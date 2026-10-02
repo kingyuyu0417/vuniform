@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCheck, Clock3, PackageCheck, Zap } from "lucide-react";
+import { PackageCheck, Zap } from "lucide-react";
 import { ORDER_STATUS, isQueueOrderToday } from "../services/queueOrderService";
 import { supabase, isSupabaseAuthEnabled, isSupabaseConfigured } from "../supabaseClient";
 
@@ -19,7 +19,15 @@ const getSafeOrder = (row) => ({
   status: row.status || ORDER_STATUS.PENDING,
 });
 
-export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
+const getOrderItems = (order) => (
+  Array.isArray(order.tailor_info?.items) ? order.tailor_info.items : []
+);
+const getOrderItemCount = (order) => getOrderItems(order).reduce((total, item) => {
+  const quantity = Number(item.quantity || 1);
+  return total + (Number.isFinite(quantity) && quantity > 0 ? quantity : 0);
+}, 0);
+
+export default function PickupPage({ currentSchoolId = "" }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [updatingId, setUpdatingId] = useState("");
@@ -42,7 +50,7 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
       let query = supabase
         .from("customer_orders")
         .select("*")
-        .in("status", [ORDER_STATUS.PREPARING, ORDER_STATUS.READY])
+        .eq("status", ORDER_STATUS.PREPARING)
         .order("created_at", { ascending: true });
       if (currentSchoolId) query = query.eq("school_id", currentSchoolId);
       const { data, error } = await query;
@@ -55,7 +63,7 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
     } catch (error) {
       console.error("pickup orders sync failed", error);
       setNotice(error?.message || "同步失敗，請重試");
-      return [];
+      return null;
     } finally {
       setLoading(false);
     }
@@ -85,34 +93,11 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
     syncOrders();
   }, [currentDay]);
 
-  const readyOrders = useMemo(
-    () => orders.filter((o) => o.status === ORDER_STATUS.READY),
-    [orders]
-  );
   const displayOrders = useMemo(
     () => orders.filter((o) => o.status === ORDER_STATUS.PREPARING),
     [orders]
   );
 
-  const batchSummary = useMemo(() => {
-    return readyOrders.reduce((acc, order) => {
-      const items = Array.isArray(order.tailor_info?.items) ? order.tailor_info.items : [];
-      items.forEach((item) => {
-        const key = `${item.product_name || "未知產品"}::${item.length || ""}::${item.size || ""}::${item.isTailored || item.is_tailored ? "tailored" : "regular"}`;
-        acc[key] = acc[key] || {
-          product: item.product_name || "未知產品",
-          size: item.size || "",
-          length: item.length || "",
-          isTailored: Boolean(item.isTailored || item.is_tailored),
-          quantity: 0,
-        };
-        acc[key].quantity += Number(item.quantity || 1);
-      });
-      return acc;
-    }, {});
-  }, [readyOrders]);
-
-  const summaryRows = useMemo(() => Object.values(batchSummary), [batchSummary]);
   const elapsedSeconds = (order) => {
     const startedAt = order.tailor_info?.prepared_at || order.created_at;
     const startedTime = Date.parse(startedAt || "");
@@ -146,12 +131,9 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
       if (error) throw error;
       if (!updated?.id) throw new Error("找不到要更新的訂單");
 
-      if (typeof onReadyForSale === "function") {
-        onReadyForSale(updated);
-        return;
-      }
-
+      setOrders((previous) => previous.filter((item) => item.id !== orderId));
       const nextOrders = await syncOrders();
+      if (!nextOrders) return;
       const nextPreparingOrder = nextOrders.find((item) => item.status === ORDER_STATUS.PREPARING);
       setNotice(nextPreparingOrder
         ? `${order.queue_number || "此訂單"} 已執好，已載入下一張待執貨單。`
@@ -162,20 +144,6 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
     } finally {
       setUpdatingId("");
     }
-  };
-
-  const goToSale = async (order) => {
-    if (!order) {
-      setNotice("請選擇有效單據");
-      return;
-    }
-
-    if (typeof onReadyForSale === "function") {
-      onReadyForSale(order);
-      return;
-    }
-
-    setNotice("銷售頁未開啟，請稍後再試");
   };
 
   return (
@@ -193,22 +161,6 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
 
       {notice && <div style={styles.notice}>{notice}</div>}
 
-      <div style={styles.summaryPanel}>
-        <div style={styles.summaryTitle}>已執好貨單彙總</div>
-        <div style={styles.summaryGrid}>
-          {summaryRows.length === 0 ? (
-            <div style={styles.emptySummary}>目前沒有已執好貨的訂單</div>
-          ) : (
-            summaryRows.map((item, index) => (
-              <div key={`${item.product}-${item.size}-${index}`} style={styles.summaryRow}>
-                <div style={styles.summaryName}>{item.product} / {item.size}</div>
-                <div style={styles.summaryQty}>{item.quantity} 件</div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
       <div style={styles.list}>
         {loading && <div style={styles.loading}>載入中...</div>}
         {displayOrders.length === 0 && !loading && <div style={styles.empty}>目前沒有待執貨單</div>}
@@ -219,6 +171,7 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
               <div>
                 <div style={styles.queue}>{order.queue_number}</div>
                 <div style={styles.customer}>{order.customer_info?.guestName || "顧客"} · {order.customer_info?.phone || "電話未填"}</div>
+                <div style={styles.orderTotal}>本單總數：{getOrderItemCount(order)} 件</div>
               </div>
               <div style={styles.cardTopRight}>
                 <div style={styles.elapsed}>已開始 {elapsedSeconds(order) ?? "-"} 秒</div>
@@ -227,11 +180,11 @@ export default function PickupPage({ currentSchoolId = "", onReadyForSale }) {
             </div>
 
             <div style={styles.itemsWrap}>
-              {(order.tailor_info?.items || []).map((item, index) => (
+              {getOrderItems(order).map((item, index) => (
                 <div key={`${item.product_name}-${item.size}-${index}`} style={styles.itemRow}>
                   <span>{item.product_name}</span>
                   <span>{item.size}</span>
-                  <strong>{item.quantity} 件</strong>
+                  <strong>{item.quantity || 1} 件</strong>
                 </div>
               ))}
             </div>
@@ -275,28 +228,6 @@ const styles = {
     fontWeight: 800,
     fontSize: 12,
   },
-  summaryPanel: {
-    background: "#1f3a5f",
-    color: "#fff",
-    borderRadius: 18,
-    padding: 16,
-    display: "grid",
-    gap: 12,
-  },
-  summaryTitle: { fontSize: 18, fontWeight: 800 },
-  summaryGrid: { display: "grid", gap: 8 },
-  summaryRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    background: "rgba(255,255,255,0.08)",
-    borderRadius: 10,
-    padding: "10px 12px",
-    fontSize: 14,
-  },
-  summaryName: { fontWeight: 700 },
-  summaryQty: { fontWeight: 900, fontSize: 18 },
-  emptySummary: { color: "#dbeafe", fontSize: 13, fontWeight: 700 },
   list: { display: "grid", gap: 12 },
   loading: { textAlign: "center", fontWeight: 700, color: "#475569", padding: 16 },
   notice: {
@@ -329,6 +260,7 @@ const styles = {
   cardTopRight: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 },
   queue: { fontSize: 30, fontWeight: 900, color: "#0f172a", letterSpacing: 1.2 },
   customer: { fontSize: 13, color: "#475569", fontWeight: 700, marginTop: 4 },
+  orderTotal: { fontSize: 14, color: "#0f766e", fontWeight: 900, marginTop: 8 },
   elapsed: { color: "#1d4ed8", fontSize: 12, fontWeight: 800, whiteSpace: "nowrap" },
   badge: {
     background: "#fff7ed",
