@@ -38,8 +38,14 @@ begin
     raise exception 'Admin role required';
   end if;
 
-  if coalesce((auth.jwt() ->> 'auth_time')::bigint, 0) < extract(epoch from now())::bigint - 300 then
-    raise exception 'Admin password verification expired; authenticate again';
+  if not exists (
+    select 1
+    from jsonb_array_elements(coalesce(auth.jwt() -> 'amr', '[]'::jsonb)) as auth_methods(method_entry)
+    where method_entry ->> 'method' = 'password'
+      and (method_entry ->> 'timestamp') ~ '^[0-9]+$'
+      and (method_entry ->> 'timestamp')::bigint >= extract(epoch from now())::bigint - 300
+  ) then
+    raise exception 'Recent admin password verification required';
   end if;
 
   if nullif(btrim(p_order_id), '') is null then

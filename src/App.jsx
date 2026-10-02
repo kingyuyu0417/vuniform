@@ -2080,7 +2080,12 @@ export default function UniformPOS() {
         p_order_id: orderId,
         p_reason: reason,
       });
-      if (error) throw error;
+      if (error) {
+        if (error.message.includes("Recent admin password verification required")) {
+          throw new Error("管理員密碼驗證已逾時，請重新輸入密碼後再試。");
+        }
+        throw error;
+      }
       if (data?.order_id !== orderId || !data?.voided_at) throw new Error("作廢結果未能確認，請重新整理記錄");
 
       setSalesLog((previous) => previous.map((order) => order.id === orderId
@@ -2088,7 +2093,7 @@ export default function UniformPOS() {
         : order));
       return data;
     } finally {
-      const { error: signOutError } = await verificationClient.auth.signOut();
+      const { error: signOutError } = await verificationClient.auth.signOut({ scope: "local" });
       if (signOutError) console.warn("管理員密碼驗證工作階段未能清除", signOutError);
     }
   };
