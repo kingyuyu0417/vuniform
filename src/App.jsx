@@ -1521,7 +1521,9 @@ const buildReceiptUrl = (order, language = "zh") => {
     binary += String.fromCharCode(byte);
   });
   const encoded = btoa(binary);
-  const publicUrl = (import.meta.env.VITE_PUBLIC_APP_URL || window.location.origin).replace(/\/$/, "");
+  const publicUrl = (import.meta.env.PROD
+    ? "https://uniform-pos-app-current.pages.dev"
+    : import.meta.env.VITE_PUBLIC_APP_URL || window.location.origin).replace(/\/$/, "");
   return `${publicUrl}/receipt.html?lang=${language}&data=${encodeURIComponent(encoded)}`;
 };
 
@@ -2760,6 +2762,14 @@ export default function UniformPOS() {
     setSelectedGuest((prev) => (prev && prev.id === updatedOrder.id ? null : prev));
   };
 
+  const handleFittingComplete = () => {
+    setSelectedGuest(null);
+    setTab("queue");
+    const school = selectedSchool || publicRouteSchool;
+    const schoolQuery = school ? `?school_id=${encodeURIComponent(school)}` : "";
+    navigate(`/queue${schoolQuery}`, { replace: true });
+  };
+
   const handleAssignGuest = (guest) => {
     if (!guest) return;
     
@@ -3224,6 +3234,28 @@ export default function UniformPOS() {
         }
         .pos-btn { cursor: pointer; border: none; outline: none; }
         .pos-btn:active { transform: scale(0.97); }
+        .receipt-modal-overlay, .receipt-modal-panel { box-sizing: border-box; }
+        .receipt-modal-header {
+          position: sticky;
+          top: -20px;
+          z-index: 2;
+          margin: -20px -20px 10px;
+          padding: 10px 12px 10px 20px;
+          background: #fff;
+          border-bottom: 1px solid #E5E7EB;
+        }
+        .receipt-modal-close {
+          flex: 0 0 44px;
+          width: 44px;
+          height: 44px;
+          min-width: 44px;
+          min-height: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 10px;
+          touch-action: manipulation;
+        }
         .pos-page-content { padding: 20px; }
         .pos-page-content > * { max-width: 100%; }
         .sale-product-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
@@ -3232,6 +3264,23 @@ export default function UniformPOS() {
         .sale-size-button { min-height: 76px; }
         @media (max-width: 560px) {
           .pos-page-content { padding: 14px; }
+          .receipt-modal-overlay {
+            align-items: flex-start !important;
+            overflow-y: auto;
+            padding: max(8px, env(safe-area-inset-top)) 10px max(8px, env(safe-area-inset-bottom)) !important;
+          }
+          .receipt-modal-panel {
+            max-height: calc(100vh - 32px) !important;
+            max-height: calc(100dvh - 32px) !important;
+            padding: 16px !important;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+          }
+          .receipt-modal-header {
+            top: -16px;
+            margin: -16px -16px 10px;
+            padding-left: 16px;
+          }
           .sale-product-grid { gap: 8px; }
           .sale-product-button { min-height: 76px; padding: 10px 8px !important; font-size: 16px !important; line-height: 1.35; }
           .sale-size-grid { gap: 8px; }
@@ -3393,6 +3442,7 @@ export default function UniformPOS() {
                 schoolName={selectedSchool}
                 onGenerateTicket={handleGenerateTicket}
                 onStatusChange={handleFittingStatusChange}
+                onComplete={handleFittingComplete}
               />
             }
           />
@@ -3550,6 +3600,7 @@ export default function UniformPOS() {
                     schoolName={selectedSchool}
                     onGenerateTicket={handleGenerateTicket}
                     onStatusChange={handleFittingStatusChange}
+                    onComplete={handleFittingComplete}
                   />
                 )}
                 {tab === "pickup" && (
@@ -5995,18 +6046,11 @@ function ReceiptModal({ order, language = "zh", onLanguageChange, onClose, onRed
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 }}>
-      <div style={{ background: "#fff", borderRadius: 14, maxWidth: 340, width: "100%", padding: 20, maxHeight: "85vh", overflowY: "auto" }}>
-        <div style={{ position: "sticky", top: -20, zIndex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", margin: "-20px -20px 10px", padding: "10px 12px 6px 20px", background: "#fff" }}>
-          <div style={{ fontSize: 16, fontWeight: 600 }}>{english ? "Transaction completed" : "交易完成"}</div>
-          <button
-            className="pos-btn"
-            type="button"
-            onClick={onClose}
-            aria-label="關閉電子收據"
-            title="關閉"
-            style={{ width: 44, height: 44, minWidth: 44, minHeight: 44, display: "grid", placeItems: "center", flexShrink: 0, borderRadius: 10, background: "none", color: "#1f2937" }}
-          >
+    <div className="receipt-modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 }}>
+      <div className="receipt-modal-panel" role="dialog" aria-modal="true" aria-labelledby="receipt-modal-title" style={{ background: "#fff", borderRadius: 14, maxWidth: 340, width: "100%", padding: 20, maxHeight: "85vh", overflowY: "auto" }}>
+        <div className="receipt-modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div id="receipt-modal-title" style={{ fontSize: 16, fontWeight: 600 }}>{english ? "Transaction completed" : "交易完成"}</div>
+          <button className="pos-btn receipt-modal-close" type="button" aria-label={english ? "Close receipt" : "關閉收據"} onClick={onClose} style={{ background: "none" }}>
             <X size={18} />
           </button>
         </div>

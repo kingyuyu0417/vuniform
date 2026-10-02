@@ -1,0 +1,10 @@
+#root {
+  zoom: 1.15;
+  min-height: 100vh;
+}
+
+@media print {
+  #root {
+    zoom: 1;
+  }
+}
