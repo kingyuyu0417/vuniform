@@ -1394,6 +1394,67 @@ const PERMISSIONS = {
   },
 };
 
+const STAFF_PERMISSION_ROLES = [ROLES.ADMIN, ROLES.MANAGER, ROLES.SALES, ROLES.STAFF];
+const STAFF_PERMISSION_TAB_LABELS = {
+  sale: "銷售",
+  products: "商品",
+  records: "銷售記錄",
+  staff: "員工管理",
+  qrcode: "QR Code",
+  track: "訂單追蹤",
+};
+
+function StaffRolePermissionsTable() {
+  const rows = [
+    { label: "可使用分頁", value: (permissions) => permissions.tabs.map((tab) => STAFF_PERMISSION_TAB_LABELS[tab]).join("、") || "—" },
+    { label: "編輯商品價格及尺碼", value: (permissions) => permissions.canEditProducts ? "可以" : "—" },
+    { label: "管理學校及款式", value: (permissions) => permissions.canManageSchools ? "可以" : "—" },
+    { label: "商品 CSV 匯入／匯出", value: (permissions) => permissions.canImportExport ? "可以" : "—" },
+    { label: "查看銷售記錄", value: (permissions) => permissions.tabs.includes("records") ? (permissions.canViewAllDates ? "所有日期" : "僅限當日") : "—" },
+    { label: "匯出銷售記錄", value: (permissions) => permissions.canExportSales ? "可以" : "—" },
+    { label: "作廢銷售單", value: (_, role) => role === ROLES.ADMIN ? "可以" : "—" },
+  ];
+
+  return (
+    <div style={{ marginBottom: 14, border: "1px solid #DCE3EA", borderRadius: 10, overflow: "hidden" }}>
+      <div style={{ padding: "10px 12px", background: "#F0F4F8", color: "#1F3A5F", fontSize: 13, fontWeight: 700 }}>
+        員工角色權限一覽
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", minWidth: 650, borderCollapse: "collapse", fontSize: 11, textAlign: "left" }}>
+          <thead>
+            <tr style={{ background: "#FAFBFC" }}>
+              <th style={{ padding: "8px 10px", borderBottom: "1px solid #E5E9ED" }}>權限</th>
+              {STAFF_PERMISSION_ROLES.map((role) => (
+                <th key={role} style={{ padding: "8px 10px", borderBottom: "1px solid #E5E9ED", whiteSpace: "nowrap" }}>
+                  {ROLE_LABEL[role]}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.label}>
+                <th scope="row" style={{ padding: "8px 10px", borderBottom: "1px solid #EEF0F2", fontWeight: 600, whiteSpace: "nowrap" }}>
+                  {row.label}
+                </th>
+                {STAFF_PERMISSION_ROLES.map((role) => (
+                  <td key={role} style={{ padding: "8px 10px", borderBottom: "1px solid #EEF0F2", color: "#444" }}>
+                    {row.value(PERMISSIONS[role], role)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ padding: "8px 12px", color: "#667085", fontSize: 10 }}>
+        權限依員工角色套用；管理員可作廢銷售單。
+      </div>
+    </div>
+  );
+}
+
 // 預設帳號（首次使用；ADMIN可以之後喺「員工」分頁改晒佢哋）
 const DEFAULT_ACCOUNTS = [
   { id: "acc-admin", name: "管理員", role: ROLES.ADMIN, pin: "0000" },
@@ -6687,6 +6748,7 @@ function AuthStaffTab({ manageStaff, currentId }) {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 12 }}><div style={{ fontSize: 12, color: "#666" }}>管理員可在此邀請員工。邀請電郵會由 Supabase 發送，員工自行設定密碼。</div><button className="pos-btn" onClick={loadStaff} disabled={busy} style={{ flexShrink: 0, padding: "6px 8px", borderRadius: 6, background: "#fff", border: "1px solid #ccc", fontSize: 11 }}>重新整理</button></div>
+      <StaffRolePermissionsTable />
       <div style={{ background: "#F7F7F5", borderRadius: 10, padding: 12, marginBottom: 14 }}>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="員工姓名" style={{ width: "100%", padding: 9, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box", marginBottom: 8 }} />
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="員工電郵" style={{ width: "100%", padding: 9, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box", marginBottom: 8 }} />
