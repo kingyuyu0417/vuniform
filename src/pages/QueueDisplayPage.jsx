@@ -53,8 +53,8 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
   const [refreshFailed, setRefreshFailed] = useState(false);
   const isPickup = serviceType === QUEUE_SERVICE.PICKUP;
   const laneTheme = isPickup
-    ? { accent: "#fb923c", border: "#9a3412", background: "#2a160e", soft: "#fed7aa", glow: "rgba(249,115,22,.2)", numberGlow: "0 0 14px rgba(251,146,60,.5), 0 0 32px rgba(249,115,22,.28)" }
-    : { accent: "#38bdf8", border: "#1e5a85", background: "#0b2038", soft: "#bae6fd", glow: "rgba(14,165,233,.18)", numberGlow: "0 0 14px rgba(56,189,248,.5), 0 0 32px rgba(14,165,233,.28)" };
+    ? { accent: "#fb923c", border: "#9a3412", background: "#2a160e", soft: "#fed7aa", glow: "rgba(249,115,22,.2)", numberGlow: "0 0 6px rgba(251,146,60,.55), 0 0 16px rgba(249,115,22,.22)" }
+    : { accent: "#38bdf8", border: "#1e5a85", background: "#0b2038", soft: "#bae6fd", glow: "rgba(14,165,233,.18)", numberGlow: "0 0 6px rgba(56,189,248,.55), 0 0 16px rgba(14,165,233,.22)" };
   const serviceTitle = isPickup ? "取貨叫號" : "度身叫號";
   const destination = isPickup ? "請前往取貨區辦理取貨及付款" : "請前往度身區辦理度身";
   const hasLoadedCounterRef = useRef(false);
