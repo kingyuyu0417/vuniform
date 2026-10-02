@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { QrCode, Users, Volume2 } from "lucide-react";
+import { Package, QrCode, Ruler, Users, Volume2 } from "lucide-react";
 import qrcodeGenerator from "qrcode-generator";
 import { ORDER_STATUS, QUEUE_SERVICE, queueOrderService } from "../services/queueOrderService";
 
@@ -34,7 +34,7 @@ const queueNumberForSpeech = (value = "") => String(value)
 
 const schoolNameStyle = (schoolName = "") => {
   const characterCount = Array.from(schoolName).length;
-  const fontSize = characterCount > 36 ? 26 : characterCount > 28 ? 32 : characterCount > 20 ? 40 : 52;
+  const fontSize = characterCount > 36 ? 18 : characterCount > 28 ? 20 : characterCount > 20 ? 22 : 26;
   return {
     ...styles.school,
     fontSize: `${fontSize}px`,
@@ -49,6 +49,14 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
   const [waitingCount, setWaitingCount] = useState(0);
   const [qrCode, setQrCode] = useState("");
   const [isCalling, setIsCalling] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
+  const [refreshFailed, setRefreshFailed] = useState(false);
+  const isPickup = serviceType === QUEUE_SERVICE.PICKUP;
+  const laneTheme = isPickup
+    ? { accent: "#fb923c", border: "#9a3412", background: "#2a160e", soft: "#fed7aa", glow: "rgba(249,115,22,.2)" }
+    : { accent: "#38bdf8", border: "#1e5a85", background: "#0b2038", soft: "#bae6fd", glow: "rgba(14,165,233,.18)" };
+  const serviceTitle = isPickup ? "取貨叫號" : "度身叫號";
+  const destination = isPickup ? "請前往取貨區辦理取貨及付款" : "請前往度身區辦理度身";
   const hasLoadedCounterRef = useRef(false);
   const lastAnnouncedCallRef = useRef("");
   const chimeAudioRef = useRef(null);
@@ -77,6 +85,8 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
           serviceType,
         });
         if (!active || !next) return;
+        setLastUpdatedAt(new Date());
+        setRefreshFailed(false);
         setWaitingCount(Number(next.waiting_count || 0));
         setCounter((previous) => {
           if (next.current_queue_number && (next.current_queue_number !== previous?.current_queue_number || next.updated_at !== previous?.updated_at)) {
@@ -86,6 +96,7 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
           return next;
         });
       } catch (error) {
+        if (active) setRefreshFailed(true);
         console.warn("public queue display refresh failed", error);
       } finally {
         refreshInFlightRef.current = false;
@@ -168,6 +179,10 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
   const enableAutomaticAudio = () => {
     enqueueAnnouncement(() => announce());
   };
+  const currentQueueNumber = counter?.current_queue_number || "";
+  const lastUpdatedLabel = lastUpdatedAt
+    ? lastUpdatedAt.toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+    : "";
 
   return (
     <main style={{ ...styles.page, ...(embedded ? styles.embeddedPage : {}) }}>
@@ -180,18 +195,30 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
         </div>
         {qrCode && <div style={styles.headerQr}><img src={qrCode} alt="客人登記 QR code" style={styles.headerQrImage} /><div><QrCode size={13} /> 登記／查詢</div></div>}
       </div>}
-      <section style={styles.hero} aria-live="polite">
-        <div style={styles.label}>{isCalling ? (serviceType === QUEUE_SERVICE.PICKUP ? "請立即到取貨區取貨付款" : "請立即到度身區度身") : (serviceType === QUEUE_SERVICE.PICKUP ? "現正取貨" : "現正度身")}</div>
-        <div key={`${counter?.current_queue_number || "empty"}-${counter?.updated_at || ""}`} style={{ ...styles.queueNumber, ...(embedded ? styles.embeddedQueueNumber : {}), ...(isCalling ? styles.queueNumberCalling : {}) }}>
-          {counter?.current_queue_number || "--"}
+      <section style={{ ...styles.hero, borderColor: laneTheme.border, background: laneTheme.background, boxShadow: `0 0 50px ${laneTheme.glow}` }} aria-live="polite">
+        <div style={{ ...styles.label, color: laneTheme.soft, display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
+          {isPickup ? <Package size={32} aria-hidden="true" /> : <Ruler size={32} aria-hidden="true" />}
+          <span>{serviceTitle}</span>
         </div>
-        <div style={{ ...styles.counter, ...(isCalling ? styles.counterCalling : {}) }}>{isCalling ? (serviceType === QUEUE_SERVICE.PICKUP ? "請到取貨區取貨付款" : "請到度身區度身") : "請留意叫號"}</div>
+        <div style={{ color: laneTheme.accent, fontSize: "clamp(14px, 2vw, 22px)", fontWeight: 800, marginTop: 16 }}>
+          {destination}
+        </div>
+        <div aria-label={currentQueueNumber ? `現正叫號 ${currentQueueNumber}` : "暫無叫號"} key={`${currentQueueNumber || "empty"}-${counter?.updated_at || ""}`} style={{ ...styles.queueNumber, ...(embedded ? styles.embeddedQueueNumber : {}), ...(!currentQueueNumber ? { fontSize: "clamp(42px, 8vw, 96px)", letterSpacing: 0, color: laneTheme.soft } : {}), ...(isCalling ? styles.queueNumberCalling : {}) }}>
+          {currentQueueNumber || "暫無叫號"}
+        </div>
+        <div style={{ ...styles.counter, color: isCalling ? "#fde68a" : laneTheme.soft, ...(isCalling ? styles.counterCalling : {}) }}>
+          {isCalling ? `正在叫號，請立即前往${isPickup ? "取貨區" : "度身區"}` : "請留意叫號"}
+        </div>
         <button type="button" onClick={enableAutomaticAudio} style={styles.announceButton} title="啟用自動叫號提示">
           <Volume2 size={18} /> 啟用自動提示
         </button>
       </section>
       <section style={styles.footer}>
         <div style={styles.waiting}><Users size={25} /><strong>{waitingCount}</strong><span>位客人等候中</span></div>
+        <div role="status" style={{ color: refreshFailed ? "#fecaca" : "#a8b8cc", fontSize: "clamp(13px, 1.5vw, 18px)", textAlign: "right" }}>
+          {refreshFailed ? "更新連線中斷，正在重試" : "自動更新"}
+          {lastUpdatedLabel ? <span> · 最後更新 {lastUpdatedLabel}</span> : ""}
+        </div>
       </section>
     </main>
   );
@@ -245,14 +272,14 @@ export default function QueueDisplayPage({ schoolName = "", outletName = "", cou
 const styles = {
   displayGrid: { minHeight: "100vh", display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", background: "#071426", gap: 2 },
   embeddedPage: { minHeight: 0, padding: "3vh 3vw", gap: 18, border: "1px solid #1e5a85", borderRadius: 16, overflow: "hidden" },
-  sharedHeader: { gridColumn: "1 / -1", display: "flex", justifyContent: "center", alignItems: "center", gap: 22, padding: "3vh 4vw 1vh", textAlign: "center", flexWrap: "wrap" },
+  sharedHeader: { gridColumn: "1 / -1", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, padding: "1.5vh 4vw 0.5vh", textAlign: "left", flexWrap: "wrap" },
   sharedHeaderText: { minWidth: 0 },
   page: { minHeight: "100vh", boxSizing: "border-box", padding: "5vh 6vw", background: "#071426", color: "#fff", fontFamily: "system-ui, sans-serif", display: "grid", gridTemplateRows: "auto 1fr auto", gap: 28 },
   header: { display: "flex", justifyContent: "center", alignItems: "center", gap: 22, textAlign: "center", flexWrap: "wrap" },
   headerText: { minWidth: 0 },
   eyebrow: { color: "#7dd3fc", fontSize: "clamp(14px, 2vw, 22px)", letterSpacing: 2, fontWeight: 800 },
-  school: { margin: "12px 0 4px", fontSize: "clamp(26px, 4vw, 52px)", lineHeight: 1.15, color: "#fef08a", textShadow: "0 2px 10px rgba(250, 204, 21, 0.24)" },
-  outlet: { color: "#a8b8cc", fontSize: "clamp(16px, 2vw, 24px)" },
+  school: { margin: "6px 0 2px", fontSize: "clamp(18px, 2.4vw, 28px)", lineHeight: 1.25, color: "#cbd5e1", fontWeight: 700 },
+  outlet: { color: "#a8b8cc", fontSize: "clamp(13px, 1.5vw, 18px)" },
   headerQr: { display: "grid", justifyItems: "center", gap: 4, color: "#dbeafe", fontSize: 12, fontWeight: 800, flexShrink: 0 },
   headerQrImage: { width: 76, height: 76, background: "#fff", padding: 5, borderRadius: 6 },
   hero: { alignSelf: "center", textAlign: "center", padding: "5vh 4vw", border: "1px solid #1e5a85", borderRadius: 18, background: "#0b2038", boxShadow: "0 0 50px rgba(14,165,233,.18)" },
