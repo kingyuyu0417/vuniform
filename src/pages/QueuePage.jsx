@@ -57,7 +57,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
   const playCallChime = () => {
     const audio = chimeAudioRef.current;
     if (!audio) return;
-    audio.currentTime = 0;
+    audio.currentTime = 0.9;
     audio.play().catch((error) => console.warn("queue call chime could not play", error));
   };
 
