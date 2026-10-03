@@ -30,6 +30,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
   const chimeContextRef = useRef(null);
   const chimeBufferRef = useRef(null);
   const chimeSourceRef = useRef(null);
+  const pointerChimePendingRef = useRef(false);
   const publicDisplaySubscriptionRef = useRef(null);
 
   useEffect(() => {
@@ -124,6 +125,23 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     audio.play().catch((error) => console.warn("queue call chime could not play", error));
   };
 
+  const playCallChimeOnPointerDown = () => {
+    pointerChimePendingRef.current = true;
+    playCallChime();
+  };
+
+  const playCallChimeOnClick = () => {
+    if (pointerChimePendingRef.current) {
+      pointerChimePendingRef.current = false;
+      return;
+    }
+    playCallChime();
+  };
+
+  const cancelPointerChime = () => {
+    pointerChimePendingRef.current = false;
+  };
+
   const notifyPublicDisplay = (next) => {
     if (next?.current_queue_number) publicDisplaySubscriptionRef.current?.notify(next);
   };
@@ -186,7 +204,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
   const callNext = async () => {
     setCalling(true);
     setCallError("");
-    if (rows.length > 0) playCallChime();
+    if (rows.length > 0) playCallChimeOnClick();
     try {
       const next = serviceType === QUEUE_SERVICE.PICKUP
         ? await queueOrderService.callNextPickup({ schoolId: currentSchoolId, outletName, calledBy })
@@ -247,7 +265,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     setCalling(true);
     setCallError("");
     const targetStatus = serviceType === QUEUE_SERVICE.PICKUP ? ORDER_STATUS.READY : ORDER_STATUS.PENDING;
-    playCallChime();
+    playCallChimeOnClick();
     try {
       await queueOrderService.updateStatus(visit.id, targetStatus, {}, currentSchoolId, ORDER_STATUS.SKIPPED);
       setSyncedVisits((previous) => (previous || []).map((order) => (
@@ -297,7 +315,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
   const recallCurrentCall = async () => {
     setCalling(true);
     setCallError("");
-    if (counter?.current_queue_number) playCallChime();
+    if (counter?.current_queue_number) playCallChimeOnClick();
     try {
       const next = serviceType === QUEUE_SERVICE.PICKUP
         ? await queueOrderService.recallPickup({ schoolId: currentSchoolId, outletName })
@@ -336,6 +354,8 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
                   <span style={{ color: "#7c2d12", fontWeight: 700 }}>{visit.queueNo} · {visit.guestName}</span>
                   <button
                     className="pos-btn"
+                    onPointerDown={playCallChimeOnPointerDown}
+                    onPointerCancel={cancelPointerChime}
                     onClick={() => recallSkipped(visit)}
                     disabled={calling}
                     style={{ background: "#ea580c", color: "#fff", padding: "7px 10px", borderRadius: 7, fontSize: 12, fontWeight: 700 }}
@@ -366,10 +386,10 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
           <div style={{ fontSize: 11, opacity: 0.75 }}>目前叫號{outletName ? ` · ${outletName}` : ""}</div>
           <div style={{ fontSize: 34, fontWeight: 900, letterSpacing: 2, margin: "2px 0 10px" }}>{counter?.current_queue_number || "未叫號"}</div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="pos-btn" onClick={callNext} disabled={calling || Boolean(counter?.current_order_id)} style={{ flex: 1, padding: "10px 8px", borderRadius: 8, background: "#D97757", color: "#fff", fontWeight: 800 }}>
+            <button className="pos-btn" onPointerDown={rows.length > 0 ? playCallChimeOnPointerDown : undefined} onPointerCancel={cancelPointerChime} onClick={callNext} disabled={calling || Boolean(counter?.current_order_id)} style={{ flex: 1, padding: "10px 8px", borderRadius: 8, background: "#D97757", color: "#fff", fontWeight: 800 }}>
               <Bell size={15} style={{ verticalAlign: "middle", marginRight: 5 }} />{calling ? "處理中…" : "叫下一位"}
             </button>
-            <button className="pos-btn" onClick={recallCurrentCall} disabled={calling || !counter?.current_queue_number} style={{ padding: "10px 9px", borderRadius: 8, background: "rgba(255,255,255,0.16)", color: "#fff", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }} title="重新叫號" aria-label="重新叫目前號碼">
+            <button className="pos-btn" onPointerDown={counter?.current_queue_number ? playCallChimeOnPointerDown : undefined} onPointerCancel={cancelPointerChime} onClick={recallCurrentCall} disabled={calling || !counter?.current_queue_number} style={{ padding: "10px 9px", borderRadius: 8, background: "rgba(255,255,255,0.16)", color: "#fff", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }} title="重新叫號" aria-label="重新叫目前號碼">
               <RotateCcw size={16} />
               <span>重叫</span>
             </button>
