@@ -749,7 +749,16 @@ const isHighConfidenceImport = ({ analysis, confidence, conversionWarnings = [] 
     && previewRows.every((row) => row.school && row.school !== UNASSIGNED);
 };
 
-const asSheetRows = (workbook, xlsx) => xlsx.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, defval: "" });
+const selectImportSheet = (workbook, xlsx, selectedSchool) => {
+  const sheets = workbook.SheetNames.map((name) => {
+    const sheet = workbook.Sheets[name];
+    return {
+      sheet,
+      rows: xlsx.utils.sheet_to_json(sheet, { header: 1, defval: "" }),
+    };
+  });
+  return sheets.find(({ rows }) => selectedSchool && findSheetSchool(rows) === selectedSchool) || sheets[0];
+};
 const numericCell = (value) => {
   const text = String(value ?? "").replace(/[$,\s]/g, "");
   if (!text || !/^\d+(?:\.\d+)?$/.test(text)) return null;
@@ -932,6 +941,7 @@ const expandTailoredPriceListValue = (name, value) => {
 };
 const inferLowerTailoredSizes = (name, rawEntries) => {
   if (!rawEntries.some(({ size }) => size === "裁碼")) return [];
+  if (expandTailoredPriceListValue(name, "裁碼").some((size) => size !== "裁碼")) return [];
   const tailoredRule = PRICE_LIST_TAILORED_SIZES.find((rule) => rule.match.test(name));
   if (!tailoredRule) return [];
   const numericEntries = rawEntries
@@ -4979,11 +4989,12 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
       const extension = file.name.toLowerCase().split(".").pop();
       const xlsx = await import("xlsx");
       const workbook = xlsx.read(await file.arrayBuffer(), { type: "array" });
-      const sheetRows = asSheetRows(workbook, xlsx);
+      const selectedSheet = selectImportSheet(workbook, xlsx, activeSchool);
+      const sheetRows = selectedSheet?.rows || [];
       const headerText = sheetRows.slice(0, 6).flat().map((value) => normalizeImportHeader(value)).join("|");
       const isStandardFormat = ["學校", "款式名稱", "尺碼", "價錢"].every((header) => headerText.includes(normalizeImportHeader(header)));
       const converted = isStandardFormat
-        ? { rows: xlsx.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" }), warnings: [] }
+        ? { rows: xlsx.utils.sheet_to_json(selectedSheet.sheet, { defval: "" }), warnings: [] }
         : convertIrregularPriceList(sheetRows);
       const analysis = smartImportRows(converted.rows, products);
 
