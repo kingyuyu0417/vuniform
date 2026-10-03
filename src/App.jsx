@@ -1312,7 +1312,32 @@ const analyzeNoticeText = (text, fileName) => {
     "男生深炭灰色長西褲", "長西褲", "冬天運動套裝", "冬天運動單衫",
     "冬天運動單褲", "V領背心", "V領長袖冷衫", "校裙", "運動褲",
   ];
-  const productsFound = productKeywords.filter((keyword) => normalized.includes(keyword));
+  const exactProductsFound = productKeywords.filter((keyword) => normalized.includes(keyword));
+  const productAliases = [
+    { name: "校褸", keywords: ["校褸", "校服外套", "冬季外套"] },
+    { name: "校呔", keywords: ["校呔", "領帶", "领带", "領呔", "呔"] },
+    { name: "冷衫", keywords: ["冷衫", "毛衣", "針織衫"] },
+    { name: "恤衫", keywords: ["恤衫", "襯衫"] },
+    { name: "運動上衣", keywords: ["運動上衣", "運動衫", "運動單衫"] },
+    { name: "運動褸", keywords: ["運動褸", "運動外套", "運動夾克"] },
+    { name: "運動褲", keywords: ["運動長褲", "運動單褲"] },
+    { name: "襪", keywords: ["襪", "袜"] },
+    { name: "皮帶", keywords: ["皮帶", "皮带", "腰帶"] },
+  ];
+  const productsFound = [...new Set([
+    ...exactProductsFound,
+    ...productAliases
+      .filter(({ keywords }) => keywords.some((keyword) => normalized.includes(keyword)))
+      .filter(({ name }) => {
+        if (name === "校呔") return !exactProductsFound.some((product) => /呔/.test(product));
+        if (name === "冷衫") return !exactProductsFound.some((product) => /冷衫|背心/.test(product));
+        if (name === "恤衫") return !exactProductsFound.some((product) => /恤衫/.test(product));
+        if (name === "運動上衣") return !exactProductsFound.some((product) => /運動單衫|運動套裝/.test(product));
+        if (name === "運動褲") return !exactProductsFound.some((product) => /運動褲|運動單褲|運動套裝/.test(product));
+        return true;
+      })
+      .map(({ name }) => name),
+  ])];
   return {
     fileName,
     text: normalized,
