@@ -242,7 +242,7 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
         <div style={{ color: laneTheme.accent, fontSize: "clamp(14px, 2vw, 22px)", fontWeight: 800, marginTop: 16 }}>
           {destination}
         </div>
-        <div aria-label={currentQueueNumber ? `現正叫號 ${currentQueueNumber}` : "暫無叫號"} key={`${currentQueueNumber || "empty"}-${counter?.updated_at || ""}`} style={{ ...styles.queueNumber, ...(embedded ? styles.embeddedQueueNumber : {}), ...(!currentQueueNumber ? { fontSize: "clamp(32px, 6vw, 64px)", letterSpacing: 0, color: laneTheme.soft } : {}), ...(isCalling ? { ...styles.queueNumberCalling, textShadow: laneTheme.numberGlow } : {}) }}>
+        <div aria-label={currentQueueNumber ? `現正叫號 ${currentQueueNumber}` : "暫無叫號"} key={`${currentQueueNumber || "empty"}-${counter?.updated_at || ""}`} style={{ ...styles.queueNumber, ...(embedded ? styles.embeddedQueueNumber : {}), ...(!currentQueueNumber ? { fontSize: "clamp(32px, 6vw, 64px)", lineHeight: 1.2, letterSpacing: 0, color: laneTheme.soft, overflow: "visible" } : {}), ...(isCalling ? { ...styles.queueNumberCalling, textShadow: laneTheme.numberGlow } : {}) }}>
           {currentQueueNumber || "暫無叫號"}
         </div>
         <div style={{ ...styles.counter, color: isCalling ? "#fde68a" : laneTheme.soft, ...(isCalling ? styles.counterCalling : {}) }}>
