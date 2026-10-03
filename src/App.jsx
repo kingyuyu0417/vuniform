@@ -887,6 +887,30 @@ const canonicalPriceListProductName = (value, season = "") => {
   }
   return PRICE_LIST_PRODUCT_ALIASES[normalizedName] || rawName;
 };
+const contextualPriceListProductName = (value, row, columnIndex, season = "") => {
+  const normalizedName = normalizePriceListProductName(value);
+  if (normalizedName === "長西褲") {
+    const color = normalizePriceListProductName(row[columnIndex + 1]);
+    const colorNames = {
+      灰: "灰色",
+      灰色: "灰色",
+      深灰: "深灰色",
+      深灰色: "深灰色",
+      黑: "黑色",
+      黑色: "黑色",
+      白: "白色",
+      白色: "白色",
+      藍: "藍色",
+      藍色: "藍色",
+      深藍: "深藍色",
+      深藍色: "深藍色",
+      啡: "啡色",
+      啡色: "啡色",
+    };
+    if (colorNames[color]) return `${colorNames[color]}長西褲`;
+  }
+  return canonicalPriceListProductName(value, season);
+};
 const looksLikeProductHeader = (value) => {
   const text = normalizePriceListProductName(value);
   if (Object.prototype.hasOwnProperty.call(PRICE_LIST_PRODUCT_ALIASES, text)) return true;
@@ -912,7 +936,6 @@ const SIMPLE_SIZE_PRODUCT_NAMES = new Set([
   "深炭灰色半截校裙",
   "女裝西裝褸配背心",
 ]);
-const LONG_TROUSER_LENGTHS = ["30", "31", "32", "33", "34", "35", "36", "37", "38.5", "40", "41.5", "43", "44.5", "46"];
 const DEFAULT_TROUSER_SURCHARGES = [
   { threshold: 43, amount: 30, minimum: true },
   { threshold: 41.5, amount: 20, minimum: false },
@@ -1028,11 +1051,11 @@ const convertIrregularPriceList = (rows) => {
   const warnings = [];
   const skirtSurchargeRules = findSurchargeRules(rows, /上圍|上围|上圉/);
   const trouserSurchargeRules = findSurchargeRules(rows, /褲長|裤长/);
-  const effectiveTrouserSurchargeRules = trouserSurchargeRules.length > 0 ? trouserSurchargeRules : DEFAULT_TROUSER_SURCHARGES;
+  const effectiveTrouserSurchargeRules = trouserSurchargeRules;
   rows.forEach((row, rowIndex) => {
     row.forEach((cell, columnIndex) => {
       const rawName = String(cell || "").replace(/\s+/g, " ").trim();
-      const name = canonicalPriceListProductName(rawName, priceListSeasonForRow(rows, rowIndex));
+      const name = contextualPriceListProductName(rawName, row, columnIndex, priceListSeasonForRow(rows, rowIndex));
       if (!looksLikeProductHeader(rawName)) return;
       const standalonePrice = row
         .slice(columnIndex + 1)
@@ -1180,6 +1203,7 @@ const convertIrregularPriceList = (rows) => {
         : [];
       const lengthRange = isTrousers ? findDimensionRange(rows, rowIndex, /褲長|裤长|長度|长度/) : [];
       const hasSkirtMatrix = isSkirt && sizeRange.length > 0;
+      const hasExplicitTrouserLengthDimension = lengthRange.length > 0;
       if (hasSkirtMatrix) {
         rawEntries.forEach(({ size: rawLength, price }) => {
           const lengths = expandTailoredPriceListValue(name, rawLength)
@@ -1196,10 +1220,9 @@ const convertIrregularPriceList = (rows) => {
             });
           }));
         });
-      } else if (isTrousers && (lengthRange.length || isLongTrousers || PRICE_LIST_TAILORED_SIZES.some((rule) => rule.matrixDimension === "length" && rule.match.test(name)))) {
+      } else if (isTrousers && hasExplicitTrouserLengthDimension) {
         const tailoredLengthRule = PRICE_LIST_TAILORED_SIZES.find((rule) => rule.matrixDimension === "length" && rule.match.test(name));
         const matrixLengthValues = new Set([
-          ...LONG_TROUSER_LENGTHS,
           ...lengthRange,
           ...(tailoredLengthRule?.matrixDimension === "length" ? tailoredLengthRule.values : []),
           ...effectiveTrouserSurchargeRules.map((rule) => String(rule.threshold)),
@@ -1264,7 +1287,7 @@ const convertIrregularPriceList = (rows) => {
   });
   const trouserGroups = new Map();
   converted.forEach((entry) => {
-    if (!/西褲/.test(entry.款式名稱) || entry.尺碼 !== "裁碼") return;
+    if (!/西褲/.test(entry.款式名稱) || entry.尺碼 !== "裁碼" || !entry.長度) return;
     const key = `${entry.學校}\u0000${entry.款式名稱}`;
     const group = trouserGroups.get(key) || new Map();
     group.set(entry.長度 || "", entry.價錢);
