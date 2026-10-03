@@ -22,7 +22,12 @@ import baseSchoolCatalog from "./schoolCatalog.json";
 import workbookSchoolCatalog from "./workbookSchoolCatalog.json";
 import workbookSchoolOutlets from "./workbookSchoolOutlets.json";
 import databaseProductsSnapshot from "../database-products-snapshot.json";
-import { loadProducts, saveProducts as saveProductsToStore, insertProduct as insertProductToStore } from "./data/productsStore";
+import {
+  loadProducts,
+  saveProducts as saveProductsToStore,
+  insertProduct as insertProductToStore,
+  updateProduct as updateProductInStore,
+} from "./data/productsStore";
 
 
 
@@ -1839,7 +1844,7 @@ export default function UniformPOS() {
   const [envError, setEnvError] = useState(null); // 环境变量验证错误
   const productsSaveTimerRef = useRef(null);
   const productsPersistQueueRef = useRef(Promise.resolve());
-  const productsSaveOptionsRef = useRef({});
+  const productsSaveOptionsRef = useRef({ insertProductIds: [], updateProductIds: [], orderOnly: false });
   const productsSavePendingRef = useRef(false);
   const productsSaveGenerationRef = useRef(0);
   const productsSaveBlockedRef = useRef(false);
@@ -2529,18 +2534,15 @@ export default function UniformPOS() {
     return () => clearInterval(timer);
   }, [authReady, session]);
 
-  const persistProducts = async (next, { orderOnly = false, insertProductId = "" } = {}) => {
+  const persistProducts = async (next, { orderOnly = false, insertProductIds = [], updateProductIds = [] } = {}) => {
     try {
-      if (insertProductId) {
-        await insertProductToStore({
-          products: next,
-          productId: insertProductId,
-          storage: window.storage,
-          supabase,
-          isSupabaseAuthEnabled,
-        });
-        return;
+      for (const productId of insertProductIds) {
+        await insertProductToStore({ products: next, productId, storage: window.storage, supabase, isSupabaseAuthEnabled });
       }
+      for (const productId of updateProductIds) {
+        await updateProductInStore({ products: next, productId, storage: window.storage, supabase, isSupabaseAuthEnabled });
+      }
+      if ((insertProductIds.length > 0 || updateProductIds.length > 0) && !orderOnly) return;
 
       if (isSupabaseAuthEnabled && supabase) {
         if (orderOnly) {
@@ -2577,7 +2579,23 @@ export default function UniformPOS() {
     }
     productsRef.current = next;
     setProducts(next);
-    productsSaveOptionsRef.current = options;
+    const pendingOptions = productsSaveOptionsRef.current;
+    const insertProductIds = new Set(pendingOptions.insertProductIds);
+    const updateProductIds = new Set(pendingOptions.updateProductIds);
+    if (options.insertProductId) {
+      insertProductIds.add(options.insertProductId);
+      updateProductIds.delete(options.insertProductId);
+    } else if (options.updateProductId) {
+      if (!insertProductIds.has(options.updateProductId)) updateProductIds.add(options.updateProductId);
+    } else if (!options.orderOnly) {
+      insertProductIds.clear();
+      updateProductIds.clear();
+    }
+    productsSaveOptionsRef.current = {
+      insertProductIds: [...insertProductIds],
+      updateProductIds: [...updateProductIds],
+      orderOnly: pendingOptions.orderOnly || Boolean(options.orderOnly),
+    };
     setProductsSaveError("");
     setProductsSaveState("pending");
     productsSavePendingRef.current = true;
@@ -2585,9 +2603,10 @@ export default function UniformPOS() {
     const saveGeneration = ++productsSaveGenerationRef.current;
     if (productsSaveTimerRef.current) clearTimeout(productsSaveTimerRef.current);
     productsSaveTimerRef.current = setTimeout(() => {
+      const saveOptions = productsSaveOptionsRef.current;
       productsPersistQueueRef.current = productsPersistQueueRef.current
         .catch(() => {})
-        .then(() => persistProducts(next, options))
+        .then(() => persistProducts(next, saveOptions))
         .catch((error) => {
           const detail = error?.message || error?.code || "未知錯誤";
           if (saveGeneration === productsSaveGenerationRef.current) {
@@ -2603,7 +2622,7 @@ export default function UniformPOS() {
         .finally(() => {
           if (saveGeneration === productsSaveGenerationRef.current) {
             productsSavePendingRef.current = false;
-            productsSaveOptionsRef.current = {};
+            productsSaveOptionsRef.current = { insertProductIds: [], updateProductIds: [], orderOnly: false };
           }
         });
       productsSaveTimerRef.current = null;
@@ -2645,7 +2664,7 @@ export default function UniformPOS() {
     } finally {
       if (saveGeneration === productsSaveGenerationRef.current) {
         productsSavePendingRef.current = false;
-        productsSaveOptionsRef.current = {};
+        productsSaveOptionsRef.current = { insertProductIds: [], updateProductIds: [], orderOnly: false };
       }
     }
   };
@@ -4677,7 +4696,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
     }
     const nextProducts = currentProducts.map((product) => (product.id === id ? merged : product));
     productsRef.current = nextProducts;
-    saveProducts(nextProducts);
+    saveProducts(nextProducts, { updateProductId: id });
     requestAnimationFrame(() => {
       window.scrollTo({ top: scrollPosition, left: window.scrollX, behavior: "auto" });
     });
@@ -4711,8 +4730,12 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
     setLengthDraft("");
   };
 
-  const addProduct = (school) => {
-    const np = { id: uid(), school: school || "", name: "新款式", priceMode: "simple", sizes: [{ size: "M", price: null }] };
+  const addProduct = (school, schoolMetadata = schoolMeta) => {
+    const outletName = explicitOutletNameForSchool(school, schoolMetadata);
+    const branchId = branchSchoolIds[school]
+      || Object.entries(BRANCH_OUTLET_NAMES).find(([, name]) => name === outletName)?.[0]
+      || "";
+    const np = { id: uid(), school: school || "", name: "新款式", priceMode: "simple", sizes: [{ size: "M", price: null }], branch_id: branchId };
     saveProducts([...products, np], { insertProductId: np.id });
     setExpanded(np.id);
   };
@@ -4885,7 +4908,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
       ? { category: catalogEntry.category || "", level: catalogEntry.level || newSchoolLevel, region: catalogEntry.region || newSchoolRegion, district: catalogEntry.district || newSchoolDistrict }
       : { category: newSchoolCategory, level: newSchoolLevel, region: newSchoolRegion, district: newSchoolDistrict };
     schoolMetaEntry.outletName = newSchoolOutlet;
-    addProduct(name);
+    addProduct(name, { ...schoolMeta, [name]: schoolMetaEntry });
     saveSchoolMeta({ ...schoolMeta, [name]: schoolMetaEntry });
     setSelectedSchool(name);
     setAddingSchool(false);
