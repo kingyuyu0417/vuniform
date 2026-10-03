@@ -22,7 +22,7 @@ import baseSchoolCatalog from "./schoolCatalog.json";
 import workbookSchoolCatalog from "./workbookSchoolCatalog.json";
 import workbookSchoolOutlets from "./workbookSchoolOutlets.json";
 import databaseProductsSnapshot from "../database-products-snapshot.json";
-import { loadProducts, saveProducts as saveProductsToStore } from "./data/productsStore";
+import { loadProducts, saveProducts as saveProductsToStore, insertProduct as insertProductToStore } from "./data/productsStore";
 
 
 
@@ -1839,6 +1839,7 @@ export default function UniformPOS() {
   const [envError, setEnvError] = useState(null); // 环境变量验证错误
   const productsSaveTimerRef = useRef(null);
   const productsPersistQueueRef = useRef(Promise.resolve());
+  const productsSaveOptionsRef = useRef({});
   const productsSavePendingRef = useRef(false);
   const productsSaveGenerationRef = useRef(0);
   const productsSaveBlockedRef = useRef(false);
@@ -2528,8 +2529,19 @@ export default function UniformPOS() {
     return () => clearInterval(timer);
   }, [authReady, session]);
 
-  const persistProducts = async (next, { orderOnly = false } = {}) => {
+  const persistProducts = async (next, { orderOnly = false, insertProductId = "" } = {}) => {
     try {
+      if (insertProductId) {
+        await insertProductToStore({
+          products: next,
+          productId: insertProductId,
+          storage: window.storage,
+          supabase,
+          isSupabaseAuthEnabled,
+        });
+        return;
+      }
+
       if (isSupabaseAuthEnabled && supabase) {
         if (orderOnly) {
           const results = await Promise.all(next.map((product, index) =>
@@ -2565,6 +2577,7 @@ export default function UniformPOS() {
     }
     productsRef.current = next;
     setProducts(next);
+    productsSaveOptionsRef.current = options;
     setProductsSaveError("");
     setProductsSaveState("pending");
     productsSavePendingRef.current = true;
@@ -2588,7 +2601,10 @@ export default function UniformPOS() {
           if (saveGeneration === productsSaveGenerationRef.current) setProductsSaveState("saved");
         })
         .finally(() => {
-          if (saveGeneration === productsSaveGenerationRef.current) productsSavePendingRef.current = false;
+          if (saveGeneration === productsSaveGenerationRef.current) {
+            productsSavePendingRef.current = false;
+            productsSaveOptionsRef.current = {};
+          }
         });
       productsSaveTimerRef.current = null;
     }, 500);
@@ -2610,9 +2626,10 @@ export default function UniformPOS() {
     setProductsSaveError("");
     setProductsSaveState("saving");
     productsSaveBlockedRef.current = false;
+    const saveOptions = productsSaveOptionsRef.current;
     productsPersistQueueRef.current = productsPersistQueueRef.current
       .catch(() => {})
-      .then(() => persistProducts(next));
+      .then(() => persistProducts(next, saveOptions));
     try {
       await productsPersistQueueRef.current;
       if (saveGeneration === productsSaveGenerationRef.current) setProductsSaveState("saved");
@@ -2626,7 +2643,10 @@ export default function UniformPOS() {
       }
       return false;
     } finally {
-      if (saveGeneration === productsSaveGenerationRef.current) productsSavePendingRef.current = false;
+      if (saveGeneration === productsSaveGenerationRef.current) {
+        productsSavePendingRef.current = false;
+        productsSaveOptionsRef.current = {};
+      }
     }
   };
 
@@ -4693,7 +4713,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
 
   const addProduct = (school) => {
     const np = { id: uid(), school: school || "", name: "新款式", priceMode: "simple", sizes: [{ size: "M", price: null }] };
-    saveProducts([...products, np]);
+    saveProducts([...products, np], { insertProductId: np.id });
     setExpanded(np.id);
   };
 

@@ -217,3 +217,29 @@ export const saveProducts = async ({ products, storage, supabase, isSupabaseAuth
 
   return normalized;
 };
+
+export const insertProduct = async ({ products, productId, storage, supabase, isSupabaseAuthEnabled }) => {
+  const normalized = normalizeProducts(products);
+  const matches = normalized.filter((product) => product.id === productId);
+  if (matches.length !== 1) throw new Error("新增商品資料不完整，未能保存。");
+  const product = matches[0];
+  assertNoConflictingSizePrices([product]);
+
+  if (isSupabaseAuthEnabled && supabase) {
+    const { data, error } = await supabase.from("products").insert({
+      id: product.id,
+      school: product.school || "",
+      name: product.name,
+      sizes: product.sizes.map((size) => ({ ...size, __priceMode: product.priceMode })),
+      display_order: normalized.findIndex((item) => item.id === product.id),
+      branch_id: product.branch_id || null,
+    }).select("id").single();
+    if (error) throw error;
+    if (data?.id !== product.id) throw new Error("新增商品未能在雲端確認保存。");
+  }
+
+  if (storage) {
+    await storage.set("products", JSON.stringify(normalized), true).catch(() => {});
+  }
+  return normalized;
+};
