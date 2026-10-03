@@ -1939,7 +1939,7 @@ export default function UniformPOS() {
   // 員工帳號（共用，ADMIN可管理）同目前呢部裝置嘅登入狀態（個人，唔跨裝置）
   const [accounts, setAccounts] = useState(DEFAULT_ACCOUNTS);
   const [session, setSession] = useState(null); // { id, name, role, branchId } | null
-  const [authReady, setAuthReady] = useState(!isSupabaseAuthEnabled); // Wait for auth before loading protected data
+  const [authReady, setAuthReady] = useState(!isSupabaseAuthEnabled || !supabase); // Wait for auth only when a client is configured
   const [passwordSetupRequired, setPasswordSetupRequired] = useState(false);
   const perms = session ? permissionsForRole(session.role) : null;
   const accessibleProducts = !isSupabaseAuthEnabled || session?.role === ROLES.ADMIN
