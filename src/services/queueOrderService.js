@@ -184,26 +184,35 @@ export const queueOrderService = {
   },
 
   subscribePublicQueueDisplay({ schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING, onChange }) {
-    if (!isSupabaseConfigured || !supabase) return { unsubscribe() {} };
+    if (!isSupabaseConfigured || !supabase) return { notify() {}, unsubscribe() {} };
+    let isSubscribed = false;
     const channel = supabase
       .channel(publicQueueDisplayTopic(schoolId, outletName, counterName, serviceType))
-      .on("broadcast", { event: "counter-updated" }, () => onChange?.())
-      .subscribe();
-    return { unsubscribe() { void supabase.removeChannel(channel); } };
-  },
-
-  notifyPublicQueueDisplay({ schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING } = {}) {
-    if (!isSupabaseConfigured || !supabase) return;
-    const channel = supabase.channel(publicQueueDisplayTopic(schoolId, outletName, counterName, serviceType));
-    channel.subscribe((status) => {
-      if (status !== "SUBSCRIBED") return;
-      void channel.send({ type: "broadcast", event: "counter-updated", payload: {} })
-        .then((result) => {
-          if (result !== "ok") console.warn("public queue display update broadcast failed", result);
+      .on("broadcast", { event: "counter-updated" }, ({ payload }) => onChange?.(payload))
+      .subscribe((status) => {
+        isSubscribed = status === "SUBSCRIBED";
+      });
+    return {
+      notify(counter) {
+        if (!isSubscribed) {
+          console.warn("public queue display notification skipped before Realtime subscription");
+          return;
+        }
+        void channel.send({
+          type: "broadcast",
+          event: "counter-updated",
+          payload: {
+            current_queue_number: counter?.current_queue_number || "",
+            updated_at: counter?.updated_at || "",
+          },
         })
-        .catch((error) => console.warn("public queue display update broadcast failed", error))
-        .finally(() => { void supabase.removeChannel(channel); });
-    });
+          .then((result) => {
+            if (result !== "ok") console.warn("public queue display update broadcast failed", result);
+          })
+          .catch((error) => console.warn("public queue display update broadcast failed", error));
+      },
+      unsubscribe() { void supabase.removeChannel(channel); },
+    };
   },
 
   async createOrder(payload) {

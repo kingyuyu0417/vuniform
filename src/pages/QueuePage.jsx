@@ -27,6 +27,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
   const [callError, setCallError] = useState("");
   const previousDataRef = useRef(visits);
   const chimeAudioRef = useRef(null);
+  const publicDisplaySubscriptionRef = useRef(null);
 
   useEffect(() => {
     const audio = new Audio("/audio/queue-chime.mpeg");
@@ -39,11 +40,29 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     };
   }, []);
 
+  useEffect(() => {
+    const subscription = queueOrderService.subscribePublicQueueDisplay({
+      schoolId: currentSchoolId,
+      outletName,
+      counterName,
+      serviceType,
+    });
+    publicDisplaySubscriptionRef.current = subscription;
+    return () => {
+      publicDisplaySubscriptionRef.current = null;
+      subscription.unsubscribe();
+    };
+  }, [currentSchoolId, outletName, counterName, serviceType]);
+
   const playCallChime = () => {
     const audio = chimeAudioRef.current;
     if (!audio) return;
     audio.currentTime = 0;
     audio.play().catch((error) => console.warn("queue call chime could not play", error));
+  };
+
+  const notifyPublicDisplay = (next) => {
+    if (next?.current_queue_number) publicDisplaySubscriptionRef.current?.notify(next);
   };
 
   useEffect(() => {
@@ -110,9 +129,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
         ? await queueOrderService.callNextPickup({ schoolId: currentSchoolId, outletName, calledBy })
         : await queueOrderService.callNextFitting({ schoolId: currentSchoolId, outletName, calledBy });
       setCounter(next);
-      if (next?.current_queue_number) {
-        queueOrderService.notifyPublicQueueDisplay({ schoolId: currentSchoolId, outletName, counterName, serviceType });
-      }
+      notifyPublicDisplay(next);
     } catch (error) {
       setCallError(error.message || "叫號失敗，請先執行 queue-counter.sql");
     } finally {
@@ -183,9 +200,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
         calledBy,
       });
       setCounter(next);
-      if (next?.current_queue_number) {
-        queueOrderService.notifyPublicQueueDisplay({ schoolId: currentSchoolId, outletName, counterName, serviceType });
-      }
+      notifyPublicDisplay(next);
     } catch (error) {
       setCallError(error.message || "重新叫過號失敗");
     } finally {
@@ -225,9 +240,7 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
         ? await queueOrderService.recallPickup({ schoolId: currentSchoolId, outletName })
         : await queueOrderService.recallFitting({ schoolId: currentSchoolId, outletName });
       setCounter(next);
-      if (next?.current_queue_number) {
-        queueOrderService.notifyPublicQueueDisplay({ schoolId: currentSchoolId, outletName, counterName, serviceType });
-      }
+      notifyPublicDisplay(next);
     } catch (error) {
       setCallError(error.message || "重叫失敗");
     } finally {

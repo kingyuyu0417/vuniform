@@ -75,6 +75,27 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
 
   useEffect(() => {
     let active = true;
+    const applyCounter = (next) => {
+      if (!next) return;
+      setCounter((previous) => {
+        const previousUpdatedAt = Date.parse(previous?.updated_at || "");
+        const nextUpdatedAt = Date.parse(next.updated_at || "");
+        if (Number.isFinite(previousUpdatedAt) && Number.isFinite(nextUpdatedAt) && nextUpdatedAt < previousUpdatedAt) {
+          return previous;
+        }
+        if (
+          next.current_queue_number === previous?.current_queue_number
+          && next.updated_at === previous?.updated_at
+        ) {
+          return previous;
+        }
+        if (next.current_queue_number) {
+          setIsCalling(true);
+          window.setTimeout(() => active && setIsCalling(false), 6000);
+        }
+        return next;
+      });
+    };
     const refreshPublicDisplay = async () => {
       if (!active) return;
       if (refreshInFlightRef.current) {
@@ -93,13 +114,7 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
         setLastUpdatedAt(new Date());
         setRefreshFailed(false);
         setWaitingCount(Number(next.waiting_count || 0));
-        setCounter((previous) => {
-          if (next.current_queue_number && (next.current_queue_number !== previous?.current_queue_number || next.updated_at !== previous?.updated_at)) {
-            setIsCalling(true);
-            window.setTimeout(() => active && setIsCalling(false), 6000);
-          }
-          return next;
-        });
+        applyCounter(next);
       } catch (error) {
         if (active) setRefreshFailed(true);
         console.warn("public queue display refresh failed", error);
@@ -117,10 +132,17 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
       outletName,
       counterName: laneCounterName,
       serviceType,
-      onChange: refreshPublicDisplay,
+      onChange: (payload) => {
+        if (!active) return;
+        setLastUpdatedAt(new Date());
+        setRefreshFailed(false);
+        applyCounter({
+          current_queue_number: payload?.current_queue_number || "",
+          updated_at: payload?.updated_at || "",
+        });
+      },
     });
-    // Keep the public display nearly real-time while retaining polling as a
-    // reliable fallback when Realtime is unavailable on the display device.
+    // Keep polling for waiting counts and as a fallback if Realtime is unavailable.
     const timer = window.setInterval(refreshPublicDisplay, 1000);
     return () => {
       active = false;
