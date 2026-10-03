@@ -4664,7 +4664,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   const [showImportHistory, setShowImportHistory] = useState(false);
   const [noticeAnalyzing, setNoticeAnalyzing] = useState(false);
   const [noticePreview, setNoticePreview] = useState(null);
-  const [autoApplyHighConfidence, setAutoApplyHighConfidence] = useState(true);
+  const [autoApplyHighConfidence, setAutoApplyHighConfidence] = useState(false);
   const IMPORT_HISTORY_KEY = "import_history_v1";
 
   const saveSnapshotToCloud = async (snapshot) => {
@@ -5212,7 +5212,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
             checked={autoApplyHighConfidence}
             onChange={(event) => setAutoApplyHighConfidence(event.target.checked)}
           />
-          高信心匯入自動落 production（信心至少 95%、零錯誤／警告）
+          高信心匯入自動落 production（信心至少 95%、零錯誤／警告；預設關閉）
         </label>
         <div style={{ display: "flex", gap: 8 }}>
           <button
