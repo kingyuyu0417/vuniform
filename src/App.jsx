@@ -1846,11 +1846,17 @@ export default function UniformPOS() {
   const tabRef = useRef(tab);
   useEffect(() => { tabRef.current = tab; }, [tab]);
 
-  const [selectedSchool, setSelectedSchool] = useState(() => (
-    new URLSearchParams(location.search).get("school_id")
-    || new URLSearchParams(location.search).get("school")
-    || DESIGNATED_SCHOOL
-  ));
+  const [selectedSchool, setSelectedSchool] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const schoolFromUrl = params.get("school_id") || params.get("school");
+    if (schoolFromUrl) return schoolFromUrl;
+    try {
+      return window.localStorage.getItem("last-school")?.trim() || DESIGNATED_SCHOOL;
+    } catch (error) {
+      console.warn("讀取上次學校選擇失敗", error);
+      return DESIGNATED_SCHOOL;
+    }
+  });
   const [schoolPanelOpen, setSchoolPanelOpen] = useState(false);
   const [branchSchoolIds, setBranchSchoolIds] = useState({});
   const customerSchools = listSchools(products);
@@ -2062,21 +2068,6 @@ export default function UniformPOS() {
     if (session && routeTab && perms.tabs.includes(routeTab)) setTab(routeTab);
   }, [perms, routeTab, session]);
 
-  // 讀返呢部裝置上次揀嘅學校（個人儲存，唔係共用）
-  useEffect(() => {
-    (async () => {
-      try {
-        const saved = await window.storage.get("last-school", false).catch(() => null);
-        if (saved && saved.value) {
-          const previousSchool = String(saved.value || "").trim();
-          if (previousSchool) setSelectedSchool(previousSchool);
-        }
-      } catch (e) {
-        console.error("讀取上次學校選擇失敗", e);
-      }
-    })();
-  }, []);
-
   // 讀返呢部裝置上次登入嘅員工（個人儲存）
   useEffect(() => {
     if (isSupabaseAuthEnabled) return;
@@ -2234,6 +2225,7 @@ export default function UniformPOS() {
   };
 
   useEffect(() => {
+    if (!loaded) return;
     if (!selectedSchool || !schools.includes(selectedSchool)) {
       setSelectedSchool(() => (
         schools.includes(DESIGNATED_SCHOOL)
@@ -2241,16 +2233,24 @@ export default function UniformPOS() {
           : (schools[0] || DESIGNATED_SCHOOL)
       ));
     }
-  }, [schools, selectedSchool]);
+  }, [loaded, schools, selectedSchool]);
 
   useEffect(() => {
+    if (!loaded) return;
     if (!["/menu", "/sale", "/products"].includes(location.pathname)) return;
     const routeSchool = new URLSearchParams(location.search).get("school_id")
       || new URLSearchParams(location.search).get("school");
     if (routeSchool && schools.includes(routeSchool) && routeSchool !== selectedSchool) {
       setSelectedSchool(routeSchool);
     }
-  }, [location.pathname, location.search, schools]);
+  }, [loaded, location.pathname, location.search, schools, selectedSchool]);
+
+  useEffect(() => {
+    if (!loaded || !selectedSchool || !schools.includes(selectedSchool)) return;
+    window.storage.set("last-school", selectedSchool, false).catch((error) => {
+      console.error("記住學校選擇失敗", error);
+    });
+  }, [loaded, selectedSchool]);
 
   useEffect(() => {
     if (!products.some((product) => product.id === selectedProduct)) {
