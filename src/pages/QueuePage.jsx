@@ -27,6 +27,9 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
   const [callError, setCallError] = useState("");
   const previousDataRef = useRef(visits);
   const chimeAudioRef = useRef(null);
+  const chimeContextRef = useRef(null);
+  const chimeBufferRef = useRef(null);
+  const chimeSourceRef = useRef(null);
   const publicDisplaySubscriptionRef = useRef(null);
 
   useEffect(() => {
@@ -34,9 +37,48 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     audio.preload = "auto";
     audio.load();
     chimeAudioRef.current = audio;
+
+    const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextConstructor) {
+      return () => {
+        audio.pause();
+        chimeAudioRef.current = null;
+      };
+    }
+
+    const context = new AudioContextConstructor();
+    let active = true;
+    chimeContextRef.current = context;
+    fetch("/audio/queue-chime.mpeg")
+      .then((response) => {
+        if (!response.ok) throw new Error(`提示音載入失敗：${response.status}`);
+        return response.arrayBuffer();
+      })
+      .then((audioData) => context.decodeAudioData(audioData))
+      .then((decoded) => {
+        if (!active) return;
+        const silenceFrames = Math.min(Math.round(decoded.sampleRate * 0.9), decoded.length - 1);
+        const trimmed = context.createBuffer(
+          decoded.numberOfChannels,
+          decoded.length - silenceFrames,
+          decoded.sampleRate
+        );
+        for (let channel = 0; channel < decoded.numberOfChannels; channel += 1) {
+          trimmed.copyToChannel(decoded.getChannelData(channel).subarray(silenceFrames), channel);
+        }
+        chimeBufferRef.current = trimmed;
+      })
+      .catch((error) => {
+        if (active) console.warn("queue call chime could not be prepared", error);
+      });
+
     return () => {
+      active = false;
       audio.pause();
       chimeAudioRef.current = null;
+      chimeBufferRef.current = null;
+      chimeContextRef.current = null;
+      void context.close();
     };
   }, []);
 
@@ -55,9 +97,30 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
   }, [currentSchoolId, outletName, counterName, serviceType]);
 
   const playCallChime = () => {
+    const context = chimeContextRef.current;
+    const buffer = chimeBufferRef.current;
+    if (context && buffer) {
+      const source = context.createBufferSource();
+      source.buffer = buffer;
+      source.connect(context.destination);
+      source.onended = () => {
+        if (chimeSourceRef.current === source) chimeSourceRef.current = null;
+        source.disconnect();
+      };
+      chimeSourceRef.current = source;
+      if (context.state === "suspended") {
+        void context.resume().catch((error) => console.warn("queue call chime audio context could not resume", error));
+      }
+      source.start();
+      return;
+    }
+
     const audio = chimeAudioRef.current;
-    if (!audio) return;
-    audio.currentTime = 0.9;
+    if (!audio) {
+      console.warn("queue call chime is not ready");
+      return;
+    }
+    audio.currentTime = audio.readyState >= HTMLMediaElement.HAVE_METADATA ? 0.9 : 0;
     audio.play().catch((error) => console.warn("queue call chime could not play", error));
   };
 
