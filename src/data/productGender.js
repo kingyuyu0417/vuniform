@@ -28,4 +28,9 @@ export const getProductGender = (product = {}) => {
   return "unisex";
 };
 
-export const productGenderBackground = () => "#fff";
+export const productGenderBackground = (product) => {
+  const gender = getProductGender(product);
+  if (gender === "boys") return "#EAF4FF";
+  if (gender === "girls") return "#FFF0F5";
+  return "#EAF6F2";
+};

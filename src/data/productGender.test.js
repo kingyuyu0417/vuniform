@@ -14,10 +14,10 @@ test("infers legacy product genders from their names and known exceptions", () =
   assert.equal(getProductGender({ name: "藍／紫色連身校裙" }), "girls");
 });
 
-test("keeps product backgrounds neutral for all genders", () => {
-  assert.equal(productGenderBackground({ gender: "boys" }), "#fff");
-  assert.equal(productGenderBackground({ gender: "girls" }), "#fff");
-  assert.equal(productGenderBackground({ gender: "unisex" }), "#fff");
+test("uses soft distinct backgrounds for each gender", () => {
+  assert.equal(productGenderBackground({ gender: "boys" }), "#EAF4FF");
+  assert.equal(productGenderBackground({ gender: "girls" }), "#FFF0F5");
+  assert.equal(productGenderBackground({ gender: "unisex" }), "#EAF6F2");
 });
 
 test("normalizes inferred legacy genders while preserving saved selections", () => {

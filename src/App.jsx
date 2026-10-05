@@ -7,7 +7,6 @@ import { isSupabaseConfigured, isSupabaseAuthEnabled, supabase, createPasswordVe
 import { logStartupCheck, getStartupErrorUI, validateAllEnvVars } from "./config/envValidation";
 import { getUserFriendlyError } from "./config/errorHandler";
 import { Alert } from "./components/common";
-import { ProductGenderTag } from "./components/ProductGenderTag";
 import { dimensionLabels, lengthDimensionLabel, sizeDimensionLabel } from "./data/productDimensions.js";
 const CustomerCheckinPage = lazy(() => import("./pages/CustomerCheckinPage"));
 const QueuePage = lazy(() => import("./pages/QueuePage"));
@@ -4508,10 +4507,7 @@ function SaleTab({
             <div className="sale-product-grid" style={{ maxHeight: 260, overflowY: "auto" }}>
               {visibleProducts.map((product) => (
                 <button key={product.id} className="pos-btn sale-product-button" onClick={() => selectDirectExchangeProduct(product.id)} style={{ padding: "10px 8px", borderRadius: 10, background: productGenderBackground(product), border: "1px solid #86EFAC", color: "#166534", fontSize: 16, fontWeight: 700, textAlign: "left" }}>
-                  <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, width: "100%" }}>
-                    <span style={{ minWidth: 0 }}>{displayProductName(product.name)}</span>
-                    <ProductGenderTag product={product} />
-                  </span>
+                  {displayProductName(product.name)}
                 </button>
               ))}
             </div>
@@ -4709,6 +4705,7 @@ function SaleTab({
             <button
               key={p.id}
               className="pos-btn sale-product-button"
+              aria-pressed={selectedProduct === p.id}
               onClick={() => {
                 setSelectedProduct(p.id === selectedProduct ? null : p.id);
                 setSelectedLength("");
@@ -4716,18 +4713,17 @@ function SaleTab({
               style={{
                 padding: "12px 10px",
                 borderRadius: 10,
-                background: selectedProduct === p.id ? "#D97757" : productGenderBackground(p),
-                color: selectedProduct === p.id ? "#fff" : "#222",
-                border: "1px solid " + (selectedProduct === p.id ? "#D97757" : "#ddd"),
+                background: productGenderBackground(p),
+                color: "#222",
+                border: "1px solid #ddd",
+                outline: selectedProduct === p.id ? "2px solid #1F3A5F" : "none",
+                outlineOffset: 1,
                 fontSize: 16,
                 fontWeight: 700,
                 textAlign: "left",
               }}
             >
-              <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, width: "100%" }}>
-                <span style={{ minWidth: 0 }}>{displayProductName(p.name)}</span>
-                <ProductGenderTag product={p} />
-              </span>
+              {displayProductName(p.name)}
             </button>
           ))}
         </div>
