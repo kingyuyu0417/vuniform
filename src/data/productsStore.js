@@ -182,10 +182,6 @@ export const saveProducts = async ({ products, storage, supabase, isSupabaseAuth
 
     const nextIds = new Set(uniqueProducts.map((product) => product.id));
     const deletedIds = (existing || []).map((product) => product.id).filter((id) => !nextIds.has(id));
-    if (deletedIds.length > 0) {
-      const { error: deleteError } = await supabase.from("products").delete().in("id", deletedIds);
-      if (deleteError) throw deleteError;
-    }
 
     const { error } = await supabase.from("products").upsert(uniqueProducts.map(({ id, school, name, sizes, priceMode, branch_id: branchId }, index) => ({
       id,
@@ -203,6 +199,11 @@ export const saveProducts = async ({ products, storage, supabase, isSupabaseAuth
       .select("id, school, name, sizes")
       .in("id", uniqueProducts.map((product) => product.id));
     if (verifyError) throw verifyError;
+
+    if (deletedIds.length > 0) {
+      const { error: deleteError } = await supabase.from("products").delete().in("id", deletedIds);
+      if (deleteError) throw deleteError;
+    }
     const { data: remainingDeletedProducts, error: deleteVerifyError } = deletedIds.length > 0
       ? await supabase.from("products").select("id").in("id", deletedIds)
       : { data: [], error: null };

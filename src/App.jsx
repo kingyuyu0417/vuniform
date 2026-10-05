@@ -28,6 +28,11 @@ import {
   insertProduct as insertProductToStore,
   updateProduct as updateProductInStore,
 } from "./data/productsStore";
+import {
+  splitCompositeProductName,
+  splitCompositeProductRecord,
+  splitCompositeImportRows,
+} from "./data/productCatalogNormalization";
 
 
 
@@ -418,7 +423,7 @@ const recoverMissingTailoredTrouserPrices = (productName, sizes) => {
   });
 };
 const normalizeProductState = (products) => {
-  const normalizedProducts = (Array.isArray(products) ? products : []).map((product) => {
+  const normalizedProducts = (Array.isArray(products) ? products : []).flatMap(splitCompositeProductRecord).map((product) => {
     const productName = cleanProductName(product.name);
     const rawSizes = normalizeProductSizes(product.sizes);
     // Prices are authoritative data. Never recalculate or overwrite them while loading.
@@ -443,11 +448,24 @@ const normalizeProductState = (products) => {
 
   return normalizedProducts.reduce((result, product) => {
     const productParts = productIdentityParts(schoolOf(product), product.name, product.branch_id);
-    const duplicate = result.find((item) => {
+    const duplicates = result.filter((item) => {
       const itemParts = productIdentityParts(schoolOf(item), item.name, item.branch_id);
       return productIdentityKey(itemParts.school, item.name, item.branch_id) === productIdentityKey(productParts.school, product.name, productParts.branchId)
         && compatibleProductGenders(itemParts.gender, productParts.gender);
     });
+    const hasConflictingSizePrice = (first, second) => {
+      const firstPrices = new Map((first.sizes || []).map((size) => [sizeIdentityKey(size), Number(size.price)]));
+      return (second.sizes || []).some((size) => {
+        const previousPrice = firstPrices.get(sizeIdentityKey(size));
+        const price = Number(size.price);
+        return Number.isFinite(previousPrice) && Number.isFinite(price) && previousPrice !== price;
+      });
+    };
+    if (duplicates.some((duplicate) => hasConflictingSizePrice(duplicate, product))) {
+      result.push(product);
+      return result;
+    }
+    const duplicate = duplicates[0];
 
     if (!duplicate) {
       result.push(product);
@@ -481,6 +499,61 @@ const normalizeProductState = (products) => {
     return result;
   }, []);
 };
+
+const productCatalogNeedsConsolidation = (products) => {
+  const source = Array.isArray(products) ? products : [];
+  const consolidated = consolidateProductCatalog(source);
+  const signature = (items) => items.map(({ id, school, name }) => `${id}\u0000${school || ""}\u0000${name}`).sort().join("\u0001");
+  return signature(source) !== signature(consolidated);
+};
+
+const productHasConflictingSizes = (first, second) => {
+  const prices = new Map((first.sizes || []).map((size) => [sizeIdentityKey(size), Number(size.price)]));
+  return (second.sizes || []).some((size) => {
+    const priorPrice = prices.get(sizeIdentityKey(size));
+    const price = Number(size.price);
+    return Number.isFinite(priorPrice) && Number.isFinite(price) && priorPrice !== price;
+  });
+};
+
+const consolidateProductCatalog = (products) => (Array.isArray(products) ? products : [])
+  .flatMap(splitCompositeProductRecord)
+  .reduce((result, product) => {
+    const productParts = productIdentityParts(schoolOf(product), product.name, product.branch_id);
+    const duplicates = result.filter((item) => {
+      const itemParts = productIdentityParts(schoolOf(item), item.name, item.branch_id);
+      return productIdentityKey(itemParts.school, item.name, item.branch_id) === productIdentityKey(productParts.school, product.name, productParts.branchId)
+        && compatibleProductGenders(itemParts.gender, productParts.gender);
+    });
+    if (duplicates.length === 0 || duplicates.some((duplicate) => productHasConflictingSizes(duplicate, product))) {
+      result.push(product);
+      return result;
+    }
+    const duplicate = duplicates[0];
+    const sizes = [...(duplicate.sizes || [])];
+    (product.sizes || []).forEach((size) => {
+      const index = sizes.findIndex((item) => sizeIdentityKey(item) === sizeIdentityKey(size));
+      if (index < 0) sizes.push(size);
+      else sizes[index] = { ...sizes[index], ...size };
+    });
+    duplicate.sizes = sizes;
+    return result;
+  }, []);
+
+const countUnresolvedPriceConflictProducts = (products) => (Array.isArray(products) ? products : [])
+  .filter((product) => {
+    const split = splitCompositeProductRecord(product);
+    if (split.length > 1) return false;
+    const pricesBySize = new Map();
+    (product.sizes || []).forEach((size) => {
+      const key = sizeIdentityKey(size);
+      const price = Number(size.price);
+      if (!pricesBySize.has(key)) pricesBySize.set(key, new Set());
+      if (Number.isFinite(price)) pricesBySize.get(key).add(price);
+    });
+    return [...pricesBySize.values()].some((prices) => prices.size > 1);
+  })
+  .length;
 
 const enforceAuthoritativeProducts = (products) => {
   const normalized = normalizeProductState(products);
@@ -688,13 +761,16 @@ const smartImportRows = (rows, existingProducts) => {
   const mappedRows = rows.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [aliases[normalizeImportHeader(key)] || key, value])));
   const previewRows = [];
   const errors = [];
-  const next = existingProducts.map((p) => ({ ...p, sizes: p.sizes.map((s) => ({ ...s })) }));
+  const next = normalizeProductState(existingProducts);
   const importedPrices = new Map();
   let addedProducts = 0;
   let addedSizes = 0;
   let updatedSizes = 0;
 
-  mappedRows.forEach((row, index) => {
+  const { rows: importRows, unresolvedNames } = splitCompositeImportRows(mappedRows);
+  unresolvedNames.forEach((names) => errors.push(`「${names.join("／")}」未能按尺碼明確拆分，請先整理成每款獨立列再匯入。`));
+
+  importRows.forEach((row, index) => {
     const school = String(row.school || "").trim();
     const name = String(row.name || "").trim();
     const size = String(row.size ?? "").trim();
@@ -1906,6 +1982,7 @@ export default function UniformPOS() {
   const [storageError, setStorageError] = useState("");
   const [productsSaveError, setProductsSaveError] = useState("");
   const [productsSaveState, setProductsSaveState] = useState("saved");
+  const [productsCatalogWarning, setProductsCatalogWarning] = useState("");
   const [sourceIntegrityWarning, setSourceIntegrityWarning] = useState("");
   const [envError, setEnvError] = useState(null); // 环境变量验证错误
   const productsSaveTimerRef = useRef(null);
@@ -1914,6 +1991,7 @@ export default function UniformPOS() {
   const productsSavePendingRef = useRef(false);
   const productsSaveGenerationRef = useRef(0);
   const productsSaveBlockedRef = useRef(false);
+  const productCatalogMigrationStateRef = useRef("idle");
   const productsRef = useRef(products);
   const tabRef = useRef(tab);
   useEffect(() => { tabRef.current = tab; }, [tab]);
@@ -2402,6 +2480,7 @@ export default function UniformPOS() {
       if (p && !productsSavePendingRef.current && !productsSaveBlockedRef.current && refreshGeneration === productsSaveGenerationRef.current) {
         const authoritative = enforceAuthoritativeProducts(p);
         if (authoritative.length > 0) {
+          await persistProductCatalogConsolidation(p);
           setSourceIntegrityWarning(p.length > 0 ? "" : "產品資料來源暫時沒有記錄，已保留目前商品資料。");
           setProducts(authoritative);
         } else if (p.length > 0) {
@@ -2525,6 +2604,37 @@ export default function UniformPOS() {
     return Object.fromEntries((data || []).map((entry) => [canonicalSchoolName(entry.school), entry.branch_id]));
   };
 
+  const persistProductCatalogConsolidation = async (sourceProducts) => {
+    const unresolvedCount = countUnresolvedPriceConflictProducts(sourceProducts);
+    setProductsCatalogWarning(unresolvedCount
+      ? `另有 ${unresolvedCount} 筆商品的相同尺碼有不同價格，系統無法判斷其款式，已保留原資料，請管理員核對後分開匯入。`
+      : "");
+    if (
+      productCatalogMigrationStateRef.current !== "idle"
+      || !isSupabaseAuthEnabled
+      || !supabase
+      || session?.role !== ROLES.ADMIN
+      || !productCatalogNeedsConsolidation(sourceProducts)
+    ) return;
+
+    productCatalogMigrationStateRef.current = "running";
+    try {
+      await saveProductsToStore({
+        products: consolidateProductCatalog(sourceProducts),
+        storage: window.storage,
+        supabase,
+        isSupabaseAuthEnabled,
+      });
+      productCatalogMigrationStateRef.current = "done";
+      console.info("[products] Consolidated duplicate school product records and split recognized styles.");
+    } catch (error) {
+      productCatalogMigrationStateRef.current = "idle";
+      console.error("整合商品款式失敗", error);
+      setProductsSaveError(`商品款式整合未能保存：${error?.message || error?.code || "未知錯誤"}`);
+      setProductsSaveState("error");
+    }
+  };
+
   useEffect(() => {
     if (!authReady) return;
     if (isSupabaseAuthEnabled && !session) {
@@ -2559,6 +2669,7 @@ export default function UniformPOS() {
               || product.branch_id === session.branchId
               || branchMap[schoolOf(product)] === session.branchId);
           if (authoritative.length > 0) {
+            await persistProductCatalogConsolidation(p);
             setSourceIntegrityWarning(p.length > 0 ? "" : "產品資料來源暫時沒有記錄，已保留目前商品資料。");
             setProducts(authoritative);
             if (session?.branchId && session.role !== ROLES.ADMIN && selectedSchool && !authoritative.some((product) => schoolOf(product) === selectedSchool)) {
@@ -3772,6 +3883,7 @@ export default function UniformPOS() {
                 setImportResult={setImportResult}
                 productsSaveError={productsSaveError}
                 productsSaveState={productsSaveState}
+                productsCatalogWarning={productsCatalogWarning}
                 saveProductsNow={saveProductsNow}
                 canManageSchools={perms.canManageSchools}
                 canImportExport={perms.canImportExport}
@@ -3919,6 +4031,7 @@ export default function UniformPOS() {
                     setImportResult={setImportResult}
                     productsSaveError={productsSaveError}
                     productsSaveState={productsSaveState}
+                    productsCatalogWarning={productsCatalogWarning}
                     saveProductsNow={saveProductsNow}
                     canManageSchools={perms.canManageSchools}
                     canImportExport={perms.canImportExport}
@@ -4751,7 +4864,7 @@ function SaleTab({
   );
 }
 
-function ProductsTab({ products, saveProducts, saveProductsNow, importResult, setImportResult, productsSaveError = "", productsSaveState = "saved", sourceIntegrityWarning = "", canManageSchools = true, canImportExport = true, schoolMeta = {}, saveSchoolMeta = async () => {}, setDeletedSchools = () => {}, selectedSchool = null, setSelectedSchool = () => {}, branchSchoolIds = {}, branchId = "", availableSchools, onPickSchool = setSelectedSchool }) {
+function ProductsTab({ products, saveProducts, saveProductsNow, importResult, setImportResult, productsSaveError = "", productsSaveState = "saved", productsCatalogWarning = "", sourceIntegrityWarning = "", canManageSchools = true, canImportExport = true, schoolMeta = {}, saveSchoolMeta = async () => {}, setDeletedSchools = () => {}, selectedSchool = null, setSelectedSchool = () => {}, branchSchoolIds = {}, branchId = "", availableSchools, onPickSchool = setSelectedSchool }) {
   const [expanded, setExpanded] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
@@ -5242,6 +5355,11 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
         <div style={{ marginBottom: 10, padding: "10px 12px", borderRadius: 8, background: "#FFF1F0", color: "#B42318", fontSize: 12, display: "flex", gap: 6, alignItems: "flex-start" }}>
           <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
           <span>{productsSaveError}</span>
+        </div>
+      )}
+      {productsCatalogWarning && (
+        <div style={{ marginBottom: 10, padding: "10px 12px", borderRadius: 8, background: "#FFF8E7", color: "#8A5A00", fontSize: 12 }}>
+          {productsCatalogWarning}
         </div>
       )}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
