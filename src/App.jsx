@@ -3483,56 +3483,55 @@ export default function UniformPOS() {
           padding: 10px;
           touch-action: manipulation;
         }
-        .pos-page-content { padding: 20px; }
+        .pos-page-content { padding: 20px 20px calc(96px + env(safe-area-inset-bottom, 0px)); }
         .pos-page-content > * { max-width: 100%; }
-        .mobile-bottom-nav { display: none; }
+        .pos-navigation-sticky {
+          position: sticky;
+          top: 0;
+          z-index: 30;
+          background: #F7F9FC;
+          box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
+        }
+        .mobile-bottom-nav {
+          position: fixed;
+          left: 50%;
+          bottom: 0;
+          z-index: 40;
+          display: flex;
+          width: min(100%, 760px);
+          box-sizing: border-box;
+          transform: translateX(-50%);
+          padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+          background: rgba(255, 255, 255, 0.98);
+          border-top: 1px solid #E5E7EB;
+          box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.08);
+        }
+        .mobile-bottom-nav-button {
+          display: flex;
+          flex: 1 1 0;
+          min-width: 0;
+          min-height: 54px;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 3px;
+          border-radius: 10px;
+          background: transparent;
+          color: #64748B;
+          font-size: 11px;
+          font-weight: 600;
+          touch-action: manipulation;
+        }
+        .mobile-bottom-nav-button[aria-current="page"] {
+          background: #EEF4FB;
+          color: #1F3A5F;
+        }
         .sale-product-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
         .sale-product-button { min-height: 76px; }
         .sale-size-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
         .sale-size-button { min-height: 76px; }
         @media (max-width: 560px) {
           .pos-page-content { padding: 14px 14px calc(96px + env(safe-area-inset-bottom, 0px)); }
-          .pos-navigation-sticky {
-            position: sticky;
-            top: 0;
-            z-index: 30;
-            background: #F7F9FC;
-            box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
-          }
-          .mobile-bottom-nav {
-            position: fixed;
-            left: 50%;
-            bottom: 0;
-            z-index: 40;
-            display: flex;
-            width: min(100%, 760px);
-            box-sizing: border-box;
-            transform: translateX(-50%);
-            padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
-            background: rgba(255, 255, 255, 0.98);
-            border-top: 1px solid #E5E7EB;
-            box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.08);
-          }
-          .mobile-bottom-nav-button {
-            display: flex;
-            flex: 1 1 0;
-            min-width: 0;
-            min-height: 54px;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 3px;
-            border-radius: 10px;
-            background: transparent;
-            color: #64748B;
-            font-size: 11px;
-            font-weight: 600;
-            touch-action: manipulation;
-          }
-          .mobile-bottom-nav-button[aria-current="page"] {
-            background: #EEF4FB;
-            color: #1F3A5F;
-          }
           .receipt-modal-overlay {
             align-items: flex-start !important;
             overflow-y: auto;
