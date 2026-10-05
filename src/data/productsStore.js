@@ -232,6 +232,38 @@ export const saveProducts = async ({ products, storage, supabase, isSupabaseAuth
   return normalized;
 };
 
+export const deleteProductsByIds = async ({ productIds, supabase, isSupabaseAuthEnabled }) => {
+  const ids = [...new Set((productIds || []).map((id) => String(id || "").trim()).filter(Boolean))];
+  if (ids.length === 0) return 0;
+  if (!isSupabaseAuthEnabled || !supabase) {
+    throw new Error("未能連接雲端商品庫，請重新登入後再清除。");
+  }
+
+  const batchSize = 10;
+  for (let index = 0; index < ids.length; index += batchSize) {
+    const batch = ids.slice(index, index + batchSize);
+    const { error } = await supabase.from("products").delete().in("id", batch);
+    if (error) {
+      const details = [error.message, error.details, error.hint, error.code].filter(Boolean).join("：");
+      throw new Error(`刪除商品失敗（${batch.length} 款）：${details || "雲端資料庫拒絕請求。"}`);
+    }
+
+    const { data: remaining, error: verifyError } = await supabase
+      .from("products")
+      .select("id")
+      .in("id", batch);
+    if (verifyError) {
+      const details = [verifyError.message, verifyError.details, verifyError.hint, verifyError.code].filter(Boolean).join("：");
+      throw new Error(`確認商品刪除失敗：${details || "無法確認雲端資料。"}`);
+    }
+    if ((remaining || []).length > 0) {
+      throw new Error(`雲端仍保留 ${remaining.length} 款商品，請檢查帳戶權限後重試。`);
+    }
+  }
+
+  return ids.length;
+};
+
 export const insertProduct = async ({ products, productId, storage, supabase, isSupabaseAuthEnabled }) => {
   const normalized = normalizeProducts(products);
   const matches = normalized.filter((product) => product.id === productId);

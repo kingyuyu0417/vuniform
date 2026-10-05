@@ -25,6 +25,7 @@ import databaseProductsSnapshot from "../database-products-snapshot.json";
 import {
   loadProducts,
   saveProducts as saveProductsToStore,
+  deleteProductsByIds as deleteProductsFromStore,
   insertProduct as insertProductToStore,
   updateProduct as updateProductInStore,
 } from "./data/productsStore";
@@ -2867,6 +2868,30 @@ export default function UniformPOS() {
     }
   };
 
+  const deleteCatalogProducts = async (productIds, currentProducts) => {
+    if (productsSaveTimerRef.current) {
+      clearTimeout(productsSaveTimerRef.current);
+      productsSaveTimerRef.current = null;
+    }
+    ++productsSaveGenerationRef.current;
+    productsSavePendingRef.current = true;
+    await productsPersistQueueRef.current.catch(() => {});
+    try {
+      const deletedCount = await deleteProductsFromStore({ productIds, supabase, isSupabaseAuthEnabled });
+      const deletedIds = new Set(productIds.map((id) => String(id)));
+      const next = currentProducts.filter((product) => !deletedIds.has(String(product.id)));
+      productsRef.current = next;
+      setProducts(next);
+      productsSaveOptionsRef.current = { insertProductIds: [], updateProductIds: [], orderOnly: false };
+      productsSaveBlockedRef.current = false;
+      setProductsSaveError("");
+      setProductsSaveState("saved");
+      return deletedCount;
+    } finally {
+      productsSavePendingRef.current = false;
+    }
+  };
+
   useEffect(() => () => {
     if (productsSaveTimerRef.current) clearTimeout(productsSaveTimerRef.current);
   }, []);
@@ -3896,6 +3921,7 @@ export default function UniformPOS() {
               <ProductsTab
                 products={products}
                 saveProducts={saveProducts}
+                deleteCatalogProducts={deleteCatalogProducts}
                 importResult={importResult}
                 setImportResult={setImportResult}
                 productsSaveError={productsSaveError}
@@ -4044,6 +4070,7 @@ export default function UniformPOS() {
                   <ProductsTab
                     products={products}
                     saveProducts={saveProducts}
+                    deleteCatalogProducts={deleteCatalogProducts}
                     importResult={importResult}
                     setImportResult={setImportResult}
                     productsSaveError={productsSaveError}
@@ -4881,7 +4908,7 @@ function SaleTab({
   );
 }
 
-function ProductsTab({ products, saveProducts, saveProductsNow, importResult, setImportResult, productsSaveError = "", productsSaveState = "saved", productsCatalogWarning = "", sourceIntegrityWarning = "", canManageSchools = true, canImportExport = true, schoolMeta = {}, saveSchoolMeta = async () => {}, setDeletedSchools = () => {}, selectedSchool = null, setSelectedSchool = () => {}, branchSchoolIds = {}, branchId = "", availableSchools, onPickSchool = setSelectedSchool }) {
+function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogProducts, importResult, setImportResult, productsSaveError = "", productsSaveState = "saved", productsCatalogWarning = "", sourceIntegrityWarning = "", canManageSchools = true, canImportExport = true, schoolMeta = {}, saveSchoolMeta = async () => {}, setDeletedSchools = () => {}, selectedSchool = null, setSelectedSchool = () => {}, branchSchoolIds = {}, branchId = "", availableSchools, onPickSchool = setSelectedSchool }) {
   const [expanded, setExpanded] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
@@ -5356,7 +5383,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   const activeSchoolProducts = activeSchool ? products.filter((p) => schoolOf(p) === activeSchool) : [];
   const visibleProducts = activeSchoolProducts;
   const productCatalogReviewGroups = canManageSchools ? findProductCatalogReviewGroups(products) : [];
-  const { products: productsWithoutPendingReview, removedCount: productsPendingReviewCount } = removeProductCatalogReviewProducts(products, productCatalogReviewGroups);
+  const { removedCount: productsPendingReviewCount } = removeProductCatalogReviewProducts(products, productCatalogReviewGroups);
   const filteredImportPreviewRows = importPreview
     ? importPreview.previewRows.filter((row) => {
         const query = importPreviewSearch.trim().toLowerCase();
@@ -5373,26 +5400,15 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
     if (productsPendingReviewCount === 0) return;
     const pendingCount = productsPendingReviewCount;
     if (!window.confirm(`確定永久刪除 ${pendingCount} 款待處理商品及其尺碼資料？歷史訂單和銷售紀錄會保留。`)) return;
-    const next = productsWithoutPendingReview;
-    if (next.length === 0) {
-      setCatalogCleanupMessage("為避免清空整個商品庫，請先確認待處理商品以外仍有可保留的商品。");
-      return;
-    }
     setImporting(true);
     setCatalogCleanupMessage("");
     try {
-      if (saveProducts(next) === false) {
-        setCatalogCleanupMessage("商品清除未能開始，請查看上方保存錯誤。");
-        return;
-      }
-      const saved = await saveProductsNow();
-      if (!saved) {
-        setCatalogCleanupMessage("商品清除未能完成，請查看上方保存錯誤並重新載入資料確認。");
-        return;
-      }
-      setCatalogCleanupMessage(`已清除 ${pendingCount} 款待處理商品及尺碼資料；歷史訂單和銷售紀錄已保留。`);
+      const productIds = productCatalogReviewGroups.flatMap((group) => group.products.map((product) => product.id));
+      const deletedCount = await deleteCatalogProducts(productIds, products);
+      setCatalogCleanupMessage(`已清除 ${deletedCount} 款待處理商品及尺碼資料；歷史訂單和銷售紀錄已保留。`);
     } catch (error) {
-      setCatalogCleanupMessage(`商品清除失敗：${error?.message || error?.code || "未知錯誤"}`);
+      const detail = [error?.message, error?.details, error?.hint, error?.code].filter(Boolean).join("：");
+      setCatalogCleanupMessage(`商品清除失敗：${detail || "未知錯誤"}`);
     } finally {
       setImporting(false);
     }
