@@ -2,7 +2,7 @@ import React, { lazy, Suspense, useState, useEffect, useRef } from "react";
 import Papa from "papaparse";
 import qrcode from "qrcode-generator";
 import { useLocation, useNavigate, Routes, Route, Navigate } from "react-router-dom";
-import { Plus, Minus, Trash2, Printer, Bluetooth, ChevronDown, ChevronUp, ChevronLeft, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown, X, ShoppingCart, Settings, ClipboardList, Check, AlertCircle, Upload, Download, School, Users, Eye, EyeOff, MapPin, GraduationCap, Search, QrCode } from "lucide-react";
+import { Plus, Minus, Trash2, Printer, Bluetooth, ChevronDown, ChevronUp, ChevronLeft, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown, X, ShoppingCart, Settings, ClipboardList, Check, AlertCircle, Upload, Download, School, Users, Eye, EyeOff, MapPin, GraduationCap, Search, QrCode, House, Radio } from "lucide-react";
 import { isSupabaseConfigured, isSupabaseAuthEnabled, supabase, createPasswordVerificationClient } from "./supabaseClient";
 import { logStartupCheck, getStartupErrorUI, validateAllEnvVars } from "./config/envValidation";
 import { getUserFriendlyError } from "./config/errorHandler";
@@ -3396,6 +3396,12 @@ export default function UniformPOS() {
   };
 
   const directoryIds = perms?.tabs || [];
+  const mobileNavigationItems = [
+    { id: "directory", label: "目錄", path: "/menu", icon: House },
+    { id: "sale", label: "銷售", path: "/sale", permission: "sale", icon: ShoppingCart },
+    { id: "queue", label: "叫號", path: "/queue", permission: "queue", icon: Radio },
+    { id: "records", label: "記錄", path: "/records", permission: "records", icon: ClipboardList },
+  ].filter((item) => !item.permission || directoryIds.includes(item.permission));
 
   if (location.pathname === "/checkin") {
     return <Suspense fallback={<PageLoading />}><CustomerCheckinPage school={publicRouteSchool} schools={customerSchools} schoolMeta={schoolMeta} onSubmit={handleGuestSubmit} /></Suspense>;
@@ -3479,18 +3485,53 @@ export default function UniformPOS() {
         }
         .pos-page-content { padding: 20px; }
         .pos-page-content > * { max-width: 100%; }
+        .mobile-bottom-nav { display: none; }
         .sale-product-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
         .sale-product-button { min-height: 76px; }
         .sale-size-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
         .sale-size-button { min-height: 76px; }
         @media (max-width: 560px) {
-          .pos-page-content { padding: 14px; }
+          .pos-page-content { padding: 14px 14px calc(96px + env(safe-area-inset-bottom, 0px)); }
           .pos-navigation-sticky {
             position: sticky;
             top: 0;
             z-index: 30;
             background: #F7F9FC;
             box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
+          }
+          .mobile-bottom-nav {
+            position: fixed;
+            left: 50%;
+            bottom: 0;
+            z-index: 40;
+            display: flex;
+            width: min(100%, 760px);
+            box-sizing: border-box;
+            transform: translateX(-50%);
+            padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+            background: rgba(255, 255, 255, 0.98);
+            border-top: 1px solid #E5E7EB;
+            box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.08);
+          }
+          .mobile-bottom-nav-button {
+            display: flex;
+            flex: 1 1 0;
+            min-width: 0;
+            min-height: 54px;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            border-radius: 10px;
+            background: transparent;
+            color: #64748B;
+            font-size: 11px;
+            font-weight: 600;
+            touch-action: manipulation;
+          }
+          .mobile-bottom-nav-button[aria-current="page"] {
+            background: #EEF4FB;
+            color: #1F3A5F;
           }
           .receipt-modal-overlay {
             align-items: flex-start !important;
@@ -3898,6 +3939,35 @@ export default function UniformPOS() {
           </Routes>
         </Suspense>
       </div>
+
+      {session.role !== ROLES.GUEST && (
+        <nav className="mobile-bottom-nav" aria-label="主要功能">
+          {mobileNavigationItems.map(({ id, label, path, icon: Icon }) => {
+            const isActive = location.pathname === path;
+            return (
+              <button
+                key={id}
+                type="button"
+                className="pos-btn mobile-bottom-nav-button"
+                aria-label={label}
+                aria-current={isActive ? "page" : undefined}
+                onClick={() => {
+                  const schoolQuery = selectedSchool ? `?school_id=${encodeURIComponent(selectedSchool)}` : "";
+                  if (id === "directory") {
+                    setSchoolPanelOpen(false);
+                    navigate(`${path}${schoolQuery}`);
+                  } else {
+                    handleTabChange(id);
+                  }
+                }}
+              >
+                <Icon size={21} strokeWidth={isActive ? 2.5 : 2} aria-hidden="true" />
+                <span>{label}</span>
+              </button>
+            );
+          })}
+        </nav>
+      )}
 
       {receipt && (
         <ReceiptModal
