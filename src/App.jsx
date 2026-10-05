@@ -2437,19 +2437,23 @@ export default function UniformPOS() {
   const loadSecureOrders = async () => {
     if (!supabase) return [];
     try {
-      let { data, error } = await supabase
+      const branchScoped = Boolean(session && session.role !== ROLES.ADMIN);
+      const branchId = branchScoped ? session.branchId || "__unassigned__" : "";
+      let query = supabase
         .from("orders")
         .select("id, school, branch_id, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, refund_due, voided_at, voided_by, void_reason, cashier_id, cashier_name, total, item_count, created_at, order_items(name, size, length, price, qty)")
         .order("created_at", { ascending: false });
+      if (branchScoped) query = query.eq("branch_id", branchId);
+      let { data, error } = await query;
       
-      if (error?.code === "42703") {
+      if (error?.code === "42703" && !branchScoped) {
         console.warn("orders 表結構版本不相容，嘗試使用簡化查詢", error);
         ({ data, error } = await supabase
           .from("orders")
           .select("id, school, exchange_source_receipt_id, cashier_id, cashier_name, total, item_count, created_at, order_items(name, size, price, qty)")
           .order("created_at", { ascending: false }));
       }
-      if (error?.code === "42703") {
+      if (error?.code === "42703" && !branchScoped) {
         console.warn("來源單據欄位尚未同步，使用基本訂單查詢", error);
         ({ data, error } = await supabase
           .from("orders")
@@ -3780,6 +3784,8 @@ export default function UniformPOS() {
             element={
               <RecordsTab
                 salesLog={salesLog}
+                branchId={session?.role === ROLES.ADMIN ? "" : session?.branchId || ""}
+                restrictToBranch={Boolean(session && session.role !== ROLES.ADMIN)}
                 selectedSchool={selectedSchool || publicRouteSchool}
                 onReprint={(o) => setReceipt(o)}
                 canVoidSales={isSupabaseAuthEnabled && session?.role === ROLES.ADMIN}
@@ -3922,6 +3928,8 @@ export default function UniformPOS() {
                 {tab === "records" && (
                   <RecordsTab
                     salesLog={salesLog}
+                    branchId={session?.role === ROLES.ADMIN ? "" : session?.branchId || ""}
+                    restrictToBranch={Boolean(session && session.role !== ROLES.ADMIN)}
                     selectedSchool={selectedSchool || publicRouteSchool}
                     onReprint={(o) => setReceipt(o)}
                     canVoidSales={isSupabaseAuthEnabled && session?.role === ROLES.ADMIN}
@@ -5969,7 +5977,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   );
 }
 
-function RecordsTab({ salesLog, selectedSchool = "", onReprint, canVoidSales = false, onVoidSale, canViewAllDates, canExportSales, schoolMeta = {} }) {
+function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selectedSchool = "", onReprint, canVoidSales = false, onVoidSale, canViewAllDates, canExportSales, schoolMeta = {} }) {
   const [date, setDate] = useState(todayStr());
   const [outletFilter, setOutletFilter] = useState("");
   const [schoolFilter, setSchoolFilter] = useState("");
@@ -5983,7 +5991,10 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canVoidSales = f
   const effectiveDate = canViewAllDates ? date : todayStr();
   const normalizedPhoneSearch = phoneSearch.replace(/\D/g, "").slice(-4);
   const normalizedReceiptSearch = receiptSearch.trim().toLowerCase().replace(/^#/, "");
-  const visibleOrders = canViewAllDates ? salesLog : salesLog.filter((order) => order.date === effectiveDate);
+  const branchOrders = restrictToBranch
+    ? salesLog.filter((order) => branchId && order.branchId === branchId)
+    : salesLog;
+  const visibleOrders = canViewAllDates ? branchOrders : branchOrders.filter((order) => order.date === effectiveDate);
   const dateOrders = normalizedReceiptSearch
     ? visibleOrders.filter((o) => String(o.id || "").toLowerCase().includes(normalizedReceiptSearch))
     : normalizedPhoneSearch.length === 4
@@ -6127,10 +6138,16 @@ function RecordsTab({ salesLog, selectedSchool = "", onReprint, canVoidSales = f
             {normalizedReceiptSearch || normalizedPhoneSearch.length === 4 ? `搜尋今日記錄（${todayStr()}）` : `即時銷售紀錄（${todayStr()}）`}
           </div>
         )}
-        <select value={outletFilter} onChange={(e) => { setOutletFilter(e.target.value); setSchoolFilter(""); }} style={{ padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 14, maxWidth: "100%" }}>
-          <option value="">全部門店</option>
-          {OUTLETS.map((outlet) => <option key={outlet.name} value={outlet.name}>{outlet.name}</option>)}
-        </select>
+        {restrictToBranch ? (
+          <div aria-label="指定門店" style={{ padding: 8, borderRadius: 8, background: "#EEF1F5", color: "#1F3A5F", fontSize: 14 }}>
+            {BRANCH_OUTLET_NAMES[branchId] || "未分配分店"}
+          </div>
+        ) : (
+          <select value={outletFilter} onChange={(e) => { setOutletFilter(e.target.value); setSchoolFilter(""); }} style={{ padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 14, maxWidth: "100%" }}>
+            <option value="">全部門店</option>
+            {OUTLETS.map((outlet) => <option key={outlet.name} value={outlet.name}>{outlet.name}</option>)}
+          </select>
+        )}
         <select value={schoolFilter} onChange={(e) => setSchoolFilter(e.target.value)} style={{ padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 14, maxWidth: "100%" }}>
           <option value="">全部學校</option>
           {availableSchools.map((school) => <option key={school} value={school}>{school}</option>)}
