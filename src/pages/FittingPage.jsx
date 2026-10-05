@@ -289,14 +289,15 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
   };
 
   const selectSize = (index, sizeOption) => {
-    const currentItem = selection[index];
     const size = typeof sizeOption === "object" ? sizeOption.size : sizeOption;
     const isTailored = typeof sizeOption === "object" && Boolean(sizeOption.isTailored);
-    const nextSize = currentItem?.size === size ? "" : size;
-    updateSelection(index, { size: nextSize, isTailored: nextSize ? isTailored : false });
-    if (nextSize && index === selection.length - 1) {
-      setSelection((prev) => [...prev, { ...emptySelection }]);
-    }
+    updateSelection(index, {
+      size,
+      isTailored,
+      quantityConfirmed: false,
+      pendingQuantity: "",
+      quantityCustom: false,
+    });
   };
 
   useEffect(() => {
@@ -390,10 +391,11 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
     setCameraReady(false);
   };
 
-  const updateSelection = (index, patch) => {
+  const updateSelection = (index, patch, appendNext = false) => {
     setSelection((prev) => {
       const next = [...prev];
       next[index] = { ...next[index], ...patch };
+      if (appendNext && index === prev.length - 1) next.push({ ...emptySelection });
       try {
         const drafts = readDrafts();
         const base = drafts[currentSchoolId] || {};
@@ -405,6 +407,17 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       }
       return next;
     });
+  };
+
+  const confirmQuantity = (index, quantity) => {
+    const parsedQuantity = Number(quantity);
+    if (!Number.isInteger(parsedQuantity) || parsedQuantity < 1 || parsedQuantity > 99) return;
+    updateSelection(index, {
+      quantity: parsedQuantity,
+      quantityConfirmed: true,
+      pendingQuantity: "",
+      quantityCustom: false,
+    }, true);
   };
 
   const addItem = () => setSelection((prev) => [...prev, { ...emptySelection }]);
@@ -423,8 +436,13 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       return;
     }
 
+    if (selection.some((row) => row?.size && row.quantityConfirmed === false)) {
+      setNotice("請先完成目前款式的數量選擇");
+      return;
+    }
+
     const validRows = Array.isArray(selection)
-      ? selection.filter((row) => row && row.productId && row.size)
+      ? selection.filter((row) => row && row.productId && row.size && row.quantityConfirmed !== false)
       : [];
 
     const nextItems = validRows.map((row) => {
@@ -613,14 +631,15 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
               && String(typeof sizeOption === "object" ? sizeOption.length || "" : "") === String(item.length || "")
               && Boolean(typeof sizeOption === "object" && sizeOption.isTailored) === Boolean(item.isTailored || item.is_tailored)
             );
-            if (item.productId && item.size) {
+            if (item.productId && item.size && item.quantityConfirmed !== false) {
               return (
                 <div key={`${item.productId}-${item.length || ""}-${item.size}-${index}`} style={styles.cartRow}>
                   <div style={styles.cartRowInfo}>
                     <div style={styles.cartRowName}>{displayProductName(selectedProduct?.name || "未知款式")}</div>
                     <div style={styles.cartRowMeta}>
-                      {item.length ? `長度 ${item.length} · ` : ""}碼數 {item.size}
-                      {selectedSize?.price != null ? ` · $${Number(selectedSize.price).toLocaleString("en-HK")}` : ""}
+                      {item.length ? `${lengthDimensionLabel(selectedProduct)} ${item.length} · ` : ""}
+                      {item.isTailored || item.is_tailored ? "裁碼" : sizeDimensionLabel(selectedProduct)} {item.size}
+                      {selectedSize?.price != null ? ` · ${formatPrice(selectedSize.price)}` : ""}
                     </div>
                   </div>
                   <input
@@ -647,99 +666,197 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
                   )}
                 </div>
 
-                <div className="sale-product-grid" style={styles.productGrid}>
-                  {safeProducts.map((product) => (
-                    <button
-                      key={product.id}
-                      className="pos-btn sale-product-button"
-                      onClick={() => updateSelection(index, { productId: item.productId === product.id ? "" : product.id, size: "" })}
-                      style={{
-                        ...styles.productBtn,
-                        background: item.productId === product.id ? "#D97757" : productGenderBackground(product),
-                        color: item.productId === product.id ? "#fff" : "#222",
-                        borderColor: item.productId === product.id ? "#D97757" : "#ddd",
-                      }}
-                    >
-                      {displayProductName(product.name)}
-                    </button>
-                  ))}
-                </div>
-
-                {selectedProduct && (
+                {!item.productId ? (
+                  <div className="sale-product-grid" style={styles.productGrid}>
+                    {safeProducts.map((product) => (
+                      <button
+                        key={product.id}
+                        className="pos-btn sale-product-button"
+                        onClick={() => updateSelection(index, {
+                          productId: product.id,
+                          size: "",
+                          length: "",
+                          isTailored: false,
+                          quantityConfirmed: false,
+                        })}
+                        style={{
+                          ...styles.productBtn,
+                          background: productGenderBackground(product),
+                          color: "#222",
+                          borderColor: "#ddd",
+                        }}
+                      >
+                        {displayProductName(product.name)}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
                   <div>
-                    <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>
-                      {hasLengthOptions(selectedProduct)
-                        ? `先揀${lengthDimensionLabel(selectedProduct)}，再揀${sizeDimensionLabel(selectedProduct)}：`
-                        : "揀尺碼："}
+                    <button
+                      className="pos-btn"
+                      onClick={() => updateSelection(index, {
+                        productId: "",
+                        size: "",
+                        length: "",
+                        isTailored: false,
+                        quantityConfirmed: false,
+                        quantityCustom: false,
+                      })}
+                      style={styles.changeButton}
+                    >
+                      ← 更改款式
+                    </button>
+                    <div style={styles.selectedProduct}>
+                      <div style={styles.selectedProductLabel}>目前選擇款式</div>
+                      <div style={styles.selectedProductName}>{displayProductName(selectedProduct?.name || "未知款式")}</div>
                     </div>
-                    {hasLengthOptions(selectedProduct) && (
-                      <div className="sale-size-grid">
-                        {[...new Set(selectedProduct.sizes.map((size) => size.length).filter(Boolean))]
-                          .sort(naturalSizeSort)
-                          .map((length) => (
+                    {item.size && item.quantityConfirmed === false ? (
+                      <div style={styles.quantityPrompt}>
+                        <div style={styles.quantityTitle}>選擇數量</div>
+                        <div style={styles.quantityMeta}>
+                          {item.length ? `${lengthDimensionLabel(selectedProduct)} ${item.length} · ` : ""}
+                          {item.isTailored ? "裁碼" : sizeDimensionLabel(selectedProduct)} {item.size}
+                          {selectedSize?.price != null ? ` · ${formatPrice(selectedSize.price)}` : ""}
+                        </div>
+                        <div style={styles.quantityChoices}>
+                          {[1, 2, 3].map((quantity) => (
                             <button
-                              key={`${selectedProduct.id}-length-${length}`}
-                              className="pos-btn sale-size-button"
-                              onClick={() => updateSelection(index, { length: item.length === length ? "" : length, size: "" })}
-                              style={{ ...styles.sizeBtn, background: item.length === length ? "#1F3A5F" : "#fff", color: item.length === length ? "#fff" : "#1F3A5F", borderColor: item.length === length ? "#1F3A5F" : "#1F3A5F", fontSize: 16 }}
+                              key={quantity}
+                              className="pos-btn"
+                              onClick={() => confirmQuantity(index, quantity)}
+                              style={styles.quantityButton}
                             >
-                              {lengthDimensionLabel(selectedProduct)} {length}
+                              {quantity}
                             </button>
                           ))}
-                      </div>
-                    )}
-                    {(!hasLengthOptions(selectedProduct) || item.length) && (
-                      <div className="sale-size-grid">
-                        {(Array.isArray(selectedProduct.sizes) ? selectedProduct.sizes : [])
-                          .filter((sizeOption) => !hasLengthOptions(selectedProduct) || sizeOption.length === item.length)
-                          .sort((first, second) => naturalSizeSort(first.size, second.size))
-                          .map((sizeOption) => {
-                            const size = typeof sizeOption === "object" ? sizeOption.size : sizeOption;
-                            if (!size) return null;
-                            return (
-                              <button
-                                key={`${selectedProduct.id}-${item.length || "all"}-${size}-${typeof sizeOption === "object" && sizeOption.isTailored ? "tailored" : "regular"}`}
-                                className="pos-btn sale-size-button"
-                                onClick={() => selectSize(index, sizeOption)}
-                                style={{ ...styles.sizeBtn, background: item.size === size && Boolean(item.isTailored) === Boolean(typeof sizeOption === "object" && sizeOption.isTailored) ? "#1f3a5f" : "#fff", color: item.size === size && Boolean(item.isTailored) === Boolean(typeof sizeOption === "object" && sizeOption.isTailored) ? "#fff" : "#24364d", borderColor: item.size === size && Boolean(item.isTailored) === Boolean(typeof sizeOption === "object" && sizeOption.isTailored) ? "#1f3a5f" : "#ccc", fontSize: 16 }}
-                              >
-                                {hasLengthOptions(selectedProduct) ? (
-                                  <div style={{ fontSize: 13, fontWeight: 600 }}>
-                                    {typeof sizeOption === "object" && sizeOption.isTailored ? "裁碼" : sizeDimensionLabel(selectedProduct)}{" "}
-                                    <span style={{ fontSize: 22 }}>{size}</span> 吋
-                                  </div>
-                                ) : (
-                                  <div style={{ fontSize: 22, fontWeight: 600 }}>
-                                    {typeof sizeOption === "object" ? sizeOption.size : size}
-                                  </div>
-                                )}
-                                {typeof sizeOption === "object" && sizeOption.price != null && <div style={styles.sizePrice}>{formatPrice(sizeOption.price)}</div>}
-                              </button>
-                            );
+                        </div>
+                        <button
+                          className="pos-btn"
+                          onClick={() => updateSelection(index, { quantityCustom: true, pendingQuantity: "" })}
+                          style={styles.otherQuantityButton}
+                        >
+                          其他（4–99）
+                        </button>
+                        {item.quantityCustom && (
+                          <>
+                            <input
+                              type="number"
+                              min={4}
+                              max={99}
+                              inputMode="numeric"
+                              autoFocus
+                              placeholder="輸入數量（4–99）"
+                              value={item.pendingQuantity || ""}
+                              onChange={(event) => updateSelection(index, { pendingQuantity: event.target.value })}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") confirmQuantity(index, item.pendingQuantity);
+                              }}
+                              style={styles.input}
+                            />
+                            <button
+                              className="pos-btn"
+                              onClick={() => confirmQuantity(index, item.pendingQuantity)}
+                              disabled={!Number.isInteger(Number(item.pendingQuantity)) || Number(item.pendingQuantity) < 4 || Number(item.pendingQuantity) > 99}
+                              style={styles.confirmQuantityButton}
+                            >
+                              確定數量，下一款
+                            </button>
+                          </>
+                        )}
+                        <button
+                          className="pos-btn"
+                          onClick={() => updateSelection(index, {
+                            size: "",
+                            isTailored: false,
+                            quantityConfirmed: false,
+                            quantityCustom: false,
+                            pendingQuantity: "",
                           })}
+                          style={styles.changeButton}
+                        >
+                          更改尺碼
+                        </button>
                       </div>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>
+                          {hasLengthOptions(selectedProduct)
+                            ? `先揀${lengthDimensionLabel(selectedProduct)}，再揀${sizeDimensionLabel(selectedProduct)}：`
+                            : "揀尺碼："}
+                        </div>
+                        {hasLengthOptions(selectedProduct) && !item.length && (
+                          <div className="sale-size-grid">
+                            {[...new Set(selectedProduct.sizes.map((size) => size.length).filter(Boolean))]
+                              .sort(naturalSizeSort)
+                              .map((length) => (
+                                <button
+                                  key={`${selectedProduct.id}-length-${length}`}
+                                  className="pos-btn sale-size-button"
+                                  onClick={() => updateSelection(index, { length, size: "" })}
+                                  style={styles.sizeBtn}
+                                >
+                                  {lengthDimensionLabel(selectedProduct)} {length}
+                                </button>
+                              ))}
+                          </div>
+                        )}
+                        {hasLengthOptions(selectedProduct) && item.length && (
+                          <button
+                            className="pos-btn"
+                            onClick={() => updateSelection(index, { length: "", size: "", isTailored: false })}
+                            style={styles.changeButton}
+                          >
+                            更改{lengthDimensionLabel(selectedProduct)}（目前：{item.length}）
+                          </button>
+                        )}
+                        {(!hasLengthOptions(selectedProduct) || item.length) && (
+                          <div className="sale-size-grid">
+                            {(Array.isArray(selectedProduct.sizes) ? selectedProduct.sizes : [])
+                              .filter((sizeOption) => !hasLengthOptions(selectedProduct) || sizeOption.length === item.length)
+                              .sort((first, second) => naturalSizeSort(first.size, second.size))
+                              .map((sizeOption) => {
+                                const size = typeof sizeOption === "object" ? sizeOption.size : sizeOption;
+                                if (!size) return null;
+                                return (
+                                  <button
+                                    key={`${selectedProduct.id}-${item.length || "all"}-${size}-${typeof sizeOption === "object" && sizeOption.isTailored ? "tailored" : "regular"}`}
+                                    className="pos-btn sale-size-button"
+                                    onClick={() => selectSize(index, sizeOption)}
+                                    style={styles.sizeBtn}
+                                  >
+                                    {hasLengthOptions(selectedProduct) ? (
+                                      <div style={{ fontSize: 13, fontWeight: 600 }}>
+                                        {typeof sizeOption === "object" && sizeOption.isTailored ? "裁碼" : sizeDimensionLabel(selectedProduct)}{" "}
+                                        <span style={{ fontSize: 22 }}>{size}</span> 吋
+                                      </div>
+                                    ) : (
+                                      <div style={{ fontSize: 22, fontWeight: 600 }}>
+                                        {typeof sizeOption === "object" ? sizeOption.size : size}
+                                      </div>
+                                    )}
+                                    {typeof sizeOption === "object" && sizeOption.price != null && <div style={styles.sizePrice}>{formatPrice(sizeOption.price)}</div>}
+                                  </button>
+                                );
+                              })}
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
-
-                <div style={styles.qtyRow}>
-                  <label style={styles.label}>數量</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={item.quantity || 1}
-                    onChange={(e) => updateSelection(index, { quantity: Math.max(1, Number(e.target.value || 1)) })}
-                    style={styles.input}
-                  />
-                </div>
               </div>
             );
           })}
 
           <div style={styles.footerActions}>
-            <button className="pos-btn" style={styles.secondaryButton} onClick={addItem}>
-              + 新增款式
-            </button>
+            {selection[selection.length - 1]?.productId
+              && selection[selection.length - 1]?.size
+              && selection[selection.length - 1]?.quantityConfirmed !== false
+              && (
+                <button className="pos-btn" style={styles.secondaryButton} onClick={addItem}>
+                  + 新增款式
+                </button>
+              )}
             <button
               className="pos-btn"
               style={{
@@ -894,6 +1011,66 @@ const styles = {
   },
   itemTop: { display: "flex", justifyContent: "space-between", alignItems: "center" },
   itemIndex: { fontSize: 13, fontWeight: 700, color: "#1f3a5f" },
+  changeButton: {
+    marginBottom: 8,
+    padding: "7px 10px",
+    borderRadius: 8,
+    background: "#F0F0EC",
+    border: "1px solid #ddd",
+    color: "#1F3A5F",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  selectedProduct: {
+    background: "#1F3A5F",
+    color: "#fff",
+    borderRadius: 10,
+    padding: "12px 14px",
+    marginBottom: 12,
+    boxShadow: "0 2px 6px rgba(31,58,95,0.18)",
+  },
+  selectedProductLabel: { fontSize: 11, opacity: 0.8, marginBottom: 3 },
+  selectedProductName: { fontSize: 18, fontWeight: 800, lineHeight: 1.35, overflowWrap: "anywhere" },
+  quantityPrompt: {
+    background: "#EAF4FF",
+    border: "1px solid #B7D4F2",
+    borderRadius: 12,
+    padding: 14,
+    display: "grid",
+    gap: 8,
+  },
+  quantityTitle: { color: "#1F3A5F", fontSize: 14, fontWeight: 800 },
+  quantityMeta: { color: "#64748B", fontSize: 12 },
+  quantityChoices: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 },
+  quantityButton: {
+    padding: "12px 8px",
+    borderRadius: 8,
+    background: "#1F3A5F",
+    border: "none",
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  otherQuantityButton: {
+    padding: 10,
+    borderRadius: 8,
+    background: "#fff",
+    border: "1px solid #9BC3EC",
+    color: "#1F3A5F",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  confirmQuantityButton: {
+    padding: "9px 10px",
+    borderRadius: 8,
+    background: "#1F3A5F",
+    border: "none",
+    color: "#fff",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
   cartRow: {
     display: "flex",
     alignItems: "center",
