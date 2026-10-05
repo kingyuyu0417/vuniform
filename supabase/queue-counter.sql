@@ -1,4 +1,7 @@
 -- Independent calling state for the public display and staff queue console.
+-- Requires secure-migration.sql and secure-customer-flow-migration.sql.
+begin;
+
 create table if not exists public.queue_counters (
   school_id varchar not null,
   outlet_name varchar not null default '',
@@ -17,8 +20,13 @@ alter table public.queue_counters add primary key (school_id, outlet_name, count
 
 alter table public.queue_counters enable row level security;
 drop policy if exists "Allow queue counter access" on public.queue_counters;
-create policy "Allow queue counter access"
-on public.queue_counters for all to anon using (true) with check (true);
+drop policy if exists "Authenticated staff manage queue counters" on public.queue_counters;
+create policy "Authenticated staff manage queue counters"
+on public.queue_counters for all to authenticated
+using (public.current_staff_role() is not null)
+with check (public.current_staff_role() is not null);
+revoke all on public.queue_counters from anon;
+grant all on public.queue_counters to authenticated;
 
 alter table public.queue_counters replica identity full;
 
@@ -63,6 +71,10 @@ declare
   result public.queue_counters;
   day_start timestamptz := ((now() at time zone 'Asia/Hong_Kong')::date::timestamp at time zone 'Asia/Hong_Kong');
 begin
+  if auth.uid() is null or public.current_staff_role() is null then
+    raise exception 'staff authentication required' using errcode = '42501';
+  end if;
+
   perform pg_advisory_xact_lock(hashtextextended(p_school_id || '::' || coalesce(p_outlet_name, '') || '::' || coalesce(p_service_type, 'FITTING'), 0));
 
   select * into result
@@ -124,6 +136,10 @@ set search_path = public
 as $$
 declare result public.queue_counters;
 begin
+  if auth.uid() is null or public.current_staff_role() is null then
+    raise exception 'staff authentication required' using errcode = '42501';
+  end if;
+
   perform pg_advisory_xact_lock(hashtextextended(p_school_id || '::' || coalesce(p_outlet_name, '') || '::' || coalesce(p_service_type, 'FITTING'), 0));
   insert into public.queue_counters (school_id, outlet_name, counter_name, service_type, current_order_id, current_queue_number, updated_at)
   values (p_school_id, coalesce(p_outlet_name, ''), coalesce(p_counter_name, 'main'), coalesce(p_service_type, 'FITTING'), null, null, now())
@@ -150,6 +166,10 @@ set search_path = public
 as $$
 declare result public.queue_counters;
 begin
+  if auth.uid() is null or public.current_staff_role() is null then
+    raise exception 'staff authentication required' using errcode = '42501';
+  end if;
+
   perform pg_advisory_xact_lock(hashtextextended(p_school_id || '::' || coalesce(p_outlet_name, '') || '::' || coalesce(p_service_type, 'FITTING'), 0));
 
   select * into result
@@ -196,6 +216,10 @@ declare
   result public.queue_counters;
   day_start timestamptz := ((now() at time zone 'Asia/Hong_Kong')::date::timestamp at time zone 'Asia/Hong_Kong');
 begin
+  if auth.uid() is null or public.current_staff_role() is null then
+    raise exception 'staff authentication required' using errcode = '42501';
+  end if;
+
   perform pg_advisory_xact_lock(hashtextextended(p_school_id || '::' || coalesce(p_outlet_name, '') || '::FITTING', 0));
 
   select * into result
@@ -249,6 +273,10 @@ declare
   result public.queue_counters;
   day_start timestamptz := ((now() at time zone 'Asia/Hong_Kong')::date::timestamp at time zone 'Asia/Hong_Kong');
 begin
+  if auth.uid() is null or public.current_staff_role() is null then
+    raise exception 'staff authentication required' using errcode = '42501';
+  end if;
+
   perform pg_advisory_xact_lock(hashtextextended(p_school_id || '::' || coalesce(p_outlet_name, '') || '::PICKUP', 0));
 
   select * into result
@@ -296,6 +324,10 @@ declare
   target_order public.customer_orders%rowtype;
   day_start timestamptz := ((now() at time zone 'Asia/Hong_Kong')::date::timestamp at time zone 'Asia/Hong_Kong');
 begin
+  if auth.uid() is null or public.current_staff_role() is null then
+    raise exception 'staff authentication required' using errcode = '42501';
+  end if;
+
   perform pg_advisory_xact_lock(hashtextextended(p_school_id || '::' || coalesce(p_outlet_name, '') || '::' || coalesce(p_service_type, 'FITTING'), 0));
 
   select * into result
@@ -351,3 +383,17 @@ revoke all on function public.clear_queue_counter_if_current(varchar, varchar, v
 grant execute on function public.clear_queue_counter_if_current(varchar, varchar, varchar, varchar, text) to authenticated;
 revoke all on function public.call_specific_queue_customer(varchar, varchar, varchar, varchar, text, varchar, uuid) from public, anon;
 grant execute on function public.call_specific_queue_customer(varchar, varchar, varchar, varchar, text, varchar, uuid) to authenticated;
+revoke all on function public.call_next_customer(varchar, varchar, varchar, varchar, uuid) from public, anon;
+grant execute on function public.call_next_customer(varchar, varchar, varchar, varchar, uuid) to authenticated;
+revoke all on function public.call_next_customer(varchar, varchar, varchar, uuid) from public, anon;
+revoke all on function public.call_next_customer(varchar, varchar, varchar, uuid) from authenticated;
+revoke all on function public.call_next_fitting_customer(varchar, varchar, varchar, uuid) from public, anon;
+grant execute on function public.call_next_fitting_customer(varchar, varchar, varchar, uuid) to authenticated;
+revoke all on function public.call_next_pickup_customer(varchar, varchar, varchar, uuid) from public, anon;
+grant execute on function public.call_next_pickup_customer(varchar, varchar, varchar, uuid) to authenticated;
+revoke all on function public.clear_queue_counter(varchar, varchar, varchar, varchar) from public, anon;
+grant execute on function public.clear_queue_counter(varchar, varchar, varchar, varchar) to authenticated;
+revoke all on function public.clear_queue_counter(varchar, varchar, varchar) from public, anon;
+revoke all on function public.clear_queue_counter(varchar, varchar, varchar) from authenticated;
+
+commit;
