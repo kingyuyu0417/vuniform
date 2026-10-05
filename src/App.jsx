@@ -4897,28 +4897,28 @@ function SaleTab({
       )}
 
       <div style={{ background: "#F7F7F5", borderRadius: 12, padding: 14 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>購物車</div>
-        {cart.length === 0 && <div style={{ fontSize: 13, color: "#999" }}>未揀任何貨品</div>}
+        <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 10 }}>購物車</div>
+        {cart.length === 0 && <div style={{ fontSize: 16, color: "#999" }}>未揀任何貨品</div>}
         {cart.map((c) => (
           <div key={c.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #E5E5E0" }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>{c.exchangeReturn ? "換出：" : ""}{c.name}（{sizeLabel(c)}）</div>
-              <div style={{ fontSize: 12, color: c.exchangeReturn ? "#9A3412" : "#888" }}>{c.exchangeReturn ? "-" : ""}{fmt(c.price)} x {c.qty}{productUnit(c.name)} = {fmt((c.exchangeReturn ? -1 : 1) * c.price * c.qty)}</div>
+            <div style={{ flex: 1, minWidth: 0, lineHeight: 1.4 }}>
+              <div style={{ fontSize: 18, fontWeight: 500 }}>{c.exchangeReturn ? "換出：" : ""}{c.name}（{sizeLabel(c)}）</div>
+              <div style={{ fontSize: 16, color: c.exchangeReturn ? "#9A3412" : "#888" }}>{c.exchangeReturn ? "-" : ""}{fmt(c.price)} x {c.qty}{productUnit(c.name)} = {fmt((c.exchangeReturn ? -1 : 1) * c.price * c.qty)}</div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: 8, flexShrink: 0 }}>
               {!c.exchangeReturn && (
                 <>
-                  <button className="pos-btn" onClick={() => changeQty(c.key, -1)} style={{ width: 26, height: 26, borderRadius: 6, background: "#fff", border: "1px solid #ccc" }}>
-                    <Minus size={13} style={{ margin: "auto" }} />
+                  <button className="pos-btn" onClick={() => changeQty(c.key, -1)} style={{ width: 36, height: 36, borderRadius: 8, background: "#fff", border: "1px solid #ccc" }}>
+                    <Minus size={18} style={{ margin: "auto" }} />
                   </button>
-                  <span style={{ fontSize: 13, minWidth: 16, textAlign: "center" }}>{c.qty}</span>
-                  <button className="pos-btn" onClick={() => changeQty(c.key, 1)} style={{ width: 26, height: 26, borderRadius: 6, background: "#fff", border: "1px solid #ccc" }}>
-                    <Plus size={13} style={{ margin: "auto" }} />
+                  <span style={{ fontSize: 18, minWidth: 20, textAlign: "center" }}>{c.qty}</span>
+                  <button className="pos-btn" onClick={() => changeQty(c.key, 1)} style={{ width: 36, height: 36, borderRadius: 8, background: "#fff", border: "1px solid #ccc" }}>
+                    <Plus size={18} style={{ margin: "auto" }} />
                   </button>
                 </>
               )}
-              <button className="pos-btn" onClick={() => removeItem(c.key)} style={{ width: 26, height: 26, borderRadius: 6, background: "#fff", border: "1px solid #eee", color: "#c33" }}>
-                <Trash2 size={13} style={{ margin: "auto" }} />
+              <button className="pos-btn" onClick={() => removeItem(c.key)} style={{ width: 36, height: 36, borderRadius: 8, background: "#fff", border: "1px solid #eee", color: "#c33" }}>
+                <Trash2 size={18} style={{ margin: "auto" }} />
               </button>
             </div>
           </div>
@@ -4926,17 +4926,17 @@ function SaleTab({
         {cart.length > 0 && (
           <>
             <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-              <button className="pos-btn" onClick={onClearCart} style={{ flex: 1, padding: "9px 8px", borderRadius: 8, background: "#FFF1F2", border: "1px solid #FDA4AF", color: "#BE123C", fontSize: 13, fontWeight: 700 }}>
+              <button className="pos-btn" onClick={onClearCart} style={{ flex: 1, padding: "12px 8px", borderRadius: 8, background: "#FFF1F2", border: "1px solid #FDA4AF", color: "#BE123C", fontSize: 17, fontWeight: 700 }}>
                 刪除所有款式
               </button>
             </div>
-            <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", fontSize: 15, fontWeight: 700 }}>
+            <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", fontSize: 18, fontWeight: 700 }}>
               <span>{exchangeMode ? "換貨應補／應退" : `總計（${cartCount}件）`}</span>
               <span>{fmt(cartTotal)}</span>
             </div>
 
             <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, paddingTop: 10, borderTop: "1px solid #E5E5E0" }}>
-              <label htmlFor="cash-received" style={{ fontSize: 13, fontWeight: 600, color: "#45515F" }}>{exchangeMode ? "補回現金" : "實收現金"}</label>
+              <label htmlFor="cash-received" style={{ fontSize: 17, fontWeight: 600, color: "#45515F" }}>{exchangeMode ? "補回現金" : "實收現金"}</label>
               <input
                 id="cash-received"
                 type="number"
@@ -4955,16 +4955,16 @@ function SaleTab({
                   setCashReceived(raw === "" ? "" : raw.replace(/^0+(?=\d)/, ""));
                 }}
                 placeholder=""
-                style={{ width: 120, padding: "8px 10px", borderRadius: 8, border: "1px solid #cfd6dd", fontSize: 14, textAlign: "right" }}
+                style={{ width: 140, padding: "10px", borderRadius: 8, border: "1px solid #cfd6dd", fontSize: 18, textAlign: "right" }}
               />
             </div>
 
-            <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 600, color: exchangeMode && refundDue > 0 ? "#166534" : "#1F3A5F" }}>
+            <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", fontSize: 18, fontWeight: 600, color: exchangeMode && refundDue > 0 ? "#166534" : "#1F3A5F" }}>
               <span>{exchangeMode && refundDue > 0 ? "應退客人" : exchangeMode ? "應補差額" : "找續"}</span>
               <span>{fmt(exchangeMode && refundDue > 0 ? refundDue : exchangeMode ? changeDue : changeDue)}</span>
             </div>
 
-            <div style={{ marginTop: 6, display: "flex", justifyContent: "space-between", fontSize: 12, color: "#666" }}>
+            <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", fontSize: 16, color: "#666" }}>
               <span>已收</span>
               <span>{fmt(cashAmount)}</span>
             </div>
@@ -4983,7 +4983,7 @@ function SaleTab({
           borderRadius: 12,
           background: cart.length === 0 ? "#ddd" : "#1F3A5F",
           color: "#fff",
-          fontSize: 16,
+          fontSize: 18,
           fontWeight: 600,
         }}
       >
@@ -4993,31 +4993,31 @@ function SaleTab({
         <button
           className="pos-btn"
           onClick={onHoldSale}
-          style={{ width: "100%", marginTop: 8, padding: "12px 0", borderRadius: 10, background: "#FFF7ED", border: "1px solid #FDBA74", color: "#9A3412", fontSize: 15, fontWeight: 700 }}
+          style={{ width: "100%", marginTop: 8, padding: "14px 0", borderRadius: 10, background: "#FFF7ED", border: "1px solid #FDBA74", color: "#9A3412", fontSize: 17, fontWeight: 700 }}
         >
           HOLD 單（稍後繼續）
         </button>
       )}
       {heldSales.length > 0 && (
         <div style={{ marginTop: 14, background: "#F8FAFC", border: "1px solid #CBD5E1", borderRadius: 10, padding: 12 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#1F3A5F", marginBottom: 8 }}>HOLD 單（{heldSales.length}張）</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#1F3A5F", marginBottom: 8 }}>HOLD 單（{heldSales.length}張）</div>
           <div style={{ display: "grid", gap: 6 }}>
             {heldSales.map((hold) => (
               <div key={hold.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: "#fff", borderRadius: 8, border: "1px solid #E2E8F0" }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#334155" }}>{hold.school || "未選學校"} · {hold.cart?.reduce((sum, item) => sum + Number(item.qty || 0), 0) || 0}件</div>
-                  <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{new Date(hold.createdAt).toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit" })}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: "#334155" }}>{hold.school || "未選學校"} · {hold.cart?.reduce((sum, item) => sum + Number(item.qty || 0), 0) || 0}件</div>
+                  <div style={{ fontSize: 15, color: "#64748B", marginTop: 2 }}>{new Date(hold.createdAt).toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit" })}</div>
                 </div>
-                <button className="pos-btn" onClick={() => onResumeHeldSale(hold)} style={{ padding: "8px 10px", borderRadius: 7, background: "#1F3A5F", color: "#fff", fontSize: 12, fontWeight: 700 }}>繼續</button>
-                <button className="pos-btn" onClick={() => onDiscardHeldSale(hold.id)} style={{ padding: "8px 9px", borderRadius: 7, background: "#FFF1F2", color: "#BE123C", fontSize: 12, fontWeight: 700 }}>刪除</button>
+                <button className="pos-btn" onClick={() => onResumeHeldSale(hold)} style={{ padding: "10px 12px", borderRadius: 7, background: "#1F3A5F", color: "#fff", fontSize: 16, fontWeight: 700 }}>繼續</button>
+                <button className="pos-btn" onClick={() => onDiscardHeldSale(hold.id)} style={{ padding: "10px 12px", borderRadius: 7, background: "#FFF1F2", color: "#BE123C", fontSize: 16, fontWeight: 700 }}>刪除</button>
               </div>
             ))}
           </div>
         </div>
       )}
       {storageError && (
-        <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 8, background: "#FFF1F0", color: "#B42318", fontSize: 12, display: "flex", gap: 6, alignItems: "flex-start" }}>
-          <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+        <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 8, background: "#FFF1F0", color: "#B42318", fontSize: 16, display: "flex", gap: 8, alignItems: "flex-start" }}>
+          <AlertCircle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
           <span>{storageError}</span>
         </div>
       )}
