@@ -165,13 +165,9 @@ export const findProductCatalogReviewGroups = (products = []) => {
   products.forEach((product) => {
     const nameKey = productIdentityName(product.name);
     const familyKey = `${product.school || ""}\u0000${product.branch_id || ""}\u0000${productGender(product.name)}\u0000${nameKey}`;
-    if (!families.has(familyKey)) families.set(familyKey, { id: familyKey, school: product.school || "", products: [], styleNames: [] });
+    if (!families.has(familyKey)) families.set(familyKey, { id: familyKey, school: product.school || "", products: [] });
     const family = families.get(familyKey);
     family.products.push(product);
-    const names = splitCompositeProductName(product.name) || [product.name];
-    names.forEach((name) => {
-      if (!family.styleNames.some((existing) => normalizeNameKey(existing) === normalizeNameKey(name))) family.styleNames.push(name);
-    });
   });
 
   return [...families.values()].flatMap((family) => {
@@ -191,82 +187,17 @@ export const findProductCatalogReviewGroups = (products = []) => {
     });
     if (![...pricesBySize.values()].some((prices) => prices.size > 1)) return [];
 
-    if (family.styleNames.length < 2) {
-      const baseName = family.styleNames[0] || family.products[0]?.name || "未命名款式";
-      const maxRowsPerSize = Math.max(2, ...[...pricesBySize.values()].map((prices) => prices.size));
-      for (let index = family.styleNames.length; index < maxRowsPerSize; index += 1) {
-        family.styleNames.push(`${baseName}（款式 ${index + 1}）`);
-      }
-    }
-
     return [{
       ...family,
-      styleNames: family.styleNames,
       entries,
-      products: family.products,
     }];
   });
 };
 
-export const resolveProductCatalogReview = (products, group, styles, assignments) => {
-  const sourceIds = new Set(group.products.map((product) => product.id));
-  const sourceProducts = products.filter((product) => sourceIds.has(product.id));
-  if (sourceProducts.length !== sourceIds.size) throw new Error("商品資料已更新，請重新載入後再判定。");
-
-  const resolvedSizes = styles.map(() => []);
-  group.entries.forEach((entry) => {
-    const styleIndex = assignments[entry.key];
-    if (!Number.isInteger(styleIndex) || !styles[styleIndex]) {
-      throw new Error("請先為每個尺碼選擇所屬款式。");
-    }
-    resolvedSizes[styleIndex].push(entry.size);
-  });
-
-  const resolvedProducts = styles.map((style, styleIndex) => {
-    if (!String(style.school || "").trim() || !String(style.name || "").trim() || resolvedSizes[styleIndex].length === 0) {
-      throw new Error("每個款式都必須有學校名稱、款式名稱及至少一個尺碼。");
-    }
-    const sizesByIdentity = new Map();
-    resolvedSizes[styleIndex].forEach((size) => {
-      const key = sizeIdentity(size);
-      const price = Number(size.price);
-      const previousSize = sizesByIdentity.get(key);
-      if (previousSize && Number(previousSize.price) !== price) {
-        throw new Error(`「${style.name}」的尺碼 ${size.size || size.length} 仍有不同價格，請分配到不同款式。`);
-      }
-      sizesByIdentity.set(key, size);
-    });
-
-    const original = sourceProducts[Math.min(styleIndex, sourceProducts.length - 1)];
-    let id = sourceProducts[styleIndex]?.id || `${sourceProducts[0].id}-manual-style-${styleIndex + 1}`;
-    let suffix = 1;
-    while (products.some((product) => !sourceIds.has(product.id) && product.id === id)) {
-      id = `${sourceProducts[0].id}-manual-style-${styleIndex + 1}-${suffix}`;
-      suffix += 1;
-    }
-    return {
-      ...original,
-      id,
-      school: String(style.school).trim(),
-      name: String(style.name).trim(),
-      sizes: [...sizesByIdentity.values()].map((size) => ({ ...size })),
-    };
-  });
-  const styleKeys = resolvedProducts.map((product) => `${product.school}\u0000${normalizeNameKey(product.name)}`);
-  if (new Set(styleKeys).size !== styleKeys.length) throw new Error("同一學校內的獨立款式名稱不可重複。");
-
-  const next = [];
-  let inserted = false;
-  products.forEach((product) => {
-    if (sourceIds.has(product.id)) {
-      if (!inserted) {
-        next.push(...resolvedProducts);
-        inserted = true;
-      }
-      return;
-    }
-    next.push(product);
-  });
-  if (!inserted) next.push(...resolvedProducts);
-  return next;
+export const removeProductCatalogReviewProducts = (products, groups) => {
+  const ids = new Set(groups.flatMap((group) => group.products.map((product) => product.id)));
+  return {
+    products: products.filter((product) => !ids.has(product.id)),
+    removedCount: ids.size,
+  };
 };
