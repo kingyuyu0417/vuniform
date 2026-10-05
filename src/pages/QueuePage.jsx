@@ -146,6 +146,37 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     if (next?.current_queue_number) publicDisplaySubscriptionRef.current?.notify(next);
   };
 
+  const callSpecificVisit = async (visit) => {
+    if (!visit?.id) {
+      setCallError("訂單資料缺少編號，無法叫號");
+      return;
+    }
+    if (counter?.current_order_id) {
+      setCallError(`目前仍在叫號 ${counter.current_queue_number || "客人"}，請先完成或過號`);
+      return;
+    }
+    setCalling(true);
+    setCallError("");
+    playCallChimeOnClick();
+    try {
+      const next = await queueOrderService.callSpecific({
+        schoolId: currentSchoolId,
+        outletName,
+        counterName,
+        serviceType,
+        orderId: visit.id,
+        queueNumber: visit.queueNo,
+        calledBy,
+      });
+      setCounter(next);
+      notifyPublicDisplay(next);
+    } catch (error) {
+      setCallError(error.message || "叫號失敗");
+    } finally {
+      setCalling(false);
+    }
+  };
+
   useEffect(() => {
     let active = true;
     const syncVisits = async () => {
@@ -218,14 +249,22 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     }
   };
 
-  const clearCurrentCall = async () => {
+  const clearCurrentCall = async (expectedOrderId = counter?.current_order_id) => {
     setCalling(true);
     setCallError("");
     try {
-      const next = await queueOrderService.clearQueueCounter({ schoolId: currentSchoolId, outletName, counterName, serviceType });
+      const next = await queueOrderService.clearQueueCounter({
+        schoolId: currentSchoolId,
+        outletName,
+        counterName,
+        serviceType,
+        expectedOrderId,
+      });
       setCounter(next);
+      return next;
     } catch (error) {
       setCallError(error.message || "清除叫號失敗");
+      return null;
     } finally {
       setCalling(false);
     }
@@ -244,7 +283,13 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
         currentSchoolId,
         expectedStatus
       );
-      const next = await queueOrderService.clearQueueCounter({ schoolId: currentSchoolId, outletName, counterName, serviceType });
+      const next = await queueOrderService.clearQueueCounter({
+        schoolId: currentSchoolId,
+        outletName,
+        counterName,
+        serviceType,
+        expectedOrderId: counter.current_order_id,
+      });
       setCounter(next);
     } catch (error) {
       setCallError(error.message || "過號處理失敗");
@@ -290,10 +335,15 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
   };
 
   const startCurrentFitting = async () => {
-    if (!counter?.current_order_id) return;
-    await clearCurrentCall();
-    onAssign?.(visibleVisits.find((visit) => visit.id === counter.current_order_id));
-    navigate(`/fitting?id=${encodeURIComponent(counter.current_order_id)}`);
+    const orderId = counter?.current_order_id;
+    if (!orderId) return;
+    const cleared = await clearCurrentCall(orderId);
+    if (!cleared || cleared.current_order_id) {
+      setCallError("目前叫號已變更，請重新整理後再選擇客人。");
+      return;
+    }
+    onAssign?.(visibleVisits.find((visit) => visit.id === orderId));
+    navigate(`/fitting?id=${encodeURIComponent(orderId)}`);
   };
 
   const completeCurrentPickup = async () => {
@@ -301,11 +351,18 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
     setCalling(true);
     setCallError("");
     try {
-      const markedOrder = await queueOrderService.markPickupCalled(counter.current_order_id, currentSchoolId);
+      const orderId = counter.current_order_id;
+      const markedOrder = await queueOrderService.markPickupCalled(orderId, currentSchoolId);
       if (!markedOrder?.id) throw new Error("取貨訂單未成功更新，請重新整理後再試");
-      await queueOrderService.clearQueueCounter({ schoolId: currentSchoolId, outletName, counterName, serviceType });
+      await queueOrderService.clearQueueCounter({
+        schoolId: currentSchoolId,
+        outletName,
+        counterName,
+        serviceType,
+        expectedOrderId: orderId,
+      });
       setCounter(null);
-      navigate(`/cashier?order_id=${encodeURIComponent(counter.current_order_id)}`);
+      navigate(`/cashier?order_id=${encodeURIComponent(orderId)}`);
     } catch (error) {
       setCallError(error.message || "取貨流程更新失敗");
       setCalling(false);
@@ -440,25 +497,11 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
                 {serviceType === QUEUE_SERVICE.FITTING && visit.status === ORDER_STATUS.PENDING ? (
                   <button
                     className="pos-btn"
-                    onClick={() => {
-                      onAssign?.(visit);
-                      const visitId = visit.id || visit.queueNo || "";
-                      if (!visitId) {
-                        console.warn("QueuePage: visit 缺少 ID 或 queueNo", visit);
-                        alert("訂單資訊不完整，無法進入度身頁面");
-                        return;
-                      }
-                      console.log("QueuePage: opening fitting for", {
-                        visitId,
-                        queueNo: visit.queueNo,
-                        guestName: visit.guestName,
-                        id: visit.id,
-                      });
-                      navigate(`/fitting?id=${encodeURIComponent(visitId)}`);
-                    }}
+                    onClick={() => callSpecificVisit(visit)}
+                    disabled={calling || Boolean(counter?.current_order_id)}
                     style={{ flex: 1, background: "#1F3A5F", color: "#fff", padding: "8px 10px", borderRadius: 8, fontSize: 12, fontWeight: 600 }}
                   >
-                    開始度身
+                    叫號此客人
                   </button>
                 ) : serviceType === QUEUE_SERVICE.PICKUP ? (
                   <button

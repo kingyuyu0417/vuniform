@@ -446,12 +446,16 @@ export const queueOrderService = {
       const normalized = normalizeCounter(data || { school_id: schoolId, outlet_name: outletName, counter_name: counterName, service_type: serviceType });
       if (normalized.service_type !== serviceType) throw new Error("叫號 counter 服務類型不一致");
       if (normalized.current_queue_number && !isQueueOrderToday(normalized.updated_at)) {
-        const reset = await supabase.rpc("clear_queue_counter", {
-          p_school_id: safeSchoolId(schoolId),
-          p_outlet_name: outletName || "",
-          p_counter_name: counterName || "main",
-          p_service_type: serviceType,
-        });
+        const reset = await supabase.rpc(
+          normalized.current_order_id ? "clear_queue_counter_if_current" : "clear_queue_counter",
+          {
+            p_school_id: safeSchoolId(schoolId),
+            p_outlet_name: outletName || "",
+            p_counter_name: counterName || "main",
+            p_service_type: serviceType,
+            ...(normalized.current_order_id ? { p_expected_order_id: normalized.current_order_id } : {}),
+          }
+        );
         if (!reset.error) {
           const resetCounter = normalizeCounter(reset.data);
           writeCounterCache({ ...readCounterCache(), [key]: resetCounter });
@@ -504,20 +508,15 @@ export const queueOrderService = {
     const key = counterKey(schoolId, outletName, counterName, serviceType);
     const updatedAt = new Date().toISOString();
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from("queue_counters")
-        .upsert({
-          school_id: safeSchoolId(schoolId),
-          outlet_name: outletName || "",
-          counter_name: counterName || "main",
-          service_type: serviceType,
-          current_order_id: orderId,
-          current_queue_number: queueNumber,
-          updated_at: updatedAt,
-          updated_by: calledBy || null,
-        }, { onConflict: "school_id,outlet_name,counter_name,service_type" })
-        .select("school_id, outlet_name, counter_name, service_type, current_order_id, current_queue_number, updated_at")
-        .maybeSingle();
+      const { data, error } = await supabase.rpc("call_specific_queue_customer", {
+        p_school_id: safeSchoolId(schoolId),
+        p_outlet_name: outletName || "",
+        p_counter_name: counterName || "main",
+        p_service_type: serviceType,
+        p_order_id: orderId,
+        p_queue_number: queueNumber,
+        p_called_by: calledBy || null,
+      });
       if (error) throw error;
       if (!data) throw new Error("重新叫號未能更新叫號櫃檯");
       const normalized = normalizeCounter(data);
@@ -538,15 +537,19 @@ export const queueOrderService = {
     return current;
   },
 
-  async clearQueueCounter({ schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING } = {}) {
+  async clearQueueCounter({ schoolId = "", outletName = "", counterName = "main", serviceType = QUEUE_SERVICE.FITTING, expectedOrderId = null } = {}) {
     const key = counterKey(schoolId, outletName, counterName, serviceType);
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.rpc("clear_queue_counter", {
-        p_school_id: safeSchoolId(schoolId),
-        p_outlet_name: outletName || "",
-        p_counter_name: counterName || "main",
-        p_service_type: serviceType,
-      });
+      const { data, error } = await supabase.rpc(
+        expectedOrderId ? "clear_queue_counter_if_current" : "clear_queue_counter",
+        {
+          p_school_id: safeSchoolId(schoolId),
+          p_outlet_name: outletName || "",
+          p_counter_name: counterName || "main",
+          p_service_type: serviceType,
+          ...(expectedOrderId ? { p_expected_order_id: expectedOrderId } : {}),
+        }
+      );
       if (error) throw error;
       const normalized = normalizeCounter(data);
       writeCounterCache({ ...readCounterCache(), [key]: normalized });

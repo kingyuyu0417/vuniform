@@ -6,14 +6,17 @@ import { ORDER_STATUS, QUEUE_SERVICE, queueOrderService } from "../services/queu
 const activeStatuses = [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STATUS.READY];
 let announcementChain = Promise.resolve();
 const announcerId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const announcerStorageKey = "uniform-pos-active-queue-announcer";
-const canAnnounce = () => {
+const announcerStorageKey = (schoolName, outletName, serviceType) => (
+  `uniform-pos-active-queue-announcer:${encodeURIComponent(schoolName)}:${encodeURIComponent(outletName)}:${serviceType}`
+);
+const canAnnounce = (schoolName, outletName, serviceType) => {
   if (typeof document !== "undefined" && document.visibilityState !== "visible") return false;
   try {
     const now = Date.now();
-    const current = JSON.parse(window.localStorage.getItem(announcerStorageKey) || "null");
+    const storageKey = announcerStorageKey(schoolName, outletName, serviceType);
+    const current = JSON.parse(window.localStorage.getItem(storageKey) || "null");
     if (current?.id && current.id !== announcerId && now - Number(current.updatedAt || 0) < 10000) return false;
-    window.localStorage.setItem(announcerStorageKey, JSON.stringify({ id: announcerId, updatedAt: now }));
+    window.localStorage.setItem(storageKey, JSON.stringify({ id: announcerId, updatedAt: now }));
     return true;
   } catch {
     return true;
@@ -197,7 +200,7 @@ function QueueDisplayLane({ schoolName = "", outletName = "", counterName = "mai
 
   const announce = async (counterToAnnounce = counter) => {
     if (!counterToAnnounce?.current_queue_number) return;
-    if (!canAnnounce()) return;
+    if (!canAnnounce(schoolName, outletName, serviceType)) return;
     await playChime();
     if (!window.speechSynthesis) return;
     const destination = serviceType === QUEUE_SERVICE.PICKUP ? "取貨區取貨付款" : "度身區度身";
