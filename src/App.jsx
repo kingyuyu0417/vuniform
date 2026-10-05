@@ -3489,13 +3489,15 @@ export default function UniformPOS() {
             align-items: flex-start !important;
             overflow-y: auto;
             padding: max(8px, env(safe-area-inset-top)) 10px max(8px, env(safe-area-inset-bottom)) !important;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior-y: contain;
           }
           .receipt-modal-panel {
-            max-height: calc(100vh - 32px) !important;
-            max-height: calc(100dvh - 32px) !important;
+            max-height: none !important;
             padding: 16px !important;
-            overflow-y: auto;
-            overscroll-behavior: contain;
+            overflow: visible !important;
+            flex: 0 0 auto;
+            margin: 0 auto;
           }
           .receipt-modal-header {
             top: -16px;
