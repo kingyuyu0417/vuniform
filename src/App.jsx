@@ -540,10 +540,10 @@ const consolidateProductCatalog = (products) => (Array.isArray(products) ? produ
     return result;
   }, []);
 
-const countUnresolvedPriceConflictProducts = (products) => (Array.isArray(products) ? products : [])
-  .filter((product) => {
-    const split = splitCompositeProductRecord(product);
-    if (split.length > 1) return false;
+const countUnresolvedPriceConflictProducts = (products) => {
+  const unresolvedIds = new Set();
+  const seen = [];
+  (Array.isArray(products) ? products : []).flatMap(splitCompositeProductRecord).forEach((product) => {
     const pricesBySize = new Map();
     (product.sizes || []).forEach((size) => {
       const key = sizeIdentityKey(size);
@@ -551,9 +551,24 @@ const countUnresolvedPriceConflictProducts = (products) => (Array.isArray(produc
       if (!pricesBySize.has(key)) pricesBySize.set(key, new Set());
       if (Number.isFinite(price)) pricesBySize.get(key).add(price);
     });
-    return [...pricesBySize.values()].some((prices) => prices.size > 1);
-  })
-  .length;
+    if ([...pricesBySize.values()].some((prices) => prices.size > 1)) unresolvedIds.add(product.id);
+
+    const productParts = productIdentityParts(schoolOf(product), product.name, product.branch_id);
+    const duplicateRows = seen.filter((item) => {
+      const itemParts = productIdentityParts(schoolOf(item), item.name, item.branch_id);
+      return productIdentityKey(itemParts.school, item.name, item.branch_id) === productIdentityKey(productParts.school, product.name, productParts.branchId)
+        && compatibleProductGenders(itemParts.gender, productParts.gender);
+    });
+    duplicateRows.forEach((duplicate) => {
+      if (productHasConflictingSizes(duplicate, product)) {
+        unresolvedIds.add(duplicate.id);
+        unresolvedIds.add(product.id);
+      }
+    });
+    seen.push(product);
+  });
+  return unresolvedIds.size;
+};
 
 const enforceAuthoritativeProducts = (products) => {
   const normalized = normalizeProductState(products);
