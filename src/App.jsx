@@ -543,7 +543,7 @@ const consolidateProductCatalog = (products) => (Array.isArray(products) ? produ
     return result;
   }, []);
 
-const countUnresolvedPriceConflictProducts = (products) => {
+const findUnresolvedPriceConflictProductIds = (products) => {
   const unresolvedIds = new Set();
   const seen = [];
   (Array.isArray(products) ? products : []).flatMap(splitCompositeProductRecord).forEach((product) => {
@@ -570,8 +570,9 @@ const countUnresolvedPriceConflictProducts = (products) => {
     });
     seen.push(product);
   });
-  return unresolvedIds.size;
+  return unresolvedIds;
 };
+const countUnresolvedPriceConflictProducts = (products) => findUnresolvedPriceConflictProductIds(products).size;
 
 const enforceAuthoritativeProducts = (products) => {
   const normalized = normalizeProductState(products);
@@ -3368,6 +3369,23 @@ export default function UniformPOS() {
 
   const checkout = async () => {
     if (cart.length === 0 || checkoutSubmittingRef.current) return;
+    const conflictingProductIds = findUnresolvedPriceConflictProductIds(products);
+    const priceIssues = cart.flatMap((item) => {
+      if (item.exchangeReturn || item.sourceOrderId) return [];
+      const product = products.find((candidate) => candidate.id === item.productId);
+      if (!product) return [`${item.name}（${sizeLabel(item)}）已不在商品資料內`];
+      if (conflictingProductIds.has(product.id)) return [`${product.name}（${sizeLabel(item)}）有相同尺碼價格衝突`];
+      const matchingSizes = product.sizes.filter((size) => sizeIdentityKey(size) === sizeIdentityKey(item));
+      if (matchingSizes.length !== 1 || Number(matchingSizes[0]?.price) !== Number(item.price)) {
+        const currentPrice = matchingSizes.length === 1 ? `現價 $${matchingSizes[0].price}` : "找不到唯一尺碼價格";
+        return [`${product.name}（${sizeLabel(item)}）購物車價格與商品資料不符（${currentPrice}）`];
+      }
+      return [];
+    });
+    if (priceIssues.length > 0) {
+      setStorageError(`價格核對未通過，未能結帳：${priceIssues.join("；")}。請移除並重新選取商品，或請管理員先修正價格。`);
+      return;
+    }
     checkoutSubmittingRef.current = true;
     const now = new Date();
     const received = cashReceived === ""
@@ -4251,7 +4269,11 @@ function SaleTab({
   const [directExchangeQuantityPrompt, setDirectExchangeQuantityPrompt] = useState(null);
   const [directExchangeItems, setDirectExchangeItems] = useState([]);
   const schools = listSchools(products);
-  const visibleProducts = (selectedSchool ? products.filter((p) => schoolOf(p) === selectedSchool) : products)
+  const conflictingProductIds = findUnresolvedPriceConflictProductIds(products);
+  const schoolProducts = selectedSchool ? products.filter((p) => schoolOf(p) === selectedSchool) : products;
+  const blockedPriceProducts = schoolProducts.filter((product) => conflictingProductIds.has(product.id));
+  const visibleProducts = schoolProducts
+    .filter((product) => !conflictingProductIds.has(product.id))
     .filter((product) => product.sizes.some(isPricedSize));
   const filteredProducts = visibleProducts.filter((product) =>
     genderFilter === "全部" || genderOf(product) === genderFilter || genderOf(product) === "男女通用"
@@ -4380,6 +4402,12 @@ function SaleTab({
 
   return (
     <div>
+      {blockedPriceProducts.length > 0 && (
+        <div role="alert" style={{ marginBottom: 12, padding: 10, borderRadius: 9, border: "1px solid #F0C36D", background: "#FFFBEB", color: "#7C4A03", fontSize: 12 }}>
+          <strong>{blockedPriceProducts.length} 款商品價格有衝突，已暫停銷售及換貨，避免收錯價。</strong>
+          <div style={{ marginTop: 3 }}>請管理員先在商品頁核對或清除相關款式，再重新匯入正確價格。</div>
+        </div>
+      )}
       <button
         className="pos-btn"
         onClick={openExchangePicker}
