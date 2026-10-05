@@ -183,33 +183,41 @@ export const saveProducts = async ({ products, storage, supabase, isSupabaseAuth
     const nextIds = new Set(uniqueProducts.map((product) => product.id));
     const deletedIds = (existing || []).map((product) => product.id).filter((id) => !nextIds.has(id));
 
-    const { error } = await supabase.from("products").upsert(uniqueProducts.map(({ id, school, name, sizes, priceMode, branch_id: branchId }, index) => ({
-      id,
-      school: school || "",
-      name,
-      sizes: sizes.map((size) => ({ ...size, __priceMode: priceMode })),
-      display_order: index,
-      branch_id: branchId || null,
-    })));
+    const batchSize = 50;
+    const savedProducts = [];
+    for (let index = 0; index < uniqueProducts.length; index += batchSize) {
+      const batch = uniqueProducts.slice(index, index + batchSize);
+      const { error } = await supabase.from("products").upsert(batch.map(({ id, school, name, sizes, priceMode, branch_id: branchId }, batchIndex) => ({
+        id,
+        school: school || "",
+        name,
+        sizes: sizes.map((size) => ({ ...size, __priceMode: priceMode })),
+        display_order: index + batchIndex,
+        branch_id: branchId || null,
+      })));
+      if (error) throw error;
 
-    if (error) throw error;
-
-    const { data: savedProducts, error: verifyError } = await supabase
-      .from("products")
-      .select("id, school, name, sizes")
-      .in("id", uniqueProducts.map((product) => product.id));
-    if (verifyError) throw verifyError;
-
-    if (deletedIds.length > 0) {
-      const { error: deleteError } = await supabase.from("products").delete().in("id", deletedIds);
-      if (deleteError) throw deleteError;
+      const { data, error: verifyError } = await supabase
+        .from("products")
+        .select("id, school, name, sizes")
+        .in("id", batch.map((product) => product.id));
+      if (verifyError) throw verifyError;
+      savedProducts.push(...(data || []));
     }
-    const { data: remainingDeletedProducts, error: deleteVerifyError } = deletedIds.length > 0
-      ? await supabase.from("products").select("id").in("id", deletedIds)
-      : { data: [], error: null };
-    if (deleteVerifyError) throw deleteVerifyError;
-    if ((remainingDeletedProducts || []).length > 0) {
-      throw new Error("雲端仍保留已刪除商品，修改未被完整保存。");
+
+    for (let index = 0; index < deletedIds.length; index += batchSize) {
+      const batch = deletedIds.slice(index, index + batchSize);
+      const { error: deleteError } = await supabase.from("products").delete().in("id", batch);
+      if (deleteError) throw deleteError;
+
+      const { data: remainingDeletedProducts, error: deleteVerifyError } = await supabase
+        .from("products")
+        .select("id")
+        .in("id", batch);
+      if (deleteVerifyError) throw deleteVerifyError;
+      if ((remainingDeletedProducts || []).length > 0) {
+        throw new Error(`雲端仍保留已刪除商品，修改未被完整保存（${remainingDeletedProducts.length} 款）。`);
+      }
     }
     const savedById = new Map((savedProducts || []).map((product) => [product.id, product]));
     const hasMismatch = uniqueProducts.some((expected) => {
@@ -257,7 +265,7 @@ export const deleteProductsByIds = async ({ productIds, supabase, isSupabaseAuth
       throw new Error(`確認商品刪除失敗：${details || "無法確認雲端資料。"}`);
     }
     if ((remaining || []).length > 0) {
-      throw new Error(`雲端仍保留 ${remaining.length} 款商品，請檢查帳戶權限後重試。`);
+      throw new Error(`雲端仍保留 ${remaining.length} 款商品（${remaining.map((product) => product.id).join(", ")}）。請確認商品刪除權限已啟用。`);
     }
   }
 

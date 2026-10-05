@@ -5383,7 +5383,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
   const activeSchoolProducts = activeSchool ? products.filter((p) => schoolOf(p) === activeSchool) : [];
   const visibleProducts = activeSchoolProducts;
   const productCatalogReviewGroups = canManageSchools ? findProductCatalogReviewGroups(products) : [];
-  const { removedCount: productsPendingReviewCount } = removeProductCatalogReviewProducts(products, productCatalogReviewGroups);
+  const { productIds: productsPendingReviewIds, removedCount: productsPendingReviewCount } = removeProductCatalogReviewProducts(products, productCatalogReviewGroups);
   const filteredImportPreviewRows = importPreview
     ? importPreview.previewRows.filter((row) => {
         const query = importPreviewSearch.trim().toLowerCase();
@@ -5403,8 +5403,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     setImporting(true);
     setCatalogCleanupMessage("");
     try {
-      const productIds = productCatalogReviewGroups.flatMap((group) => group.products.map((product) => product.id));
-      const deletedCount = await deleteCatalogProducts(productIds, products);
+      const deletedCount = await deleteCatalogProducts(productsPendingReviewIds, products);
       setCatalogCleanupMessage(`已清除 ${deletedCount} 款待處理商品及尺碼資料；歷史訂單和銷售紀錄已保留。`);
     } catch (error) {
       const detail = [error?.message, error?.details, error?.hint, error?.code].filter(Boolean).join("：");

@@ -114,6 +114,7 @@ export const splitCompositeProductRecord = (product) => {
 
   return names.map((name, index) => ({
     ...product,
+    sourceProductId: product.sourceProductId || product.id,
     id: `${product.id}-style-${index + 1}`,
     name,
     sizes: [...sizeGroups.values()].map((group) => group[index]),
@@ -195,9 +196,10 @@ export const findProductCatalogReviewGroups = (products = []) => {
 };
 
 export const removeProductCatalogReviewProducts = (products, groups) => {
-  const ids = new Set(groups.flatMap((group) => group.products.map((product) => product.id)));
+  const ids = new Set(groups.flatMap((group) => group.products.map((product) => product.sourceProductId || product.id)));
   return {
-    products: products.filter((product) => !ids.has(product.id)),
+    products: products.filter((product) => !ids.has(product.sourceProductId || product.id)),
+    productIds: [...ids],
     removedCount: ids.size,
   };
 };
