@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useState, useEffect, useRef } from "react";
+import React, { lazy, Suspense, useState, useEffect, useRef, useMemo } from "react";
 import Papa from "papaparse";
 import qrcode from "qrcode-generator";
 import { useLocation, useNavigate, Routes, Route, Navigate } from "react-router-dom";
@@ -18,6 +18,7 @@ const StaffOrderTracking = lazy(() => import("./pages/StaffOrderTracking"));
 const QueueDisplayPage = lazy(() => import("./pages/QueueDisplayPage"));
 const DirectoryPage = lazy(() => import("./pages/DirectoryPage"));
 import { getHongKongDate, QUEUE_SERVICE, queueOrderService } from "./services/queueOrderService";
+import { findConflictingProductIds } from "./data/productConflictDetection";
 import baseSchoolCatalog from "./schoolCatalog.json";
 import workbookSchoolCatalog from "./workbookSchoolCatalog.json";
 import workbookSchoolOutlets from "./workbookSchoolOutlets.json";
@@ -126,6 +127,27 @@ const sizeIdentityKey = (size = {}) => `${isTailoredSize(size) ? "tailored" : "r
 const customerSurname = (name = "") => String(name || "").trim().replace(/\s+/g, "").slice(0, 1);
 const customerPhoneLast4 = (phone = "") => String(phone || "").replace(/\D/g, "").slice(-4);
 const sizeLabel = (size) => size.length ? `${size.isTailored ? "裁碼 " : ""}${size.length}／${size.size}` : size.size;
+const productCatalogsEqual = (first, second) => {
+  if (first === second) return true;
+  if (!Array.isArray(first) || !Array.isArray(second) || first.length !== second.length) return false;
+  return first.every((product, productIndex) => {
+    const candidate = second[productIndex];
+    if (
+      product.id !== candidate.id
+      || product.school !== candidate.school
+      || product.name !== candidate.name
+      || product.branch_id !== candidate.branch_id
+      || product.sizes.length !== candidate.sizes.length
+    ) return false;
+    return product.sizes.every((size, sizeIndex) => {
+      const candidateSize = candidate.sizes[sizeIndex];
+      return sizeIdentityKey(size) === sizeIdentityKey(candidateSize)
+        && (size.price === null || size.price === undefined
+          ? candidateSize.price === null || candidateSize.price === undefined
+          : Number(size.price) === Number(candidateSize.price));
+    });
+  });
+};
 const productUnit = (name = "") => {
   const normalizedName = String(name || "").replace(/\s+/g, "");
   if (/襪.*[（(]?\d+對|[（(]3對[）)]/.test(normalizedName)) return "包";
@@ -544,33 +566,18 @@ const consolidateProductCatalog = (products) => (Array.isArray(products) ? produ
   }, []);
 
 const findUnresolvedPriceConflictProductIds = (products) => {
-  const unresolvedIds = new Set();
-  const seen = [];
-  (Array.isArray(products) ? products : []).flatMap(splitCompositeProductRecord).forEach((product) => {
-    const pricesBySize = new Map();
-    (product.sizes || []).forEach((size) => {
-      const key = sizeIdentityKey(size);
-      const price = Number(size.price);
-      if (!pricesBySize.has(key)) pricesBySize.set(key, new Set());
-      if (Number.isFinite(price)) pricesBySize.get(key).add(price);
-    });
-    if ([...pricesBySize.values()].some((prices) => prices.size > 1)) unresolvedIds.add(product.id);
-
-    const productParts = productIdentityParts(schoolOf(product), product.name, product.branch_id);
-    const duplicateRows = seen.filter((item) => {
-      const itemParts = productIdentityParts(schoolOf(item), item.name, item.branch_id);
-      return productIdentityKey(itemParts.school, item.name, item.branch_id) === productIdentityKey(productParts.school, product.name, productParts.branchId)
-        && compatibleProductGenders(itemParts.gender, productParts.gender);
-    });
-    duplicateRows.forEach((duplicate) => {
-      if (productHasConflictingSizes(duplicate, product)) {
-        unresolvedIds.add(duplicate.id);
-        unresolvedIds.add(product.id);
-      }
-    });
-    seen.push(product);
+  const normalizedProducts = (Array.isArray(products) ? products : []).flatMap(splitCompositeProductRecord);
+  return findConflictingProductIds(normalizedProducts, {
+    getProductIdentity: (product) => {
+      const parts = productIdentityParts(schoolOf(product), product.name, product.branch_id);
+      return {
+        key: productIdentityKey(parts.school, product.name, parts.branchId),
+        gender: parts.gender,
+      };
+    },
+    getSizeIdentity: sizeIdentityKey,
+    isIdentityCompatible: (first, second) => compatibleProductGenders(first.gender, second.gender),
   });
-  return unresolvedIds;
 };
 const countUnresolvedPriceConflictProducts = (products) => findUnresolvedPriceConflictProductIds(products).size;
 
@@ -2051,7 +2058,6 @@ export default function UniformPOS() {
   });
   const [schoolPanelOpen, setSchoolPanelOpen] = useState(false);
   const [branchSchoolIds, setBranchSchoolIds] = useState({});
-  const customerSchools = listSchools(products);
 
   // 學校分類資料（階段/地區/18區），共用儲存，全部裝置見到同一份
   const [schoolMeta, setSchoolMeta] = useState({});
@@ -2070,17 +2076,22 @@ export default function UniformPOS() {
   const [authReady, setAuthReady] = useState(!isSupabaseAuthEnabled || !supabase); // Wait for auth only when a client is configured
   const [passwordSetupRequired, setPasswordSetupRequired] = useState(false);
   const perms = session ? permissionsForRole(session.role) : null;
-  const accessibleProducts = !isSupabaseAuthEnabled || session?.role === ROLES.ADMIN
-    ? products
-    : products.filter((product) => product.branch_id === session?.branchId || branchSchoolIds[schoolOf(product)] === session?.branchId);
-  const branchAssignedSchools = isSupabaseAuthEnabled && session?.role !== ROLES.ADMIN
-    ? Object.entries(branchSchoolIds)
-      .filter(([, branchId]) => branchId === session?.branchId)
-      .map(([school]) => school)
-    : [];
-  const schools = Array.from(new Set([...listSchools(accessibleProducts), ...branchAssignedSchools]))
+  const accessibleProducts = useMemo(() => (
+    !isSupabaseAuthEnabled || session?.role === ROLES.ADMIN
+      ? products
+      : products.filter((product) => product.branch_id === session?.branchId || branchSchoolIds[schoolOf(product)] === session?.branchId)
+  ), [products, isSupabaseAuthEnabled, session?.role, session?.branchId, branchSchoolIds]);
+  const branchAssignedSchools = useMemo(() => (
+    isSupabaseAuthEnabled && session?.role !== ROLES.ADMIN
+      ? Object.entries(branchSchoolIds)
+        .filter(([, branchId]) => branchId === session?.branchId)
+        .map(([school]) => school)
+      : []
+  ), [isSupabaseAuthEnabled, session?.role, session?.branchId, branchSchoolIds]);
+  const schools = useMemo(() => Array.from(new Set([...listSchools(accessibleProducts), ...branchAssignedSchools]))
     .filter((school) => school && !deletedSchoolsRuntime.has(school))
-    .sort((a, b) => a.localeCompare(b, "zh-Hant"));
+    .sort((a, b) => a.localeCompare(b, "zh-Hant")), [accessibleProducts, branchAssignedSchools, deletedSchools]);
+  const customerSchools = useMemo(() => listSchools(products), [products]);
 
   useEffect(() => {
     window.storage.get("held-sales", false).then((saved) => {
@@ -2522,9 +2533,12 @@ export default function UniformPOS() {
       if (p && !productsSavePendingRef.current && !productsSaveBlockedRef.current && refreshGeneration === productsSaveGenerationRef.current) {
         const authoritative = enforceAuthoritativeProducts(p);
         if (authoritative.length > 0) {
-          await persistProductCatalogConsolidation(p);
+          persistProductCatalogConsolidation(p);
           setSourceIntegrityWarning(p.length > 0 ? "" : "產品資料來源暫時沒有記錄，已保留目前商品資料。");
-          setProducts(authoritative);
+          if (!productCatalogsEqual(productsRef.current, authoritative)) {
+            productsRef.current = authoritative;
+            setProducts(authoritative);
+          }
         } else if (p.length > 0) {
           setSourceIntegrityWarning("產品資料來源不完整：目前只檢測到示範資料，已阻止當作正式產品庫。");
         }
@@ -2709,25 +2723,38 @@ export default function UniformPOS() {
       setLoaded(true);
       return;
     }
-    
+    let active = true;
+
     (async () => {
       try {
-        const deleted = await window.storage.get("deleted-schools", false).catch(() => null);
+        const salesPromise = isSupabaseAuthEnabled
+          ? loadSecureOrders()
+          : window.storage.get("sales-log", true);
+        salesPromise.then((sales) => {
+          if (!active) return;
+          if (isSupabaseAuthEnabled ? Array.isArray(sales) : sales) {
+            setSalesLog(isSupabaseAuthEnabled ? sales : JSON.parse(sales.value));
+          }
+        }).catch((error) => console.error("載入銷售記錄失敗", error));
+
+        const [deleted, p, a, sm, branchMap] = await Promise.all([
+          window.storage.get("deleted-schools", false).catch(() => null),
+          isSupabaseAuthEnabled
+            ? loadSecureProducts()
+            : loadProducts({
+              storage: window.storage,
+              supabase,
+              isSupabaseAuthEnabled,
+              fallbackProducts: PRODUCT_CATALOG_FALLBACK,
+            }),
+          window.storage.get("staff-accounts", true).catch(() => null),
+          window.storage.get("school-meta", true).catch(() => null),
+          loadBranchSchoolMap(),
+        ]);
+        if (!active) return;
         const deletedList = deleted && deleted.value ? JSON.parse(deleted.value) : [];
         deletedSchoolsRuntime = new Set(Array.isArray(deletedList) ? deletedList : []);
         setDeletedSchools([...deletedSchoolsRuntime]);
-        const p = isSupabaseAuthEnabled
-          ? await loadSecureProducts()
-          : await loadProducts({
-            storage: window.storage,
-            supabase,
-            isSupabaseAuthEnabled,
-            fallbackProducts: PRODUCT_CATALOG_FALLBACK,
-          });
-        const s = isSupabaseAuthEnabled ? await loadSecureOrders() : await window.storage.get("sales-log", true).catch(() => null);
-        const a = await window.storage.get("staff-accounts", true).catch(() => null);
-        const sm = await window.storage.get("school-meta", true).catch(() => null);
-        const branchMap = await loadBranchSchoolMap();
         setBranchSchoolIds(branchMap);
         if (p) {
           const authoritative = enforceAuthoritativeProducts(p)
@@ -2737,9 +2764,12 @@ export default function UniformPOS() {
               || product.branch_id === session.branchId
               || branchMap[schoolOf(product)] === session.branchId);
           if (authoritative.length > 0) {
-            await persistProductCatalogConsolidation(p);
+            persistProductCatalogConsolidation(p);
             setSourceIntegrityWarning(p.length > 0 ? "" : "產品資料來源暫時沒有記錄，已保留目前商品資料。");
-            setProducts(authoritative);
+            if (!productCatalogsEqual(productsRef.current, authoritative)) {
+              productsRef.current = authoritative;
+              setProducts(authoritative);
+            }
             if (session?.branchId && session.role !== ROLES.ADMIN && selectedSchool && !authoritative.some((product) => schoolOf(product) === selectedSchool)) {
               setSelectedSchool(schoolOf(authoritative[0]) || "");
             }
@@ -2747,7 +2777,6 @@ export default function UniformPOS() {
             setSourceIntegrityWarning("產品資料來源不完整：目前只檢測到示範資料，已阻止當作正式產品庫。");
           }
         }
-        if (isSupabaseAuthEnabled ? Array.isArray(s) : s) setSalesLog(isSupabaseAuthEnabled ? s : JSON.parse(s.value));
         if (a && a.value) {
           setAccounts(JSON.parse(a.value));
         } else {
@@ -2758,9 +2787,13 @@ export default function UniformPOS() {
       } catch (e) {
         console.error("載入資料失敗", e);
       } finally {
-        setLoaded(true);
+        if (active) setLoaded(true);
       }
     })();
+
+    return () => {
+      active = false;
+    };
   }, [authReady, session]);
 
   // 第一次加載時自動刷新以確保從 Supabase 加載產品
@@ -4319,28 +4352,31 @@ function SaleTab({
   const [directExchangeLength, setDirectExchangeLength] = useState("");
   const [directExchangeQuantityPrompt, setDirectExchangeQuantityPrompt] = useState(null);
   const [directExchangeItems, setDirectExchangeItems] = useState([]);
-  const schools = listSchools(products);
-  const conflictingProductIds = findUnresolvedPriceConflictProductIds(products);
-  const schoolProducts = selectedSchool ? products.filter((p) => schoolOf(p) === selectedSchool) : products;
-  const blockedPriceProducts = schoolProducts.filter((product) => conflictingProductIds.has(product.id));
-  const visibleProducts = schoolProducts
-    .filter((product) => !conflictingProductIds.has(product.id))
-    .filter((product) => product.sizes.some(isPricedSize));
-  const filteredProducts = visibleProducts.filter((product) =>
-    genderFilter === "全部" || genderOf(product) === genderFilter || genderOf(product) === "男女通用"
+  const schools = useMemo(() => listSchools(products), [products]);
+  const productsById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
+  const conflictingProductIds = useMemo(() => findUnresolvedPriceConflictProductIds(products), [products]);
+  const schoolProducts = useMemo(() => selectedSchool
+    ? products.filter((product) => schoolOf(product) === selectedSchool)
+    : products, [products, selectedSchool]);
+  const blockedPriceProducts = useMemo(
+    () => schoolProducts.filter((product) => conflictingProductIds.has(product.id)),
+    [schoolProducts, conflictingProductIds],
   );
+  const visibleProducts = useMemo(() => schoolProducts
+    .filter((product) => !conflictingProductIds.has(product.id))
+    .filter((product) => product.sizes.some(isPricedSize)), [schoolProducts, conflictingProductIds]);
+  const filteredProducts = useMemo(() => visibleProducts.filter((product) =>
+    genderFilter === "全部" || genderOf(product) === genderFilter || genderOf(product) === "男女通用"
+  ), [visibleProducts, genderFilter]);
   const exchangeDate = todayStr();
-  const exchangeOrders = selectedSchool
+  const exchangeOrders = useMemo(() => selectedSchool
     ? salesLog.filter((order) =>
       String(order.school || "").trim() === String(selectedSchool).trim()
       && String(order.date || "").slice(0, 10) === exchangeDate
     )
-    : [];
-  const sortedProducts = [...filteredProducts].sort((a, b) => {
-    const aIndex = products.findIndex((p) => p.id === a.id);
-    const bIndex = products.findIndex((p) => p.id === b.id);
-    return aIndex - bIndex;
-  });
+    : [], [salesLog, selectedSchool, exchangeDate]);
+  const sortedProducts = filteredProducts;
+  const selectedProductData = productsById.get(selectedProduct);
 
   useEffect(() => {
     if (
@@ -4726,7 +4762,7 @@ function SaleTab({
             ← 返回選款式
           </button>
           {(() => {
-            const product = products.find((p) => p.id === selectedProduct);
+            const product = selectedProductData;
             return product ? (
               <div style={{ background: "#1F3A5F", color: "#fff", borderRadius: 10, padding: "12px 14px", marginBottom: 12, boxShadow: "0 2px 6px rgba(31,58,95,0.18)" }}>
                 <div style={{ fontSize: 11, opacity: 0.8, marginBottom: 3 }}>目前選擇款式</div>
@@ -4735,7 +4771,7 @@ function SaleTab({
             ) : null;
           })()}
           {(() => {
-            const product = products.find((p) => p.id === selectedProduct);
+            const product = selectedProductData;
             const categoryLabel = hasLengthOptions(product) ? `先揀${lengthDimensionLabel(product)}，再揀${sizeDimensionLabel(product)}：` : "揀尺碼：";
             return (
               <>
@@ -4802,7 +4838,7 @@ function SaleTab({
             );
           })()}
           {(() => {
-            const product = products.find((p) => p.id === selectedProduct);
+            const product = selectedProductData;
             if (!product) return null;
             if (!product) return null;
             const hasLengths = hasLengthOptions(product);
