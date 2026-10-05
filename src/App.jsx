@@ -19,6 +19,7 @@ const QueueDisplayPage = lazy(() => import("./pages/QueueDisplayPage"));
 const DirectoryPage = lazy(() => import("./pages/DirectoryPage"));
 import { getHongKongDate, QUEUE_SERVICE, queueOrderService } from "./services/queueOrderService";
 import { findConflictingProductIds } from "./data/productConflictDetection";
+import { productUnit } from "./data/productUnits";
 import baseSchoolCatalog from "./schoolCatalog.json";
 import workbookSchoolCatalog from "./workbookSchoolCatalog.json";
 import workbookSchoolOutlets from "./workbookSchoolOutlets.json";
@@ -147,15 +148,6 @@ const productCatalogsEqual = (first, second) => {
           : Number(size.price) === Number(candidateSize.price));
     });
   });
-};
-const productUnit = (name = "") => {
-  const normalizedName = String(name || "").replace(/\s+/g, "");
-  if (/襪.*[（(]?\d+對|[（(]3對[）)]/.test(normalizedName)) return "包";
-  if (/襪|鞋|手套/.test(normalizedName)) return "對";
-  if (/套裝|套服/.test(normalizedName)) return "套";
-  if (/皮帶|腰帶|領帶|頸巾|圍巾/.test(normalizedName)) return "條";
-  if (/書包|背囊|袋|筆袋/.test(normalizedName)) return "個";
-  return "件";
 };
 const hasLengthOptions = (product) => product.sizes.some((size) => size.length);
 const dimensionLabels = (name = "") => {
@@ -1707,8 +1699,8 @@ const DEFAULT_ACCOUNTS = [
 
 const ENGLISH_RECEIPT_SCHOOL = "港青基信書院";
 const receiptLanguageLabel = (language) => language === "en" ? "English" : "中文";
-const receiptProductUnit = (name, language) => {
-  const unit = productUnit(name);
+const receiptProductUnit = (name, language, size = "") => {
+  const unit = productUnit(name, size);
   if (language !== "en") return unit;
   return { "件": "pcs", "對": "pairs", "包": "packs", "套": "sets", "條": "pcs", "個": "pcs" }[unit] || "pcs";
 };
@@ -1798,7 +1790,7 @@ const buildReceiptLines = (order, shopName, language = "zh") => {
   order.items.forEach((it) => {
     lines.push(`${it.exchangeReturn ? labels.exchangeOut : ""}${it.name}`);
     lines.push(`  ${formatSizeForReceipt(it.name, it.size, it.length)}`);
-    lines.push(`  ${labels.quantity} ${it.qty} ${receiptProductUnit(it.name, language)} x ${fmt(Math.abs(it.price))} = ${fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}`);
+    lines.push(`  ${labels.quantity} ${it.qty} ${receiptProductUnit(it.name, language, it.size)} x ${fmt(Math.abs(it.price))} = ${fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}`);
   });
   lines.push("--------------------------------");
   lines.push(`${labels.itemCount}: ${order.itemCount || 0}`);
@@ -4288,7 +4280,7 @@ export default function UniformPOS() {
               <div key={i}>
                 <div>{it.exchangeReturn ? labels.exchangeOut : ""}{it.name}</div>
                 <div>  {formatSizeForReceipt(it.name, it.size, it.length)}</div>
-                <div>  {labels.quantity} {it.qty} {receiptProductUnit(it.name, receiptLanguage)} x {fmt(it.price)} = {fmt((it.exchangeReturn ? -1 : 1) * it.price * it.qty)}</div>
+                <div>  {labels.quantity} {it.qty} {receiptProductUnit(it.name, receiptLanguage, it.size)} x {fmt(it.price)} = {fmt((it.exchangeReturn ? -1 : 1) * it.price * it.qty)}</div>
               </div>
             ))}
             <div>--------------------------------</div>
@@ -4517,7 +4509,7 @@ function SaleTab({
               <div style={{ color: "#166534", fontSize: 12, fontWeight: 800, marginBottom: 6 }}>已選退回貨品（{directExchangeItems.length}款）</div>
               {directExchangeItems.map((item) => (
                 <div key={`${item.productId}-${item.size}-${item.length}`} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, padding: "4px 0", borderBottom: "1px solid #DCFCE7" }}>
-                  <span>{displayProductName(item.name)}（{sizeLabel(item)}）× {item.qty}{productUnit(item.name)}</span>
+                  <span>{displayProductName(item.name)}（{sizeLabel(item)}）× {item.qty}{productUnit(item.name, item.size)}</span>
                   <button className="pos-btn" onClick={() => setDirectExchangeItems((current) => current.filter((entry) => entry !== item))} style={{ padding: "2px 6px", background: "transparent", color: "#166534", fontSize: 11 }}>移除</button>
                 </div>
               ))}
@@ -4552,12 +4544,12 @@ function SaleTab({
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginTop: 8 }}>
                       {[1, 2, 3].map((quantity) => (
                         <button key={quantity} className="pos-btn" onClick={() => startDirectExchange(product, directExchangeQuantityPrompt.size, quantity)} style={{ padding: "10px 6px", borderRadius: 8, background: "#166534", border: "none", color: "#fff", fontWeight: 800 }}>
-                          {quantity}{productUnit(product.name)}
+                          {quantity}{productUnit(product.name, directExchangeQuantityPrompt.size)}
                         </button>
                       ))}
                     </div>
                     <button className="pos-btn" onClick={() => setDirectExchangeQuantityPrompt((current) => ({ ...current, custom: true, quantity: "" }))} style={{ width: "100%", marginTop: 6, padding: 8, borderRadius: 8, background: directExchangeQuantityPrompt.custom ? "#DCFCE7" : "#fff", border: "1px solid #86EFAC", color: "#166534", fontWeight: 800 }}>
-                      其他（4–99{productUnit(product.name)}）
+                      其他（4–99{productUnit(product.name, directExchangeQuantityPrompt.size)}）
                     </button>
                     {directExchangeQuantityPrompt.custom && (
                       <>
@@ -4567,7 +4559,7 @@ function SaleTab({
                           max="99"
                           inputMode="numeric"
                           autoFocus
-                          placeholder={`輸入數量（4–99${productUnit(product.name)}）`}
+                          placeholder={`輸入數量（4–99${productUnit(product.name, directExchangeQuantityPrompt.size)}）`}
                           value={directExchangeQuantityPrompt.quantity}
                           onChange={(event) => setDirectExchangeQuantityPrompt((current) => ({ ...current, quantity: event.target.value }))}
                           onKeyDown={(event) => {
@@ -4656,7 +4648,7 @@ function SaleTab({
                       });
                     }}
                   />
-                  <span>{item.name}（{sizeLabel(item)}）× {item.qty}{productUnit(item.name)}</span>
+                  <span>{item.name}（{sizeLabel(item)}）× {item.qty}{productUnit(item.name, item.size)}</span>
                 </label>
                 {selected && (
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, paddingLeft: 24 }}>
@@ -4673,7 +4665,7 @@ function SaleTab({
                       }}
                       style={{ width: 64, padding: "6px 8px", border: "1px solid #FDBA74", borderRadius: 6, fontSize: 16, fontWeight: 700 }}
                     />
-                    <span style={{ fontSize: 12 }}>{productUnit(item.name)}（最多 {item.qty}）</span>
+                    <span style={{ fontSize: 12 }}>{productUnit(item.name, item.size)}（最多 {item.qty}）</span>
                   </div>
                 )}
               </div>
@@ -4789,7 +4781,7 @@ function SaleTab({
                           onClick={() => confirmQuantity(quantity)}
                           style={{ padding: "12px 8px", borderRadius: 8, background: "#1F3A5F", border: "none", color: "#fff", fontSize: 16, fontWeight: 800 }}
                         >
-                          {quantity}{productUnit(quantityPrompt.product.name)}
+                          {quantity}{productUnit(quantityPrompt.product.name, quantityPrompt.size)}
                         </button>
                       ))}
                     </div>
@@ -4798,7 +4790,7 @@ function SaleTab({
                       onClick={() => setQuantityPrompt((current) => ({ ...current, custom: true, quantity: "" }))}
                       style={{ width: "100%", marginTop: 8, padding: "10px", borderRadius: 8, background: quantityPrompt.custom ? "#DCEEFF" : "#fff", border: "1px solid #9BC3EC", color: "#1F3A5F", fontWeight: 800 }}
                     >
-                      其他（4–99{productUnit(quantityPrompt.product.name)}）
+                      其他（4–99{productUnit(quantityPrompt.product.name, quantityPrompt.size)}）
                     </button>
                     {!quantityPrompt.custom && (
                       <button className="pos-btn" onClick={() => setQuantityPrompt(null)} style={{ width: "100%", marginTop: 8, padding: "9px 10px", borderRadius: 8, background: "#fff", border: "1px solid #CBD5E1", color: "#475569", fontWeight: 700 }}>
@@ -4813,7 +4805,7 @@ function SaleTab({
                           max="99"
                           inputMode="numeric"
                           autoFocus
-                          placeholder={`輸入數量（4–99${productUnit(quantityPrompt.product.name)}）`}
+                          placeholder={`輸入數量（4–99${productUnit(quantityPrompt.product.name, quantityPrompt.size)}）`}
                           value={quantityPrompt.quantity}
                           onChange={(event) => setQuantityPrompt((current) => ({ ...current, quantity: event.target.value }))}
                           onKeyDown={(event) => {
@@ -4903,7 +4895,7 @@ function SaleTab({
           <div key={c.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #E5E5E0" }}>
             <div style={{ flex: 1, minWidth: 0, lineHeight: 1.4 }}>
               <div style={{ fontSize: 18, fontWeight: 500 }}>{c.exchangeReturn ? "換出：" : ""}{c.name}（{sizeLabel(c)}）</div>
-              <div style={{ fontSize: 16, color: c.exchangeReturn ? "#9A3412" : "#888" }}>{c.exchangeReturn ? "-" : ""}{fmt(c.price)} x {c.qty}{productUnit(c.name)} = {fmt((c.exchangeReturn ? -1 : 1) * c.price * c.qty)}</div>
+              <div style={{ fontSize: 16, color: c.exchangeReturn ? "#9A3412" : "#888" }}>{c.exchangeReturn ? "-" : ""}{fmt(c.price)} x {c.qty}{productUnit(c.name, c.size)} = {fmt((c.exchangeReturn ? -1 : 1) * c.price * c.qty)}</div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: 8, flexShrink: 0 }}>
               {!c.exchangeReturn && (
@@ -6791,7 +6783,7 @@ function ReceiptModal({ order, language = "zh", onLanguageChange, onClose, onRed
             <div key={i}>
               <div>{it.exchangeReturn ? labels.exchangeOut : ""}{it.name}</div>
               <div>  {formatSizeForReceipt(it.name, it.size, it.length)}</div>
-              <div>  {labels.quantity} {it.qty} {receiptProductUnit(it.name, language)} x {fmt(Math.abs(it.price))} = {fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}</div>
+              <div>  {labels.quantity} {it.qty} {receiptProductUnit(it.name, language, it.size)} x {fmt(Math.abs(it.price))} = {fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}</div>
             </div>
           ))}
           <div>--------------------------------</div>
