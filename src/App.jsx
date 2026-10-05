@@ -7,6 +7,7 @@ import { isSupabaseConfigured, isSupabaseAuthEnabled, supabase, createPasswordVe
 import { logStartupCheck, getStartupErrorUI, validateAllEnvVars } from "./config/envValidation";
 import { getUserFriendlyError } from "./config/errorHandler";
 import { Alert } from "./components/common";
+import { dimensionLabels, lengthDimensionLabel, sizeDimensionLabel } from "./data/productDimensions.js";
 const CustomerCheckinPage = lazy(() => import("./pages/CustomerCheckinPage"));
 const QueuePage = lazy(() => import("./pages/QueuePage"));
 const FittingPage = lazy(() => import("./pages/FittingPage"));
@@ -151,15 +152,6 @@ const productCatalogsEqual = (first, second) => {
   });
 };
 const hasLengthOptions = (product) => product.sizes.some((size) => size.length);
-const dimensionLabels = (name = "") => {
-  const normalizedName = String(name || "").replace(/\s+/g, "");
-  if (/裙/.test(normalizedName)) return { length: "裙長", size: "上圍" };
-  if (/長袖.*(?:恤衫|襯衫)|(?:恤衫|襯衫).*長袖/.test(normalizedName)) return { length: "袖長", size: "領圍" };
-  if (/(?:西褲|長褲|短褲|運動褲|褲)/.test(normalizedName)) return { length: "褲長", size: "腰圍" };
-  return { length: "", size: "尺碼" };
-};
-const sizeDimensionLabel = (product) => dimensionLabels(product?.name).size;
-const lengthDimensionLabel = (product) => dimensionLabels(product?.name).length;
 const sizeDimensionLabels = (product) => {
   const labels = dimensionLabels(product?.name);
   return `${labels.length} → ${labels.size}`;

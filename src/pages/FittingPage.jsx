@@ -12,6 +12,7 @@ import {
 import { queueOrderService, ORDER_STATUS } from "../services/queueOrderService";
 import { supabase, isSupabaseConfigured } from "../supabaseClient";
 import { productGenderBackground } from "../data/productGender.js";
+import { lengthDimensionLabel, sizeDimensionLabel } from "../data/productDimensions.js";
 
 const STORAGE_DRAFT_KEY = "uniform-pos-fitting-drafts";
 
@@ -56,6 +57,7 @@ const displayProductName = (name = "") => name
   .trim();
 
 const hasLengthOptions = (product) => (product?.sizes || []).some((size) => typeof size === "object" && size.length);
+const formatPrice = (price) => `$${Math.round(Number(price)).toLocaleString("en-HK")}`;
 const naturalSizeSort = (first, second) => {
   const firstText = String(first ?? "").trim();
   const secondText = String(second ?? "").trim();
@@ -665,6 +667,11 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
 
                 {selectedProduct && (
                   <div>
+                    <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>
+                      {hasLengthOptions(selectedProduct)
+                        ? `先揀${lengthDimensionLabel(selectedProduct)}，再揀${sizeDimensionLabel(selectedProduct)}：`
+                        : "揀尺碼："}
+                    </div>
                     {hasLengthOptions(selectedProduct) && (
                       <div className="sale-size-grid">
                         {[...new Set(selectedProduct.sizes.map((size) => size.length).filter(Boolean))]
@@ -676,7 +683,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
                               onClick={() => updateSelection(index, { length: item.length === length ? "" : length, size: "" })}
                               style={{ ...styles.sizeBtn, background: item.length === length ? "#1F3A5F" : "#fff", color: item.length === length ? "#fff" : "#1F3A5F", borderColor: item.length === length ? "#1F3A5F" : "#1F3A5F", fontSize: 16 }}
                             >
-                              長度 {length}
+                              {lengthDimensionLabel(selectedProduct)} {length}
                             </button>
                           ))}
                       </div>
@@ -696,9 +703,17 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
                                 onClick={() => selectSize(index, sizeOption)}
                                 style={{ ...styles.sizeBtn, background: item.size === size && Boolean(item.isTailored) === Boolean(typeof sizeOption === "object" && sizeOption.isTailored) ? "#1f3a5f" : "#fff", color: item.size === size && Boolean(item.isTailored) === Boolean(typeof sizeOption === "object" && sizeOption.isTailored) ? "#fff" : "#24364d", borderColor: item.size === size && Boolean(item.isTailored) === Boolean(typeof sizeOption === "object" && sizeOption.isTailored) ? "#1f3a5f" : "#ccc", fontSize: 16 }}
                               >
-                                <div>{typeof sizeOption === "object" ? sizeOption.size : size}</div>
-                                {typeof sizeOption === "object" && sizeOption.isTailored && <div style={{ fontSize: 11 }}>裁碼</div>}
-                                {typeof sizeOption === "object" && sizeOption.price != null && <div style={styles.sizePrice}>${Number(sizeOption.price).toLocaleString("en-HK")}</div>}
+                                {hasLengthOptions(selectedProduct) ? (
+                                  <div style={{ fontSize: 13, fontWeight: 600 }}>
+                                    {typeof sizeOption === "object" && sizeOption.isTailored ? "裁碼" : sizeDimensionLabel(selectedProduct)}{" "}
+                                    <span style={{ fontSize: 22 }}>{size}</span> 吋
+                                  </div>
+                                ) : (
+                                  <div style={{ fontSize: 22, fontWeight: 600 }}>
+                                    {typeof sizeOption === "object" ? sizeOption.size : size}
+                                  </div>
+                                )}
+                                {typeof sizeOption === "object" && sizeOption.price != null && <div style={styles.sizePrice}>{formatPrice(sizeOption.price)}</div>}
                               </button>
                             );
                           })}
