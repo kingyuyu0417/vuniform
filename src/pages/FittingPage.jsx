@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { queueOrderService, ORDER_STATUS } from "../services/queueOrderService";
 import { supabase, isSupabaseConfigured } from "../supabaseClient";
+import { productGenderBackground } from "../data/productGender.js";
 
 const STORAGE_DRAFT_KEY = "uniform-pos-fitting-drafts";
 
@@ -652,7 +653,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
                       onClick={() => updateSelection(index, { productId: item.productId === product.id ? "" : product.id, size: "" })}
                       style={{
                         ...styles.productBtn,
-                        background: item.productId === product.id ? "#D97757" : "#fff",
+                        background: item.productId === product.id ? "#D97757" : productGenderBackground(product),
                         color: item.productId === product.id ? "#fff" : "#222",
                         borderColor: item.productId === product.id ? "#D97757" : "#ddd",
                       }}

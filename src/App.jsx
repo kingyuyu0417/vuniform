@@ -19,6 +19,7 @@ const QueueDisplayPage = lazy(() => import("./pages/QueueDisplayPage"));
 const DirectoryPage = lazy(() => import("./pages/DirectoryPage"));
 import { getHongKongDate, QUEUE_SERVICE, queueOrderService } from "./services/queueOrderService";
 import { findConflictingProductIds } from "./data/productConflictDetection";
+import { getProductGender, productGenderBackground, PRODUCT_GENDER_OPTIONS } from "./data/productGender";
 import { productUnit } from "./data/productUnits";
 import baseSchoolCatalog from "./schoolCatalog.json";
 import workbookSchoolCatalog from "./workbookSchoolCatalog.json";
@@ -321,15 +322,6 @@ const insertSalesOrderRecord = async (order, salesLog) => {
 const UNASSIGNED = "（未分類）";
 let deletedSchoolsRuntime = new Set();
 const schoolOf = (p) => (p.school && p.school.trim()) || UNASSIGNED;
-const PRODUCT_GENDER_OVERRIDES = {
-  "藍／紫色短袖恤衫": "男裝",
-  "黑色短西褲": "男裝",
-  "藍／紫色連身校裙": "女裝",
-  "男生長西褲": "男裝",
-  "女生背心校裙": "女裝",
-  "男生黑色短襪（3對）": "男裝",
-  "女生黑色長襪": "女裝",
-};
 const cleanProductName = (name) => {
   if (name === "男生黑色短襪（3對）") return name;
   const cleaned = name.replace(/（(?!冬季|夏季)[^）]*）|\((?!冬季|夏季)[^)]*\)/g, "").replace(/\s+/g, " ").trim();
@@ -343,10 +335,14 @@ const normalizeProductSizes = (sizes = []) => sizes.map((size) => ({
   ...size,
   isTailored: isTailoredSize(size),
 }));
-const productIdentityParts = (school, name, branchId = "") => {
+const productIdentityParts = (school, name, branchId = "", explicitGender = "") => {
   const cleaned = cleanProductName(name);
   const genderMatch = cleaned.match(/^(男生|女生|男女生)\s*[-–—:：]?\s*/);
-  const gender = genderMatch ? genderMatch[1] : "";
+  const gender = {
+    boys: "男生",
+    girls: "女生",
+    unisex: "男女生",
+  }[explicitGender] || (genderMatch ? genderMatch[1] : "");
   const cleanedName = cleaned
     .replace(/^(?:男生|女生|男女生)\s*[-–—:：]?\s*/, "")
     .replace(/[（(][^）)]*[）)]/g, "")
@@ -370,15 +366,9 @@ const displayProductName = (name) => name
   .replace(/校\s+褸/g, "校褸")
   .trim();
 const genderOf = (product) => {
-  if (PRODUCT_GENDER_OVERRIDES[product.name]) return PRODUCT_GENDER_OVERRIDES[product.name];
-  const name = product.name;
-  const hasUnisexLabel = /(?:男女生|男女通用|【男女生】)/.test(name);
-  const hasMaleLabel = /男生|\bBoy[`'’]s\b/i.test(name);
-  const hasFemaleLabel = /女生|\bGirl[`'’]s\b/i.test(name);
-  if (hasUnisexLabel || (hasMaleLabel && hasFemaleLabel)) return "男女通用";
-  if (hasFemaleLabel) return "女裝";
-  if (hasMaleLabel) return "男裝";
-  if (name.includes("運動")) return "男女通用";
+  const gender = getProductGender(product);
+  if (gender === "boys") return "男裝";
+  if (gender === "girls") return "女裝";
   return "男女通用";
 };
 const seasonOf = (product) => {
@@ -443,6 +433,7 @@ const normalizeProductState = (products) => {
   const normalizedProducts = (Array.isArray(products) ? products : []).flatMap(splitCompositeProductRecord).map((product) => {
     const productName = cleanProductName(product.name);
     const rawSizes = normalizeProductSizes(product.sizes);
+    const gender = getProductGender(product);
     // Prices are authoritative data. Never recalculate or overwrite them while loading.
     const sizes = rawSizes;
     if (SIMPLE_SIZE_PRODUCT_NAMES.has(productName)) {
@@ -450,6 +441,7 @@ const normalizeProductState = (products) => {
         ...product,
         school: canonicalSchoolName(product.school),
         name: productName,
+        gender,
         sizes,
         priceMode: sizes.some((size) => size.length) ? "matrix" : product.priceMode,
       };
@@ -458,15 +450,16 @@ const normalizeProductState = (products) => {
       ...product,
       school: canonicalSchoolName(product.school),
       name: cleanProductName(product.name),
+      gender,
       priceMode: sizes.some((size) => size.length) ? "matrix" : product.priceMode,
       sizes,
     };
   });
 
   return normalizedProducts.reduce((result, product) => {
-    const productParts = productIdentityParts(schoolOf(product), product.name, product.branch_id);
+    const productParts = productIdentityParts(schoolOf(product), product.name, product.branch_id, product.gender);
     const duplicates = result.filter((item) => {
-      const itemParts = productIdentityParts(schoolOf(item), item.name, item.branch_id);
+      const itemParts = productIdentityParts(schoolOf(item), item.name, item.branch_id, item.gender);
       return productIdentityKey(itemParts.school, item.name, item.branch_id) === productIdentityKey(productParts.school, product.name, productParts.branchId)
         && compatibleProductGenders(itemParts.gender, productParts.gender);
     });
@@ -536,9 +529,9 @@ const productHasConflictingSizes = (first, second) => {
 const consolidateProductCatalog = (products) => (Array.isArray(products) ? products : [])
   .flatMap(splitCompositeProductRecord)
   .reduce((result, product) => {
-    const productParts = productIdentityParts(schoolOf(product), product.name, product.branch_id);
+    const productParts = productIdentityParts(schoolOf(product), product.name, product.branch_id, product.gender);
     const duplicates = result.filter((item) => {
-      const itemParts = productIdentityParts(schoolOf(item), item.name, item.branch_id);
+      const itemParts = productIdentityParts(schoolOf(item), item.name, item.branch_id, item.gender);
       return productIdentityKey(itemParts.school, item.name, item.branch_id) === productIdentityKey(productParts.school, product.name, productParts.branchId)
         && compatibleProductGenders(itemParts.gender, productParts.gender);
     });
@@ -561,7 +554,7 @@ const findUnresolvedPriceConflictProductIds = (products) => {
   const normalizedProducts = (Array.isArray(products) ? products : []).flatMap(splitCompositeProductRecord);
   return findConflictingProductIds(normalizedProducts, {
     getProductIdentity: (product) => {
-      const parts = productIdentityParts(schoolOf(product), product.name, product.branch_id);
+      const parts = productIdentityParts(schoolOf(product), product.name, product.branch_id, product.gender);
       return {
         key: productIdentityKey(parts.school, product.name, parts.branchId),
         gender: parts.gender,
@@ -2640,7 +2633,7 @@ export default function UniformPOS() {
 
   const loadSecureProducts = async () => {
     if (!supabase) return [];
-    const { data, error } = await supabase.from("products").select("id, school, name, sizes, display_order, branch_id").order("display_order", { ascending: true, nullsFirst: false }).order("name");
+    const { data, error } = await supabase.from("products").select("id, school, name, gender, sizes, display_order, branch_id").order("display_order", { ascending: true, nullsFirst: false }).order("name");
     if (error) throw error;
     return data || [];
   };
@@ -4521,7 +4514,7 @@ function SaleTab({
           {!directExchangeProductId ? (
             <div className="sale-product-grid" style={{ maxHeight: 260, overflowY: "auto" }}>
               {visibleProducts.map((product) => (
-                <button key={product.id} className="pos-btn sale-product-button" onClick={() => selectDirectExchangeProduct(product.id)} style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #86EFAC", color: "#166534", fontSize: 16, fontWeight: 700, textAlign: "left" }}>
+                <button key={product.id} className="pos-btn sale-product-button" onClick={() => selectDirectExchangeProduct(product.id)} style={{ padding: "10px 8px", borderRadius: 10, background: productGenderBackground(product), border: "1px solid #86EFAC", color: "#166534", fontSize: 16, fontWeight: 700, textAlign: "left" }}>
                   {displayProductName(product.name)}
                 </button>
               ))}
@@ -4727,7 +4720,7 @@ function SaleTab({
               style={{
                 padding: "12px 10px",
                 borderRadius: 10,
-                background: selectedProduct === p.id ? "#D97757" : "#fff",
+                background: selectedProduct === p.id ? "#D97757" : productGenderBackground(p),
                 color: selectedProduct === p.id ? "#fff" : "#222",
                 border: "1px solid " + (selectedProduct === p.id ? "#D97757" : "#ddd"),
                 fontSize: 16,
@@ -5156,7 +5149,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     const branchId = branchSchoolIds[school]
       || Object.entries(BRANCH_OUTLET_NAMES).find(([, name]) => name === outletName)?.[0]
       || "";
-    const np = { id: uid(), school: school || "", name: "新款式", priceMode: "simple", sizes: [{ size: "M", price: null }], branch_id: branchId };
+    const np = { id: uid(), school: school || "", name: "新款式", gender: "unisex", priceMode: "simple", sizes: [{ size: "M", price: null }], branch_id: branchId };
     saveProducts([...products, np], { insertProductId: np.id });
     setExpanded(np.id);
   };
@@ -6037,6 +6030,14 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                 placeholder="款式名稱"
                 style={{ width: "100%", padding: 8, marginBottom: 10, borderRadius: 8, border: "1px solid #ccc", fontSize: 14, boxSizing: "border-box" }}
               />
+              <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>適用性別</div>
+              <select
+                value={getProductGender(p)}
+                onChange={(e) => updateProduct(p.id, { ...p, gender: e.target.value })}
+                style={{ width: "100%", padding: 8, marginBottom: 10, borderRadius: 8, border: "1px solid #ccc", fontSize: 14, boxSizing: "border-box" }}
+              >
+                {PRODUCT_GENDER_OPTIONS.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+              </select>
               <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>價格模式</div>
               <select
                 value={productPriceMode(p)}
