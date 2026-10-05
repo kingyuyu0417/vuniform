@@ -32,5 +32,5 @@ export const productGenderBackground = (product) => {
   const gender = getProductGender(product);
   if (gender === "boys") return "#EAF4FF";
   if (gender === "girls") return "#FFF0F5";
-  return "#fff";
+  return "linear-gradient(to right, #EAF4FF 50%, #FFF0F5 50%)";
 };

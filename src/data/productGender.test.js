@@ -14,10 +14,10 @@ test("infers legacy product genders from their names and known exceptions", () =
   assert.equal(getProductGender({ name: "藍／紫色連身校裙" }), "girls");
 });
 
-test("uses pale blue and pink backgrounds only for gendered styles", () => {
+test("uses gender-specific backgrounds and a split blue-pink background for unisex styles", () => {
   assert.equal(productGenderBackground({ gender: "boys" }), "#EAF4FF");
   assert.equal(productGenderBackground({ gender: "girls" }), "#FFF0F5");
-  assert.equal(productGenderBackground({ gender: "unisex" }), "#fff");
+  assert.equal(productGenderBackground({ gender: "unisex" }), "linear-gradient(to right, #EAF4FF 50%, #FFF0F5 50%)");
 });
 
 test("normalizes inferred legacy genders while preserving saved selections", () => {
