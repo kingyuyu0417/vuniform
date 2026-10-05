@@ -29,6 +29,8 @@ import {
   updateProduct as updateProductInStore,
 } from "./data/productsStore";
 import {
+  findProductCatalogReviewGroups,
+  resolveProductCatalogReview,
   splitCompositeProductName,
   splitCompositeProductRecord,
   splitCompositeImportRows,
@@ -4889,6 +4891,10 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   const [noticeAnalyzing, setNoticeAnalyzing] = useState(false);
   const [noticePreview, setNoticePreview] = useState(null);
   const [autoApplyHighConfidence, setAutoApplyHighConfidence] = useState(false);
+  const [manualReviewGroupId, setManualReviewGroupId] = useState("");
+  const [manualReviewAssignments, setManualReviewAssignments] = useState({});
+  const [manualReviewStyles, setManualReviewStyles] = useState([]);
+  const [manualReviewError, setManualReviewError] = useState("");
   const IMPORT_HISTORY_KEY = "import_history_v1";
 
   const saveSnapshotToCloud = async (snapshot) => {
@@ -5352,6 +5358,8 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
 
   const activeSchoolProducts = activeSchool ? products.filter((p) => schoolOf(p) === activeSchool) : [];
   const visibleProducts = activeSchoolProducts;
+  const productCatalogReviewGroups = canManageSchools ? findProductCatalogReviewGroups(products) : [];
+  const activeManualReviewGroup = productCatalogReviewGroups.find((group) => group.id === manualReviewGroupId);
   const filteredImportPreviewRows = importPreview
     ? importPreview.previewRows.filter((row) => {
         const query = importPreviewSearch.trim().toLowerCase();
@@ -5363,6 +5371,35 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
   const noticeImportFusion = noticePreview && importPreview
     ? buildNoticeImportFusion(noticePreview, importPreview)
     : null;
+
+  const openManualReview = (group) => {
+    setManualReviewGroupId(group.id);
+    setManualReviewStyles(group.styleNames.map((name) => ({ school: group.school, name })));
+    setManualReviewAssignments({});
+    setManualReviewError("");
+  };
+
+  const saveManualReview = async () => {
+    if (!activeManualReviewGroup) return;
+    setImporting(true);
+    setManualReviewError("");
+    try {
+      const next = resolveProductCatalogReview(products, activeManualReviewGroup, manualReviewStyles, manualReviewAssignments);
+      saveProducts(next);
+      const saved = await saveProductsNow();
+      if (!saved) {
+        setManualReviewError("保存失敗，原有商品資料已保留。請檢查上方保存錯誤後重試。");
+        return;
+      }
+      setManualReviewGroupId("");
+      setManualReviewAssignments({});
+      setManualReviewStyles([]);
+    } catch (error) {
+      setManualReviewError(error?.message || "判定資料無法保存，請檢查每個尺碼的分配。");
+    } finally {
+      setImporting(false);
+    }
+  };
 
   return (
     <div>
@@ -5376,6 +5413,108 @@ function ProductsTab({ products, saveProducts, saveProductsNow, importResult, se
         <div style={{ marginBottom: 10, padding: "10px 12px", borderRadius: 8, background: "#FFF8E7", color: "#8A5A00", fontSize: 12 }}>
           {productsCatalogWarning}
         </div>
+      )}
+      {canManageSchools && productCatalogReviewGroups.length > 0 && (
+        <section style={{ marginBottom: 12, padding: 12, borderRadius: 10, border: "1px solid #F0D39A", background: "#FFFBEB" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontWeight: 700, color: "#7C4A03" }}>商品款式需要人手判定</div>
+              <div style={{ marginTop: 3, color: "#8A5A00", fontSize: 12 }}>逐個尺碼指定學校及款式；價錢會沿用原資料，不會自動更改。</div>
+            </div>
+            <span style={{ color: "#7C4A03", fontSize: 12, fontWeight: 700 }}>{productCatalogReviewGroups.length} 組待處理</span>
+          </div>
+          <div style={{ display: "grid", gap: 6, marginTop: 10 }}>
+            {productCatalogReviewGroups.map((group, index) => (
+              <button
+                key={group.id}
+                type="button"
+                className="pos-btn"
+                onClick={() => openManualReview(group)}
+                style={{ width: "100%", padding: "9px 10px", borderRadius: 8, border: "1px solid #E8D4AA", background: manualReviewGroupId === group.id ? "#FEF3C7" : "#fff", color: "#334155", textAlign: "left", fontSize: 12 }}
+              >
+                {index + 1}. {group.school || "未指定學校"} · {group.styleNames.join("／")}（{group.entries.length} 個尺碼記錄）{manualReviewGroupId === group.id ? "　判定中" : "　人手判定"}
+              </button>
+            ))}
+          </div>
+          {activeManualReviewGroup && (
+            <div style={{ marginTop: 12, padding: 12, borderRadius: 9, background: "#fff", border: "1px solid #E5E7EB" }}>
+              <div style={{ fontWeight: 700, color: "#1F3A5F" }}>第一步：確認每個獨立款式（名稱可修改）</div>
+              <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+                {manualReviewStyles.map((style, styleIndex) => (
+                  <div key={styleIndex} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.4fr)", gap: 6 }}>
+                    <input
+                      aria-label={`款式${styleIndex + 1}所屬學校`}
+                      value={style.school}
+                      onChange={(event) => setManualReviewStyles((current) => current.map((item, index) => index === styleIndex ? { ...item, school: event.target.value } : item))}
+                      placeholder="所屬學校"
+                      style={{ minWidth: 0, padding: 8, border: "1px solid #CBD5E1", borderRadius: 7, fontSize: 12 }}
+                    />
+                    <input
+                      aria-label={`款式${styleIndex + 1}名稱`}
+                      value={style.name}
+                      onChange={(event) => setManualReviewStyles((current) => current.map((item, index) => index === styleIndex ? { ...item, name: event.target.value } : item))}
+                      placeholder={`款式${styleIndex + 1}名稱`}
+                      style={{ minWidth: 0, padding: 8, border: "1px solid #CBD5E1", borderRadius: 7, fontSize: 12 }}
+                    />
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="pos-btn"
+                onClick={() => setManualReviewStyles((current) => [...current, { school: activeManualReviewGroup.school, name: `${activeManualReviewGroup.styleNames[0] || "新款式"}（款式 ${current.length + 1}）` }])}
+                style={{ marginTop: 8, padding: "6px 9px", borderRadius: 7, border: "1px solid #CBD5E1", background: "#fff", color: "#334155", fontSize: 11 }}
+              >
+                + 新增款式
+              </button>
+              {manualReviewStyles.length > 2 && (
+                <button
+                  type="button"
+                  className="pos-btn"
+                  onClick={() => {
+                    const removedIndex = manualReviewStyles.length - 1;
+                    setManualReviewStyles((current) => current.slice(0, -1));
+                    setManualReviewAssignments((current) => Object.fromEntries(
+                      Object.entries(current).map(([key, styleIndex]) => [key, styleIndex === removedIndex ? undefined : styleIndex]),
+                    ));
+                  }}
+                  style={{ marginTop: 8, marginLeft: 6, padding: "6px 9px", borderRadius: 7, border: "1px solid #CBD5E1", background: "#fff", color: "#334155", fontSize: 11 }}
+                >
+                  移除末款
+                </button>
+              )}
+              <div style={{ marginTop: 12, fontWeight: 700, color: "#1F3A5F" }}>第二步：逐項分配尺碼（價格保持不變）</div>
+              <div style={{ display: "grid", gap: 5, marginTop: 8 }}>
+                {activeManualReviewGroup.entries.map((entry) => (
+                  <div key={entry.key} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(150px, 0.9fr)", gap: 8, alignItems: "center", padding: "6px 8px", borderRadius: 7, background: "#F8FAFC" }}>
+                    <div style={{ minWidth: 0, color: "#334155", fontSize: 12, overflowWrap: "anywhere" }}>
+                      <div>{entry.size.length ? `${entry.size.isTailored ? "裁碼 " : ""}${entry.size.length}／` : ""}{entry.size.size || "未標尺碼"}　·　{fmt(Number(entry.size.price || 0))}</div>
+                      <div style={{ color: "#94A3B8", fontSize: 10 }}>{entry.sourceName}</div>
+                    </div>
+                    <select
+                      aria-label={`${entry.size.length || ""} ${entry.size.size || ""} ${entry.size.price} 所屬款式`}
+                      value={manualReviewAssignments[entry.key] ?? ""}
+                      onChange={(event) => setManualReviewAssignments((current) => ({ ...current, [entry.key]: event.target.value === "" ? undefined : Number(event.target.value) }))}
+                      style={{ width: "100%", minWidth: 0, padding: 7, border: "1px solid #CBD5E1", borderRadius: 7, background: "#fff", fontSize: 12 }}
+                    >
+                      <option value="">選擇所屬款式</option>
+                      {manualReviewStyles.map((style, styleIndex) => <option key={styleIndex} value={styleIndex}>{style.name || `款式 ${styleIndex + 1}`}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+              {manualReviewError && <div role="alert" style={{ marginTop: 9, color: "#B42318", fontSize: 12 }}>{manualReviewError}</div>}
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button type="button" className="pos-btn" onClick={saveManualReview} disabled={importing} style={{ flex: 1, padding: 9, borderRadius: 8, background: "#28784B", color: "#fff", fontWeight: 700, fontSize: 12 }}>
+                  {importing ? "保存中…" : "確認判定並保存"}
+                </button>
+                <button type="button" className="pos-btn" onClick={() => { setManualReviewGroupId(""); setManualReviewError(""); }} disabled={importing} style={{ flex: 1, padding: 9, borderRadius: 8, border: "1px solid #CBD5E1", background: "#fff", color: "#475569", fontSize: 12 }}>
+                  暫不處理
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
       )}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <button
