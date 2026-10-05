@@ -826,6 +826,12 @@ const smartImportRows = (rows, existingProducts) => {
       .map((item, itemIndex) => ({ item, itemIndex }))
       .filter(({ item }) => sizeIdentityKey(item) === importedSizeKey);
     const existing = matchingSizes[0]?.item;
+    const previousPrice = existing
+      && existing.price !== null
+      && existing.price !== undefined
+      && Number.isFinite(Number(existing.price))
+      ? Number(existing.price)
+      : null;
     const action = existing ? (Number(existing.price) === price ? "無變更" : "更新價格") : "新增尺碼";
     if (existing) {
       if (Number(existing.price) !== price) updatedSizes++;
@@ -838,9 +844,26 @@ const smartImportRows = (rows, existingProducts) => {
       product.sizes.push({ size, length: normalizedLength, price, isTailored: tailored });
       addedSizes++;
     }
-    previewRows.push({ school: schoolKey, name, length, size, price, action });
+    previewRows.push({ school: schoolKey, name, length, size, price, previousPrice, hasExistingSize: Boolean(existing), isTailored: tailored, normalizedLength, action });
   });
   return { next, summary: { addedProducts, addedSizes, updatedSizes, rows: mappedRows.length }, errors, previewRows };
+};
+const pricePreviewHasChanged = (previousRows = [], nextRows = []) => {
+  const rowKey = (row) => `${row.school}\u0000${row.name}\u0000${row.isTailored ? "tailored" : "regular"}\u0000${row.normalizedLength || ""}\u0000${row.size}`;
+  const pricesByKey = (rows) => new Map(rows.map((row) => [rowKey(row), {
+    price: row.previousPrice ?? null,
+    exists: Boolean(row.hasExistingSize),
+  }]));
+  const previousPrices = pricesByKey(previousRows);
+  const nextPrices = pricesByKey(nextRows);
+  if (previousPrices.size !== nextPrices.size) return true;
+  return [...nextPrices].some(([key, current]) => {
+    if (!previousPrices.has(key)) return true;
+    const previous = previousPrices.get(key);
+    if (previous.exists !== current.exists) return true;
+    if (previous.price === null) return current.price !== null;
+    return current.price === null || Number(previous.price) !== Number(current.price);
+  });
 };
 const isHighConfidenceImport = ({ analysis, confidence, conversionWarnings = [] }) => {
   const errors = Array.isArray(analysis?.errors) ? analysis.errors : [];
@@ -2616,6 +2639,32 @@ export default function UniformPOS() {
     return data || [];
   };
 
+  const loadLatestProductsForImport = async () => {
+    const sourceProducts = isSupabaseAuthEnabled
+      ? await loadSecureProducts()
+      : await loadProducts({
+        storage: window.storage,
+        supabase,
+        isSupabaseAuthEnabled,
+        fallbackProducts: PRODUCT_CATALOG_FALLBACK,
+      });
+    if (!Array.isArray(sourceProducts) || sourceProducts.length === 0) {
+      throw new Error("未能讀取最新商品資料，為免覆蓋舊價，匯入已暫停。");
+    }
+    const latestProducts = enforceAuthoritativeProducts(sourceProducts)
+      .filter((product) => !isSupabaseAuthEnabled
+        || !session?.branchId
+        || session.role === ROLES.ADMIN
+        || product.branch_id === session.branchId
+        || branchSchoolIds[schoolOf(product)] === session.branchId);
+    if (latestProducts.length === 0) {
+      throw new Error("最新商品資料為空，為免覆蓋商品庫，匯入已暫停。");
+    }
+    productsRef.current = latestProducts;
+    setProducts(latestProducts);
+    return latestProducts;
+  };
+
   const loadBranchSchoolMap = async () => {
     if (!supabase || !isSupabaseAuthEnabled || !session || session.role === ROLES.ADMIN) return {};
     const { data, error } = await supabase.from("school_branches").select("school, branch_id");
@@ -3940,6 +3989,7 @@ export default function UniformPOS() {
                 products={products}
                 saveProducts={saveProducts}
                 deleteCatalogProducts={deleteCatalogProducts}
+                loadLatestProducts={loadLatestProductsForImport}
                 importResult={importResult}
                 setImportResult={setImportResult}
                 productsSaveError={productsSaveError}
@@ -4089,6 +4139,7 @@ export default function UniformPOS() {
                     products={products}
                     saveProducts={saveProducts}
                     deleteCatalogProducts={deleteCatalogProducts}
+                    loadLatestProducts={loadLatestProductsForImport}
                     importResult={importResult}
                     setImportResult={setImportResult}
                     productsSaveError={productsSaveError}
@@ -4936,7 +4987,7 @@ function SaleTab({
   );
 }
 
-function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogProducts, importResult, setImportResult, productsSaveError = "", productsSaveState = "saved", productsCatalogWarning = "", sourceIntegrityWarning = "", canManageSchools = true, canImportExport = true, schoolMeta = {}, saveSchoolMeta = async () => {}, setDeletedSchools = () => {}, selectedSchool = null, setSelectedSchool = () => {}, branchSchoolIds = {}, branchId = "", availableSchools, onPickSchool = setSelectedSchool }) {
+function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogProducts, loadLatestProducts, importResult, setImportResult, productsSaveError = "", productsSaveState = "saved", productsCatalogWarning = "", sourceIntegrityWarning = "", canManageSchools = true, canImportExport = true, schoolMeta = {}, saveSchoolMeta = async () => {}, setDeletedSchools = () => {}, selectedSchool = null, setSelectedSchool = () => {}, branchSchoolIds = {}, branchId = "", availableSchools, onPickSchool = setSelectedSchool }) {
   const [expanded, setExpanded] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
@@ -5339,15 +5390,49 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
         console.warn("儲存匯入快照到雲端失敗", e);
       }
 
-      const preview = { fileName: file.name, conversionMode: isStandardFormat ? "標準格式" : "價目表格式轉換", conversionWarnings: converted.warnings, ...analysis, errors: [...converted.warnings, ...analysis.errors], confidence, snapshotId: snapshot.id, timestamp };
+      const isHighConfidence = isHighConfidenceImport({ analysis, confidence, conversionWarnings: converted.warnings });
+      const priceChangesNeedReview = autoApplyHighConfidence && isHighConfidence && analysis.summary.updatedSizes > 0;
+      const preview = {
+        fileName: file.name,
+        conversionMode: isStandardFormat ? "標準格式" : "價目表格式轉換",
+        conversionWarnings: converted.warnings,
+        sourceRows: converted.rows,
+        ...analysis,
+        errors: [...converted.warnings, ...analysis.errors],
+        warning: priceChangesNeedReview ? "匯入包含現有價格更改，為避免誤改價錢，請核對現價與匯入價後再確認保存。" : "",
+        confidence,
+        snapshotId: snapshot.id,
+        timestamp,
+      };
       setImportPreview(preview);
 
-      if (autoApplyHighConfidence && isHighConfidenceImport({ analysis, confidence, conversionWarnings: converted.warnings })) {
-        saveProducts(analysis.next);
+      if (autoApplyHighConfidence && isHighConfidence && analysis.summary.updatedSizes === 0) {
+        if (productsSaveState === "pending" || productsSaveState === "saving") {
+          const pendingSaveCompleted = await saveProductsNow();
+          if (!pendingSaveCompleted) {
+            setImportResult({ summary: null, errors: ["商品資料有未保存修改，請先修正保存問題；自動匯入已暫停。"] });
+            return;
+          }
+        }
+        const latestProducts = await loadLatestProducts();
+        const latestAnalysis = smartImportRows(converted.rows, latestProducts);
+        const priceChanged = pricePreviewHasChanged(analysis.previewRows, latestAnalysis.previewRows);
+        if (priceChanged || latestAnalysis.errors.length > 0) {
+          setImportPreview({
+            ...preview,
+            ...latestAnalysis,
+            errors: [...converted.warnings, ...latestAnalysis.errors],
+            warning: priceChanged
+              ? "預覽後商品現價已有更新，已刷新現價對照；請重新核對後再次確認保存。"
+              : "",
+          });
+          return;
+        }
+        saveProducts(latestAnalysis.next);
         const saved = await saveProductsNow();
         if (saved) {
           setImportResult({
-            summary: analysis.summary,
+            summary: latestAnalysis.summary,
             errors: [],
             message: `已自動套用高信心匯入（信心分數 ${Math.round(confidence * 100)}%）。`,
           });
@@ -5370,18 +5455,36 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     if (!importPreview) return;
     setImporting(true);
     try {
-      saveProducts(importPreview.next);
+      if (productsSaveState === "pending" || productsSaveState === "saving") {
+        const pendingSaveCompleted = await saveProductsNow();
+        if (!pendingSaveCompleted) {
+          setImportResult({ summary: null, errors: ["商品資料有未保存修改，請先修正保存問題；本次匯入未保存。"] });
+          return;
+        }
+      }
+      const latestProducts = await loadLatestProducts();
+      const analysis = smartImportRows(importPreview.sourceRows, latestProducts);
+      if (pricePreviewHasChanged(importPreview.previewRows, analysis.previewRows)) {
+        setImportPreview({
+          ...importPreview,
+          ...analysis,
+          errors: [...importPreview.conversionWarnings, ...analysis.errors],
+          warning: "預覽後商品現價已有更新，已刷新現價對照；請重新核對後再次確認保存。",
+        });
+        return;
+      }
+      saveProducts(analysis.next);
       const saved = await saveProductsNow();
       if (!saved) {
         setImportResult({ summary: null, errors: ["匯入分析成功，但保存商品資料失敗，請重試。"] });
         return;
       }
-      setImportResult({ summary: importPreview.summary, errors: [] });
+      setImportResult({ summary: analysis.summary, errors: [] });
       setImportPreview(null);
       setImportPreviewSearch("");
     } catch (error) {
       console.error("智能匯入保存失敗", error);
-      setImportResult({ summary: null, errors: ["匯入分析成功，但保存商品資料失敗，請重試。"] });
+      setImportResult({ summary: null, errors: [`商品資料核對或保存失敗，匯入未保存：${error?.message || "請重試。"}`] });
     } finally {
       setImporting(false);
     }
@@ -5529,7 +5632,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
         <div style={{ borderTop: "1px solid #E5E5E0", marginTop: 14, paddingTop: 14 }}>
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>批量匯入 / 匯出</div>
         <div style={{ fontSize: 12, color: "#888", marginBottom: 10, lineHeight: 1.5 }}>
-          支援 Excel／CSV。系統會自動識別學校、款式、長度／袖長、尺碼及價錢；高信心資料會直接寫入，其他資料仍然先預覽。
+          支援 Excel／CSV。系統會自動識別學校、款式、長度／袖長、尺碼及價錢；自動匯入只適用於不改動現有價格的高信心資料。改價必須先核對現價與匯入價，再確認保存。
         </div>
         <label style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10, fontSize: 12, color: "#475569", cursor: "pointer" }}>
           <input
@@ -5537,7 +5640,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
             checked={autoApplyHighConfidence}
             onChange={(event) => setAutoApplyHighConfidence(event.target.checked)}
           />
-          高信心匯入自動落 production（信心至少 95%、零錯誤／警告；預設關閉）
+          高信心新增資料自動落 production（現有價格更改仍須預覽確認；預設關閉）
         </label>
         <div style={{ display: "flex", gap: 8 }}>
           <button
@@ -5572,6 +5675,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
             <div style={{ fontWeight: 700, color: "#1F3A5F" }}>分析預覽：{importPreview.fileName}</div>
             <div style={{ marginTop: 4, color: "#52657A" }}>模式：{importPreview.conversionMode}</div>
             <div style={{ marginTop: 5 }}>讀取 {importPreview.summary.rows} 行；新增 {importPreview.summary.addedProducts} 款、新增 {importPreview.summary.addedSizes} 個尺碼、更新 {importPreview.summary.updatedSizes} 個價格。</div>
+            {importPreview.warning && <div style={{ marginTop: 6, color: "#B54708", fontWeight: 600 }}>{importPreview.warning}</div>}
             {importPreview.previewRows.length > 0 && (
               <>
                 <input
@@ -5585,8 +5689,8 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                 </div>
                 <div style={{ maxHeight: 180, overflowY: "auto", marginTop: 5, background: "#fff", borderRadius: 6, padding: 6 }}>
                   {filteredImportPreviewRows.map((row, index) => (
-                  <div key={index} style={{ padding: "3px 0", borderBottom: "1px solid #EEF2F7" }}>
-                    {row.school} · {row.name} · {row.length ? `${row.length}/` : ""}{row.size} · ${row.price}（{row.action}）
+                  <div key={index} style={{ padding: "3px 0", borderBottom: "1px solid #EEF2F7", color: row.hasExistingSize && (row.previousPrice === null || Number(row.previousPrice) !== Number(row.price)) ? "#B42318" : "#334155" }}>
+                    {row.school} · {row.name} · {row.length ? `${row.length}/` : ""}{row.size} · {!row.hasExistingSize ? "新增" : row.previousPrice === null ? "現價未設定" : `$${row.previousPrice}`} → ${row.price}（{row.action}）
                   </div>
                   ))}
                   {filteredImportPreviewRows.length === 0 && <div style={{ padding: "8px 3px", color: "#64748B" }}>找不到符合資料。</div>}
@@ -5601,7 +5705,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
               </div>
             )}
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <button className="pos-btn" onClick={confirmImport} disabled={importing} style={{ flex: 1, padding: 8, background: "#28784B", color: "#fff", borderRadius: 7 }}>確認匯入</button>
+              <button className="pos-btn" onClick={confirmImport} disabled={importing} style={{ flex: 1, padding: 8, background: "#28784B", color: "#fff", borderRadius: 7 }}>{importing ? "保存緊…" : importPreview.summary.updatedSizes ? `確認 ${importPreview.summary.updatedSizes} 項改價並匯入` : "確認匯入"}</button>
               <button className="pos-btn" onClick={() => { setImportPreview(null); setImportPreviewSearch(""); }} disabled={importing} style={{ flex: 1, padding: 8, background: "#fff", color: "#475569", border: "1px solid #CBD5E1", borderRadius: 7 }}>取消</button>
             </div>
           </div>
