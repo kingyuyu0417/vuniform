@@ -4851,7 +4851,7 @@ function SaleTab({
                     onClick={() => handleSizeSelect(product, s)}
                     style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #ccc", fontSize: 16 }}
                   >
-                    <div style={{ fontWeight: 600 }}>{sizeLabel(s)}</div>
+                    <div style={{ fontSize: 22, fontWeight: 600 }}>{sizeLabel(s)}</div>
                     <div style={{ fontSize: 12, color: "#888" }}>{fmt(s.price)}</div>
                   </button>
                 ))}
@@ -4883,7 +4883,9 @@ function SaleTab({
                       onClick={() => handleSizeSelect(product, s)}
                       style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #ccc", fontSize: 16 }}
                     >
-                      <div style={{ fontWeight: 600 }}>{s.isTailored ? "裁碼" : sizeDimensionLabel(product)} {s.size} 吋</div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>
+                        {s.isTailored ? "裁碼" : sizeDimensionLabel(product)} <span style={{ fontSize: 22 }}>{s.size}</span> 吋
+                      </div>
                       <div style={{ color: "#888", marginTop: 2 }}>{fmt(s.price)}</div>
                     </button>
                   ))}
