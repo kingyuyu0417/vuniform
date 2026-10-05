@@ -3488,7 +3488,7 @@ export default function UniformPOS() {
           .receipt-modal-overlay {
             align-items: flex-start !important;
             overflow-y: auto;
-            padding: max(8px, env(safe-area-inset-top)) 10px max(8px, env(safe-area-inset-bottom)) !important;
+            padding: max(8px, env(safe-area-inset-top)) 10px calc(80px + env(safe-area-inset-bottom, 0px)) !important;
             -webkit-overflow-scrolling: touch;
             overscroll-behavior-y: contain;
           }
