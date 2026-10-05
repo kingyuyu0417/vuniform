@@ -49,7 +49,14 @@
 </head>
 <body>
   <main id="app"></main>
-  <script>
+  <script type="module">
+    import {
+      englishReceiptProductUnit,
+      receiptProductTranslationTerms,
+      receiptProductUnit,
+      translateReceiptAttribute,
+    } from "./receipt-translations.js";
+
     const app = document.getElementById("app");
     const money = (value) => "$" + Math.round(Number(value) || 0).toLocaleString("en-HK");
     const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
@@ -72,18 +79,8 @@
       if (/(?:西褲|長褲|短褲|運動褲|褲)/.test(name)) return { length: "褲長", size: "腰圍" };
       return { length: "", size: "尺碼" };
     };
-    const productUnit = (productName) => {
-      const name = String(productName || "").replace(/\s+/g, "");
-      if (/襪.*[（(]?\d+對|[（(]3對[）)]/.test(name)) return "包";
-      if (/襪|鞋|手套/.test(name)) return "對";
-      if (/套裝|套服/.test(name)) return "套";
-      if (/皮帶|腰帶|領帶|頸巾|圍巾/.test(name)) return "條";
-      if (/書包|背囊|袋|筆袋/.test(name)) return "個";
-      return "件";
-    };
-    const englishProductUnit = (productName) => ({
-      "件": "pcs", "對": "pairs", "包": "packs", "套": "sets", "條": "pcs", "個": "pcs",
-    }[productUnit(productName)] || "pcs");
+    const productUnit = receiptProductUnit;
+    const englishProductUnit = englishReceiptProductUnit;
     const exactProductTranslations = {
         "男生白色長袖恤衫": "Boys' White Long-sleeve Shirt",
         "男生白色短袖恤衫": "Boys' White Short-sleeve Shirt",
@@ -128,6 +125,7 @@
       "背囊": "Backpack", "筆袋": "Pencil Case", "格仔": "Checked", "水手領": "Sailor Collar",
       "V領": "V-neck", "圓領": "Crew-neck", "長冷": "Long-sleeve Jumper", "冷": "Jumper",
       "校呔": "School Tie", "呔": "Tie",
+      ...receiptProductTranslationTerms,
       "開胸": "Open-front", "半橡筋": "Half-elastic Waist", "領圍": "Collar",
       "上圍": "Chest", "褲長": "Trouser Length", "裙長": "Skirt Length", "袖長": "Sleeve Length",
       "長度": "Length", "短": "Short", "長": "Long", "裁碼": "Tailored",
@@ -191,7 +189,7 @@
     const englishSizeValue = (value) => {
       const size = String(value == null ? "" : value).trim();
       if (size === "均碼") return "One size";
-      return size.replace(/^(\d+)\s*碼$/, "$1");
+      return translateReceiptAttribute(size.replace(/^(\d+)\s*碼$/, "$1"));
     };
     const formatSizeDisplay = (productName, size, length, english = false) => {
       const labels = dimensionLabels(productName);
@@ -207,10 +205,7 @@
         return `${translatedLabels.size}: ${text(english ? translateAttribute(displayedSize) : size)}`;
       }
     };
-    const translateAttribute = (value) => {
-      const normalized = String(value || "").trim();
-      return productTranslationTerms[normalized] || normalized;
-    };
+    const translateAttribute = (value) => translateReceiptAttribute(productTranslationTerms[String(value || "").trim()] || value);
     const sourceReceiptId = (order) => order.exchangeSourceReceiptId || order.exchange_source_receipt_id || order.sourceReceiptId || "";
     let receiptOrder = null;
     let receiptLanguage = new URLSearchParams(location.search).get("lang") === "en" ? "en" : "zh";
@@ -280,7 +275,7 @@
               ${translatedItems.map(({ item, translation: translatedName }) => {
                 const sign = item.exchangeReturn ? -1 : 1;
                 const translationNote = translatedName.partial ? labels.partialTranslation : labels.translationUnavailable;
-                return `<div class="item"><div class="item-main"><span>${item.exchangeReturn ? (english ? "Exchange out: " : "換出：") : ""}${text(translatedName.text)}${english && !translatedName.translated && showTranslationNotes ? `<span class="translation-note">${translationNote} ${text(translatedName.original)}</span>` : ""}</span><span>${money(sign * Number(item.price) * Number(item.qty))}</span></div><div class="item-sub"><span>${formatSizeDisplay(item.name, item.size, item.length, english)}</span></div><div class="item-sub"><span>${labels.quantity}</span><span>${text(item.qty, "0")} ${english ? englishProductUnit(item.name) : productUnit(item.name)} × ${money(item.price)}</span></div></div>`;
+                return `<div class="item"><div class="item-main"><span>${item.exchangeReturn ? (english ? "Exchange out: " : "換出：") : ""}${text(translatedName.text)}${english && !translatedName.translated && showTranslationNotes ? `<span class="translation-note">${translationNote} ${text(translatedName.original)}</span>` : ""}</span><span>${money(sign * Number(item.price) * Number(item.qty))}</span></div><div class="item-sub"><span>${formatSizeDisplay(item.name, item.size, item.length, english)}</span></div><div class="item-sub"><span>${labels.quantity}</span><span>${text(item.qty, "0")} ${english ? englishProductUnit(item.name, item.size, item.qty) : productUnit(item.name, item.size)} × ${money(item.price)}</span></div></div>`;
               }).join("")}
           </div>
           <div class="summary">
