@@ -11,6 +11,12 @@ const normalizeSize = (size = {}) => {
   return normalized;
 };
 const sizeIdentityKey = (size = {}) => `${size.isTailored ? "tailored" : "regular"}\u0000${size.length || ""}\u0000${size.size || ""}`;
+const productDataSignature = (product) => JSON.stringify([
+  product.school || "",
+  product.name,
+  product.priceMode,
+  product.sizes.map((size) => [size.size, size.length, size.price, Boolean(size.isTailored)]),
+]);
 const assertNoConflictingSizePrices = (products = []) => {
   products.forEach((product) => {
     const pricesByKey = new Map();
@@ -143,7 +149,6 @@ export const loadProducts = async ({ storage, supabase, isSupabaseAuthEnabled, f
 
 export const saveProducts = async ({ products, storage, supabase, isSupabaseAuthEnabled }) => {
   const normalized = normalizeProducts(products);
-  assertNoConflictingSizePrices(normalized);
   if (normalized.length === 0) {
     throw new Error("拒絕保存空商品清單，避免刪除整個商品庫。請先載入或匯入商品資料。");
   }
@@ -166,8 +171,14 @@ export const saveProducts = async ({ products, storage, supabase, isSupabaseAuth
       return result;
     }, []);
 
-    const { data: existing, error: existingError } = await supabase.from("products").select("id");
+    const { data: existing, error: existingError } = await supabase.from("products").select("id, school, name, sizes");
     if (existingError) throw existingError;
+    const existingById = new Map(normalizeProducts(existing || []).map((product) => [product.id, product]));
+    const changedProducts = uniqueProducts.filter((product) => {
+      const saved = existingById.get(product.id);
+      return !saved || productDataSignature(saved) !== productDataSignature(product);
+    });
+    assertNoConflictingSizePrices(changedProducts);
 
     const nextIds = new Set(uniqueProducts.map((product) => product.id));
     const deletedIds = (existing || []).map((product) => product.id).filter((id) => !nextIds.has(id));
@@ -210,6 +221,8 @@ export const saveProducts = async ({ products, storage, supabase, isSupabaseAuth
     });
     if (hasMismatch) throw new Error("雲端商品資料驗證不一致，修改未被完整保存。");
   }
+
+  if (!(isSupabaseAuthEnabled && supabase)) assertNoConflictingSizePrices(normalized);
 
   if (storage) {
     await storage.set("products", JSON.stringify(normalized), true).catch(() => {});

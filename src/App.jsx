@@ -725,12 +725,20 @@ const smartImportRows = (rows, existingProducts) => {
       next.push(product);
       addedProducts++;
     }
-    const existing = product.sizes.find((item) => sizeIdentityKey(item) === sizeIdentityKey({ size, length: normalizedLength, isTailored: tailored }));
+    const importedSize = { size, length: normalizedLength, isTailored: tailored };
+    const importedSizeKey = sizeIdentityKey(importedSize);
+    const matchingSizes = product.sizes
+      .map((item, itemIndex) => ({ item, itemIndex }))
+      .filter(({ item }) => sizeIdentityKey(item) === importedSizeKey);
+    const existing = matchingSizes[0]?.item;
     const action = existing ? (Number(existing.price) === price ? "無變更" : "更新價格") : "新增尺碼";
     if (existing) {
       if (Number(existing.price) !== price) updatedSizes++;
-      existing.price = price;
-      existing.isTailored = Boolean(existing.isTailored || row.isTailored);
+      Object.assign(existing, importedSize, { price });
+      if (matchingSizes.length > 1) {
+        const duplicateIndexes = new Set(matchingSizes.slice(1).map(({ itemIndex }) => itemIndex));
+        product.sizes = product.sizes.filter((_, itemIndex) => !duplicateIndexes.has(itemIndex));
+      }
     } else {
       product.sizes.push({ size, length: normalizedLength, price, isTailored: tailored });
       addedSizes++;
