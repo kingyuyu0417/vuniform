@@ -3485,6 +3485,13 @@ export default function UniformPOS() {
         .sale-size-button { min-height: 76px; }
         @media (max-width: 560px) {
           .pos-page-content { padding: 14px; }
+          .pos-navigation-sticky {
+            position: sticky;
+            top: 0;
+            z-index: 30;
+            background: #F7F9FC;
+            box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
+          }
           .receipt-modal-overlay {
             align-items: flex-start !important;
             overflow-y: auto;
@@ -3514,6 +3521,7 @@ export default function UniformPOS() {
         }
       `}</style>
 
+        <div className="pos-navigation-sticky">
         {envError && (
           <div style={{ padding: "12px 16px" }}>
             <Alert
@@ -3642,6 +3650,7 @@ export default function UniformPOS() {
           </button>
         </div>
       )}
+        </div>
 
       {(() => {
         const queueParam = new URLSearchParams(window.location.search).get("queue");
