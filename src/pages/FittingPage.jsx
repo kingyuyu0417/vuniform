@@ -13,6 +13,7 @@ import { queueOrderService, ORDER_STATUS } from "../services/queueOrderService";
 import { supabase, isSupabaseConfigured } from "../supabaseClient";
 import { productGenderBackground } from "../data/productGender.js";
 import { lengthDimensionLabel, sizeDimensionLabel } from "../data/productDimensions.js";
+import { ProductGenderTag } from "../components/ProductGenderTag.jsx";
 
 const STORAGE_DRAFT_KEY = "uniform-pos-fitting-drafts";
 
@@ -686,7 +687,10 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
                           borderColor: "#ddd",
                         }}
                       >
-                        {displayProductName(product.name)}
+                        <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, width: "100%" }}>
+                          <span style={{ minWidth: 0 }}>{displayProductName(product.name)}</span>
+                          <ProductGenderTag product={product} />
+                        </span>
                       </button>
                     ))}
                   </div>
