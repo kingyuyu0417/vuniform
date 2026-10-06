@@ -7063,19 +7063,19 @@ function SchoolSwitcher({ schools, schoolMeta, selectedSchool, onPick }) {
  */
 function PublicHomePage({ onStaffLogin }) {
   return (
-    <main style={{ minHeight: "100vh", background: "#F4F7FB", padding: "32px 16px", boxSizing: "border-box", display: "grid", placeItems: "center", fontFamily: "system-ui, -apple-system, sans-serif" }}>
-      <div style={{ width: "100%", maxWidth: 560, display: "grid", gap: 18 }}>
-        <section style={{ background: "#1F3A5F", color: "#fff", borderRadius: 18, padding: "28px 24px" }}>
+    <main style={{ minHeight: "100svh", background: "#F4F7FB", padding: "clamp(16px, 3vh, 32px) 16px", boxSizing: "border-box", display: "grid", placeItems: "center", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+      <div style={{ width: "100%", maxWidth: 560, display: "grid", gap: 14 }}>
+        <section style={{ background: "#1F3A5F", color: "#fff", borderRadius: 16, padding: "24px 22px" }}>
           <div style={{ fontSize: 13, opacity: 0.78, marginBottom: 8 }}>Victoria Uniform 校服銷售系統</div>
-          <h1 style={{ margin: 0, fontSize: 26, lineHeight: 1.35 }}>員工登入</h1>
-          <div style={{ marginTop: 10, fontSize: 14, opacity: 0.82 }}>登入後使用銷售、度身、叫號、取貨及收銀功能</div>
+          <h1 style={{ margin: 0, fontSize: 25, lineHeight: 1.3 }}>員工登入</h1>
+          <div style={{ marginTop: 8, fontSize: 14, lineHeight: 1.5, opacity: 0.82 }}>登入後使用銷售、度身、叫號、取貨及收銀功能</div>
         </section>
 
-        <button type="button" onClick={onStaffLogin} style={{ border: "none", borderRadius: 14, background: "#D97757", color: "#fff", padding: "18px 22px", textAlign: "left", cursor: "pointer", fontSize: 16, fontWeight: 800 }}>
+        <button type="button" onClick={onStaffLogin} style={{ border: "none", borderRadius: 12, background: "#D97757", color: "#fff", padding: "16px 20px", textAlign: "left", cursor: "pointer", fontSize: 16, fontWeight: 800 }}>
           進入員工系統
         </button>
 
-        <p style={{ margin: 0, color: "#66717D", fontSize: 13, lineHeight: 1.6, textAlign: "center" }}>
+        <p style={{ margin: 0, color: "#66717D", fontSize: 13, lineHeight: 1.5, textAlign: "center" }}>
           家長及學生請使用學校提供的登記 QR Code 或專屬連結。
         </p>
       </div>
