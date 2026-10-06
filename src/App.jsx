@@ -5314,6 +5314,12 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
       alert(`「${dup}」已經存在，唔可以重複新增。`);
       return;
     }
+    const nextDeletedSchools = [...deletedSchoolsRuntime].filter((school) => school !== name);
+    if (nextDeletedSchools.length !== deletedSchoolsRuntime.size) {
+      deletedSchoolsRuntime = new Set(nextDeletedSchools);
+      setDeletedSchools(nextDeletedSchools);
+      window.storage.set("deleted-schools", JSON.stringify(nextDeletedSchools), false).catch((e) => console.error("更新已刪除學校清單失敗", e));
+    }
     const catalogEntry = schoolCatalog[name];
     const schoolMetaEntry = catalogEntry
       ? { category: catalogEntry.category || "", level: catalogEntry.level || newSchoolLevel, region: catalogEntry.region || newSchoolRegion, district: catalogEntry.district || newSchoolDistrict }
