@@ -5054,6 +5054,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
   const activeSchool = selectedSchool;
 
   const fileInputRef = useRef(null);
+  const analyzerFileInputRef = useRef(null);
   const noticeInputRef = useRef(null);
   const [addingSchool, setAddingSchool] = useState(false);
   const [newSchoolName, setNewSchoolName] = useState("");
@@ -5469,6 +5470,85 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     }
   };
 
+  // 價目表分析匯入：用 uniform-import-analyzer 解析學校價目 Excel，
+  // 轉做標準行後重用現有 smartImportRows → preview → confirmImport 流程。
+  // 呢條路強制行 preview，唔會自動套用；組合價按用戶決定唔入 DB。
+  const handleAnalyzerImportFile = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    setImportPreviewSearch("");
+    setImporting(true);
+    try {
+      const [{ analyzePriceWorkbook }, { SCHOOL_LAYOUTS }, { mapAnalyzerItems, splitAnalyzerWarnings }] = await Promise.all([
+        import("./lib/import/uniform-import-analyzer"),
+        import("./lib/import/school-layouts"),
+        import("./lib/import/mapAnalyzerItems"),
+      ]);
+      const buffer = await file.arrayBuffer();
+      const { items, warnings } = analyzePriceWorkbook(buffer, SCHOOL_LAYOUTS);
+      const { errors: analyzerErrors, conversionWarnings } = splitAnalyzerWarnings(warnings);
+
+      if (!items || items.length === 0) {
+        const reasons = analyzerErrors.length > 0 ? analyzerErrors : conversionWarnings;
+        setImportResult({
+          summary: null,
+          errors: reasons.length > 0
+            ? [`「${file.name}」分析唔到任何商品：`, ...reasons]
+            : [`「${file.name}」分析唔到任何商品，可能係未設定版面嘅學校／學年。`],
+        });
+        return;
+      }
+
+      const mapped = mapAnalyzerItems(items);
+      const analysis = smartImportRows(mapped.rows, products);
+      const errors = [...analyzerErrors, ...analysis.errors];
+      const totalRows = Math.max(1, mapped.rows.length);
+      const confidence = Math.max(0, Math.min(1, Number(((totalRows - errors.length) / totalRows).toFixed(2))));
+
+      const timestamp = new Date().toISOString();
+      const snapshot = {
+        id: `snap-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,
+        fileName: file.name,
+        timestamp,
+        conversionMode: "價目表分析匯入",
+        conversionWarnings,
+        analysis,
+        next: analysis.next,
+        summary: analysis.summary,
+        errors,
+        confidence,
+        savedBy: 'ui',
+      };
+      try {
+        await saveSnapshotToCloud(snapshot);
+      } catch (err) {
+        console.warn("儲存匯入快照到雲端失敗", err);
+      }
+
+      setImportPreview({
+        fileName: file.name,
+        conversionMode: "價目表分析匯入",
+        conversionWarnings,
+        sourceRows: mapped.rows,
+        ...analysis,
+        errors,
+        warning: analysis.summary.updatedSizes > 0
+          ? "匯入包含現有價格更改，為避免誤改價錢，請核對現價與匯入價後再確認保存。"
+          : "",
+        confidence,
+        snapshotId: snapshot.id,
+        timestamp,
+      });
+      // 注意：分析匯入一律強制行 preview，唔行自動套用
+    } catch (err) {
+      console.error(err);
+      setImportResult({ summary: null, errors: ["讀取檔案失敗，請確認係學校價目 Excel 格式。"] });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const confirmImport = async () => {
     if (!importPreview) return;
     setImporting(true);
@@ -5671,6 +5751,15 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
           </button>
           <button
             className="pos-btn"
+            onClick={() => analyzerFileInputRef.current && analyzerFileInputRef.current.click()}
+            disabled={importing}
+            title="用價目表分析器解析學校 Excel（聖安多尼／港青基信／英皇書院同學會小學已驗證），經預覽確認後匯入"
+            style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "#0F766E", color: "#fff", fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+          >
+            <Upload size={14} /> {importing ? "分析緊…" : "價目表分析匯入"}
+          </button>
+          <button
+            className="pos-btn"
             onClick={handleExport}
             style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "#fff", border: "1px solid #1F3A5F", color: "#1F3A5F", fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
           >
@@ -5686,6 +5775,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
           </button>
 
           <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" onChange={handleImportFile} style={{ display: "none" }} />
+          <input ref={analyzerFileInputRef} type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" onChange={handleAnalyzerImportFile} style={{ display: "none" }} />
         </div>
 
         {importPreview && (
