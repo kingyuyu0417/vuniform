@@ -5011,6 +5011,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
   const [importing, setImporting] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
   const [importPreviewSearch, setImportPreviewSearch] = useState("");
+  const [genericImportAcknowledged, setGenericImportAcknowledged] = useState(false);
   const [importHistory, setImportHistory] = useState([]);
   const [showImportHistory, setShowImportHistory] = useState(false);
   const [noticeAnalyzing, setNoticeAnalyzing] = useState(false);
@@ -5487,6 +5488,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     e.target.value = "";
     if (!file) return;
     setImportPreviewSearch("");
+    setGenericImportAcknowledged(false);
     setImporting(true);
     try {
       const [{ analyzePriceWorkbook }, { SCHOOL_LAYOUTS }, { mapAnalyzerItems, splitAnalyzerWarnings }] = await Promise.all([
@@ -5495,7 +5497,10 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
         import("./lib/import/mapAnalyzerItems"),
       ]);
       const buffer = await file.arrayBuffer();
-      const { items, warnings } = analyzePriceWorkbook(buffer, SCHOOL_LAYOUTS);
+      const { items, warnings, genericMode } = analyzePriceWorkbook(buffer, SCHOOL_LAYOUTS, {
+        strict: false,
+        fallbackSchool: activeSchool || undefined,
+      });
       const { errors: analyzerErrors, conversionWarnings } = splitAnalyzerWarnings(warnings);
 
       const analyzedSchools = [...new Set(items.map((item) => String(item.school || "").trim()))];
@@ -5520,18 +5525,22 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
 
       const mapped = mapAnalyzerItems(items);
       const analysis = smartImportRows(mapped.rows, products);
+      const reviewWarnings = genericMode
+        ? ["通用辨識只供整理及預覽參考；確認匯入前，請逐項核對款式、尺碼、價格及所屬學校。", ...conversionWarnings]
+        : conversionWarnings;
       const errors = [...analyzerErrors, ...analysis.errors];
       const totalRows = Math.max(1, mapped.rows.length);
-      const confidence = Math.max(0, Math.min(1, Number(((totalRows - errors.length) / totalRows).toFixed(2))));
+      const confidence = Math.max(0, Math.min(genericMode ? 0.75 : 1, Number(((totalRows - errors.length) / totalRows).toFixed(2))));
 
       const timestamp = new Date().toISOString();
       const snapshot = {
         id: `snap-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,
         fileName: file.name,
         timestamp,
-        conversionMode: "價目表分析匯入",
-        conversionWarnings,
+        conversionMode: genericMode ? "通用辨識（必須人工核對）" : "專用版面分析",
+        conversionWarnings: reviewWarnings,
         blockingErrors: analyzerErrors,
+        genericMode,
         sourceRows: mapped.rows,
         analysis,
         next: analysis.next,
@@ -5548,9 +5557,10 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
 
       setImportPreview({
         fileName: file.name,
-        conversionMode: "價目表分析匯入",
-        conversionWarnings,
+        conversionMode: genericMode ? "通用辨識（必須人工核對）" : "專用版面分析",
+        conversionWarnings: reviewWarnings,
         blockingErrors: analyzerErrors,
+        genericMode,
         sourceRows: mapped.rows,
         ...analysis,
         errors,
@@ -5572,6 +5582,13 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
 
   const confirmImport = async () => {
     if (!importPreview) return;
+    if (importPreview.genericMode && !genericImportAcknowledged) {
+      setImportResult({
+        summary: null,
+        errors: ["通用辨識結果尚未確認：請先核對預覽中的學校、款式、尺碼及價錢，再勾選確認。"],
+      });
+      return;
+    }
     if (importPreview.blockingErrors?.length > 0) {
       setImportResult({
         summary: null,
@@ -5608,6 +5625,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
       setImportResult({ summary: analysis.summary, errors: [] });
       setImportPreview(null);
       setImportPreviewSearch("");
+      setGenericImportAcknowledged(false);
     } catch (error) {
       console.error("智能匯入保存失敗", error);
       setImportResult({ summary: null, errors: [`商品資料核對或保存失敗，匯入未保存：${error?.message || "請重試。"}`] });
@@ -5761,7 +5779,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
         <div style={{ borderTop: "1px solid #E5E5E0", marginTop: 14, paddingTop: 14 }}>
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>批量匯入 / 匯出</div>
         <div style={{ fontSize: 12, color: "#888", marginBottom: 10, lineHeight: 1.5 }}>
-          支援 Excel／CSV。系統會自動識別學校、款式、長度／袖長、尺碼及價錢；自動匯入只適用於不改動現有價格的高信心資料。改價必須先核對現價與匯入價，再確認保存。
+          新學校可先用智能匯入處理標準欄位 Excel／CSV；原始並排價目表可用分析匯入嘗試通用辨識。通用結果只會預覽，必須核對學校、款式、尺碼及價格並勾選確認後才保存；辨識不到會明確提示，不會猜校名匯入。
         </div>
         <label style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10, fontSize: 12, color: "#475569", cursor: "pointer" }}>
           <input
@@ -5784,7 +5802,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
             className="pos-btn"
             onClick={() => analyzerFileInputRef.current && analyzerFileInputRef.current.click()}
             disabled={importing}
-            title="用價目表分析器解析學校 Excel（聖安多尼／港青基信／英皇書院同學會小學第二校已驗證），經預覽確認後匯入"
+            title="先使用學校專用版面，未設定時嘗試通用辨識；所有結果都必須預覽核對後才能匯入"
             style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "#0F766E", color: "#fff", fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
           >
             <Upload size={14} /> {importing ? "分析緊…" : "價目表分析匯入"}
@@ -5815,6 +5833,17 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
             <div style={{ marginTop: 4, color: "#52657A" }}>模式：{importPreview.conversionMode}</div>
             <div style={{ marginTop: 5 }}>讀取 {importPreview.summary.rows} 行；新增 {importPreview.summary.addedProducts} 款、新增 {importPreview.summary.addedSizes} 個尺碼、更新 {importPreview.summary.updatedSizes} 個價格。</div>
             {importPreview.warning && <div style={{ marginTop: 6, color: "#B54708", fontWeight: 600 }}>{importPreview.warning}</div>}
+            {importPreview.genericMode && (
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 7, marginTop: 8, padding: 8, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 6, color: "#92400E", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={genericImportAcknowledged}
+                  onChange={(event) => setGenericImportAcknowledged(event.target.checked)}
+                  style={{ marginTop: 2 }}
+                />
+                <span>我已逐項核對上方預覽，確認學校、款式、尺碼及價格正確，明白未核對資料可能錯誤。</span>
+              </label>
+            )}
             {importPreview.conversionWarnings?.length > 0 && (
               <div style={{ marginTop: 6, color: "#92400E" }}>
                 <div style={{ fontWeight: 600 }}>解析提示（請核對後再匯入）：</div>
@@ -5858,8 +5887,8 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
               </div>
             )}
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <button className="pos-btn" onClick={confirmImport} disabled={importing || Boolean(importPreview.blockingErrors?.length)} style={{ flex: 1, padding: 8, background: importPreview.blockingErrors?.length ? "#94A3B8" : "#28784B", color: "#fff", borderRadius: 7 }}>{importing ? "保存緊…" : importPreview.blockingErrors?.length ? "修正解析錯誤後再匯入" : importPreview.summary.updatedSizes ? `確認 ${importPreview.summary.updatedSizes} 項改價並匯入` : "確認匯入"}</button>
-              <button className="pos-btn" onClick={() => { setImportPreview(null); setImportPreviewSearch(""); }} disabled={importing} style={{ flex: 1, padding: 8, background: "#fff", color: "#475569", border: "1px solid #CBD5E1", borderRadius: 7 }}>取消</button>
+              <button className="pos-btn" onClick={confirmImport} disabled={importing || Boolean(importPreview.blockingErrors?.length) || Boolean(importPreview.genericMode && !genericImportAcknowledged)} style={{ flex: 1, padding: 8, background: importPreview.blockingErrors?.length || importPreview.genericMode && !genericImportAcknowledged ? "#94A3B8" : "#28784B", color: "#fff", borderRadius: 7 }}>{importing ? "保存緊…" : importPreview.blockingErrors?.length ? "修正解析錯誤後再匯入" : importPreview.genericMode && !genericImportAcknowledged ? "核對並勾選後才能匯入" : importPreview.summary.updatedSizes ? `確認 ${importPreview.summary.updatedSizes} 項改價並匯入` : "確認匯入"}</button>
+              <button className="pos-btn" onClick={() => { setImportPreview(null); setImportPreviewSearch(""); setGenericImportAcknowledged(false); }} disabled={importing} style={{ flex: 1, padding: 8, background: "#fff", color: "#475569", border: "1px solid #CBD5E1", borderRadius: 7 }}>取消</button>
             </div>
           </div>
         )}
@@ -5948,7 +5977,8 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                           const snap = await window.storage.get(`import_snapshot:${h.id}`, true).catch(() => null);
                           if (snap && snap.value) {
                             const parsed = JSON.parse(snap.value);
-                            setImportPreview({ fileName: parsed.fileName || h.fileName, conversionMode: parsed.conversionMode || '', conversionWarnings: parsed.conversionWarnings || [], blockingErrors: parsed.blockingErrors || [], sourceRows: parsed.sourceRows || [], ...parsed.analysis, errors: parsed.errors || [], confidence: parsed.confidence, snapshotId: parsed.id, timestamp: parsed.timestamp });
+                            setGenericImportAcknowledged(false);
+                            setImportPreview({ fileName: parsed.fileName || h.fileName, conversionMode: parsed.conversionMode || '', conversionWarnings: parsed.conversionWarnings || [], blockingErrors: parsed.blockingErrors || [], genericMode: Boolean(parsed.genericMode), sourceRows: parsed.sourceRows || [], ...parsed.analysis, errors: parsed.errors || [], confidence: parsed.confidence, snapshotId: parsed.id, timestamp: parsed.timestamp });
                             setShowImportHistory(false);
                           } else {
                             alert('未能讀取該快照，可能已刪除。');
@@ -5962,7 +5992,8 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                           const snap = await window.storage.get(`import_snapshot:${h.id}`, true).catch(() => null);
                           if (snap && snap.value) {
                             const parsed = JSON.parse(snap.value);
-                            setImportPreview({ fileName: parsed.fileName || h.fileName, conversionMode: parsed.conversionMode || '', conversionWarnings: parsed.conversionWarnings || [], blockingErrors: parsed.blockingErrors || [], sourceRows: parsed.sourceRows || [], ...parsed.analysis, errors: parsed.errors || [], confidence: parsed.confidence, snapshotId: parsed.id, timestamp: parsed.timestamp });
+                            setGenericImportAcknowledged(false);
+                            setImportPreview({ fileName: parsed.fileName || h.fileName, conversionMode: parsed.conversionMode || '', conversionWarnings: parsed.conversionWarnings || [], blockingErrors: parsed.blockingErrors || [], genericMode: Boolean(parsed.genericMode), sourceRows: parsed.sourceRows || [], ...parsed.analysis, errors: parsed.errors || [], confidence: parsed.confidence, snapshotId: parsed.id, timestamp: parsed.timestamp });
                             setShowImportHistory(false);
                           } else {
                             alert('未能讀取該快照，可能已刪除。');

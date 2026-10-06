@@ -117,6 +117,7 @@ export interface SheetLayoutConfig {
 export interface AnalyzeResult {
   school: string;
   season: string;
+  genericMode: boolean;
   items: AnalyzedItem[];
   warnings: ImportWarning[];
   stats: { sheets: number; blocks: number; items: number; warnings: number };
@@ -153,6 +154,8 @@ export function parsePriceText(t: string): number | null {
 }
 const isNumericText = (t: string) =>
   t !== '' && /[0-9]/.test(t) && !isNaN(parseFloat(t.replace(/[$\s,，]/g, '')));
+const isTextSize = (value: string) =>
+  /^(?:裁碼|均碼|XXS|XS|S|M|L|XL|XXL|[2-9]XL)$/i.test(value.trim());
 
 /** 將換行分隔嘅多值格拆開（R18） */
 export function splitLines(t: string): string[] {
@@ -245,7 +248,7 @@ function detectTitle(g: SheetGrid, knownSchools: string[] = []): { school: strin
 export function analyzePriceWorkbook(
   buffer: ArrayBuffer,
   layouts: SheetLayoutConfig[] = [],
-  opts: { strict?: boolean } = {},
+  opts: { strict?: boolean; fallbackSchool?: string } = {},
 ): AnalyzeResult {
   const strict = opts.strict ?? true; // 預設：冇設定嘅 sheet 唔出 items，只 warning（寧缺勿錯）
   const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
@@ -253,10 +256,15 @@ export function analyzePriceWorkbook(
   const warnings: ImportWarning[] = [];
   let school = '', season = '';
   let blockCount = 0;
+  let genericMode = false;
 
   for (const sheetName of wb.SheetNames) {
     const g = sheetToGrid(sheetName, wb.Sheets[sheetName]);
-    const title = detectTitle(g, [...new Set(layouts.map((layout) => layout.school).filter((name): name is string => Boolean(name)))]);
+    const knownSchools = [...new Set([
+      ...layouts.map((layout) => layout.school),
+      opts.fallbackSchool,
+    ].filter((name): name is string => Boolean(name)))];
+    const title = detectTitle(g, knownSchools);
     if (title.school && !school) { school = title.school; season = title.season; }
 
     // 同名 sheet 要按校名配對；校名不明或不符時，唔套用具名版面，避免讀錯別校價錢。
@@ -274,12 +282,14 @@ export function analyzePriceWorkbook(
       warnings.push({
         sheet: sheetName,
         code: 'SCHOOL_LAYOUT_MISMATCH',
-        severity: 'error',
-        message: `「${sheetName}」${message}，已跳過唔分析，避免套用錯誤價目版面。`,
+        severity: strict ? 'error' : 'warn',
+        message: strict
+          ? `「${sheetName}」${message}，已跳過唔分析，避免套用錯誤價目版面。`
+          : `「${sheetName}」${message}；唔會套用別校版面，改用通用辨識並要求人工核對。`,
       });
     }
-    if (layoutMismatch) {
-      // 已出錯誤提示，直接跳過呢個 sheet。
+    if (layoutMismatch && strict) {
+      continue;
     } else if (layout) {
       if (layout.school && !school) school = layout.school;
       if (layout.season && !season) season = layout.season;
@@ -301,13 +311,31 @@ export function analyzePriceWorkbook(
       for (const b of layout.blocks) parseBlock(g, b, ctx, items, warnings, layout);
       checkStrayCells(g, layout, warnings);
     } else if (!strict) {
-      warnings.push({
-        sheet: sheetName, code: 'NO_LAYOUT_CONFIG', severity: 'warn',
-        message: `搵唔到「${sheetName}」嘅版面設定，已用自動偵測，結果需人手確認`,
-      });
       const guessed = suggestBlocks(g);
+      const fallbackSchool = detectedSchool || opts.fallbackSchool || school;
+      if (!fallbackSchool) {
+        warnings.push({
+          sheet: sheetName, code: 'SCHOOL_NOT_IDENTIFIED', severity: 'error',
+          message: `「${sheetName}」未能從標題辨識學校，請先在商品管理選擇正確學校，再重新分析。`,
+        });
+        continue;
+      }
+      if (guessed.length === 0) {
+        warnings.push({
+          sheet: sheetName, code: 'NO_LAYOUT_CONFIG', severity: 'error',
+          message: `「${sheetName}」未能自動辨識款式／尺碼／價錢欄，請改用標準格式匯入或整理 Excel 後再試。`,
+        });
+        continue;
+      }
+      genericMode = true;
+      warnings.push({
+        sheet: sheetName, code: 'GENERIC_LAYOUT', severity: 'warn',
+        message: layoutMismatch
+          ? `「${sheetName}」已使用通用辨識（${guessed.length} 個區塊），完全唔會套用其他學校設定；請逐項核對款式、尺碼及價錢。`
+          : `「${sheetName}」未有專用版面設定，已用通用辨識（${guessed.length} 個區塊）；請逐項核對款式、尺碼及價錢。`,
+      });
       blockCount += guessed.length;
-      const ctx = { school, season };
+      const ctx = { school: fallbackSchool, season: title.season || season };
       for (const b of guessed) parseBlock(g, b, ctx, items, warnings);
     } else {
       warnings.push({
@@ -317,7 +345,7 @@ export function analyzePriceWorkbook(
     }
   }
   return {
-    school, season, items, warnings,
+    school, season, genericMode, items, warnings,
     stats: { sheets: wb.SheetNames.length, blocks: blockCount, items: items.length, warnings: warnings.length },
   };
 }
@@ -792,13 +820,29 @@ export function suggestBlocks(g: SheetGrid): BlockConfig[] {
           if (cnt >= 3) numCols.push(cc);
         }
         if (numCols.length >= 1) {
+          const textSizeCol = numCols.length === 1
+            ? Array.from({ length: numCols[0] - c }, (_, offset) => c + offset)
+              .find((candidateCol) => {
+                let sizeCount = 0;
+                for (let rr = r + 1; rr < Math.min(g.nRows, r + 13); rr++) {
+                  if (isTextSize(g.grid[rr][candidateCol])) sizeCount++;
+                }
+                return sizeCount >= 3;
+              })
+            : undefined;
+          const sizeCol = textSizeCol ?? numCols[0];
+          const priceColumns = textSizeCol === undefined ? numCols.slice(1) : numCols;
+          if (priceColumns.length === 0) {
+            c++;
+            continue;
+          }
           let last = r;
           for (let rr = r + 1; rr < g.nRows; rr++) {
             if (numCols.some((cc) => isNumericText(g.grid[rr][cc]))) last = rr;
             else break;
           }
           if (last > r + 1) {
-            const priceCols: PriceColConfig[] = numCols.slice(1).map((cc) => {
+            const priceCols: PriceColConfig[] = priceColumns.map((cc) => {
               const h = `${g.grid[r][cc - 1] ?? ''} ${g.grid[r][cc] ?? ''} ${t}`;
               const bm = h.match(/(\d+)\s*[件條對]/);
               return {
@@ -810,10 +854,10 @@ export function suggestBlocks(g: SheetGrid): BlockConfig[] {
             blocks.push({
               id: `auto-${++n}`, name: t,
               dataFirst: r + 2, dataLast: last + 1,
-              sizeCol: idxToCol(numCols[0]), priceCols,
+              sizeCol: idxToCol(sizeCol), priceCols,
             });
-            for (let cc = c; cc <= numCols[numCols.length - 1]; cc++) used.add(`${r},${cc}`);
-            c = numCols[numCols.length - 1] + 1;
+            for (let cc = c; cc <= Math.max(...numCols); cc++) used.add(`${r},${cc}`);
+            c = Math.max(...numCols) + 1;
             continue;
           }
         }

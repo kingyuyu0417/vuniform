@@ -102,3 +102,48 @@ test("detects a school title in row four and reads cells from a non-A1 range", (
   assert.equal(result.items.find((item) => item.size === "腰23／43寸或以上")?.unitPrice, 106);
   assert.equal(result.warnings.some((warning) => warning.code === "SCHOOL_LAYOUT_MISMATCH"), false);
 });
+
+test("uses generic detection for an unconfigured school without borrowing another school's layout", () => {
+  const workbook = XLSX.utils.book_new();
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ["新學校中學 夏季價目表"],
+    ["白恤衫", "尺碼", "單價"],
+    ["", "S", 80],
+    ["", "M", 90],
+    ["", "L", 100],
+  ]);
+  XLSX.utils.book_append_sheet(workbook, sheet, "Sheet1");
+
+  const result = analyzePriceWorkbook(
+    XLSX.write(workbook, { type: "array", bookType: "xlsx" }),
+    [layout],
+    { strict: false, fallbackSchool: "新學校中學" },
+  );
+
+  assert.equal(result.genericMode, true);
+  assert.ok(result.items.length > 0);
+  assert.ok(result.items.every((item) => item.school === "新學校中學"));
+  assert.ok(result.warnings.some((warning) => warning.code === "SCHOOL_LAYOUT_MISMATCH" && warning.severity === "warn"));
+  assert.ok(result.warnings.some((warning) => warning.code === "GENERIC_LAYOUT" && warning.severity === "warn"));
+  assert.equal(result.items.some((item) => item.school === layout.school), false);
+});
+
+test("rejects generic detection without a recognized or selected school", () => {
+  const workbook = XLSX.utils.book_new();
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ["白恤衫", "尺碼", "單價"],
+    ["", "S", 80],
+    ["", "M", 90],
+    ["", "L", 100],
+  ]);
+  XLSX.utils.book_append_sheet(workbook, sheet, "Products");
+
+  const result = analyzePriceWorkbook(
+    XLSX.write(workbook, { type: "array", bookType: "xlsx" }),
+    [],
+    { strict: false },
+  );
+
+  assert.equal(result.items.length, 0);
+  assert.ok(result.warnings.some((warning) => warning.code === "SCHOOL_NOT_IDENTIFIED" && warning.severity === "error"));
+});
