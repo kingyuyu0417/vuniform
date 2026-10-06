@@ -216,18 +216,19 @@ function cellText(g: SheetGrid, addr: string): string {
   return (g.grid[r] && g.grid[r][c]) ?? '';
 }
 
-function detectTitle(g: SheetGrid): { school: string; season: string } {
+function detectTitle(g: SheetGrid, knownSchools: string[] = []): { school: string; season: string } {
   let school = '', season = '';
-  for (let r = 0; r < Math.min(3, g.nRows); r++)
-    for (let c = 0; c < g.nCols; c++) {
-      const t = g.grid[r][c];
-      const m = t.match(/(.+?(?:學校|書院|學院|中學|小學))/);
-      if (m && !school) {
-        school = m[1].replace(/\s+/g, '');
-        const sm = t.match(/(冬|夏)/);
-        if (sm) season = sm[1];
-      }
-    }
+  const titleCells = g.grid.slice(0, Math.min(3, g.nRows)).flat();
+  const normalizedTitle = titleCells.join('').replace(/\s+/g, '');
+  school = knownSchools
+    .filter((candidate) => normalizedTitle.includes(candidate.replace(/\s+/g, '')))
+    .sort((a, b) => b.length - a.length)[0] ?? '';
+  for (const t of titleCells) {
+    const m = t.match(/(.+?(?:學校|書院|學院|中學|小學))/);
+    if (m && !school) school = m[1].replace(/\s+/g, '');
+    const sm = t.match(/(冬|夏)/);
+    if (sm && !season) season = sm[1];
+  }
   return { school, season };
 }
 
@@ -247,26 +248,32 @@ export function analyzePriceWorkbook(
 
   for (const sheetName of wb.SheetNames) {
     const g = sheetToGrid(sheetName, wb.Sheets[sheetName]);
-    const title = detectTitle(g);
+    const title = detectTitle(g, [...new Set(layouts.map((layout) => layout.school).filter((name): name is string => Boolean(name)))]);
     if (title.school && !school) { school = title.school; season = title.season; }
 
     // 同一名嘅 sheet（如兩間學校都有「冬 2026」）要連學校一齊配對；
     // 有多個候選但學校對唔上 → 唔估，skip + warning（寧缺勿錯，唔好攞錯別校價錢）
+    const detectedSchool = title.school || school;
     const cands = layouts.filter((l) => l.sheet === sheetName);
-    let layout = cands.find((l) => l.school === school)
+    let layout = cands.find((l) => l.school === detectedSchool)
       ?? cands.find((l) => !l.school)
-      ?? (cands.length === 1 ? cands[0] : undefined);
-    let ambiguous = false;
-    if (!layout && cands.length > 1) {
-      ambiguous = true;
+      ?? (cands.length === 1 && !detectedSchool ? cands[0] : undefined);
+    let layoutMismatch = false;
+    if (!layout && cands.length > 0) {
+      layoutMismatch = true;
+      const configuredSchools = [...new Set(cands.map((candidate) => candidate.school).filter(Boolean))];
+      const message = detectedSchool && configuredSchools.length === 1
+        ? `版面設定屬於「${configuredSchools[0]}」，但 Excel 偵測到「${detectedSchool}」`
+        : `有多個版面設定（${configuredSchools.join('、') || '未指定學校'}），但偵測到嘅學校「${detectedSchool || '（未知）'}」無法配對`;
       warnings.push({
-        sheet: sheetName, code: 'AMBIGUOUS_LAYOUT', severity: 'warn',
-        message: `「${sheetName}」有多個版面設定（${cands.map((c) => c.school ?? '?').join('、')}）` +
-          `，但偵測到嘅學校「${school || '（未知）'}」對唔上任何一個，已跳過唔分析（驚攞錯別校價錢）`,
+        sheet: sheetName,
+        code: 'SCHOOL_LAYOUT_MISMATCH',
+        severity: 'error',
+        message: `「${sheetName}」${message}，已跳過唔分析，避免套用錯誤價目版面。`,
       });
     }
-    if (ambiguous) {
-      // 已出 warning，直接跳過呢個 sheet
+    if (layoutMismatch) {
+      // 已出錯誤提示，直接跳過呢個 sheet。
     } else if (layout) {
       if (layout.school && !school) school = layout.school;
       if (layout.season && !season) season = layout.season;
