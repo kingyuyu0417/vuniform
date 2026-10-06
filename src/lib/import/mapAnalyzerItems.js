@@ -10,19 +10,29 @@
 * size → 尺碼（null＝無尺碼如校呔 → 用「均碼」；腰圍×褲長已併埋一粒字串）
 * unitPrice → 價錢
 * tailored → 是否裁碼（「是」／空）
-* gender → 另外回傳 genderByName（男→boys／女→girls／其他→unisex），
-* 等 handler 幫新產品 set gender（DB 要求 boys/girls/unisex）
+* gender → 每行附加 gender（男→boys／女→girls／其他→unisex）；
+* 同款同時有男女尺碼時合併為 unisex。
 *
 * 注意：組合價（bundles）按用戶決定唔入 DB，呢度直接唔理。
 */
 
 export const NO_SIZE_LABEL = '均碼';
 
-const ANALYZER_GENDER_MAP = { '男': 'boys', '女': 'girls'};
+const ANALYZER_GENDER_MAP = {
+  '男': 'boys',
+  '男生': 'boys',
+  boys: 'boys',
+  '女': 'girls',
+  '女生': 'girls',
+  girls: 'girls',
+  '男女': 'unisex',
+  '男女生': 'unisex',
+  unisex: 'unisex',
+};
 
 export function mapAnalyzerItems(items) {
 const rows = [];
-const genderByName = new Map(); // `${school} ${item}` → boys/girls/unisex
+const gendersByName = new Map();
 let tailoredCount = 0;
 let noSizeCount = 0;
 
@@ -36,7 +46,7 @@ const tailored = Boolean(it.tailored) || size === '裁碼';
 if (tailored) tailoredCount++;
 if (!name ||!Number.isFinite(price) || price < 0) continue;
 
-rows.push({
+const row = {
 '學校': school,
 '款式名稱': name,
 '尺碼': size,
@@ -46,11 +56,21 @@ rows.push({
 // 下面兩個唔係畀 smartImportRows 用，係畀 preview 睇同埋 debug
 '分析備註': it.note || '',
 '來源': it.source? `${it.source.sheet}!${it.source.cell}`: '',
-});
+};
+rows.push(row);
 
-const g = ANALYZER_GENDER_MAP[it.gender] || 'unisex';
-genderByName.set(`${school} ${name}`, g);
+const key = `${school} ${name}`;
+const genders = gendersByName.get(key) || new Set();
+genders.add(ANALYZER_GENDER_MAP[String(it.gender || '').trim().toLowerCase()] || 'unisex');
+gendersByName.set(key, genders);
 }
+
+const genderByName = new Map(
+  [...gendersByName].map(([key, genders]) => [key, genders.size === 1 ? [...genders][0] : 'unisex']),
+);
+rows.forEach((row) => {
+  row.gender = genderByName.get(`${row['學校']} ${row['款式名稱']}`) || 'unisex';
+});
 
 return {
 rows,

@@ -800,7 +800,8 @@ const smartImportRows = (rows, existingProducts) => {
     importedPrices.set(importKey, price);
     let product = next.find((item) => schoolOf(item) === schoolKey && item.name === name);
     if (!product) {
-      product = { id: uid(), school: schoolKey === UNASSIGNED ? "" : schoolKey, name, sizes: [] };
+      const gender = ["boys", "girls", "unisex"].includes(row.gender) ? row.gender : undefined;
+      product = { id: uid(), school: schoolKey === UNASSIGNED ? "" : schoolKey, name, ...(gender ? { gender } : {}), sizes: [] };
       next.push(product);
       addedProducts++;
     }
@@ -828,7 +829,7 @@ const smartImportRows = (rows, existingProducts) => {
       product.sizes.push({ size, length: normalizedLength, price, isTailored: tailored });
       addedSizes++;
     }
-    previewRows.push({ school: schoolKey, name, length, size, price, previousPrice, hasExistingSize: Boolean(existing), isTailored: tailored, normalizedLength, action });
+    previewRows.push({ school: schoolKey, name, length, size, price, previousPrice, hasExistingSize: Boolean(existing), isTailored: tailored, normalizedLength, action, gender: getProductGender(product) });
   });
   return { next, summary: { addedProducts, addedSizes, updatedSizes, rows: mappedRows.length }, errors, previewRows };
 };
@@ -5522,6 +5523,8 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
         timestamp,
         conversionMode: "價目表分析匯入",
         conversionWarnings,
+        blockingErrors: analyzerErrors,
+        sourceRows: mapped.rows,
         analysis,
         next: analysis.next,
         summary: analysis.summary,
@@ -5539,6 +5542,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
         fileName: file.name,
         conversionMode: "價目表分析匯入",
         conversionWarnings,
+        blockingErrors: analyzerErrors,
         sourceRows: mapped.rows,
         ...analysis,
         errors,
@@ -5560,6 +5564,13 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
 
   const confirmImport = async () => {
     if (!importPreview) return;
+    if (importPreview.blockingErrors?.length > 0) {
+      setImportResult({
+        summary: null,
+        errors: ["匯入已暫停：解析器發現必須修正的錯誤，請修正價目表後重新分析。", ...importPreview.blockingErrors],
+      });
+      return;
+    }
     setImporting(true);
     try {
       if (productsSaveState === "pending" || productsSaveState === "saving") {
@@ -5620,6 +5631,9 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
 
   const activeSchoolProducts = activeSchool ? products.filter((p) => schoolOf(p) === activeSchool) : [];
   const visibleProducts = activeSchoolProducts;
+  const nonBlockingPreviewErrors = importPreview
+    ? importPreview.errors.filter((error) => !importPreview.blockingErrors?.includes(error))
+    : [];
   const productCatalogReviewGroups = canManageSchools ? findProductCatalogReviewGroups(products) : [];
   const { productIds: productsPendingReviewIds, removedCount: productsPendingReviewCount } = removeProductCatalogReviewProducts(products, productCatalogReviewGroups);
   const filteredImportPreviewRows = importPreview
@@ -5762,7 +5776,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
             className="pos-btn"
             onClick={() => analyzerFileInputRef.current && analyzerFileInputRef.current.click()}
             disabled={importing}
-            title="用價目表分析器解析學校 Excel（聖安多尼／港青基信／英皇書院同學會小學已驗證），經預覽確認後匯入"
+            title="用價目表分析器解析學校 Excel（聖安多尼／港青基信／英皇書院同學會小學第二校已驗證），經預覽確認後匯入"
             style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "#0F766E", color: "#fff", fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
           >
             <Upload size={14} /> {importing ? "分析緊…" : "價目表分析匯入"}
@@ -5793,6 +5807,20 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
             <div style={{ marginTop: 4, color: "#52657A" }}>模式：{importPreview.conversionMode}</div>
             <div style={{ marginTop: 5 }}>讀取 {importPreview.summary.rows} 行；新增 {importPreview.summary.addedProducts} 款、新增 {importPreview.summary.addedSizes} 個尺碼、更新 {importPreview.summary.updatedSizes} 個價格。</div>
             {importPreview.warning && <div style={{ marginTop: 6, color: "#B54708", fontWeight: 600 }}>{importPreview.warning}</div>}
+            {importPreview.conversionWarnings?.length > 0 && (
+              <div style={{ marginTop: 6, color: "#92400E" }}>
+                <div style={{ fontWeight: 600 }}>解析提示（請核對後再匯入）：</div>
+                {importPreview.conversionWarnings.slice(0, 8).map((warning, index) => <div key={index} style={{ marginTop: 2 }}>• {warning}</div>)}
+                {importPreview.conversionWarnings.length > 8 && <div>另有 {importPreview.conversionWarnings.length - 8} 項提示。</div>}
+              </div>
+            )}
+            {importPreview.blockingErrors?.length > 0 && (
+              <div style={{ marginTop: 6, color: "#B42318", fontWeight: 600 }}>
+                解析錯誤必須修正後才能匯入（{importPreview.blockingErrors.length} 項）。
+                {importPreview.blockingErrors.slice(0, 8).map((error, index) => <div key={index} style={{ marginTop: 2, fontWeight: 400 }}>• {error}</div>)}
+                {importPreview.blockingErrors.length > 8 && <div style={{ fontWeight: 400 }}>其餘錯誤請整理原表後再試。</div>}
+              </div>
+            )}
             {importPreview.previewRows.length > 0 && (
               <>
                 <input
@@ -5807,22 +5835,22 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                 <div style={{ maxHeight: 180, overflowY: "auto", marginTop: 5, background: "#fff", borderRadius: 6, padding: 6 }}>
                   {filteredImportPreviewRows.map((row, index) => (
                   <div key={index} style={{ padding: "3px 0", borderBottom: "1px solid #EEF2F7", color: row.hasExistingSize && (row.previousPrice === null || Number(row.previousPrice) !== Number(row.price)) ? "#B42318" : "#334155" }}>
-                    {row.school} · {row.name} · {row.length ? `${row.length}/` : ""}{row.size} · {!row.hasExistingSize ? "新增" : row.previousPrice === null ? "現價未設定" : `$${row.previousPrice}`} → ${row.price}（{row.action}）
+                    {row.school} · {row.name} · {PRODUCT_GENDER_OPTIONS.find(({ value }) => value === row.gender)?.label || "男女生"} · {row.length ? `${row.length}/` : ""}{row.size} · {!row.hasExistingSize ? "新增" : row.previousPrice === null ? "現價未設定" : `$${row.previousPrice}`} → ${row.price}（{row.action}）
                   </div>
                   ))}
                   {filteredImportPreviewRows.length === 0 && <div style={{ padding: "8px 3px", color: "#64748B" }}>找不到符合資料。</div>}
                 </div>
               </>
             )}
-            {importPreview.errors.length > 0 && (
+            {nonBlockingPreviewErrors.length > 0 && (
               <div style={{ color: "#B42318", marginTop: 6 }}>
-                <div>發現 {importPreview.errors.length} 個問題，錯誤行不會匯入：</div>
-                {importPreview.errors.slice(0, 8).map((error, index) => <div key={index} style={{ marginTop: 2 }}>• {error}</div>)}
-                {importPreview.errors.length > 8 && <div>其餘問題請整理原表後再試。</div>}
+                <div>發現 {nonBlockingPreviewErrors.length} 個資料問題，錯誤行不會匯入：</div>
+                {nonBlockingPreviewErrors.slice(0, 8).map((error, index) => <div key={index} style={{ marginTop: 2 }}>• {error}</div>)}
+                {nonBlockingPreviewErrors.length > 8 && <div>其餘問題請整理原表後再試。</div>}
               </div>
             )}
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <button className="pos-btn" onClick={confirmImport} disabled={importing} style={{ flex: 1, padding: 8, background: "#28784B", color: "#fff", borderRadius: 7 }}>{importing ? "保存緊…" : importPreview.summary.updatedSizes ? `確認 ${importPreview.summary.updatedSizes} 項改價並匯入` : "確認匯入"}</button>
+              <button className="pos-btn" onClick={confirmImport} disabled={importing || Boolean(importPreview.blockingErrors?.length)} style={{ flex: 1, padding: 8, background: importPreview.blockingErrors?.length ? "#94A3B8" : "#28784B", color: "#fff", borderRadius: 7 }}>{importing ? "保存緊…" : importPreview.blockingErrors?.length ? "修正解析錯誤後再匯入" : importPreview.summary.updatedSizes ? `確認 ${importPreview.summary.updatedSizes} 項改價並匯入` : "確認匯入"}</button>
               <button className="pos-btn" onClick={() => { setImportPreview(null); setImportPreviewSearch(""); }} disabled={importing} style={{ flex: 1, padding: 8, background: "#fff", color: "#475569", border: "1px solid #CBD5E1", borderRadius: 7 }}>取消</button>
             </div>
           </div>
@@ -5912,7 +5940,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                           const snap = await window.storage.get(`import_snapshot:${h.id}`, true).catch(() => null);
                           if (snap && snap.value) {
                             const parsed = JSON.parse(snap.value);
-                            setImportPreview({ fileName: parsed.fileName || h.fileName, conversionMode: parsed.conversionMode || '', conversionWarnings: parsed.conversionWarnings || [], ...parsed.analysis, errors: parsed.errors || [], confidence: parsed.confidence, snapshotId: parsed.id, timestamp: parsed.timestamp });
+                            setImportPreview({ fileName: parsed.fileName || h.fileName, conversionMode: parsed.conversionMode || '', conversionWarnings: parsed.conversionWarnings || [], blockingErrors: parsed.blockingErrors || [], sourceRows: parsed.sourceRows || [], ...parsed.analysis, errors: parsed.errors || [], confidence: parsed.confidence, snapshotId: parsed.id, timestamp: parsed.timestamp });
                             setShowImportHistory(false);
                           } else {
                             alert('未能讀取該快照，可能已刪除。');
@@ -5926,7 +5954,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                           const snap = await window.storage.get(`import_snapshot:${h.id}`, true).catch(() => null);
                           if (snap && snap.value) {
                             const parsed = JSON.parse(snap.value);
-                            setImportPreview({ fileName: parsed.fileName || h.fileName, conversionMode: parsed.conversionMode || '', conversionWarnings: parsed.conversionWarnings || [], ...parsed.analysis, errors: parsed.errors || [], confidence: parsed.confidence, snapshotId: parsed.id, timestamp: parsed.timestamp });
+                            setImportPreview({ fileName: parsed.fileName || h.fileName, conversionMode: parsed.conversionMode || '', conversionWarnings: parsed.conversionWarnings || [], blockingErrors: parsed.blockingErrors || [], sourceRows: parsed.sourceRows || [], ...parsed.analysis, errors: parsed.errors || [], confidence: parsed.confidence, snapshotId: parsed.id, timestamp: parsed.timestamp });
                             setShowImportHistory(false);
                           } else {
                             alert('未能讀取該快照，可能已刪除。');
