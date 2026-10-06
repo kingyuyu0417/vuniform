@@ -126,6 +126,55 @@ test("uses generic detection for an unconfigured school without borrowing anothe
   assert.ok(result.warnings.some((warning) => warning.code === "SCHOOL_LAYOUT_MISMATCH" && warning.severity === "warn"));
   assert.ok(result.warnings.some((warning) => warning.code === "GENERIC_LAYOUT" && warning.severity === "warn"));
   assert.equal(result.items.some((item) => item.school === layout.school), false);
+  assert.equal(result.suggestedLayouts.length, 1);
+  assert.ok(result.suggestedLayouts[0].signature);
+});
+
+test("reuses a learned layout only when worksheet labels and structure are unchanged", () => {
+  const workbook = XLSX.utils.book_new();
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ["新學校中學 夏季價目表"],
+    ["白恤衫", "尺碼", "單價"],
+    ["", "S", 80],
+    ["", "M", 90],
+    ["", "L", 100],
+  ]);
+  XLSX.utils.book_append_sheet(workbook, sheet, "Sheet1");
+  const buffer = XLSX.write(workbook, { type: "array", bookType: "xlsx" });
+  const learned = analyzePriceWorkbook(buffer, [], {
+    strict: false,
+    fallbackSchool: "新學校中學",
+  }).suggestedLayouts;
+
+  const reused = analyzePriceWorkbook(buffer, learned, {
+    strict: false,
+    fallbackSchool: "新學校中學",
+  });
+  assert.equal(reused.genericMode, false);
+  assert.equal(reused.learnedMode, true);
+  assert.equal(reused.items.length, 3);
+  assert.ok(reused.warnings.some((warning) => warning.code === "LEARNED_LAYOUT_REUSED"));
+
+  XLSX.utils.sheet_add_aoa(sheet, [[85]], { origin: "C3" });
+  const repricedBuffer = XLSX.write(workbook, { type: "array", bookType: "xlsx" });
+  const repriced = analyzePriceWorkbook(repricedBuffer, learned, {
+    strict: false,
+    fallbackSchool: "新學校中學",
+  });
+  assert.equal(repriced.learnedMode, true);
+  assert.equal(repriced.items[0].unitPrice, 85);
+
+  XLSX.utils.sheet_add_aoa(sheet, [["白制服"]], { origin: "A2" });
+  const changedBuffer = XLSX.write(workbook, { type: "array", bookType: "xlsx" });
+  const changed = analyzePriceWorkbook(changedBuffer, learned, {
+    strict: false,
+    fallbackSchool: "新學校中學",
+  });
+  assert.equal(changed.genericMode, true);
+  assert.equal(changed.learnedMode, false);
+  assert.ok(changed.warnings.some((warning) => warning.code === "LEARNED_LAYOUT_CHANGED"));
+  assert.equal(changed.items.length, 3);
+  assert.equal(changed.items[0].item, "白制服");
 });
 
 test("rejects generic detection without a recognized or selected school", () => {

@@ -108,6 +108,8 @@ export interface SheetLayoutConfig {
   sheet: string;
   school?: string;
   season?: string;
+  signature?: string;
+  learned?: boolean;
   blocks: BlockConfig[];
   ignoreCells?: string[];          // 已知備註格，唔當雜訊
   nameAliases?: Record<string, string>; // 內部名 → 官方名（如 掛呔 → 校呔）
@@ -118,6 +120,8 @@ export interface AnalyzeResult {
   school: string;
   season: string;
   genericMode: boolean;
+  learnedMode: boolean;
+  suggestedLayouts: SheetLayoutConfig[];
   items: AnalyzedItem[];
   warnings: ImportWarning[];
   stats: { sheets: number; blocks: number; items: number; warnings: number };
@@ -208,6 +212,7 @@ function sheetToGrid(name: string, ws: XLSX.WorkSheet): SheetGrid {
       grid.push(Array(nCols).fill(''));
       isDate.push(Array(nCols).fill(false));
     }
+
     for (let r = 0; r <= r2 - r1; r++) {
       for (let c = 0; c <= c2 - c1; c++) {
         const absoluteRow = r1 + r;
@@ -220,6 +225,34 @@ function sheetToGrid(name: string, ws: XLSX.WorkSheet): SheetGrid {
     }
   }
   return { name, grid, isDate, nRows, nCols };
+}
+
+function sheetStructureSignature(g: SheetGrid, blocks: BlockConfig[]): string {
+  const gridContents = g.grid
+    .map((row) => row
+      .map((value, index) => {
+        if (!value) return '';
+        const content = isNumericText(value) ? '#' : value.replace(/\s+/g, ' ').replace(/[;|]/g, ' ');
+        return `${idxToCol(index)}:${content}`;
+      })
+      .filter(Boolean)
+      .join('|'))
+    .join(';');
+  const inferredLayout = JSON.stringify(blocks.map((block) => ({
+    id: block.id,
+    name: block.name,
+    dataFirst: block.dataFirst,
+    dataLast: block.dataLast,
+    sizeCol: block.sizeCol,
+    priceCols: block.priceCols,
+  })));
+  const contents = `${gridContents}\n${inferredLayout}`;
+  let hash = 14695981039346656037n;
+  for (let index = 0; index < contents.length; index++) {
+    hash ^= BigInt(contents.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * 1099511628211n);
+  }
+  return `v1-${hash.toString(16).padStart(16, '0')}`;
 }
 
 function cellText(g: SheetGrid, addr: string): string {
@@ -254,9 +287,11 @@ export function analyzePriceWorkbook(
   const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
   const items: AnalyzedItem[] = [];
   const warnings: ImportWarning[] = [];
+  const suggestedLayouts: SheetLayoutConfig[] = [];
   let school = '', season = '';
   let blockCount = 0;
   let genericMode = false;
+  let learnedMode = false;
 
   for (const sheetName of wb.SheetNames) {
     const g = sheetToGrid(sheetName, wb.Sheets[sheetName]);
@@ -270,10 +305,24 @@ export function analyzePriceWorkbook(
     // 同名 sheet 要按校名配對；校名不明或不符時，唔套用具名版面，避免讀錯別校價錢。
     const detectedSchool = title.school || school;
     const cands = layouts.filter((l) => l.sheet === sheetName);
-    const layout = cands.find((l) => l.school === detectedSchool)
+    const candidateLayout = cands.find((l) => l.school === detectedSchool)
       ?? cands.find((l) => !l.school);
+    const currentSuggestedBlocks = candidateLayout?.signature ? suggestBlocks(g) : [];
+    const changedLearnedLayout = Boolean(
+      candidateLayout?.signature
+      && candidateLayout.signature !== sheetStructureSignature(g, currentSuggestedBlocks),
+    );
+    const layout = changedLearnedLayout ? undefined : candidateLayout;
     let layoutMismatch = false;
-    if (!layout && cands.length > 0) {
+    if (changedLearnedLayout && candidateLayout) {
+      warnings.push({
+        sheet: sheetName,
+        code: 'LEARNED_LAYOUT_CHANGED',
+        severity: 'warn',
+        message: `「${sheetName}」結構同上次核對過嘅版面不同，已停用已記住版面並改用通用辨識；請逐項核對。`,
+      });
+    }
+    if (!layout && cands.length > 0 && !changedLearnedLayout) {
       layoutMismatch = true;
       const configuredSchools = [...new Set(cands.map((candidate) => candidate.school).filter(Boolean))];
       const message = configuredSchools.length === 1
@@ -293,6 +342,15 @@ export function analyzePriceWorkbook(
     } else if (layout) {
       if (layout.school && !school) school = layout.school;
       if (layout.season && !season) season = layout.season;
+      if (layout.learned || layout.signature) {
+        learnedMode = true;
+        warnings.push({
+          sheet: sheetName,
+          code: 'LEARNED_LAYOUT_REUSED',
+          severity: 'warn',
+          message: `「${sheetName}」使用已記住版面；請核對本次所有款式、尺碼及價格後再匯入。`,
+        });
+      }
       blockCount += layout.blocks.length;
       const ctx = { school: layout.school ?? school, season: layout.season ?? season };
       if (layout.cellOverrides) {
@@ -328,6 +386,13 @@ export function analyzePriceWorkbook(
         continue;
       }
       genericMode = true;
+      suggestedLayouts.push({
+        sheet: sheetName,
+        school: fallbackSchool,
+        season: title.season || season,
+        signature: sheetStructureSignature(g, guessed),
+        blocks: guessed,
+      });
       warnings.push({
         sheet: sheetName, code: 'GENERIC_LAYOUT', severity: 'warn',
         message: layoutMismatch
@@ -345,7 +410,7 @@ export function analyzePriceWorkbook(
     }
   }
   return {
-    school, season, genericMode, items, warnings,
+    school, season, genericMode, learnedMode, suggestedLayouts, items, warnings,
     stats: { sheets: wb.SheetNames.length, blocks: blockCount, items: items.length, warnings: warnings.length },
   };
 }

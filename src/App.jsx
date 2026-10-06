@@ -5012,6 +5012,11 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
   const [importPreview, setImportPreview] = useState(null);
   const [importPreviewSearch, setImportPreviewSearch] = useState("");
   const [genericImportAcknowledged, setGenericImportAcknowledged] = useState(false);
+  const [rememberLearnedLayout, setRememberLearnedLayout] = useState(false);
+  const [savedPriceLayouts, setSavedPriceLayouts] = useState([]);
+  const [priceLayoutStoreAvailable, setPriceLayoutStoreAvailable] = useState(false);
+  const [showSavedPriceLayouts, setShowSavedPriceLayouts] = useState(false);
+  const [priceLayoutMessage, setPriceLayoutMessage] = useState("");
   const [importHistory, setImportHistory] = useState([]);
   const [showImportHistory, setShowImportHistory] = useState(false);
   const [noticeAnalyzing, setNoticeAnalyzing] = useState(false);
@@ -5046,6 +5051,42 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     } catch (e) {
       console.warn("載入匯入歷史失敗", e);
       setImportHistory([]);
+    }
+  };
+
+  const loadSavedPriceLayouts = async () => {
+    if (!supabase || !isSupabaseAuthEnabled) {
+      setPriceLayoutMessage("請使用已登入的管理員帳戶及已設定 Supabase 的環境管理版面。");
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from("price_layouts")
+        .select("id, school, sheet, season, config, verified")
+        .eq("verified", true)
+        .order("school")
+        .order("sheet");
+      if (error) throw error;
+      setSavedPriceLayouts(data || []);
+      setPriceLayoutStoreAvailable(true);
+      setPriceLayoutMessage("");
+    } catch (error) {
+      setPriceLayoutStoreAvailable(false);
+      console.error("載入已記住價目表版面失敗", error);
+      setPriceLayoutMessage("無法載入雲端版面設定；請確認已執行 price-layouts-migration.sql。");
+    }
+  };
+
+  const deleteSavedPriceLayout = async (id) => {
+    if (!supabase || !isSupabaseAuthEnabled) return;
+    try {
+      const { error } = await supabase.from("price_layouts").delete().eq("id", id);
+      if (error) throw error;
+      setSavedPriceLayouts((current) => current.filter((layout) => layout.id !== id));
+      setPriceLayoutMessage("已刪除版面；下次匯入會回到內置或通用辨識。");
+    } catch (error) {
+      console.error("刪除已記住價目表版面失敗", error);
+      setPriceLayoutMessage(`刪除版面失敗：${error?.message || "請重試。"}`);
     }
   };
 
@@ -5489,19 +5530,52 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     if (!file) return;
     setImportPreviewSearch("");
     setGenericImportAcknowledged(false);
+    setRememberLearnedLayout(false);
+    setPriceLayoutStoreAvailable(false);
+    setPriceLayoutMessage("");
     setImporting(true);
     try {
-      const [{ analyzePriceWorkbook }, { SCHOOL_LAYOUTS }, { mapAnalyzerItems, splitAnalyzerWarnings }] = await Promise.all([
+      const [
+        { analyzePriceWorkbook },
+        { SCHOOL_LAYOUTS },
+        { mapAnalyzerItems, splitAnalyzerWarnings },
+        { mergePriceLayouts, toVerifiedPriceLayoutRows },
+      ] = await Promise.all([
         import("./lib/import/uniform-import-analyzer"),
         import("./lib/import/school-layouts"),
         import("./lib/import/mapAnalyzerItems"),
+        import("./lib/import/price-layout-store"),
       ]);
       const buffer = await file.arrayBuffer();
-      const { items, warnings, genericMode } = analyzePriceWorkbook(buffer, SCHOOL_LAYOUTS, {
+      let storedLayouts = [];
+      let layoutLoadWarning = "";
+      if (supabase && isSupabaseAuthEnabled) {
+        try {
+          const { data, error } = await supabase
+            .from("price_layouts")
+            .select("school, sheet, season, config, verified")
+            .eq("verified", true);
+          if (error) throw error;
+          storedLayouts = data || [];
+          setPriceLayoutStoreAvailable(true);
+        } catch (error) {
+          setPriceLayoutStoreAvailable(false);
+          console.error("載入雲端價目表版面失敗", error);
+          layoutLoadWarning = "雲端版面設定暫時無法載入，今次使用內置設定或通用辨識；請確認資料庫 migration 已執行。";
+        }
+      }
+      const layouts = mergePriceLayouts(SCHOOL_LAYOUTS, storedLayouts);
+      const { items, warnings, genericMode, learnedMode, suggestedLayouts } = analyzePriceWorkbook(buffer, layouts, {
         strict: false,
         fallbackSchool: activeSchool || undefined,
       });
       const { errors: analyzerErrors, conversionWarnings } = splitAnalyzerWarnings(warnings);
+      const requiresManualReview = genericMode || learnedMode;
+      const conversionMode = genericMode
+        ? "通用辨識（必須人工核對）"
+        : learnedMode
+          ? "已記住版面（必須人工核對）"
+          : "專用版面分析";
 
       const analyzedSchools = [...new Set(items.map((item) => String(item.school || "").trim()))];
       if (activeSchool && analyzedSchools.some((school) => school !== activeSchool)) {
@@ -5525,9 +5599,12 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
 
       const mapped = mapAnalyzerItems(items);
       const analysis = smartImportRows(mapped.rows, products);
-      const reviewWarnings = genericMode
+      const reviewWarnings = [
+        ...(genericMode
         ? ["通用辨識只供整理及預覽參考；確認匯入前，請逐項核對款式、尺碼、價格及所屬學校。", ...conversionWarnings]
-        : conversionWarnings;
+        : conversionWarnings),
+        ...(layoutLoadWarning ? [layoutLoadWarning] : []),
+      ];
       const errors = [...analyzerErrors, ...analysis.errors];
       const totalRows = Math.max(1, mapped.rows.length);
       const confidence = Math.max(0, Math.min(genericMode ? 0.75 : 1, Number(((totalRows - errors.length) / totalRows).toFixed(2))));
@@ -5537,10 +5614,13 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
         id: `snap-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,
         fileName: file.name,
         timestamp,
-        conversionMode: genericMode ? "通用辨識（必須人工核對）" : "專用版面分析",
+        conversionMode,
         conversionWarnings: reviewWarnings,
         blockingErrors: analyzerErrors,
         genericMode,
+        learnedMode,
+        requiresManualReview,
+        suggestedLayouts,
         sourceRows: mapped.rows,
         analysis,
         next: analysis.next,
@@ -5557,10 +5637,13 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
 
       setImportPreview({
         fileName: file.name,
-        conversionMode: genericMode ? "通用辨識（必須人工核對）" : "專用版面分析",
+        conversionMode,
         conversionWarnings: reviewWarnings,
         blockingErrors: analyzerErrors,
         genericMode,
+        learnedMode,
+        requiresManualReview,
+        suggestedLayouts,
         sourceRows: mapped.rows,
         ...analysis,
         errors,
@@ -5582,10 +5665,10 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
 
   const confirmImport = async () => {
     if (!importPreview) return;
-    if (importPreview.genericMode && !genericImportAcknowledged) {
+    if (importPreview.requiresManualReview && !genericImportAcknowledged) {
       setImportResult({
         summary: null,
-        errors: ["通用辨識結果尚未確認：請先核對預覽中的學校、款式、尺碼及價錢，再勾選確認。"],
+        errors: ["版面分析結果尚未確認：請先核對預覽中的學校、款式、尺碼及價錢，再勾選確認。"],
       });
       return;
     }
@@ -5622,10 +5705,33 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
         setImportResult({ summary: null, errors: ["匯入分析成功，但保存商品資料失敗，請重試。"] });
         return;
       }
-      setImportResult({ summary: analysis.summary, errors: [] });
+      let resultErrors = [];
+      let resultMessage;
+      if (rememberLearnedLayout && importPreview.genericMode) {
+        if (!canManageSchools || !supabase || !isSupabaseAuthEnabled) {
+          resultErrors.push("商品已保存，但目前環境未能以管理員身份保存版面設定。");
+        } else if (!importPreview.suggestedLayouts?.length) {
+          resultErrors.push("商品已保存，但沒有可保存的版面草稿。");
+        } else {
+          const rows = toVerifiedPriceLayoutRows(importPreview.suggestedLayouts);
+          try {
+            const { error } = await supabase
+              .from("price_layouts")
+              .upsert(rows, { onConflict: "school,sheet" });
+            if (error) throw error;
+            await loadSavedPriceLayouts();
+            resultMessage = "已保存已核對版面；下次重用時仍會要求逐項核對。";
+          } catch (error) {
+            console.error("保存已核對價目表版面失敗", error);
+            resultErrors.push(`商品已保存，但版面未能記住：${error?.message || "請重試。"}。請確認已執行 price-layouts-migration.sql。`);
+          }
+        }
+      }
+      setImportResult({ summary: analysis.summary, errors: resultErrors, message: resultMessage });
       setImportPreview(null);
       setImportPreviewSearch("");
       setGenericImportAcknowledged(false);
+      setRememberLearnedLayout(false);
     } catch (error) {
       console.error("智能匯入保存失敗", error);
       setImportResult({ summary: null, errors: [`商品資料核對或保存失敗，匯入未保存：${error?.message || "請重試。"}`] });
@@ -5779,7 +5885,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
         <div style={{ borderTop: "1px solid #E5E5E0", marginTop: 14, paddingTop: 14 }}>
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>批量匯入 / 匯出</div>
         <div style={{ fontSize: 12, color: "#888", marginBottom: 10, lineHeight: 1.5 }}>
-          新學校可先用智能匯入處理標準欄位 Excel／CSV；原始並排價目表可用分析匯入嘗試通用辨識。通用結果只會預覽，必須核對學校、款式、尺碼及價格並勾選確認後才保存；辨識不到會明確提示，不會猜校名匯入。
+          新學校可先用智能匯入處理標準欄位 Excel／CSV；原始並排價目表可用分析匯入嘗試通用辨識。管理員核對後可選擇記住版面，下次仍須逐項確認；工作表結構改變時會停用舊版面並退回通用辨識。
         </div>
         <label style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10, fontSize: 12, color: "#475569", cursor: "pointer" }}>
           <input
@@ -5827,22 +5933,81 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
           <input ref={analyzerFileInputRef} type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" onChange={handleAnalyzerImportFile} style={{ display: "none" }} />
         </div>
 
+        {canManageSchools && supabase && isSupabaseAuthEnabled && (
+          <div style={{ marginTop: 8 }}>
+            <button
+              className="pos-btn"
+              onClick={async () => {
+                if (!showSavedPriceLayouts) await loadSavedPriceLayouts();
+                setShowSavedPriceLayouts((current) => !current);
+              }}
+              style={{ padding: "6px 9px", borderRadius: 7, background: "#fff", border: "1px solid #CBD5E1", color: "#1F3A5F", fontSize: 11 }}
+            >
+              {showSavedPriceLayouts ? "收起已記住版面" : "管理已記住版面"}
+            </button>
+            {priceLayoutMessage && <div style={{ marginTop: 5, color: "#92400E", fontSize: 11 }}>{priceLayoutMessage}</div>}
+            {showSavedPriceLayouts && (
+              <div style={{ marginTop: 6, padding: 8, background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 7 }}>
+                {savedPriceLayouts.length === 0
+                  ? <div style={{ color: "#64748B", fontSize: 11 }}>暫時沒有已記住的版面。</div>
+                  : savedPriceLayouts.map((layout) => (
+                    <div key={layout.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "5px 0", borderBottom: "1px solid #E2E8F0", fontSize: 11 }}>
+                      <span>{layout.school} · {layout.sheet}{layout.season ? ` · ${layout.season}` : ""}</span>
+                      <button
+                        className="pos-btn"
+                        onClick={() => {
+                          if (window.confirm(`確定刪除「${layout.school} · ${layout.sheet}」版面？`)) {
+                            deleteSavedPriceLayout(layout.id);
+                          }
+                        }}
+                        style={{ padding: "4px 7px", borderRadius: 5, background: "#fff", border: "1px solid #FCA5A5", color: "#B42318", fontSize: 10 }}
+                      >
+                        刪除
+                      </button>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {importPreview && (
           <div style={{ marginTop: 10, background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 8, padding: 10, fontSize: 12 }}>
             <div style={{ fontWeight: 700, color: "#1F3A5F" }}>分析預覽：{importPreview.fileName}</div>
             <div style={{ marginTop: 4, color: "#52657A" }}>模式：{importPreview.conversionMode}</div>
             <div style={{ marginTop: 5 }}>讀取 {importPreview.summary.rows} 行；新增 {importPreview.summary.addedProducts} 款、新增 {importPreview.summary.addedSizes} 個尺碼、更新 {importPreview.summary.updatedSizes} 個價格。</div>
             {importPreview.warning && <div style={{ marginTop: 6, color: "#B54708", fontWeight: 600 }}>{importPreview.warning}</div>}
-            {importPreview.genericMode && (
-              <label style={{ display: "flex", alignItems: "flex-start", gap: 7, marginTop: 8, padding: 8, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 6, color: "#92400E", cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={genericImportAcknowledged}
-                  onChange={(event) => setGenericImportAcknowledged(event.target.checked)}
-                  style={{ marginTop: 2 }}
-                />
-                <span>我已逐項核對上方預覽，確認學校、款式、尺碼及價格正確，明白未核對資料可能錯誤。</span>
-              </label>
+            {importPreview.requiresManualReview && (
+              <>
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 7, marginTop: 8, padding: 8, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 6, color: "#92400E", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={genericImportAcknowledged}
+                    onChange={(event) => setGenericImportAcknowledged(event.target.checked)}
+                    style={{ marginTop: 2 }}
+                  />
+                  <span>
+                    {importPreview.genericMode
+                      ? "我已逐項核對上方預覽，確認學校、款式、尺碼及價格正確，明白未核對資料可能錯誤。"
+                      : "我已逐項核對已記住版面產生的本次預覽，確認學校、款式、尺碼及價格正確。"}
+                  </span>
+                </label>
+                {canManageSchools && importPreview.suggestedLayouts?.length > 0 && (
+                  <label style={{ display: "flex", alignItems: "flex-start", gap: 7, marginTop: 6, padding: 8, background: "#F0FDFA", border: "1px solid #99F6E4", borderRadius: 6, color: "#115E59", cursor: supabase && isSupabaseAuthEnabled && priceLayoutStoreAvailable ? "pointer" : "not-allowed" }}>
+                    <input
+                      type="checkbox"
+                      checked={rememberLearnedLayout}
+                      disabled={!supabase || !isSupabaseAuthEnabled || !priceLayoutStoreAvailable}
+                      onChange={(event) => setRememberLearnedLayout(event.target.checked)}
+                      style={{ marginTop: 2 }}
+                    />
+                    <span>
+                      記住已核對版面，供同一學校及工作表下次使用。
+                      {(!supabase || !isSupabaseAuthEnabled || !priceLayoutStoreAvailable) && "（需要已登入的 Supabase 管理員及已成功載入版面資料表）"}
+                    </span>
+                  </label>
+                )}
+              </>
             )}
             {importPreview.conversionWarnings?.length > 0 && (
               <div style={{ marginTop: 6, color: "#92400E" }}>
@@ -5887,8 +6052,8 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
               </div>
             )}
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <button className="pos-btn" onClick={confirmImport} disabled={importing || Boolean(importPreview.blockingErrors?.length) || Boolean(importPreview.genericMode && !genericImportAcknowledged)} style={{ flex: 1, padding: 8, background: importPreview.blockingErrors?.length || importPreview.genericMode && !genericImportAcknowledged ? "#94A3B8" : "#28784B", color: "#fff", borderRadius: 7 }}>{importing ? "保存緊…" : importPreview.blockingErrors?.length ? "修正解析錯誤後再匯入" : importPreview.genericMode && !genericImportAcknowledged ? "核對並勾選後才能匯入" : importPreview.summary.updatedSizes ? `確認 ${importPreview.summary.updatedSizes} 項改價並匯入` : "確認匯入"}</button>
-              <button className="pos-btn" onClick={() => { setImportPreview(null); setImportPreviewSearch(""); setGenericImportAcknowledged(false); }} disabled={importing} style={{ flex: 1, padding: 8, background: "#fff", color: "#475569", border: "1px solid #CBD5E1", borderRadius: 7 }}>取消</button>
+              <button className="pos-btn" onClick={confirmImport} disabled={importing || Boolean(importPreview.blockingErrors?.length) || Boolean(importPreview.requiresManualReview && !genericImportAcknowledged)} style={{ flex: 1, padding: 8, background: importPreview.blockingErrors?.length || importPreview.requiresManualReview && !genericImportAcknowledged ? "#94A3B8" : "#28784B", color: "#fff", borderRadius: 7 }}>{importing ? "保存緊…" : importPreview.blockingErrors?.length ? "修正解析錯誤後再匯入" : importPreview.requiresManualReview && !genericImportAcknowledged ? "核對並勾選後才能匯入" : importPreview.summary.updatedSizes ? `確認 ${importPreview.summary.updatedSizes} 項改價並匯入` : "確認匯入"}</button>
+              <button className="pos-btn" onClick={() => { setImportPreview(null); setImportPreviewSearch(""); setGenericImportAcknowledged(false); setRememberLearnedLayout(false); }} disabled={importing} style={{ flex: 1, padding: 8, background: "#fff", color: "#475569", border: "1px solid #CBD5E1", borderRadius: 7 }}>取消</button>
             </div>
           </div>
         )}
@@ -5978,7 +6143,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                           if (snap && snap.value) {
                             const parsed = JSON.parse(snap.value);
                             setGenericImportAcknowledged(false);
-                            setImportPreview({ fileName: parsed.fileName || h.fileName, conversionMode: parsed.conversionMode || '', conversionWarnings: parsed.conversionWarnings || [], blockingErrors: parsed.blockingErrors || [], genericMode: Boolean(parsed.genericMode), sourceRows: parsed.sourceRows || [], ...parsed.analysis, errors: parsed.errors || [], confidence: parsed.confidence, snapshotId: parsed.id, timestamp: parsed.timestamp });
+                            setImportPreview({ fileName: parsed.fileName || h.fileName, conversionMode: parsed.conversionMode || '', conversionWarnings: parsed.conversionWarnings || [], blockingErrors: parsed.blockingErrors || [], genericMode: Boolean(parsed.genericMode), learnedMode: Boolean(parsed.learnedMode), requiresManualReview: Boolean(parsed.requiresManualReview || parsed.genericMode || parsed.learnedMode), suggestedLayouts: parsed.suggestedLayouts || [], sourceRows: parsed.sourceRows || [], ...parsed.analysis, errors: parsed.errors || [], confidence: parsed.confidence, snapshotId: parsed.id, timestamp: parsed.timestamp });
                             setShowImportHistory(false);
                           } else {
                             alert('未能讀取該快照，可能已刪除。');
@@ -5993,7 +6158,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                           if (snap && snap.value) {
                             const parsed = JSON.parse(snap.value);
                             setGenericImportAcknowledged(false);
-                            setImportPreview({ fileName: parsed.fileName || h.fileName, conversionMode: parsed.conversionMode || '', conversionWarnings: parsed.conversionWarnings || [], blockingErrors: parsed.blockingErrors || [], genericMode: Boolean(parsed.genericMode), sourceRows: parsed.sourceRows || [], ...parsed.analysis, errors: parsed.errors || [], confidence: parsed.confidence, snapshotId: parsed.id, timestamp: parsed.timestamp });
+                            setImportPreview({ fileName: parsed.fileName || h.fileName, conversionMode: parsed.conversionMode || '', conversionWarnings: parsed.conversionWarnings || [], blockingErrors: parsed.blockingErrors || [], genericMode: Boolean(parsed.genericMode), learnedMode: Boolean(parsed.learnedMode), requiresManualReview: Boolean(parsed.requiresManualReview || parsed.genericMode || parsed.learnedMode), suggestedLayouts: parsed.suggestedLayouts || [], sourceRows: parsed.sourceRows || [], ...parsed.analysis, errors: parsed.errors || [], confidence: parsed.confidence, snapshotId: parsed.id, timestamp: parsed.timestamp });
                             setShowImportHistory(false);
                           } else {
                             alert('未能讀取該快照，可能已刪除。');
