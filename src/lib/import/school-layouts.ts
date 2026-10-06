@@ -279,6 +279,145 @@ const ANTHONY_WINTER_2026: SheetLayoutConfig = {
 };
 
 
+/** 香港中國婦女會馮堯敬紀念中學・夏季 2026（Sheet1，標題在 F4） */
+const FUNG_YIU_KING_SUMMER_2026: SheetLayoutConfig = {
+  sheet: 'Sheet1',
+  school: '香港中國婦女會馮堯敬紀念中學',
+  season: '夏',
+  ignoreCells: [
+    'B6', 'G6', 'F7', 'I7', 'L7', 'B17', 'F17', 'B18', 'F18', 'G18', 'I18',
+    'B19', 'F19', 'G19', 'H19', 'I19', 'G20', 'I20', 'F23', 'I23',
+    'K23', 'L23', 'F32', 'K32', 'L32',
+  ],
+  nameAliases: {
+    '$44/3對': '白短襪（3對裝）',
+    '$80/6對': '白短襪（6對裝）',
+    '$140/12對': '白短襪（12對裝）',
+  },
+  blocks: [
+    {
+      id: 'summer-skirt', gender: '女', name: '白裙',
+      dataFirst: 8, dataLast: 15, sizeCol: 'B',
+      priceCols: [
+        { col: 'E', kind: 'unit' },
+        { col: 'F', kind: 'bundle', bundleQty: 2, bundleUnit: '條' },
+      ],
+    },
+    {
+      id: 'summer-trousers', name: '白長西褲',
+      dataFirst: 8, dataLast: 16, sizeCol: 'G',
+      priceCols: [
+        { col: 'H', kind: 'unit' },
+        { col: 'I', kind: 'bundle', bundleQty: 2, bundleUnit: '條' },
+      ],
+      secondDim: {
+        label: '褲長',
+        values: [
+          { label: '33-38.5寸', plus: 0 },
+          { label: '40寸', plus: 10 },
+          { label: '41.5寸', plus: 20 },
+          { label: '43寸或以上', plus: 30 },
+        ],
+        tailorNote: '裁碼；褲長附加費請按實際長度核對',
+        bundleNote: '2條價按每條加錢計',
+        sizeTemplate: (waist, length) => `腰${waist}／${length}`,
+      },
+    },
+    {
+      id: 'point-collar-shirt', name: '白尖領恤',
+      dataFirst: 8, dataLast: 17, sizeCol: 'J',
+      priceCols: [
+        { col: 'K', kind: 'unit' },
+        { col: 'L', kind: 'bundle', bundleQty: 2, bundleUnit: '件' },
+      ],
+      secondDim: {
+        label: '上圍',
+        values: [
+          { label: '32-38吋', plus: 0 },
+          { label: '40吋', plus: 10 },
+          { label: '42吋', plus: 20 },
+          { label: '44吋或以上', plus: 30 },
+        ],
+        tailorNote: '裁碼；上圍附加費請按實際尺寸核對',
+        sizeTemplate: (collar, chest) => `領${collar}／上圍${chest}`,
+      },
+    },
+    {
+      id: 'underskirt', gender: '女', nameCol: 'B',
+      dataFirst: 21, dataLast: 21, priceCols: [{ col: 'E', kind: 'unit' }],
+    },
+    {
+      id: 'black-belt', name: '黑皮帶',
+      dataFirst: 19, dataLast: 19, priceCols: [{ col: 'J', kind: 'unit' }],
+    },
+    {
+      id: 'black-belt-large', name: '黑皮帶（38寸以上）',
+      dataFirst: 20, dataLast: 20, priceCols: [{ col: 'J', kind: 'unit' }],
+    },
+    {
+      id: 'summer-sport-shirt', name: '夏運衣',
+      dataFirst: 24, dataLast: 30, sizeCol: 'B',
+      priceCols: [
+        { col: 'E', kind: 'unit' },
+        { col: 'F', kind: 'bundle', bundleQty: 2, bundleUnit: '件' },
+      ],
+    },
+    {
+      id: 'summer-sport-trousers', name: '夏運褲',
+      dataFirst: 24, dataLast: 30, sizeCol: 'G',
+      priceCols: [
+        { col: 'H', kind: 'unit' },
+        { col: 'I', kind: 'bundle', bundleQty: 2, bundleUnit: '條' },
+      ],
+    },
+    {
+      id: 'wool-vest', name: 'V背心冷衫',
+      dataFirst: 24, dataLast: 30, sizeCol: 'J',
+      priceCols: [{ col: 'K', kind: 'unit' }],
+    },
+    {
+      id: 'wool-long-sleeve', name: 'V長冷衫',
+      dataFirst: 24, dataLast: 30, sizeCol: 'J',
+      priceCols: [{ col: 'L', kind: 'unit' }],
+    },
+    {
+      id: 'undershirt', name: '底衫',
+      dataFirst: 33, dataLast: 34, sizeCol: 'B', expandRanges: true,
+      priceCols: [
+        { col: 'E', kind: 'unit' },
+        { col: 'F', kind: 'bundle', bundleQty: 2, bundleUnit: '件' },
+      ],
+    },
+    {
+      id: 'white-socks-3-pair', nameCol: 'E',
+      dataFirst: 37, dataLast: 37, priceCols: [{ col: 'E', kind: 'unit' }],
+    },
+    {
+      id: 'white-socks-6-pair', nameCol: 'E',
+      dataFirst: 38, dataLast: 38, priceCols: [{ col: 'E', kind: 'unit' }],
+    },
+    {
+      id: 'white-socks-12-pair', nameCol: 'B',
+      dataFirst: 39, dataLast: 39, priceCols: [{ col: 'B', kind: 'unit' }],
+    },
+    {
+      id: 'winter-sports-set', name: '冬季運衣',
+      dataFirst: 33, dataLast: 39, sizeCol: 'I',
+      priceCols: [{ col: 'J', kind: 'unit' }],
+    },
+    {
+      id: 'winter-sports-shirt', name: '單衫',
+      dataFirst: 33, dataLast: 39, sizeCol: 'I',
+      priceCols: [{ col: 'K', kind: 'unit' }],
+    },
+    {
+      id: 'winter-sports-trousers', name: '單褲',
+      dataFirst: 33, dataLast: 39, sizeCol: 'I',
+      priceCols: [{ col: 'L', kind: 'unit' }],
+    },
+  ],
+};
+
 /** =====================================================================
  * 英皇書院同學會小學・冬2026（Sheet1）
  * 通告：英皇書院同學會小學第二校 2026年8月 冬季價目表（已交叉驗證）
@@ -369,4 +508,4 @@ const KINGS_WINTER_2026: SheetLayoutConfig = {
   ],
 };
 
-export const SCHOOL_LAYOUTS: SheetLayoutConfig[] = [YMCA_WINTER_2026, ANTHONY_WINTER_2026, KINGS_WINTER_2026];
+export const SCHOOL_LAYOUTS: SheetLayoutConfig[] = [YMCA_WINTER_2026, ANTHONY_WINTER_2026, FUNG_YIU_KING_SUMMER_2026, KINGS_WINTER_2026];

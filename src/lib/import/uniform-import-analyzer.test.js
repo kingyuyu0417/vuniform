@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as XLSX from "xlsx";
-import { analyzePriceWorkbook } from "./uniform-import-analyzer.ts";
+import { analyzePriceWorkbook, parsePriceText } from "./uniform-import-analyzer.ts";
+import { SCHOOL_LAYOUTS } from "./school-layouts.ts";
 
 const layout = {
   sheet: "Sheet1",
@@ -63,5 +64,41 @@ test("still applies a school layout when the workbook title matches it", () => {
   assert.equal(result.items.length, 1);
   assert.equal(result.items[0].school, "英皇書院同學會小學第二校");
   assert.equal(result.items[0].unitPrice, 100);
+  assert.equal(result.warnings.some((warning) => warning.code === "SCHOOL_LAYOUT_MISMATCH"), false);
+});
+
+test("parses the currency amount when a size appears before the price", () => {
+  assert.equal(parsePriceText("38寸以上$60"), 60);
+  assert.equal(parsePriceText("$44/3對"), 44);
+});
+
+test("detects a school title in row four and reads cells from a non-A1 range", () => {
+  const workbook = XLSX.utils.book_new();
+  const sheet = {};
+  XLSX.utils.sheet_add_aoa(sheet, [["香港中國婦女會馮堯敬紀念中學 夏季價目表"]], { origin: "F4" });
+  XLSX.utils.sheet_add_aoa(sheet, [
+    ["白裙", "", "", "", "2條"],
+    ["33", "", "", "87", "174"],
+  ], { origin: "B7" });
+  XLSX.utils.sheet_add_aoa(sheet, [[23, 76, 152]], { origin: "G8" });
+  XLSX.utils.sheet_add_aoa(sheet, [["黑皮帶 $50"], ["38寸以上$60"]], { origin: "J19" });
+  XLSX.utils.book_append_sheet(workbook, sheet, "Sheet1");
+
+  const fungLayout = SCHOOL_LAYOUTS.find((candidate) => candidate.school === "香港中國婦女會馮堯敬紀念中學");
+  assert.ok(fungLayout);
+  const result = analyzePriceWorkbook(
+    XLSX.write(workbook, { type: "array", bookType: "xlsx" }),
+    [fungLayout],
+  );
+
+  assert.equal(result.school, "香港中國婦女會馮堯敬紀念中學");
+  assert.equal(result.items[0].item, "白裙");
+  assert.equal(result.items[0].size, "33");
+  assert.equal(result.items[0].unitPrice, 87);
+  assert.deepEqual(result.items[0].bundles, [{ qty: 2, unit: "條", price: 174 }]);
+  assert.equal(result.items.find((item) => item.item === "黑皮帶")?.unitPrice, 50);
+  assert.equal(result.items.find((item) => item.item === "黑皮帶（38寸以上）")?.unitPrice, 60);
+  assert.equal(result.items.find((item) => item.size === "腰23／33-38.5寸")?.unitPrice, 76);
+  assert.equal(result.items.find((item) => item.size === "腰23／43寸或以上")?.unitPrice, 106);
   assert.equal(result.warnings.some((warning) => warning.code === "SCHOOL_LAYOUT_MISMATCH"), false);
 });

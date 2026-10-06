@@ -125,6 +125,7 @@ export interface AnalyzeResult {
 /* ================= 小工具 ================= */
 
 const INFERRED_NOTE = '細碼推斷：跟最細碼價（待用戶刪減）';
+const TITLE_SCAN_ROWS = 5;
 
 function colToIdx(col: string): number {
   let n = 0;
@@ -143,6 +144,8 @@ function parseAddr(addr: string): [number, number] {
 }
 /** 價錢文字 → 數字 */
 export function parsePriceText(t: string): number | null {
+  const currencyAmount = t.match(/[$]\s*(\d+(?:\.\d+)?)/);
+  if (currencyAmount) return Number(currencyAmount[1]);
   const cleaned = t.replace(/[$\s,，]/g, '');
   if (!cleaned) return null;
   const n = parseFloat(cleaned);
@@ -197,14 +200,19 @@ function sheetToGrid(name: string, ws: XLSX.WorkSheet): SheetGrid {
     const [r1, c1] = parseAddr(s); const [r2, c2] = parseAddr(e);
     // raw:false 攞顯示文字：「2-6」唔會變日期物件
     const json: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
-    nRows = r2 - r1 + 1; nCols = c2 - c1 + 1;
+    nRows = r2 + 1; nCols = c2 + 1;
     for (let r = 0; r < nRows; r++) {
-      grid.push([]); isDate.push([]);
-      for (let c = 0; c < nCols; c++) {
-        const v = (json[r1 + r] && json[r1 + r][c1 + c]) ?? '';
-        grid[r].push(String(v).trim());
-        const cell = (ws as any)[idxToCol(c1 + c) + (r1 + r + 1)];
-        isDate[r].push(!!cell && cell.t === 'd');
+      grid.push(Array(nCols).fill(''));
+      isDate.push(Array(nCols).fill(false));
+    }
+    for (let r = 0; r <= r2 - r1; r++) {
+      for (let c = 0; c <= c2 - c1; c++) {
+        const absoluteRow = r1 + r;
+        const absoluteCol = c1 + c;
+        const v = (json[r] && json[r][c]) ?? '';
+        grid[absoluteRow][absoluteCol] = String(v).trim();
+        const cell = (ws as any)[idxToCol(absoluteCol) + (absoluteRow + 1)];
+        isDate[absoluteRow][absoluteCol] = !!cell && cell.t === 'd';
       }
     }
   }
@@ -218,7 +226,7 @@ function cellText(g: SheetGrid, addr: string): string {
 
 function detectTitle(g: SheetGrid, knownSchools: string[] = []): { school: string; season: string } {
   let school = '', season = '';
-  const titleCells = g.grid.slice(0, Math.min(3, g.nRows)).flat();
+  const titleCells = g.grid.slice(0, Math.min(TITLE_SCAN_ROWS, g.nRows)).flat();
   const normalizedTitle = titleCells.join('').replace(/\s+/g, '');
   school = knownSchools
     .filter((candidate) => normalizedTitle.includes(candidate.replace(/\s+/g, '')))
@@ -251,8 +259,7 @@ export function analyzePriceWorkbook(
     const title = detectTitle(g, [...new Set(layouts.map((layout) => layout.school).filter((name): name is string => Boolean(name)))]);
     if (title.school && !school) { school = title.school; season = title.season; }
 
-    // 同一名嘅 sheet（如兩間學校都有「冬 2026」）要連學校一齊配對；
-    // 有多個候選但學校對唔上 → 唔估，skip + warning（寧缺勿錯，唔好攞錯別校價錢）
+    // 同名 sheet 要按校名配對；校名不明或不符時，唔套用具名版面，避免讀錯別校價錢。
     const detectedSchool = title.school || school;
     const cands = layouts.filter((l) => l.sheet === sheetName);
     const layout = cands.find((l) => l.school === detectedSchool)
@@ -744,7 +751,7 @@ function checkStrayCells(g: SheetGrid, layout: SheetLayoutConfig, warnings: Impo
     // header 行（dataFirst 上面嗰行）都唔係雜訊
     for (const c of cols) mark(`${c}${b.dataFirst - 1}`);
   }
-  for (let r = 0; r < Math.min(3, g.nRows); r++)
+  for (let r = 0; r < Math.min(TITLE_SCAN_ROWS, g.nRows); r++)
     for (let c = 0; c < g.nCols; c++)
       if (/學校|書院|學院|中學|小學/.test(g.grid[r][c])) covered.add(`${r},${c}`);
 
