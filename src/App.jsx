@@ -3678,7 +3678,7 @@ export default function UniformPOS() {
   }
 
   if (location.pathname === "/" || location.pathname === "") {
-    return <PublicHomePage schools={schools} schoolMeta={schoolMeta} onStaffLogin={() => navigate("/menu")} />;
+    return <PublicHomePage onStaffLogin={() => navigate("/menu")} />;
   }
 
   if (!session) {
@@ -7061,166 +7061,25 @@ function SchoolSwitcher({ schools, schoolMeta, selectedSchool, onPick }) {
           {typedSchools.length > 6 && searchInput}
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginBottom: 6 }}>第三步：揀學校</div>
  */
-function PublicHomePage({ schools = [], schoolMeta = {}, onStaffLogin }) {
-  const navigate = useNavigate();
-  const [selectedLevel, setSelectedLevel] = useState(null);
-  const [selectedDistrict, setSelectedDistrict] = useState(null);
-  const [selectedSchoolForRegistration, setSelectedSchoolForRegistration] = useState("");
-
-  const schoolOptions = [...new Set(schools.filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-Hant"));
-
-  const levelOptions = SCHOOL_LEVELS.map((level) => ({
-    level,
-    count: schoolOptions.filter((school) => {
-      const schoolLevel = normalizeSchoolLevel(school, schoolMeta);
-      return level === "其他" ? schoolLevel === "其他" : schoolLevel === level;
-    }).length,
-  }));
-
-  const levelFilteredSchools = selectedLevel
-    ? schoolOptions.filter((school) => {
-        const schoolLevel = normalizeSchoolLevel(school, schoolMeta);
-        return selectedLevel === "其他" ? schoolLevel === "其他" : schoolLevel === selectedLevel;
-      })
-    : schoolOptions;
-
-  const districtOptions = [...new Set(levelFilteredSchools.map((school) => normalizeSchoolDistrict(school, schoolMeta)).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-Hant"));
-
-  const districtFilteredSchools = selectedDistrict
-    ? levelFilteredSchools.filter((school) => normalizeSchoolDistrict(school, schoolMeta) === selectedDistrict)
-    : levelFilteredSchools;
-
-  const handleLevelSelect = (level) => {
-    setSelectedLevel(level);
-    setSelectedDistrict(null);
-    setSelectedSchoolForRegistration("");
-  };
-
-  const handleDistrictSelect = (district) => {
-    setSelectedDistrict(district);
-    setSelectedSchoolForRegistration("");
-  };
-
+function PublicHomePage({ onStaffLogin }) {
   return (
-    <div style={{ minHeight: "100vh", background: "#F4F7FB", padding: "32px 16px", boxSizing: "border-box", fontFamily: "system-ui, -apple-system, sans-serif" }}>
-      <div style={{ maxWidth: 560, margin: "0 auto", display: "grid", gap: 18 }}>
-        <div style={{ background: "#1F3A5F", color: "#fff", borderRadius: 18, padding: "28px 24px" }}>
+    <main style={{ minHeight: "100vh", background: "#F4F7FB", padding: "32px 16px", boxSizing: "border-box", display: "grid", placeItems: "center", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+      <div style={{ width: "100%", maxWidth: 560, display: "grid", gap: 18 }}>
+        <section style={{ background: "#1F3A5F", color: "#fff", borderRadius: 18, padding: "28px 24px" }}>
           <div style={{ fontSize: 13, opacity: 0.78, marginBottom: 8 }}>Victoria Uniform 校服銷售系統</div>
-          <h1 style={{ margin: 0, fontSize: 26, lineHeight: 1.35 }}>歡迎使用</h1>
-          <div style={{ marginTop: 10, fontSize: 14, opacity: 0.82 }}>請選擇你要使用的服務</div>
-        </div>
+          <h1 style={{ margin: 0, fontSize: 26, lineHeight: 1.35 }}>員工登入</h1>
+          <div style={{ marginTop: 10, fontSize: 14, opacity: 0.82 }}>登入後使用銷售、度身、叫號、取貨及收銀功能</div>
+        </section>
 
-        <div style={{ border: "1px solid #D5DDE5", borderRadius: 14, background: "#fff", padding: 22 }}>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "#1F3A5F" }}>登記學校</div>
-          <div style={{ marginTop: 6, fontSize: 13, color: "#66717D" }}>請按步驟選擇學校，再進行客人登記</div>
-
-          <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8, fontWeight: 700 }}>第一步：選擇學校類別</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {levelOptions.map(({ level, count }) => (
-                  <button
-                    key={level}
-                    type="button"
-                    className="pos-btn"
-                    onClick={() => handleLevelSelect(level)}
-                    style={{
-                      padding: "9px 12px",
-                      borderRadius: 10,
-                      background: selectedLevel === level ? "#1F3A5F" : "#F3F6FA",
-                      color: selectedLevel === level ? "#fff" : "#1F3A5F",
-                      border: "1px solid " + (selectedLevel === level ? "#1F3A5F" : "#D5DDE5"),
-                      fontSize: 13,
-                      fontWeight: 700,
-                    }}
-                  >
-                    {level} ({count})
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {selectedLevel && (
-              <div>
-                <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8, fontWeight: 700 }}>第二步：選擇地區（18區）</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {districtOptions.length > 0 ? (
-                    districtOptions.map((district) => (
-                      <button
-                        key={district}
-                        type="button"
-                        className="pos-btn"
-                        onClick={() => handleDistrictSelect(district)}
-                        style={{
-                          padding: "9px 12px",
-                          borderRadius: 10,
-                          background: selectedDistrict === district ? "#D97757" : "#F3F6FA",
-                          color: selectedDistrict === district ? "#fff" : "#1F3A5F",
-                          border: "1px solid " + (selectedDistrict === district ? "#D97757" : "#D5DDE5"),
-                          fontSize: 13,
-                          fontWeight: 700,
-                        }}
-                      >
-                        {district}
-                      </button>
-                    ))
-                  ) : (
-                    <div style={{ fontSize: 12, color: "#66717D" }}>此類別暫無地區資料</div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {selectedDistrict && (
-              <div>
-                <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8, fontWeight: 700 }}>第三步：選擇學校</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 240, overflowY: "auto", paddingRight: 4 }}>
-                  {districtFilteredSchools.length > 0 ? (
-                    districtFilteredSchools.map((school) => (
-                      <button
-                        key={school}
-                        type="button"
-                        className="pos-btn"
-                        onClick={() => setSelectedSchoolForRegistration(school)}
-                        style={{
-                          width: "100%",
-                          textAlign: "left",
-                          padding: "10px 12px",
-                          borderRadius: 10,
-                          background: selectedSchoolForRegistration === school ? "#EAF4FF" : "#fff",
-                          border: "1px solid " + (selectedSchoolForRegistration === school ? "#9BC3EC" : "#D5DDE5"),
-                          color: "#1F3A5F",
-                          fontSize: 14,
-                          fontWeight: selectedSchoolForRegistration === school ? 700 : 500,
-                        }}
-                      >
-                        {school}
-                      </button>
-                    ))
-                  ) : (
-                    <div style={{ fontSize: 12, color: "#66717D" }}>此區域暫無學校資料</div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <button
-            type="button"
-            disabled={!selectedSchoolForRegistration}
-            onClick={() => navigate(`/checkin?school_id=${encodeURIComponent(selectedSchoolForRegistration)}`)}
-            style={{ width: "100%", marginTop: 18, border: "none", borderRadius: 10, background: selectedSchoolForRegistration ? "#1F3A5F" : "#C7D0DA", color: "#fff", padding: "12px 16px", fontWeight: 800, cursor: selectedSchoolForRegistration ? "pointer" : "not-allowed" }}
-          >
-            開始登記
-          </button>
-        </div>
-
-        <button type="button" onClick={onStaffLogin} style={{ border: "none", borderRadius: 14, background: "#D97757", color: "#fff", padding: 22, textAlign: "left", cursor: "pointer" }}>
-          <div style={{ fontSize: 18, fontWeight: 800 }}>登入後台</div>
-          <div style={{ marginTop: 6, fontSize: 13, opacity: 0.88 }}>員工登入、銷售、度身、取貨及收銀</div>
+        <button type="button" onClick={onStaffLogin} style={{ border: "none", borderRadius: 14, background: "#D97757", color: "#fff", padding: "18px 22px", textAlign: "left", cursor: "pointer", fontSize: 16, fontWeight: 800 }}>
+          進入員工系統
         </button>
+
+        <p style={{ margin: 0, color: "#66717D", fontSize: 13, lineHeight: 1.6, textAlign: "center" }}>
+          家長及學生請使用學校提供的登記 QR Code 或專屬連結。
+        </p>
       </div>
-    </div>
+    </main>
   );
 }
 
