@@ -5325,7 +5325,9 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
       ? { category: catalogEntry.category || "", level: catalogEntry.level || newSchoolLevel, region: catalogEntry.region || newSchoolRegion, district: catalogEntry.district || newSchoolDistrict }
       : { category: newSchoolCategory, level: newSchoolLevel, region: newSchoolRegion, district: newSchoolDistrict };
     schoolMetaEntry.outletName = newSchoolOutlet;
-    addProduct(name, { ...schoolMeta, [name]: schoolMetaEntry });
+    if (!productsRef.current.some((product) => schoolOf(product) === name)) {
+      addProduct(name, { ...schoolMeta, [name]: schoolMetaEntry });
+    }
     saveSchoolMeta({ ...schoolMeta, [name]: schoolMetaEntry });
     setSelectedSchool(name);
     setAddingSchool(false);
