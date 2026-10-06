@@ -41,6 +41,19 @@ test("does not apply the Kings layout to another school's Sheet1", () => {
   assert.match(result.warnings[0].message, /英皇書院同學會小學第二校/);
 });
 
+test("does not apply a school-specific layout when the workbook title has no school name", () => {
+  const result = analyzePriceWorkbook(
+    workbookBuffer("冬季校服價目表"),
+    [layout],
+  );
+
+  assert.equal(result.items.length, 0);
+  assert.equal(result.warnings[0].code, "SCHOOL_LAYOUT_MISMATCH");
+  assert.equal(result.warnings[0].severity, "error");
+  assert.match(result.warnings[0].message, /無法從 Excel 標題辨識學校/);
+  assert.match(result.warnings[0].message, /英皇書院同學會小學第二校/);
+});
+
 test("still applies a school layout when the workbook title matches it", () => {
   const result = analyzePriceWorkbook(
     workbookBuffer("英皇書院同學會小學第二校"),
