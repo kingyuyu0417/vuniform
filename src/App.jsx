@@ -5489,6 +5489,15 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
       const { items, warnings } = analyzePriceWorkbook(buffer, SCHOOL_LAYOUTS);
       const { errors: analyzerErrors, conversionWarnings } = splitAnalyzerWarnings(warnings);
 
+      const analyzedSchools = [...new Set(items.map((item) => String(item.school || "").trim()))];
+      if (activeSchool && analyzedSchools.some((school) => school !== activeSchool)) {
+        setImportResult({
+          summary: null,
+          errors: [`價目表辨識到的學校（${analyzedSchools.filter(Boolean).join("、") || "未能辨識"}）與目前選擇的「${activeSchool}」不一致，已停止匯入，請先核對學校版面設定。`],
+        });
+        return;
+      }
+
       if (!items || items.length === 0) {
         const reasons = analyzerErrors.length > 0 ? analyzerErrors : conversionWarnings;
         setImportResult({

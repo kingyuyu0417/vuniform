@@ -290,7 +290,7 @@ const ANTHONY_WINTER_2026: SheetLayoutConfig = {
  * ===================================================================== */
 const KINGS_WINTER_2026: SheetLayoutConfig = {
   sheet: 'Sheet1',
-  school: '英皇書院同學會小學',
+  school: '英皇書院同學會小學第二校',
   season: '冬',
   ignoreCells: ['G2', 'I18'],   // G2「男」（冇性別分區，殘留）；I18「單衫」表頭
   nameAliases: { '掛呔': '校呔', '頸巾': '繡校名頸巾' },
@@ -370,4 +370,3 @@ const KINGS_WINTER_2026: SheetLayoutConfig = {
 };
 
 export const SCHOOL_LAYOUTS: SheetLayoutConfig[] = [YMCA_WINTER_2026, ANTHONY_WINTER_2026, KINGS_WINTER_2026];
-
