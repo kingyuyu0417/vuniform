@@ -124,7 +124,9 @@ test("detects a school title in row four and reads cells from a non-A1 range", (
     )),
     [76, 76, 76, 76, 76, 76],
   );
-  assert.equal(result.items.find((item) => item.size === "腰23／43寸或以上")?.unitPrice, 106);
+  assert.equal(result.items.find((item) => item.size === "腰23／43寸")?.unitPrice, 106);
+  assert.equal(result.items.find((item) => item.size === "腰23／44寸")?.unitPrice, 106);
+  assert.equal(result.items.some((item) => item.size?.includes("或以上")), false);
   assert.equal(result.warnings.some((warning) => warning.code === "SCHOOL_LAYOUT_MISMATCH"), false);
 });
 
@@ -225,8 +227,8 @@ test("rejects generic detection without a recognized or selected school", () => 
 test("matches verified real-school layouts after Excel copy suffixes without changing parsed items", async () => {
   const fixtures = [
     { file: "anthony-winter-2026.xlsx", school: "聖安多尼學校", count: 100 },
-    { file: "ymca-winter-2026.xlsx", school: "港青基信書院", count: 249 },
-    { file: "fung-yiu-king-summer.xlsx", school: "香港中國婦女會馮堯敬紀念中學", count: 301 },
+    { file: "ymca-winter-2026.xlsx", school: "港青基信書院", count: 259 },
+    { file: "fung-yiu-king-summer.xlsx", school: "香港中國婦女會馮堯敬紀念中學", count: 318 },
   ];
 
   for (const fixture of fixtures) {
@@ -275,7 +277,7 @@ test("expands Fung Yiu King tailored trouser and shirt sizes across their price 
   const shirts = result.items.filter((item) => item.source.blockId === "point-collar-shirt" && item.tailored);
   const mappedTailored = mapAnalyzerItems([...trousers, ...shirts]).rows.filter((row) => row.isTailored);
 
-  assert.equal(trousers.length, 9 * 9);
+  assert.equal(trousers.length, 9 * 10);
   assert.equal(shirts.length, 10 * 4);
   assert.equal(mappedTailored.length, trousers.length + shirts.length);
   assert.equal(trousers.some((item) => item.size === "裁碼"), false);
@@ -311,7 +313,13 @@ test("uses the verified YMCA layout for the exact real workbook named with (2)",
   );
 
   assert.equal(copied.genericMode, false);
-  assert.equal(copied.items.length, 249);
+  assert.equal(copied.items.length, 259);
+  assert.deepEqual(
+    ["43寸", "44寸"].map((length) => (
+      original.items.find((item) => item.source.blockId === "m-trousers" && item.size === `腰23／${length}`)?.unitPrice
+    )),
+    [123, 123],
+  );
   assert.deepEqual(normalizedItems(copied.items), normalizedItems(original.items));
   assert.equal(copied.warnings.some((warning) => warning.code === "COPY_LAYOUT_CHANGED"), false);
 });
