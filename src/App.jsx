@@ -23,6 +23,7 @@ import { findConflictingProductIds } from "./data/productConflictDetection";
 import { getProductGender, productGenderBackground, PRODUCT_GENDER_OPTIONS } from "./data/productGender";
 import { productUnit } from "./data/productUnits";
 import { createSalesExportWorkbook } from "./data/salesExport";
+import { clearCheckoutAttempt, getOrCreateCheckoutAttempt } from "./data/checkoutAttempt";
 import { validateAndDeduplicateImportRows } from "./lib/import/importDuplicateGuard";
 import baseSchoolCatalog from "./schoolCatalog.json";
 import workbookSchoolCatalog from "./workbookSchoolCatalog.json";
@@ -225,92 +226,7 @@ const localReceiptId = (salesLog) => {
   return `${prefix}${String(nextNumber).padStart(4, "0")}`;
 };
 
-const buildOrderInsertPayload = (order, receiptId) => {
-  const payload = {
-    id: receiptId,
-    school: order.school || "",
-    total: Math.max(0, Number(order.total || 0)),
-    refund_due: Math.max(0, Number(order.refundDue || 0)),
-    item_count: Number(order.itemCount || 0),
-    created_at: new Date().toISOString(),
-  };
-
-  if (order.outletName) payload.outlet_name = order.outletName;
-  if (order.outletAddress) payload.outlet_address = order.outletAddress;
-  if (order.outletPhone) payload.outlet_phone = order.outletPhone;
-  if (order.customerName || order.customerPhone) {
-    payload.customer_surname = customerSurname(order.customerName);
-    payload.customer_phone_last4 = customerPhoneLast4(order.customerPhone);
-  }
-  if (order.cashierId !== undefined) payload.cashier_id = order.cashierId || null;
-  if (order.cashierName) payload.cashier_name = order.cashierName;
-  if (order.exchangeSourceReceiptId) payload.exchange_source_receipt_id = order.exchangeSourceReceiptId;
-  if (order.branchId) payload.branch_id = order.branchId;
-
-  return payload;
-};
-
 const netOrderTotal = (order) => Number(order.total || 0) - Math.max(0, Number(order.refundDue || 0));
-
-const buildOrderItemInsertPayload = (orderId, item) => {
-  const payload = {
-    order_id: orderId,
-    name: item.name,
-    size: item.size || "",
-    price: Number(item.price || 0),
-    qty: Number(item.qty || 1),
-  };
-
-  if (item.length) payload.length = item.length;
-  return payload;
-};
-
-const insertSalesOrderRecord = async (order, salesLog) => {
-  if (!isSupabaseAuthEnabled || !supabase) {
-    return { savedOrder: { ...order, id: localReceiptId(salesLog) } };
-  }
-
-  const requestedReceiptId = localReceiptId(salesLog);
-  const orderPayload = buildOrderInsertPayload(order, requestedReceiptId);
-  const itemPayload = (order.items || []).map((item) => buildOrderItemInsertPayload(requestedReceiptId, item));
-
-  try {
-    const { error } = await supabase.from("orders").insert(orderPayload);
-    if (error) {
-      const message = String(error.message || "");
-      const missingColumn = /column .* does not exist|42703/i.test(message);
-      if (missingColumn) {
-        const fallbackPayload = Object.fromEntries(
-          Object.entries(orderPayload).filter(([key]) => !["cashier_id", "cashier_name", "outlet_name", "outlet_address", "outlet_phone", "customer_surname", "customer_phone_last4", "refund_due"].includes(key))
-        );
-        const { error: fallbackError } = await supabase.from("orders").insert(fallbackPayload);
-        if (fallbackError) throw fallbackError;
-      } else {
-        throw error;
-      }
-    }
-
-    const { error: itemError } = await supabase.from("order_items").insert(itemPayload);
-    if (itemError) {
-      const message = String(itemError.message || "");
-      const missingLengthColumn = /column .*length.* does not exist|42703/i.test(message);
-      if (missingLengthColumn) {
-        const fallbackItems = itemPayload.map(({ length, ...item }) => item);
-        const { error: fallbackItemsError } = await supabase.from("order_items").insert(fallbackItems);
-        if (fallbackItemsError) throw fallbackItemsError;
-      } else {
-        throw itemError;
-      }
-    }
-
-    return { savedOrder: { ...order, id: requestedReceiptId } };
-  } catch (error) {
-    if (error?.message && /row-level security policy|policy/i.test(error.message)) {
-      throw new Error("Supabase public sales policy/schema 未同步，請先執行 supabase/fix-public-orders-rls.sql");
-    }
-    throw error;
-  }
-};
 
 // 只列出目前商品庫內實際有商品的學校，避免選到空商品學校
 const UNASSIGNED = "（未分類）";
@@ -2082,6 +1998,7 @@ export default function UniformPOS() {
   const [btStatus, setBtStatus] = useState({ state: "idle", msg: "" });
   const printAreaRef = useRef(null);
   const checkoutSubmittingRef = useRef(false);
+  const [checkoutSubmitting, setCheckoutSubmitting] = useState(false);
 
   const [importResult, setImportResult] = useState(null); // { summary, errors } | null
   const [lastSync, setLastSync] = useState(null);
@@ -3037,20 +2954,17 @@ export default function UniformPOS() {
     if (productsSaveTimerRef.current) clearTimeout(productsSaveTimerRef.current);
   }, []);
 
-  const saveSalesLog = async (next) => {
+  const saveSalesLog = async (order, checkoutKey) => {
     try {
-      const order = next[0];
-      let savedOrder = order;
-
+      let savedOrder;
       if (isSupabaseAuthEnabled && supabase) {
-        const requestedReceiptId = localReceiptId(salesLog);
         const persistedOrder = { ...order, total: Math.max(0, Number(order.total || 0)) };
-        const { data: receiptId, error } = await supabase.rpc("create_order_with_items", {
+        const { data: receiptId, error } = await supabase.rpc("create_order_idempotently", {
           order_data: {
             ...persistedOrder,
-            id: requestedReceiptId,
             cashier_id: order.cashierId,
             cashier_name: order.cashierName,
+            branch_id: order.branchId || null,
             item_count: order.itemCount,
             outlet_name: order.outletName,
             outlet_address: order.outletAddress,
@@ -3061,25 +2975,18 @@ export default function UniformPOS() {
             refund_due: Math.max(0, Number(order.refundDue || 0)),
             created_at: new Date().toISOString(),
           },
+          p_checkout_key: checkoutKey,
         });
 
-        if (!error) {
-          savedOrder = { ...order, id: receiptId || requestedReceiptId };
-        } else if (error.code === "42702" || error.code === "23505" || error.code === "23514") {
-          const fallbackOrder = { ...persistedOrder, id: `${requestedReceiptId}-${uid()}` };
-          const fallbackResult = await insertSalesOrderRecord(fallbackOrder, salesLog);
-          savedOrder = fallbackResult.savedOrder;
-        } else if (error.message && /row-level security policy|policy|cashier_id|column .* does not exist/i.test(error.message)) {
-          const fallbackResult = await insertSalesOrderRecord(persistedOrder, salesLog);
-          savedOrder = fallbackResult.savedOrder;
-        } else {
-          throw error;
-        }
+        if (error) throw error;
+        if (!receiptId) throw new Error("交易服務沒有回傳收據編號");
+        savedOrder = { ...order, id: receiptId };
       } else {
-        savedOrder = { ...order, id: localReceiptId(salesLog) };
+        savedOrder = salesLog.find((entry) => entry.checkoutKey === checkoutKey)
+          || { ...order, id: localReceiptId(salesLog), checkoutKey };
       }
 
-      const savedLog = [savedOrder, ...salesLog];
+      const savedLog = [savedOrder, ...salesLog.filter((entry) => entry.id !== savedOrder.id)];
       if (!isSupabaseAuthEnabled || !supabase) await window.storage.set("sales-log", JSON.stringify(savedLog), true);
       setSalesLog(savedLog);
       setStorageError("");
@@ -3087,7 +2994,10 @@ export default function UniformPOS() {
     } catch (e) {
       console.error("儲存記錄失敗", e);
       const detail = e?.code ? `（${e.code}${e?.details ? `：${e.details}` : ""}）` : "";
-      setStorageError(`交易未能儲存${detail}，請檢查網絡或聯絡管理員更新 Supabase；購物車資料仍然保留。`);
+      const migrationNote = e?.code === "PGRST202"
+        ? "請管理員先在 Supabase 執行 supabase/idempotent-sales-checkout.sql。"
+        : "";
+      setStorageError(`交易結果未能確認${detail}。請勿另開新單；保持相同商品及金額後重試，系統會沿用同一交易識別碼。${migrationNote}`);
       return null;
     }
   };
@@ -3507,8 +3417,8 @@ export default function UniformPOS() {
   const changeDue = exchangeMode ? Math.max(cartTotal - cashAmount, 0) : Math.max(settlementDifference, 0);
   const refundDue = exchangeMode ? Math.max(-cartTotal - cashAmount, 0) : 0;
 
-  const checkout = async () => {
-    if (cart.length === 0 || checkoutSubmittingRef.current) return;
+  const submitCheckout = async () => {
+    if (cart.length === 0) return;
     const conflictingProductIds = findUnresolvedPriceConflictProductIds(products);
     const priceIssues = cart.flatMap((item) => {
       if (item.exchangeReturn || item.sourceOrderId) return [];
@@ -3526,7 +3436,6 @@ export default function UniformPOS() {
       setStorageError(`價格核對未通過，未能結帳：${priceIssues.join("；")}。請移除並重新選取商品，或請管理員先修正價格。`);
       return;
     }
-    checkoutSubmittingRef.current = true;
     const now = new Date();
     const received = cashReceived === ""
       ? (exchangeMode ? 0 : cartTotal)
@@ -3593,19 +3502,26 @@ export default function UniformPOS() {
       } catch (error) {
         console.error("同步已支付客戶訂單失敗，保留購物車", error);
         setStorageError("來源訂單未能同步完成，交易尚未完成；請檢查網絡後再試。 ");
-        checkoutSubmittingRef.current = false;
         return;
       }
     }
 
-    const savedOrder = await saveSalesLog([order, ...salesLog]);
+    let checkoutKey;
+    try {
+      checkoutKey = getOrCreateCheckoutAttempt(window.sessionStorage, order);
+    } catch (error) {
+      setStorageError(error.message || "無法安全保存結帳狀態，請聯絡管理員。");
+      return;
+    }
+
+    const savedOrder = await saveSalesLog(order, checkoutKey);
     if (!savedOrder) {
       if (sourceOrderIds.length > 0 && isSupabaseConfigured && supabase) {
         await Promise.all(sourceOrderIds.map((sourceOrderId) => supabase.from("customer_orders").update({ status: "READY" }).eq("id", sourceOrderId).eq("school_id", order.school)));
       }
-      checkoutSubmittingRef.current = false;
       return;
     }
+    clearCheckoutAttempt(window.sessionStorage, order.cashierId, checkoutKey);
 
     sourceOrderIds.forEach((sourceOrderId) => {
       window.dispatchEvent(new CustomEvent("customer-order-paid", { detail: { orderId: sourceOrderId } }));
@@ -3616,7 +3532,18 @@ export default function UniformPOS() {
     setSelectedProduct(null);
     exchangeReplacementQueueRef.current = [];
     setExchangeReplacementQueue([]);
-    checkoutSubmittingRef.current = false;
+  };
+
+  const checkout = async () => {
+    if (cart.length === 0 || checkoutSubmittingRef.current) return;
+    checkoutSubmittingRef.current = true;
+    setCheckoutSubmitting(true);
+    try {
+      await submitCheckout();
+    } finally {
+      checkoutSubmittingRef.current = false;
+      setCheckoutSubmitting(false);
+    }
   };
 
   const advanceExchangeReplacement = () => {
@@ -4141,6 +4068,7 @@ export default function UniformPOS() {
                 cartTotal={cartTotal}
                 cartCount={cartCount}
                 checkout={checkout}
+                checkoutSubmitting={checkoutSubmitting}
                 selectedSchool={selectedSchool}
                 storageError={storageError}
                 cashReceived={cashReceived}
@@ -4178,6 +4106,7 @@ export default function UniformPOS() {
                     cartTotal={cartTotal}
                     cartCount={cartCount}
                     checkout={checkout}
+                    checkoutSubmitting={checkoutSubmitting}
                     selectedSchool={selectedSchool}
                     storageError={storageError}
                     cashReceived={cashReceived}
@@ -4379,6 +4308,7 @@ function SaleTab({
   cartTotal,
   cartCount,
   checkout,
+  checkoutSubmitting = false,
   selectedSchool,
   storageError,
   cashReceived,
@@ -4546,7 +4476,15 @@ function SaleTab({
   };
 
   return (
-    <div>
+    <div aria-busy={checkoutSubmitting} style={{ position: "relative" }}>
+      {checkoutSubmitting && (
+        <div
+          role="status"
+          style={{ position: "absolute", inset: 0, zIndex: 20, display: "grid", placeItems: "center", padding: 20, background: "rgba(255,255,255,0.88)", color: "#1F3A5F", fontSize: 18, fontWeight: 700, textAlign: "center" }}
+        >
+          正在確認交易及保存單據，請勿重覆操作…
+        </div>
+      )}
       {blockedPriceProducts.length > 0 && (
         <div role="alert" style={{ marginBottom: 12, padding: 10, borderRadius: 9, border: "1px solid #F0C36D", background: "#FFFBEB", color: "#7C4A03", fontSize: 12 }}>
           <strong>{blockedPriceProducts.length} 款商品價格有衝突，已暫停銷售及換貨，避免收錯價。</strong>
@@ -5036,19 +4974,19 @@ function SaleTab({
       <button
         className="pos-btn"
         onClick={checkout}
-        disabled={cart.length === 0}
+        disabled={cart.length === 0 || checkoutSubmitting}
         style={{
           width: "100%",
           marginTop: 14,
           padding: "14px 0",
           borderRadius: 12,
-          background: cart.length === 0 ? "#ddd" : "#1F3A5F",
+          background: cart.length === 0 || checkoutSubmitting ? "#9CA3AF" : "#1F3A5F",
           color: "#fff",
           fontSize: 18,
           fontWeight: 600,
         }}
       >
-        {exchangeMode ? (refundDue > 0 ? `完成換貨／退回 ${fmt(refundDue)}` : `完成換貨${changeDue > 0 ? `／補回 ${fmt(changeDue)}` : ""}`) : "完成交易"}並開單
+        {checkoutSubmitting ? "正在確認交易…" : `${exchangeMode ? (refundDue > 0 ? `完成換貨／退回 ${fmt(refundDue)}` : `完成換貨${changeDue > 0 ? `／補回 ${fmt(changeDue)}` : ""}`) : "完成交易"}並開單`}
       </button>
       {!exchangeMode && cart.length > 0 && (
         <button

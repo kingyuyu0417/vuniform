@@ -48,9 +48,9 @@ Auth 登入開關是 `VITE_USE_SUPABASE_AUTH`。只有在 Supabase 已建立 `st
 
 在 Supabase Authentication → URL Configuration，將本機測試網址加入 Redirect URLs，例如 `http://localhost:5173/**`；公開部署後則加入公開網址。員工按邀請連結後會在 App 內設定密碼。
 
-Auth 模式的銷售交易會用 `create_order_with_items` 一次寫入 `orders` 和 `order_items`。商品資料會由管理員首次登入時自動遷移到 `products`。
+Auth 模式的銷售交易會用 `create_order_idempotently` 一次寫入 `orders` 和 `order_items`。商品資料會由管理員首次登入時自動遷移到 `products`。
 
-收據編號由 Supabase 每日流水號自動產生，格式為 `VU-YYYYMMDD-0001`。啟用新編號前，請先在 Supabase 執行最新的 `supabase/secure-migration.sql`，它會建立每日流水號及更新交易 RPC。
+收據編號由 Supabase 每日流水號自動產生，格式為 `VU-YYYYMMDD-0001`。啟用新版結帳前，先執行 `supabase/secure-migration.sql`，再執行 `supabase/idempotent-sales-checkout.sql`。新版 App 只會呼叫具冪等保護的 RPC；若 migration 尚未執行，結帳會保留購物車並提示管理員，不會退回非原子寫入方式。
 
 銷售記錄作廢只供管理員操作，需重新輸入管理員密碼並填寫原因。作廢會保留原單及稽核記錄，但不計入收入、件數或客人統計。啟用前須在 Supabase SQL Editor 執行 `supabase/void-sales-order.sql`；資料庫 RPC 亦會驗證管理員角色及最近 5 分鐘內的重新登入憑證。
 
