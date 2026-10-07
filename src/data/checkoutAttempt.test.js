@@ -41,6 +41,21 @@ test("refuses to replace an unresolved checkout key when transaction details cha
   );
 });
 
+test("keeps the exchange reason bound to an unresolved checkout attempt", () => {
+  const storage = createStorage();
+  const exchangeOrder = {
+    ...order,
+    exchangeSourceReceiptId: "receipt-1",
+    adjustmentReason: "尺碼不合",
+  };
+  getOrCreateCheckoutAttempt(storage, exchangeOrder, () => "attempt-1");
+
+  assert.throws(
+    () => getOrCreateCheckoutAttempt(storage, { ...exchangeOrder, adjustmentReason: "更換款式" }, () => "attempt-2"),
+    /上次結帳結果尚未確認/,
+  );
+});
+
 test("clears only the matching cashier checkout key after confirmed success", () => {
   const storage = createStorage();
   getOrCreateCheckoutAttempt(storage, order, () => "attempt-1");

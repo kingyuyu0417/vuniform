@@ -56,6 +56,15 @@ begin
     raise exception 'A void reason between 1 and 500 characters is required';
   end if;
 
+  perform 1
+  from public.orders
+  where id = p_order_id
+  for update;
+
+  if not found then
+    raise exception 'Receipt not found or already voided';
+  end if;
+
   if exists (
     select 1
     from public.orders related_order

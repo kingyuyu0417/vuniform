@@ -1,11 +1,13 @@
--- Run after secure-migration.sql. Repeated calls with the same cashier/key return
--- the original receipt instead of inserting another order.
+-- Run after secure-migration.sql. Checkout keys prevent duplicate receipts;
+-- linked return-item references let the database reject over-returns atomically.
 begin;
 
 alter table public.orders
   add column if not exists branch_id text,
   add column if not exists checkout_key text,
-  add column if not exists checkout_payload_hash text;
+  add column if not exists checkout_payload_hash text,
+  add column if not exists adjustment_reason text,
+  add column if not exists voided_at timestamptz;
 
 do $$
 begin
@@ -16,11 +18,17 @@ end;
 $$;
 
 alter table public.order_items
-  add column if not exists length text;
+  add column if not exists length text,
+  add column if not exists is_return boolean not null default false,
+  add column if not exists source_order_item_id text;
 
 create unique index if not exists orders_cashier_checkout_key_unique
   on public.orders (cashier_id, checkout_key)
   where checkout_key is not null;
+
+create index if not exists order_items_source_return_lookup
+  on public.order_items (source_order_item_id)
+  where is_return;
 
 create or replace function public.create_order_idempotently(order_data jsonb, p_checkout_key text)
 returns text
@@ -36,6 +44,12 @@ declare
   request_key text := nullif(p_checkout_key, '');
   payload_hash text := md5((order_data - 'created_at' - 'date' - 'time' - 'id')::text);
   existing_hash text;
+  requested_return record;
+  original_qty integer;
+  original_order_id text;
+  original_school text;
+  original_voided_at timestamptz;
+  already_returned integer;
 begin
   if actor_id is null or nullif(order_data ->> 'cashier_id', '')::uuid is distinct from actor_id then
     raise exception 'cashier_id must match the signed-in user';
@@ -43,6 +57,11 @@ begin
 
   if request_key is null or char_length(request_key) > 100 then
     raise exception 'A valid checkout_key is required';
+  end if;
+
+  if nullif(order_data ->> 'exchange_source_receipt_id', '') is not null
+     and nullif(btrim(order_data ->> 'adjustment_reason'), '') is null then
+    raise exception 'An exchange reason is required';
   end if;
 
   perform pg_advisory_xact_lock(hashtextextended(actor_id::text || ':' || request_key, 0));
@@ -61,6 +80,91 @@ begin
     return receipt_id;
   end if;
 
+  for requested_return in
+    select item.source_order_item_id, sum(item.qty)::integer as requested_qty
+    from jsonb_to_recordset(order_data -> 'items') as item(
+      name text,
+      size text,
+      length text,
+      price integer,
+      qty integer,
+      is_return boolean,
+      source_order_item_id text
+    )
+    where coalesce(item.is_return, false)
+    group by item.source_order_item_id
+    order by item.source_order_item_id
+  loop
+    if nullif(requested_return.source_order_item_id, '') is null then
+      raise exception 'Every returned item must reference its original order item';
+    end if;
+
+    select source_item.order_id
+      into original_order_id
+    from public.order_items as source_item
+    where source_item.id::text = requested_return.source_order_item_id;
+
+    if original_order_id is null then
+      raise exception 'Original order item was not found';
+    end if;
+
+    if nullif(order_data ->> 'exchange_source_receipt_id', '') is distinct from original_order_id then
+      raise exception 'Returned items must belong to the linked original receipt';
+    end if;
+
+    select source_order.school, source_order.voided_at
+      into original_school, original_voided_at
+    from public.orders as source_order
+    where source_order.id = original_order_id
+    for update;
+
+    if not found or original_voided_at is not null then
+      raise exception 'Original sale is unavailable for return';
+    end if;
+
+    if coalesce(order_data ->> 'school', '') is distinct from original_school then
+      raise exception 'Returned items must belong to the linked original receipt and school';
+    end if;
+
+    select source_item.qty, source_item.order_id
+      into original_qty, original_order_id
+    from public.order_items as source_item
+    where source_item.id::text = requested_return.source_order_item_id
+      and not source_item.is_return
+    for update;
+
+    if original_qty is null then
+      raise exception 'Original sale item was not found';
+    end if;
+
+    if exists (
+      select 1
+      from public.orders as legacy_adjustment
+      where legacy_adjustment.exchange_source_receipt_id = original_order_id
+        and legacy_adjustment.voided_at is null
+        and not exists (
+          select 1
+          from public.order_items as tagged_return
+          where tagged_return.order_id = legacy_adjustment.id
+            and tagged_return.is_return
+        )
+    ) then
+      raise exception 'This receipt has an older untracked exchange; manager review is required before another return';
+    end if;
+
+    select coalesce(sum(return_item.qty), 0)::integer
+      into already_returned
+    from public.order_items as return_item
+    join public.orders as adjustment on adjustment.id = return_item.order_id
+    where return_item.source_order_item_id = requested_return.source_order_item_id
+      and return_item.is_return
+      and adjustment.voided_at is null;
+
+    if already_returned + requested_return.requested_qty > original_qty then
+      raise exception 'Return quantity exceeds the quantity remaining on the original sale';
+    end if;
+  end loop;
+
   insert into public.daily_receipt_sequences (receipt_date, last_number)
   values (current_receipt_date, 1)
   on conflict (receipt_date) do update
@@ -75,7 +179,7 @@ begin
 
   insert into public.orders (
     id, school, branch_id, outlet_name, outlet_address, outlet_phone,
-    customer_surname, customer_phone_last4, exchange_source_receipt_id, refund_due,
+    customer_surname, customer_phone_last4, exchange_source_receipt_id, adjustment_reason, refund_due,
     cashier_id, cashier_name, total, item_count, created_at,
     checkout_key, checkout_payload_hash
   )
@@ -89,6 +193,7 @@ begin
     nullif(order_data ->> 'customer_surname', ''),
     nullif(order_data ->> 'customer_phone_last4', ''),
     nullif(order_data ->> 'exchange_source_receipt_id', ''),
+    nullif(btrim(order_data ->> 'adjustment_reason'), ''),
     greatest(coalesce((order_data ->> 'refund_due')::integer, 0), 0),
     actor_id,
     coalesce(order_data ->> 'cashier_name', ''),
@@ -99,10 +204,26 @@ begin
     payload_hash
   );
 
-  insert into public.order_items (order_id, name, size, length, price, qty)
-  select receipt_id, item.name, item.size, nullif(item.length, ''), item.price, item.qty
+  insert into public.order_items (order_id, name, size, length, price, qty, is_return, source_order_item_id)
+  select
+    receipt_id,
+    item.name,
+    item.size,
+    nullif(item.length, ''),
+    item.price,
+    item.qty,
+    coalesce(item.is_return, false),
+    nullif(item.source_order_item_id, '')
   from jsonb_to_recordset(order_data -> 'items')
-    as item(name text, size text, length text, price integer, qty integer);
+    as item(
+      name text,
+      size text,
+      length text,
+      price integer,
+      qty integer,
+      is_return boolean,
+      source_order_item_id text
+    );
 
   return receipt_id;
 end;

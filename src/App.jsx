@@ -24,6 +24,7 @@ import { getProductGender, productGenderBackground, PRODUCT_GENDER_OPTIONS } fro
 import { productUnit } from "./data/productUnits";
 import { createSalesExportWorkbook } from "./data/salesExport";
 import { clearCheckoutAttempt, getOrCreateCheckoutAttempt } from "./data/checkoutAttempt";
+import { getRemainingReturnQuantity, hasUntrackedExchangeHistory } from "./data/returnLimits";
 import { validateAndDeduplicateImportRows } from "./lib/import/importDuplicateGuard";
 import baseSchoolCatalog from "./schoolCatalog.json";
 import workbookSchoolCatalog from "./workbookSchoolCatalog.json";
@@ -2559,7 +2560,7 @@ export default function UniformPOS() {
       const branchId = branchScoped ? session.branchId || "__unassigned__" : "";
       let query = supabase
         .from("orders")
-        .select("id, school, branch_id, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, refund_due, voided_at, voided_by, void_reason, cashier_id, cashier_name, total, item_count, created_at, order_items(name, size, length, price, qty)")
+        .select("id, school, branch_id, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, adjustment_reason, refund_due, voided_at, voided_by, void_reason, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, price, qty, is_return, source_order_item_id)")
         .order("created_at", { ascending: false });
       if (branchScoped) query = query.eq("branch_id", branchId);
       let { data, error } = await query;
@@ -2592,7 +2593,13 @@ export default function UniformPOS() {
             id: order.id,
             date: created.toISOString().slice(0, 10),
             time: created.toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit" }),
-            items: (order.order_items || []).map((item) => ({ ...item, length: item.length || "" })),
+            items: (order.order_items || []).map((item) => ({
+              ...item,
+              id: String(item.id),
+              length: item.length || "",
+              exchangeReturn: Boolean(item.is_return),
+              sourceOrderItemId: item.source_order_item_id || "",
+            })),
             total: Math.max(0, Number(order.total || 0)),
             refundDue: Math.max(0, Number(order.refund_due || 0)),
             itemCount: order.item_count,
@@ -2606,6 +2613,7 @@ export default function UniformPOS() {
             customerName: order.customer_surname || "",
             customerPhone: order.customer_phone_last4 || "",
             exchangeSourceReceiptId: order.exchange_source_receipt_id || order.exchangeSourceReceiptId || order.source_receipt_id || "",
+            adjustmentReason: order.adjustment_reason || "",
             voidedAt: order.voided_at || "",
             voidedBy: order.voided_by || "",
             voidReason: order.void_reason || "",
@@ -2972,15 +2980,39 @@ export default function UniformPOS() {
             customer_surname: customerSurname(order.customerName),
             customer_phone_last4: customerPhoneLast4(order.customerPhone),
             exchange_source_receipt_id: order.exchangeSourceReceiptId || null,
+            adjustment_reason: order.adjustmentReason || null,
             refund_due: Math.max(0, Number(order.refundDue || 0)),
             created_at: new Date().toISOString(),
+            items: (order.items || []).map((item) => ({
+              ...item,
+              is_return: Boolean(item.exchangeReturn),
+              source_order_item_id: item.sourceOrderItemId || null,
+            })),
           },
           p_checkout_key: checkoutKey,
         });
 
         if (error) throw error;
         if (!receiptId) throw new Error("交易服務沒有回傳收據編號");
-        savedOrder = { ...order, id: receiptId };
+        const { data: savedItems, error: itemLoadError } = await supabase
+          .from("order_items")
+          .select("id, name, size, length, price, qty, is_return, source_order_item_id")
+          .eq("order_id", receiptId);
+        if (itemLoadError) throw itemLoadError;
+        if (!Array.isArray(savedItems) || savedItems.length !== order.items.length) {
+          throw new Error("交易已建立，但未能核對全部商品明細；請保持購物車並重試確認。");
+        }
+        savedOrder = {
+          ...order,
+          id: receiptId,
+          items: savedItems.map((item) => ({
+            ...item,
+            id: String(item.id),
+            length: item.length || "",
+            exchangeReturn: Boolean(item.is_return),
+            sourceOrderItemId: item.source_order_item_id || "",
+          })),
+        };
       } else {
         savedOrder = salesLog.find((entry) => entry.checkoutKey === checkoutKey)
           || { ...order, id: localReceiptId(salesLog), checkoutKey };
@@ -3029,6 +3061,14 @@ export default function UniformPOS() {
 
   const startExchange = (order, selectedItems) => {
     const items = Array.isArray(selectedItems) ? selectedItems : [selectedItems];
+    if (!order.id || items.some((item) => !item.id)) {
+      setStorageError("退換貨必須連結原單貨品記錄，請重新載入原單後再試。");
+      return false;
+    }
+    if (items.some((item) => Number(item.qty || 1) > getRemainingReturnQuantity(item, salesLog))) {
+      setStorageError("退回數量超出原單尚未退回數量，請重新選擇。");
+      return false;
+    }
     const exchangeItems = items.map((item) => {
       const product = products.find((candidate) => candidate.name === item.name || candidate.id === item.productId);
       const originalSize = product?.sizes?.find((size) => sizeIdentityKey(size) === sizeIdentityKey(item))
@@ -3037,11 +3077,11 @@ export default function UniformPOS() {
     });
     if (exchangeItems.some(({ product }) => !product)) {
       setStorageError("找不到原有貨品款式，請先更新商品資料後再試。");
-      return;
+      return false;
     }
     if (exchangeItems.some(({ originalSize }) => !originalSize)) {
       setStorageError("找不到原有貨品碼數，請先更新商品資料後再試。");
-      return;
+      return false;
     }
     setSelectedSchool(order.school || selectedSchool);
     setCart(exchangeItems.map(({ item, product, originalSize }) => ({
@@ -3055,6 +3095,7 @@ export default function UniformPOS() {
       qty: Math.max(1, Number(item.qty || 1)),
       exchangeReturn: true,
       exchangeSourceReceiptId: order.id || "",
+      sourceOrderItemId: String(item.id),
       sourceGuestName: order.customerName || "",
       sourceGuestPhone: order.customerPhone || "",
     })));
@@ -3067,6 +3108,7 @@ export default function UniformPOS() {
     setReceipt(null);
     setTab("sale");
     navigate("/sale", { replace: true });
+    return true;
   };
 
   useEffect(() => {
@@ -3417,7 +3459,7 @@ export default function UniformPOS() {
   const changeDue = exchangeMode ? Math.max(cartTotal - cashAmount, 0) : Math.max(settlementDifference, 0);
   const refundDue = exchangeMode ? Math.max(-cartTotal - cashAmount, 0) : 0;
 
-  const submitCheckout = async () => {
+  const submitCheckout = async (adjustmentReason = "") => {
     if (cart.length === 0) return;
     const conflictingProductIds = findUnresolvedPriceConflictProductIds(products);
     const priceIssues = cart.flatMap((item) => {
@@ -3445,11 +3487,12 @@ export default function UniformPOS() {
       id: "",
       date: todayStr(),
       time: now.toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit" }),
-      items: cart.map(({ name, size, length, isTailored, price, qty, exchangeReturn, exchangeSourceReceiptId }) => ({ name, size, length, isTailored, price, qty, exchangeReturn, exchangeSourceReceiptId })),
+      items: cart.map(({ name, size, length, isTailored, price, qty, exchangeReturn, exchangeSourceReceiptId, sourceOrderItemId }) => ({ name, size, length, isTailored, price, qty, exchangeReturn, exchangeSourceReceiptId, sourceOrderItemId })),
       total: cartTotal,
       cashReceived: received,
       changeDue: exchangeMode ? Math.max(cartTotal - received, 0) : Math.max(received - cartTotal, 0),
       refundDue: exchangeMode ? Math.max(-cartTotal - received, 0) : 0,
+      adjustmentReason: exchangeMode ? adjustmentReason : "",
       itemCount: cartCount,
       cashierId: session ? session.id : null,
       cashierName: session ? session.name : "",
@@ -3534,12 +3577,12 @@ export default function UniformPOS() {
     setExchangeReplacementQueue([]);
   };
 
-  const checkout = async () => {
+  const checkout = async (adjustmentReason = "") => {
     if (cart.length === 0 || checkoutSubmittingRef.current) return;
     checkoutSubmittingRef.current = true;
     setCheckoutSubmitting(true);
     try {
-      await submitCheckout();
+      await submitCheckout(adjustmentReason);
     } finally {
       checkoutSubmittingRef.current = false;
       setCheckoutSubmitting(false);
@@ -4233,14 +4276,23 @@ export default function UniformPOS() {
       {receipt && (
         <ReceiptModal
           order={receipt}
+          orders={salesLog}
           language={receiptLanguage}
           onLanguageChange={setReceiptLanguage}
           onClose={() => {
             setReceipt(null);
             setBtStatus({ state: "idle", msg: "" });
           }}
+          canRedoSale={Boolean(
+            !receipt.exchangeSourceReceiptId
+            && !receipt.voidedAt
+            && receipt.items.some((item) => getRemainingReturnQuantity(item, salesLog) > 0),
+          )}
           onRedoSale={(order) => {
-            const started = handleReadyForSale({ ...order, id: "" });
+            const items = order.items
+              .map((item) => ({ ...item, qty: getRemainingReturnQuantity(item, salesLog) }))
+              .filter((item) => item.qty > 0);
+            const started = items.length > 0 && startExchange(order, items);
             if (started) {
               setReceipt(null);
               setBtStatus({ state: "idle", msg: "" });
@@ -4265,6 +4317,7 @@ export default function UniformPOS() {
             <div style={{ textAlign: "center" }}>{english ? "ELECTRONIC RECEIPT" : "電子銷售單 ELECTRONIC RECEIPT"}</div>
             <div>{labels.receiptNo}: #{(receipt.id || "").toUpperCase()}</div>
             {receipt.exchangeSourceReceiptId && <div>{labels.sourceReceipt}: #{String(receipt.exchangeSourceReceiptId).toUpperCase()}</div>}
+            {receipt.adjustmentReason && <div>退換原因：{receipt.adjustmentReason}</div>}
             <div>{labels.date}: {receipt.date} {receipt.time}</div>
             <div>{labels.school}: {english && receipt.school === ENGLISH_RECEIPT_SCHOOL ? "YMCA of Hong Kong Christian College" : receipt.school || "-"}</div>
             <div>{labels.customer}: {customerSurname(receipt.customerName) || "-"}</div>
@@ -4335,6 +4388,9 @@ function SaleTab({
   const [exchangeItems, setExchangeItems] = useState([]);
   const [exchangeItemQuantities, setExchangeItemQuantities] = useState({});
   const [exchangeSearch, setExchangeSearch] = useState("");
+  const [exchangePreviewOpen, setExchangePreviewOpen] = useState(false);
+  const [exchangeReason, setExchangeReason] = useState("");
+  const [exchangeReasonNote, setExchangeReasonNote] = useState("");
   const [directExchangeOpen, setDirectExchangeOpen] = useState(false);
   const [directExchangeProductId, setDirectExchangeProductId] = useState("");
   const [directExchangeLength, setDirectExchangeLength] = useState("");
@@ -4361,10 +4417,20 @@ function SaleTab({
     ? salesLog.filter((order) =>
       String(order.school || "").trim() === String(selectedSchool).trim()
       && String(order.date || "").slice(0, 10) === exchangeDate
+      && !order.voidedAt
+      && !order.exchangeSourceReceiptId
     )
     : [], [salesLog, selectedSchool, exchangeDate]);
   const sortedProducts = filteredProducts;
   const selectedProductData = productsById.get(selectedProduct);
+  const exchangeSourceReceiptId = cart.find((item) => item.exchangeSourceReceiptId)?.exchangeSourceReceiptId || "";
+  useEffect(() => {
+    setExchangeReason("");
+    setExchangeReasonNote("");
+    setExchangePreviewOpen(false);
+  }, [exchangeSourceReceiptId]);
+  const returnedCartItems = cart.filter((item) => item.exchangeReturn);
+  const replacementCartItems = cart.filter((item) => !item.exchangeReturn);
 
   useEffect(() => {
     if (
@@ -4422,7 +4488,10 @@ function SaleTab({
     if (!exchangeOrder || exchangeItems.length === 0) return;
     const selectedWithQuantities = exchangeItems.map((item) => ({
       ...item,
-      qty: Math.max(1, Math.min(Number(item.qty || 1), Number(exchangeItemQuantities[item._exchangeIndex] || 1))),
+      qty: Math.max(1, Math.min(
+        getRemainingReturnQuantity(item, salesLog),
+        Number(exchangeItemQuantities[item._exchangeIndex] || 1),
+      )),
     }));
     onExchange?.(exchangeOrder, selectedWithQuantities);
     setExchangePickerOpen(false);
@@ -4500,10 +4569,12 @@ function SaleTab({
       </button>
       <button
         className="pos-btn"
-        onClick={() => { setDirectExchangeOpen(true); setDirectExchangeProductId(""); setDirectExchangeLength(""); setDirectExchangeQuantityPrompt(null); }}
-        style={{ width: "100%", padding: "12px 0", borderRadius: 10, background: "#ECFDF3", color: "#166534", border: "1px solid #86EFAC", fontSize: 14, fontWeight: 700, marginBottom: 12 }}
+        type="button"
+        disabled
+        title="退貨必須選擇原單，以核實未退回數量"
+        style={{ width: "100%", padding: "12px", borderRadius: 10, background: "#F1F5F9", color: "#64748B", border: "1px solid #CBD5E1", fontSize: 14, fontWeight: 700, marginBottom: 12, cursor: "not-allowed" }}
       >
-        遺失單據快速換貨（直接揀退回貨品）
+        無原單退換已停用（請先搜尋原單）
       </button>
       {directExchangeOpen && (
         <div style={{ background: "#ECFDF3", border: "1px solid #86EFAC", borderRadius: 10, padding: 12, marginBottom: 12 }}>
@@ -4622,14 +4693,20 @@ function SaleTab({
               ))}
             </div>
             </>
-          ) : <div style={{ color: "#9A3412", fontSize: 12 }}>{selectedSchool ? `「${selectedSchool}」目前沒有可供換貨的銷售單據。` : "請先在左上角選擇學校。"}</div>}
+          ) : <div style={{ color: "#9A3412", fontSize: 12 }}>{selectedSchool ? `「${selectedSchool}」今天沒有可供退換的原單。退貨必須連結原單，不能以無單方式登記。` : "請先在左上角選擇學校。"}</div>}
           <button className="pos-btn" onClick={() => setExchangePickerOpen(false)} style={{ width: "100%", marginTop: 8, padding: 7, background: "transparent", color: "#9A3412" }}>取消</button>
         </div>
       )}
       {exchangePickerOpen && exchangeOrder && (
         <div style={{ background: "#FFF7ED", border: "1px solid #FDBA74", borderRadius: 10, padding: 12, marginBottom: 12 }}>
           <div style={{ color: "#9A3412", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>揀選換貨貨品（可多選）</div>
+          {hasUntrackedExchangeHistory(exchangeOrder, salesLog) && (
+            <div role="alert" style={{ marginBottom: 8, padding: 8, borderRadius: 8, background: "#FEF2F2", color: "#991B1B", fontSize: 12 }}>
+              此原單有舊版退換記錄，系統未能核實已退數量；請先由管理員核對，暫不能再退回。
+            </div>
+          )}
           {exchangeOrder.items.map((item, index) => {
+            const remaining = getRemainingReturnQuantity(item, salesLog);
             const selected = exchangeItems.some((entry) => entry._exchangeIndex === index);
             const selectedQuantity = Number(exchangeItemQuantities[index] || 1);
             return (
@@ -4637,6 +4714,7 @@ function SaleTab({
                 <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <input
                     type="checkbox"
+                    disabled={remaining <= 0}
                     checked={selected}
                     onChange={() => {
                       setExchangeItems((previous) => selected
@@ -4648,11 +4726,11 @@ function SaleTab({
                           delete next[index];
                           return next;
                         }
-                        return { ...previous, [index]: 1 };
+                        return { ...previous, [index]: Math.min(1, remaining) };
                       });
                     }}
                   />
-                  <span>{item.name}（{sizeLabel(item)}）× {item.qty}{productUnit(item.name, item.size)}</span>
+                  <span>{item.name}（{sizeLabel(item)}）× {item.qty}{productUnit(item.name, item.size)}；尚可退 {remaining}{productUnit(item.name, item.size)}</span>
                 </label>
                 {selected && (
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, paddingLeft: 24 }}>
@@ -4660,16 +4738,84 @@ function SaleTab({
                     <input
                       type="number"
                       min="1"
-                      max={item.qty}
+                      max={remaining}
                       inputMode="numeric"
                       value={selectedQuantity}
                       onChange={(event) => {
                         const value = Number(event.target.value);
-                        setExchangeItemQuantities((previous) => ({ ...previous, [index]: Number.isFinite(value) ? Math.max(1, Math.min(Number(item.qty), value)) : 1 }));
+                        setExchangeItemQuantities((previous) => ({ ...previous, [index]: Number.isFinite(value) ? Math.max(1, Math.min(remaining, value)) : 1 }));
                       }}
                       style={{ width: 64, padding: "6px 8px", border: "1px solid #FDBA74", borderRadius: 6, fontSize: 16, fontWeight: 700 }}
                     />
-                    <span style={{ fontSize: 12 }}>{productUnit(item.name, item.size)}（最多 {item.qty}）</span>
+                    <span style={{ fontSize: 12 }}>{productUnit(item.name, item.size)}（最多 {remaining}）</span>
+                  </div>
+                )}
+                {exchangePreviewOpen && exchangeMode && (
+                  <div style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(15,23,42,0.55)" }}>
+                    <div role="dialog" aria-modal="true" aria-labelledby="exchange-preview-title" style={{ width: "min(560px, 100%)", maxHeight: "85vh", overflowY: "auto", boxSizing: "border-box", padding: 18, borderRadius: 14, background: "#fff", boxShadow: "0 20px 50px rgba(15,23,42,0.25)" }}>
+                      <div id="exchange-preview-title" style={{ fontSize: 18, fontWeight: 800, color: "#1F3A5F" }}>退換貨結帳預覽</div>
+                      <div style={{ marginTop: 6, color: "#64748B", fontSize: 13 }}>原單：#{exchangeSourceReceiptId || "未連結"}</div>
+                      <label style={{ display: "grid", gap: 6, marginTop: 12, fontSize: 13, fontWeight: 700 }}>
+                        退換原因（必須記錄）
+                        <select value={exchangeReason} onChange={(event) => setExchangeReason(event.target.value)} style={{ padding: 9, border: "1px solid #CBD5E1", borderRadius: 8, fontSize: 15 }}>
+                          <option value="">請選擇原因</option>
+                          <option value="尺碼不合">尺碼不合</option>
+                          <option value="更換款式">更換款式</option>
+                          <option value="貨品問題">貨品問題</option>
+                          <option value="客人取消">客人取消</option>
+                          <option value="原單輸入錯誤">原單輸入錯誤</option>
+                          <option value="其他">其他</option>
+                        </select>
+                      </label>
+                      {exchangeReason === "其他" && (
+                        <input
+                          aria-label="其他退換原因"
+                          value={exchangeReasonNote}
+                          onChange={(event) => setExchangeReasonNote(event.target.value)}
+                          maxLength={500}
+                          placeholder="請填寫退換原因"
+                          style={{ width: "100%", boxSizing: "border-box", marginTop: 8, padding: 9, border: "1px solid #CBD5E1", borderRadius: 8, fontSize: 15 }}
+                        />
+                      )}
+                      {exchangeReason && <div style={{ color: "#475569", fontSize: 13 }}>記錄原因：{exchangeReason === "其他" ? `其他：${exchangeReasonNote.trim() || "（待填寫）"}` : exchangeReason}</div>}
+                      <div style={{ marginTop: 14, fontWeight: 700, color: "#9A3412" }}>退回貨品</div>
+                      {returnedCartItems.map((item, index) => (
+                        <div key={`return-${item.key || index}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 6, fontSize: 14 }}>
+                          <span>{item.name}（{sizeLabel(item)}）× {item.qty}</span>
+                          <span>−{fmt(Math.abs(item.price) * item.qty)}</span>
+                        </div>
+                      ))}
+                      <div style={{ marginTop: 14, fontWeight: 700, color: "#166534" }}>換入貨品</div>
+                      {replacementCartItems.length > 0 ? replacementCartItems.map((item, index) => (
+                        <div key={`replacement-${item.key || index}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 6, fontSize: 14 }}>
+                          <span>{item.name}（{sizeLabel(item)}）× {item.qty}</span>
+                          <span>{fmt(Math.abs(item.price) * item.qty)}</span>
+                        </div>
+                      )) : <div style={{ marginTop: 6, color: "#64748B", fontSize: 13 }}>沒有換入貨品</div>}
+                      <div style={{ marginTop: 14, padding: 12, borderRadius: 10, background: "#F8FAFC", display: "grid", gap: 7 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                          <span>本次對淨收入的影響</span><strong>{fmt(cartTotal)}</strong>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                          <span>{refundDue > 0 ? "應退款" : "客人需補款"}</span>
+                          <strong>{fmt(refundDue > 0 ? refundDue : changeDue)}</strong>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                        <button type="button" className="pos-btn" onClick={() => setExchangePreviewOpen(false)} style={{ flex: 1, padding: 11, borderRadius: 9, background: "#F1F5F9", color: "#334155", fontWeight: 700 }}>返回修改</button>
+                        <button
+                          type="button"
+                          className="pos-btn"
+                          disabled={!exchangeReason || (exchangeReason === "其他" && !exchangeReasonNote.trim())}
+                          onClick={() => {
+                            const reason = exchangeReason === "其他" ? `其他：${exchangeReasonNote.trim()}` : exchangeReason;
+                            setExchangePreviewOpen(false);
+                            checkout(reason);
+                          }}
+                          style={{ flex: 1, padding: 11, borderRadius: 9, border: 0, background: !exchangeReason || (exchangeReason === "其他" && !exchangeReasonNote.trim()) ? "#9CA3AF" : "#1F3A5F", color: "#fff", fontWeight: 700 }}
+                        >確認並完成退換</button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -4973,7 +5119,10 @@ function SaleTab({
 
       <button
         className="pos-btn"
-        onClick={checkout}
+        onClick={() => {
+          if (exchangeMode) setExchangePreviewOpen(true);
+          else checkout();
+        }}
         disabled={cart.length === 0 || checkoutSubmitting}
         style={{
           width: "100%",
@@ -7142,7 +7291,7 @@ function ReceiptQR({ order, language = "zh" }) {
   );
 }
 
-function ReceiptModal({ order, language = "zh", onLanguageChange, onClose, onRedoSale, onExchange, onPrintBrowser, onPrintBluetooth, btStatus }) {
+function ReceiptModal({ order, orders = [], language = "zh", onLanguageChange, onClose, canRedoSale = false, onRedoSale, onExchange, onPrintBrowser, onPrintBluetooth, btStatus }) {
   const [exchangeSelection, setExchangeSelection] = useState(null);
   const english = language === "en";
   const labels = receiptFieldLabels(language);
@@ -7174,6 +7323,7 @@ function ReceiptModal({ order, language = "zh", onLanguageChange, onClose, onRed
           <div style={{ textAlign: "center", color: "#888", fontSize: 11 }}>{english ? "ELECTRONIC RECEIPT" : "電子銷售單 ELECTRONIC RECEIPT"}</div>
           <div style={{ marginTop: 4 }}>{labels.receiptNo}: #{(order.id || "").toUpperCase()}</div>
           {order.exchangeSourceReceiptId && <div>{labels.sourceReceipt}: #{String(order.exchangeSourceReceiptId).toUpperCase()}</div>}
+          {order.adjustmentReason && <div>退換原因：{order.adjustmentReason}</div>}
           <div>{labels.date}: {order.date} {order.time}</div>
           <div>{labels.school}: {english ? "YMCA of Hong Kong Christian College" : order.school || "-"}</div>
           <div>{labels.customer}: {customerSurname(order.customerName) || "-"}</div>
@@ -7220,32 +7370,57 @@ function ReceiptModal({ order, language = "zh", onLanguageChange, onClose, onRed
         >
           <QrCode size={16} /> {english ? "View customer receipt" : "查看客人電子收據"}
         </button>
-        <button
-          className="pos-btn"
-          onClick={() => onRedoSale?.(order)}
-          title="將此收據所有商品帶入銷售頁，重新進行退／換貨處理"
-          style={{ width: "100%", padding: "13px 0", borderRadius: 10, background: "#FFF7ED", color: "#9A3412", border: "1px solid #FDBA74", fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 8 }}
-        >
-          <ShoppingCart size={16} /> {english ? "Return / exchange this sale" : "退／換貨：重新進行此單銷售"}
-        </button>
+        {canRedoSale && (
+          <button
+            className="pos-btn"
+            onClick={() => onRedoSale?.(order)}
+            title="將原單尚未退回的貨品帶入退換流程，完成後會保留原單及連結調整單"
+            style={{ width: "100%", padding: "13px 0", borderRadius: 10, background: "#FFF7ED", color: "#9A3412", border: "1px solid #FDBA74", fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 8 }}
+          >
+            <ShoppingCart size={16} /> {english ? "Return / exchange this sale" : "退／換貨：重新進行此單銷售"}
+          </button>
+        )}
         {exchangeSelection ? (
           <div style={{ background: "#FFF7ED", border: "1px solid #FDBA74", borderRadius: 10, padding: 12, marginBottom: 8 }}>
             <div style={{ color: "#9A3412", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>揀選需要更換的貨品（可多選）</div>
-            {order.items.map((item, index) => (
-              <label
-                key={`${item.name}-${item.size}-${index}`}
-                style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", boxSizing: "border-box", padding: "10px", marginBottom: 6, borderRadius: 8, background: "#fff", border: "1px solid #FDBA74", color: "#7C2D12", cursor: "pointer" }}
-              >
-                <input
-                  type="checkbox"
-                  checked={exchangeSelection.some((selected) => selected.index === index)}
-                  onChange={() => setExchangeSelection((current) => current.some((selected) => selected.index === index)
-                    ? current.filter((selected) => selected.index !== index)
-                    : [...current, { ...item, index }])}
-                />
-                <span>{item.name}（{sizeLabel(item)}）× {item.qty}，原價 {fmt(item.price)}</span>
-              </label>
-            ))}
+            {order.items.map((item, index) => {
+              const remaining = getRemainingReturnQuantity(item, orders);
+              const selectedItem = exchangeSelection.find((selected) => selected.index === index);
+              return (
+                <div key={`${item.name}-${item.size}-${index}`} style={{ width: "100%", boxSizing: "border-box", padding: "10px", marginBottom: 6, borderRadius: 8, background: "#fff", border: "1px solid #FDBA74", color: "#7C2D12" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: remaining > 0 ? "pointer" : "not-allowed" }}>
+                    <input
+                      type="checkbox"
+                      disabled={remaining <= 0}
+                      checked={Boolean(selectedItem)}
+                      onChange={() => setExchangeSelection((current) => current.some((selected) => selected.index === index)
+                        ? current.filter((selected) => selected.index !== index)
+                        : [...current, { ...item, index, qty: remaining }])}
+                    />
+                    <span>{item.name}（{sizeLabel(item)}）× {item.qty}，尚可退 {remaining}，原價 {fmt(item.price)}</span>
+                  </label>
+                  {selectedItem && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, paddingLeft: 24 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700 }}>本次退回</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max={remaining}
+                        value={selectedItem.qty}
+                        onChange={(event) => {
+                          const value = Number(event.target.value);
+                          setExchangeSelection((current) => current.map((selected) => selected.index === index
+                            ? { ...selected, qty: Number.isFinite(value) ? Math.max(1, Math.min(remaining, value)) : 1 }
+                            : selected));
+                        }}
+                        style={{ width: 64, padding: "6px 8px", border: "1px solid #FDBA74", borderRadius: 6, fontSize: 16, fontWeight: 700 }}
+                      />
+                      <span style={{ fontSize: 12 }}>最多 {remaining}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
             <button className="pos-btn" disabled={exchangeSelection.length === 0} onClick={() => onExchange?.(order, exchangeSelection)} style={{ width: "100%", padding: "10px", marginTop: 4, borderRadius: 8, background: "#166534", border: "none", color: "#fff", fontWeight: 700 }}>
               確定換選貨品（{exchangeSelection.length}款）
             </button>

@@ -50,7 +50,7 @@ Auth 登入開關是 `VITE_USE_SUPABASE_AUTH`。只有在 Supabase 已建立 `st
 
 Auth 模式的銷售交易會用 `create_order_idempotently` 一次寫入 `orders` 和 `order_items`。商品資料會由管理員首次登入時自動遷移到 `products`。
 
-收據編號由 Supabase 每日流水號自動產生，格式為 `VU-YYYYMMDD-0001`。啟用新版結帳前，先執行 `supabase/secure-migration.sql`，再執行 `supabase/idempotent-sales-checkout.sql`。新版 App 只會呼叫具冪等保護的 RPC；若 migration 尚未執行，結帳會保留購物車並提示管理員，不會退回非原子寫入方式。
+收據編號由 Supabase 每日流水號自動產生，格式為 `VU-YYYYMMDD-0001`。啟用新版結帳及退貨數量防護前，先執行 `supabase/secure-migration.sql`，再執行 `supabase/idempotent-sales-checkout.sql`。此 migration 同時記錄退貨所屬原單商品及退換原因，並在資料庫阻止超退及缺少原因的退換；舊版無法追蹤退貨商品的換貨記錄會先被視為未核實，需管理員檢查。新版 App 只會呼叫具冪等保護的 RPC；若 migration 尚未執行，結帳會保留購物車並提示管理員，不會退回非原子寫入方式。
 
 銷售記錄作廢只供管理員操作，需重新輸入管理員密碼並填寫原因。作廢會保留原單及稽核記錄，但不計入收入、件數或客人統計。啟用前須在 Supabase SQL Editor 執行 `supabase/void-sales-order.sql`；資料庫 RPC 亦會驗證管理員角色及最近 5 分鐘內的重新登入憑證。
 

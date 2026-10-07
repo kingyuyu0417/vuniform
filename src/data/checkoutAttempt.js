@@ -22,12 +22,14 @@ const checkoutFingerprint = (order) => JSON.stringify({
     qty: Number(item.qty || 1),
     exchangeReturn: Boolean(item.exchangeReturn),
     exchangeSourceReceiptId: item.exchangeSourceReceiptId || "",
+    sourceOrderItemId: item.sourceOrderItemId || "",
   })),
   total: Number(order.total || 0),
   cashReceived: Number(order.cashReceived || 0),
   changeDue: Number(order.changeDue || 0),
   refundDue: Number(order.refundDue || 0),
   exchangeSourceReceiptId: order.exchangeSourceReceiptId || "",
+  adjustmentReason: order.adjustmentReason || "",
 });
 
 export const getOrCreateCheckoutAttempt = (storage, order, createId = createCheckoutKey) => {
