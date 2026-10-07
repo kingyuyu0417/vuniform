@@ -22,6 +22,7 @@ import { getHongKongDate, QUEUE_SERVICE, queueOrderService } from "./services/qu
 import { findConflictingProductIds } from "./data/productConflictDetection";
 import { getProductGender, productGenderBackground, PRODUCT_GENDER_OPTIONS } from "./data/productGender";
 import { productUnit } from "./data/productUnits";
+import { createSalesExportWorkbook } from "./data/salesExport";
 import { validateAndDeduplicateImportRows } from "./lib/import/importDuplicateGuard";
 import baseSchoolCatalog from "./schoolCatalog.json";
 import workbookSchoolCatalog from "./workbookSchoolCatalog.json";
@@ -6809,6 +6810,8 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
   const [voidReason, setVoidReason] = useState("");
   const [voidError, setVoidError] = useState("");
   const [voidSubmitting, setVoidSubmitting] = useState(false);
+  const [exportingSales, setExportingSales] = useState(false);
+  const [salesExportError, setSalesExportError] = useState("");
   const effectiveDate = canViewAllDates ? date : todayStr();
   const normalizedPhoneSearch = phoneSearch.replace(/\D/g, "").slice(-4);
   const normalizedReceiptSearch = receiptSearch.trim().toLowerCase().replace(/^#/, "");
@@ -6867,32 +6870,41 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
     byCashier[key].count += 1;
   });
 
-  const handleExportCSV = () => {
-    const rows = [["日期", "時間", "單號", "狀態", "作廢原因", "開單員工", "學校", "門店", "單據件數", "單據總額", "款式", "尺碼", "長度", "數量", "單價", "款式小計"]];
-    dateOrders.forEach((o) => {
-      const items = Array.isArray(o.items) ? o.items : [];
-      items.forEach((item) => {
-        rows.push([
-          o.date,
-          o.time,
-          o.id,
-          o.voidedAt ? "已作廢" : "有效",
-          o.voidReason || "",
-          o.cashierName || "",
-          o.school || "",
-          o.outletName || outletNameForSchool(o.school, schoolMeta),
-          o.itemCount,
-          o.total,
-          item.name || "",
-          item.size || "",
-          item.length || "",
-          item.qty,
-          item.price,
-          Number(item.price || 0) * Number(item.qty || 0),
-        ]);
+  const handleExportSales = async () => {
+    if (exportingSales) return;
+    setExportingSales(true);
+    setSalesExportError("");
+    try {
+      const xlsx = await import("xlsx");
+      const exportDates = [...new Set(dayOrders.map((order) => order.date).filter(Boolean))].sort();
+      const dateLabel = exportDates.length === 1 ? exportDates[0] : exportDates.length > 1 ? "多日期" : effectiveDate;
+      const filters = [
+        outletFilter ? `門店：${outletFilter}` : "",
+        schoolFilter ? `學校：${schoolFilter}` : "",
+        normalizedPhoneSearch.length === 4 ? `電話尾4位：${normalizedPhoneSearch}` : "",
+        normalizedReceiptSearch ? `單號搜尋：${receiptSearch.trim()}` : "",
+      ].filter(Boolean);
+      const scope = [`日期：${dateLabel}`, ...filters].join("；");
+      const workbook = createSalesExportWorkbook(xlsx, dayOrders, {
+        outletForOrder: outletForOrder,
+        scope,
       });
-    });
-    downloadCSV(Papa.unparse(rows), `銷售紀錄_${todayStr()}.csv`);
+      const file = xlsx.write(workbook, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([file], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `銷售分析_${dateLabel}.xlsx`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      console.error("匯出銷售分析報表失敗", error);
+      setSalesExportError(`匯出失敗：${error?.message || "請重試"}`);
+    } finally {
+      setExportingSales(false);
+    }
   };
 
   const closeVoidDialog = () => {
@@ -6974,11 +6986,12 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
           {availableSchools.map((school) => <option key={school} value={school}>{school}</option>)}
         </select>
         {canExportSales && (
-          <button className="pos-btn" onClick={handleExportCSV} style={{ marginLeft: "auto", fontSize: 12, padding: "8px 12px", borderRadius: 8, background: "#fff", border: "1px solid #1F3A5F", color: "#1F3A5F", display: "flex", alignItems: "center", gap: 6 }}>
-            <Download size={13} /> 匯出全部紀錄
+          <button className="pos-btn" onClick={handleExportSales} disabled={exportingSales} style={{ marginLeft: "auto", fontSize: 12, padding: "8px 12px", borderRadius: 8, background: "#fff", border: "1px solid #1F3A5F", color: "#1F3A5F", display: "flex", alignItems: "center", gap: 6, opacity: exportingSales ? 0.6 : 1 }}>
+            <Download size={13} /> {exportingSales ? "整理報表中…" : "匯出分析報表"}
           </button>
         )}
       </div>
+      {salesExportError && <div role="alert" style={{ marginBottom: 10, color: "#B42318", fontSize: 13 }}>{salesExportError}</div>}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 14 }}>
         <div style={{ background: "#EEF1F5", borderRadius: 10, padding: "12px 14px" }}>
           <div style={{ fontSize: 12, color: "#666" }}>總收入</div>
