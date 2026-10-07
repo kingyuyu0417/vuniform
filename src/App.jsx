@@ -829,7 +829,7 @@ const smartImportRows = (rows, existingProducts) => {
       product.sizes.push({ size, length: normalizedLength, price, isTailored: tailored });
       addedSizes++;
     }
-    previewRows.push({ school: schoolKey, name, length, size, price, previousPrice, hasExistingSize: Boolean(existing), isTailored: tailored, normalizedLength, action, gender: getProductGender(product) });
+    previewRows.push({ school: schoolKey, name, length, size, price, previousPrice, hasExistingSize: Boolean(existing), isTailored: tailored, normalizedLength, action, gender: getProductGender(product), blockId: String(row["分析區塊"] || "") });
   });
   return { next, summary: { addedProducts, addedSizes, updatedSizes, rows: mappedRows.length }, errors, previewRows };
 };
@@ -5772,7 +5772,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     ? importPreview.previewRows.filter((row) => {
         const query = importPreviewSearch.trim().toLowerCase();
         if (!query) return true;
-        return [row.school, row.name, row.length, row.size, row.price, row.action]
+        return [row.school, row.name, row.length, row.size, row.price, row.action, row.blockId]
           .some((value) => String(value ?? "").toLowerCase().includes(query));
       })
     : [];
@@ -6037,7 +6037,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                 <div style={{ maxHeight: 180, overflowY: "auto", marginTop: 5, background: "#fff", borderRadius: 6, padding: 6 }}>
                   {filteredImportPreviewRows.map((row, index) => (
                   <div key={index} style={{ padding: "3px 0", borderBottom: "1px solid #EEF2F7", color: row.hasExistingSize && (row.previousPrice === null || Number(row.previousPrice) !== Number(row.price)) ? "#B42318" : "#334155" }}>
-                    {row.school} · {row.name} · {PRODUCT_GENDER_OPTIONS.find(({ value }) => value === row.gender)?.label || "男女生"} · {row.length ? `${row.length}/` : ""}{row.size} · {!row.hasExistingSize ? "新增" : row.previousPrice === null ? "現價未設定" : `$${row.previousPrice}`} → ${row.price}（{row.action}）
+                    {row.school} · {row.blockId ? `區塊 ${row.blockId} · ` : ""}{row.name} · {PRODUCT_GENDER_OPTIONS.find(({ value }) => value === row.gender)?.label || "男女生"} · {row.length ? `${row.length}/` : ""}{row.size} · {!row.hasExistingSize ? "新增" : row.previousPrice === null ? "現價未設定" : `$${row.previousPrice}`} → ${row.price}（{row.action}）
                   </div>
                   ))}
                   {filteredImportPreviewRows.length === 0 && <div style={{ padding: "8px 3px", color: "#64748B" }}>找不到符合資料。</div>}

@@ -56,6 +56,7 @@ const row = {
 // 下面兩個唔係畀 smartImportRows 用，係畀 preview 睇同埋 debug
 '分析備註': it.note || '',
 '來源': it.source? `${it.source.sheet}!${it.source.cell}`: '',
+'分析區塊': it.source?.blockId || '',
 };
 rows.push(row);
 

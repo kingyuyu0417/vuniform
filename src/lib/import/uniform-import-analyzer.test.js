@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import * as XLSX from "xlsx";
 import { analyzePriceWorkbook, parsePriceText } from "./uniform-import-analyzer.ts";
 import { SCHOOL_LAYOUTS } from "./school-layouts.ts";
+import { mapAnalyzerItems } from "./mapAnalyzerItems.js";
 
 const layout = {
   sheet: "Sheet1",
@@ -28,6 +30,24 @@ const workbookBuffer = (schoolName) => {
   XLSX.utils.book_append_sheet(workbook, sheet, "Sheet1");
   return XLSX.write(workbook, { type: "array", bookType: "xlsx" });
 };
+
+const fixtureBuffer = async (name) => {
+  const file = await readFile(new URL(`./fixtures/${name}`, import.meta.url));
+  return file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength);
+};
+
+const renameSheet = (buffer, newName) => {
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const oldName = workbook.SheetNames[0];
+  const renamedWorkbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(renamedWorkbook, workbook.Sheets[oldName], newName);
+  return XLSX.write(renamedWorkbook, { type: "array", bookType: "xlsx" });
+};
+
+const normalizedItems = (items) => items.map(({ source, ...item }) => ({
+  ...item,
+  source: { ...source, sheet: "" },
+}));
 
 test("does not apply the Kings layout to another school's Sheet1", () => {
   const result = analyzePriceWorkbook(
@@ -88,7 +108,7 @@ test("detects a school title in row four and reads cells from a non-A1 range", (
   assert.ok(fungLayout);
   const result = analyzePriceWorkbook(
     XLSX.write(workbook, { type: "array", bookType: "xlsx" }),
-    [fungLayout],
+    [{ ...fungLayout, signature: undefined }],
   );
 
   assert.equal(result.school, "香港中國婦女會馮堯敬紀念中學");
@@ -195,4 +215,224 @@ test("rejects generic detection without a recognized or selected school", () => 
 
   assert.equal(result.items.length, 0);
   assert.ok(result.warnings.some((warning) => warning.code === "SCHOOL_NOT_IDENTIFIED" && warning.severity === "error"));
+});
+
+test("matches verified real-school layouts after Excel copy suffixes without changing parsed items", async () => {
+  const fixtures = [
+    { file: "anthony-winter-2026.xlsx", school: "聖安多尼學校", count: 100 },
+    { file: "ymca-winter-2026.xlsx", school: "港青基信書院", count: 249 },
+    { file: "fung-yiu-king-summer.xlsx", school: "香港中國婦女會馮堯敬紀念中學", count: 142 },
+  ];
+
+  for (const fixture of fixtures) {
+    const buffer = await fixtureBuffer(fixture.file);
+    const workbook = XLSX.read(buffer, { type: "array" });
+    const sourceSheet = workbook.SheetNames[0];
+    const layout = SCHOOL_LAYOUTS.find((candidate) => candidate.school === fixture.school);
+    assert.ok(layout?.signature, `${fixture.school} layout has a verified structure signature`);
+
+    const original = analyzePriceWorkbook(buffer, [layout], { strict: false });
+    assert.equal(original.genericMode, false);
+    assert.equal(original.items.length, fixture.count);
+
+    const normalizedBuffer = renameSheet(buffer, sourceSheet);
+    const inferred = analyzePriceWorkbook(normalizedBuffer, [], { strict: false });
+    const roundTrippedLayout = {
+      ...layout,
+      signature: inferred.suggestedLayouts.find((candidate) => candidate.sheet === sourceSheet)?.signature,
+    };
+    assert.ok(roundTrippedLayout.signature);
+    const roundTrippedOriginal = analyzePriceWorkbook(
+      normalizedBuffer,
+      [roundTrippedLayout],
+      { strict: false },
+    );
+    const copied = analyzePriceWorkbook(
+      renameSheet(buffer, `${sourceSheet} (2)`),
+      [roundTrippedLayout],
+      { strict: false },
+    );
+    assert.equal(copied.genericMode, false);
+    assert.equal(copied.learnedMode, false);
+    assert.equal(copied.items.length, roundTrippedOriginal.items.length);
+    assert.deepEqual(normalizedItems(copied.items), normalizedItems(roundTrippedOriginal.items));
+    assert.equal(copied.warnings.some((warning) => warning.code === "COPY_LAYOUT_CHANGED"), false);
+  }
+});
+
+test("uses the verified YMCA layout for the exact real workbook named with (2)", async () => {
+  const original = analyzePriceWorkbook(
+    await fixtureBuffer("ymca-winter-2026.xlsx"),
+    SCHOOL_LAYOUTS,
+    { strict: false },
+  );
+  const copied = analyzePriceWorkbook(
+    await fixtureBuffer("ymca-winter-2026-copy.xlsx"),
+    SCHOOL_LAYOUTS,
+    { strict: false },
+  );
+
+  assert.equal(copied.genericMode, false);
+  assert.equal(copied.items.length, 249);
+  assert.deepEqual(normalizedItems(copied.items), normalizedItems(original.items));
+  assert.equal(copied.warnings.some((warning) => warning.code === "COPY_LAYOUT_CHANGED"), false);
+});
+
+test("falls back to generic parsing when a copied sheet no longer matches its verified signature", async () => {
+  const buffer = await fixtureBuffer("ymca-winter-2026.xlsx");
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const oldName = workbook.SheetNames[0];
+  const rows = XLSX.utils.sheet_to_json(workbook.Sheets[oldName], { header: 1, defval: "" });
+  const changedSheet = XLSX.utils.aoa_to_sheet(rows.map((row) => row.filter((_, index) => index !== 1)));
+  const changedWorkbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(changedWorkbook, changedSheet, `${oldName} (2)`);
+  const changedBuffer = XLSX.write(changedWorkbook, { type: "array", bookType: "xlsx" });
+  const layout = SCHOOL_LAYOUTS.find((candidate) => candidate.school === "港青基信書院");
+
+  const result = analyzePriceWorkbook(changedBuffer, [layout], {
+    strict: false,
+    fallbackSchool: "港青基信書院",
+  });
+
+  assert.equal(result.genericMode, true);
+  assert.ok(result.warnings.some((warning) => warning.code === "COPY_LAYOUT_CHANGED"));
+});
+
+test("normalizes the supported Excel copy suffix variants", () => {
+  const workbook = XLSX.utils.book_new();
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ["測試中學 夏季價目表"],
+    ["白恤衫", "尺碼", "單價"],
+    ["", "S", 80],
+    ["", "M", 90],
+    ["", "L", 100],
+  ]);
+  XLSX.utils.book_append_sheet(workbook, sheet, "Sheet1");
+  const source = XLSX.write(workbook, { type: "array", bookType: "xlsx" });
+  const normalized = renameSheet(source, "Sheet1");
+  const suggested = analyzePriceWorkbook(normalized, [], {
+    strict: false,
+    fallbackSchool: "測試中學",
+  }).suggestedLayouts;
+  const baseline = analyzePriceWorkbook(normalized, suggested, {
+    strict: false,
+    fallbackSchool: "測試中學",
+  });
+
+  for (const suffix of [" (2)", " (3)", " - 複本", " (副本)", "_copy", "_COPY"]) {
+    const copied = analyzePriceWorkbook(
+      renameSheet(source, `Sheet1${suffix}`),
+      suggested,
+      { strict: false, fallbackSchool: "測試中學" },
+    );
+    assert.equal(copied.genericMode, false, suffix);
+    assert.deepEqual(normalizedItems(copied.items), normalizedItems(baseline.items), suffix);
+    assert.equal(copied.warnings.some((warning) => warning.code === "COPY_LAYOUT_CHANGED"), false, suffix);
+  }
+});
+
+test("scores product labels, keeps unit prices, and tags each generic block", () => {
+  const workbook = XLSX.utils.book_new();
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ["測試中學 夏季價目表"],
+    ["白恤衫"],
+    ["", "尺碼", "單價", "2件價"],
+    ["", "S", 32, 60],
+    ["", "M", 34, 64],
+    ["", "L", 36, 68],
+  ]);
+  XLSX.utils.book_append_sheet(workbook, sheet, "Sheet1");
+
+  const result = analyzePriceWorkbook(
+    XLSX.write(workbook, { type: "array", bookType: "xlsx" }),
+    [],
+    { strict: false, fallbackSchool: "測試中學" },
+  );
+  const mapped = mapAnalyzerItems(result.items);
+
+  assert.equal(result.genericMode, true);
+  assert.deepEqual(result.items.map((entry) => [entry.item, entry.size, entry.unitPrice]), [
+    ["白恤衫", "S", 32],
+    ["白恤衫", "M", 34],
+    ["白恤衫", "L", 36],
+  ]);
+  assert.ok(result.items.every((entry) => entry.source.blockId));
+  assert.deepEqual(mapped.rows.map((row) => row["價錢"]), [32, 34, 36]);
+  assert.ok(mapped.rows.every((row) => row["分析區塊"]));
+});
+
+test("does not treat surcharge notes as product names and asks for preview review", () => {
+  const workbook = XLSX.utils.book_new();
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ["測試中學 夏季價目表"],
+    ["褲長33-38.5吋長同價"],
+    ["校褲", "尺碼", "單價"],
+    ["校褲", "S", 40],
+    ["", "M", 45],
+    ["", "L", 50],
+  ]);
+  XLSX.utils.book_append_sheet(workbook, sheet, "Sheet1");
+
+  const result = analyzePriceWorkbook(
+    XLSX.write(workbook, { type: "array", bookType: "xlsx" }),
+    [],
+    { strict: false, fallbackSchool: "測試中學" },
+  );
+
+  assert.ok(result.items.length > 0);
+  assert.ok(result.items.every((entry) => !/褲長|吋|同價|加\s*\$/.test(entry.item)));
+  assert.ok(result.warnings.some((warning) => warning.code === "SURCHARGE_REVIEW"));
+});
+
+test("reports ambiguous numeric-only size and price columns instead of guessing", () => {
+  const workbook = XLSX.utils.book_new();
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ["測試中學 夏季價目表"],
+    ["運動短褲"],
+    ["", 30, 31],
+    ["", 32, 33],
+    ["", 34, 35],
+  ]);
+  XLSX.utils.book_append_sheet(workbook, sheet, "Sheet1");
+
+  const result = analyzePriceWorkbook(
+    XLSX.write(workbook, { type: "array", bookType: "xlsx" }),
+    [],
+    { strict: false, fallbackSchool: "測試中學" },
+  );
+
+  assert.equal(result.items.length, 0);
+  assert.ok(result.warnings.some((warning) => warning.code === "NUMERIC_COLUMN_AMBIGUOUS"));
+});
+
+test("generic review of the real summer sheet never promotes surcharge text to a product", async () => {
+  const buffer = await fixtureBuffer("fung-yiu-king-summer.xlsx");
+  const result = analyzePriceWorkbook(buffer, [], {
+    strict: false,
+    fallbackSchool: "香港中國婦女會馮堯敬紀念中學",
+  });
+  const names = result.items.map((entry) => entry.item);
+  const skirt = result.items.find((entry) => entry.item === "白裙" && entry.size === "33");
+  const importedSkirtRows = mapAnalyzerItems(skirt ? [skirt] : []).rows;
+
+  assert.equal(skirt?.unitPrice, 87);
+  assert.deepEqual(skirt?.bundles, [{ qty: 2, unit: "條", price: 174 }]);
+  assert.deepEqual(importedSkirtRows.map((row) => row["價錢"]), [87]);
+  assert.ok(names.includes("白長西褲"));
+  assert.ok(names.includes("白尖領恤"));
+  assert.ok(names.every((name) => !/加\s*\$|或以上|同價|吋|褲長/.test(name)));
+  assert.ok(result.warnings.some((warning) => warning.code === "SURCHARGE_REVIEW"));
+  assert.ok(result.items.every((entry) => entry.source.blockId));
+});
+
+test("keeps the winter set and its single garment options as separate products", async () => {
+  const result = analyzePriceWorkbook(
+    await fixtureBuffer("ymca-winter-2026.xlsx"),
+    SCHOOL_LAYOUTS,
+    { strict: false },
+  );
+  const names = new Set(result.items.map((entry) => entry.item));
+
+  assert.ok(names.has("運動套裝（外套及長褲）"));
+  assert.ok(names.has("運動套裝（單件：外套／長褲）"));
 });

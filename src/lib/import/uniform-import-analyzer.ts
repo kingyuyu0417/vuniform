@@ -59,7 +59,7 @@ export interface AnalyzedItem {
   bundles: BundleInfo[];           // 2件 / 3件 / 2條 …
   setTotal?: number;               // 全套價（複合款式）
   note?: string;
-  source: { sheet: string; cell: string };
+  source: { sheet: string; cell: string; blockId?: string; blockName?: string };
 }
 
 export interface PriceColConfig {
@@ -102,6 +102,7 @@ export interface BlockConfig {
   secondDim?: SecondDimConfig;     // R11 二維變體
   setCheck?: { setLabel: string; singleLabel: string; ratio: number }; // R7
   unavailableMarks?: string[];     // 預設 ['x']
+  reviewNotes?: string[];
 }
 
 export interface SheetLayoutConfig {
@@ -255,6 +256,10 @@ function sheetStructureSignature(g: SheetGrid, blocks: BlockConfig[]): string {
   return `v1-${hash.toString(16).padStart(16, '0')}`;
 }
 
+function normalizeSheetName(name: string): string {
+  return name.trim().replace(/(?:\s+\((?:[2-9]|\d{2,})\)|\s*-\s*複本|\s*\(副本\)|_copy)$/i, '').trim();
+}
+
 function cellText(g: SheetGrid, addr: string): string {
   const [r, c] = parseAddr(addr);
   return (g.grid[r] && g.grid[r][c]) ?? '';
@@ -276,6 +281,24 @@ function detectTitle(g: SheetGrid, knownSchools: string[] = []): { school: strin
   return { school, season };
 }
 
+function findSurchargeNotes(g: SheetGrid): ImportWarning[] {
+  const warnings: ImportWarning[] = [];
+  for (let row = 0; row < g.nRows; row++) {
+    for (let col = 0; col < g.nCols; col++) {
+      const text = g.grid[row]?.[col] ?? '';
+      if (!/(?:加\s*\$\s*\d+|(?:褲長|長度|上圍).*(?:寸|吋)|(?:寸|吋).*(?:同價|加\s*\$))/i.test(text)) continue;
+      warnings.push({
+        sheet: g.name,
+        cell: `${idxToCol(col)}${row + 1}`,
+        code: 'SURCHARGE_REVIEW',
+        severity: 'warn',
+        message: `「${text}」係附加費／尺寸說明，唔會當作獨立商品匯入；請核對預覽中的價格處理。`,
+      });
+    }
+  }
+  return warnings;
+}
+
 /* ================= 主入口 ================= */
 
 export function analyzePriceWorkbook(
@@ -295,6 +318,7 @@ export function analyzePriceWorkbook(
 
   for (const sheetName of wb.SheetNames) {
     const g = sheetToGrid(sheetName, wb.Sheets[sheetName]);
+    warnings.push(...findSurchargeNotes(g));
     const knownSchools = [...new Set([
       ...layouts.map((layout) => layout.school),
       opts.fallbackSchool,
@@ -304,25 +328,39 @@ export function analyzePriceWorkbook(
 
     // 同名 sheet 要按校名配對；校名不明或不符時，唔套用具名版面，避免讀錯別校價錢。
     const detectedSchool = title.school || school;
-    const cands = layouts.filter((l) => l.sheet === sheetName);
-    const candidateLayout = cands.find((l) => l.school === detectedSchool)
-      ?? cands.find((l) => !l.school);
+    const normalizedSheetName = normalizeSheetName(sheetName);
+    const isCopySheet = normalizedSheetName !== sheetName.trim();
+    const cands = layouts.filter((l) => normalizeSheetName(l.sheet) === normalizedSheetName);
+    const candidateLayout = cands.find((l) => l.school === title.school && l.season === title.season)
+      ?? cands.find((l) => !l.school && l.season === title.season);
     const currentSuggestedBlocks = candidateLayout?.signature ? suggestBlocks(g) : [];
-    const changedLearnedLayout = Boolean(
+    const changedLayout = Boolean(
       candidateLayout?.signature
       && candidateLayout.signature !== sheetStructureSignature(g, currentSuggestedBlocks),
     );
-    const layout = changedLearnedLayout ? undefined : candidateLayout;
+    const missingCopySignature = Boolean(isCopySheet && candidateLayout && !candidateLayout.signature);
+    const changedLayoutOrUnverifiedCopy = changedLayout || missingCopySignature;
+    const layout = changedLayoutOrUnverifiedCopy ? undefined : candidateLayout;
     let layoutMismatch = false;
-    if (changedLearnedLayout && candidateLayout) {
+    if (changedLayoutOrUnverifiedCopy && candidateLayout) {
       warnings.push({
         sheet: sheetName,
-        code: 'LEARNED_LAYOUT_CHANGED',
+        code: isCopySheet ? 'COPY_LAYOUT_CHANGED' : 'LEARNED_LAYOUT_CHANGED',
         severity: 'warn',
-        message: `「${sheetName}」結構同上次核對過嘅版面不同，已停用已記住版面並改用通用辨識；請逐項核對。`,
+        message: isCopySheet
+          ? `「${sheetName}」係疑似副本，但版面結構未能核對（${missingCopySignature ? '未有已驗證結構記錄' : '結構與已驗證版面不同'}），已轉通用辨識；請逐項核對。`
+          : `「${sheetName}」結構同上次核對過嘅版面不同，已停用已記住版面並改用通用辨識；請逐項核對。`,
       });
     }
-    if (!layout && cands.length > 0 && !changedLearnedLayout) {
+    if (isCopySheet && !candidateLayout && !changedLayoutOrUnverifiedCopy) {
+      warnings.push({
+        sheet: sheetName,
+        code: 'COPY_LAYOUT_CHANGED',
+        severity: 'warn',
+        message: `「${sheetName}」係疑似副本，但校名／季節／版面未能配對已驗證設定，已轉通用辨識；請逐項核對。`,
+      });
+    }
+    if (!layout && cands.length > 0 && !changedLayoutOrUnverifiedCopy) {
       layoutMismatch = true;
       const configuredSchools = [...new Set(cands.map((candidate) => candidate.school).filter(Boolean))];
       const message = configuredSchools.length === 1
@@ -342,7 +380,7 @@ export function analyzePriceWorkbook(
     } else if (layout) {
       if (layout.school && !school) school = layout.school;
       if (layout.season && !season) season = layout.season;
-      if (layout.learned || layout.signature) {
+      if (layout.learned) {
         learnedMode = true;
         warnings.push({
           sheet: sheetName,
@@ -369,7 +407,21 @@ export function analyzePriceWorkbook(
       for (const b of layout.blocks) parseBlock(g, b, ctx, items, warnings, layout);
       checkStrayCells(g, layout, warnings);
     } else if (!strict) {
-      const guessed = suggestBlocks(g);
+      const { blocks: guessed, warnings: detectionWarnings } = detectGenericBlocks(g);
+      warnings.push(...detectionWarnings.map((warning) => ({
+        sheet: sheetName,
+        code: warning.code,
+        severity: 'warn' as const,
+        message: warning.message,
+      })));
+      for (const block of guessed.filter((candidate) => !candidate.priceCols.some((column) => column.kind === 'unit'))) {
+        warnings.push({
+          sheet: sheetName,
+          code: 'GENERIC_NO_UNIT_PRICE',
+          severity: 'warn',
+          message: `區塊「${block.name ?? block.id}」只辨識到多件／組合價欄，沒有可靠單件價，未建立商品；請核對表格欄位。`,
+        });
+      }
       const fallbackSchool = detectedSchool || opts.fallbackSchool || school;
       if (!fallbackSchool) {
         warnings.push({
@@ -391,8 +443,19 @@ export function analyzePriceWorkbook(
         school: fallbackSchool,
         season: title.season || season,
         signature: sheetStructureSignature(g, guessed),
-        blocks: guessed,
+        learned: true,
+        blocks: guessed.map(({ reviewNotes, ...block }) => block),
       });
+      for (const block of guessed) {
+        for (const note of block.reviewNotes ?? []) {
+          warnings.push({
+            sheet: sheetName,
+            code: 'GENERIC_BLOCK_REVIEW',
+            severity: 'warn',
+            message: `區塊「${block.name ?? block.id}」：${note}`,
+          });
+        }
+      }
       warnings.push({
         sheet: sheetName, code: 'GENERIC_LAYOUT', severity: 'warn',
         message: layoutMismatch
@@ -461,6 +524,15 @@ function parseBlock(
 ): void {
   const marks = (b.unavailableMarks ?? ['x']).map((s) => s.toLowerCase());
   const baseName = resolveName(g, b);
+  const surchargeValues = b.secondDim?.values.filter((value) => value.plus !== 0) ?? [];
+  if (surchargeValues.length > 0) {
+    warnings.push({
+      sheet: g.name,
+      code: 'SURCHARGE_REVIEW',
+      severity: 'warn',
+      message: `「${baseName}」含尺寸附加費（${surchargeValues.map((value) => `${value.label} +$${value.plus}`).join('、')}）；附加費不會作為獨立商品，請核對預覽價格。`,
+    });
+  }
 
   // R13：名格有數字、價錢格又有另一個數字
   if (b.nameCells && b.sizeCol == null && !b.nameCol) {
@@ -680,7 +752,7 @@ function makeItem(
     ...(tailored ? { tailored: true } : {}),
     setTotal,
     note: parts.length ? parts.join('；') : undefined,
-    source: { sheet: g.name, cell },
+    source: { sheet: g.name, cell, blockId: b.id, blockName: label },
   };
 }
 
@@ -863,74 +935,413 @@ function checkStrayCells(g: SheetGrid, layout: SheetLayoutConfig, warnings: Impo
 
 /* ================= 自動偵測（新版面半自動對位） ================= */
 
-/**
- * 冇設定檔時嘅啟發式偵測。回傳建議 BlockConfig（需人手確認）。
- */
-export function suggestBlocks(g: SheetGrid): BlockConfig[] {
-  const blocks: BlockConfig[] = [];
-  const used = new Set<string>();
-  let n = 0;
+interface GenericDetectionWarning {
+  code: string;
+  message: string;
+}
 
-  for (let r = 0; r < Math.min(45, g.nRows); r++) {
-    let c = 0;
-    while (c < g.nCols) {
-      const t = g.grid[r][c];
-      const isHeader = t && !isNumericText(t) && t.replace(/[$\s,，]/g, '').length >= 2 && !used.has(`${r},${c}`);
-      if (isHeader) {
-        const numCols: number[] = [];
-        for (let cc = c; cc < Math.min(g.nCols, c + 6); cc++) {
-          let cnt = 0;
-          for (let rr = r + 1; rr < Math.min(g.nRows, r + 13); rr++)
-            if (isNumericText(g.grid[rr][cc])) cnt++;
-          if (cnt >= 3) numCols.push(cc);
-        }
-        if (numCols.length >= 1) {
-          const textSizeCol = numCols.length === 1
-            ? Array.from({ length: numCols[0] - c }, (_, offset) => c + offset)
-              .find((candidateCol) => {
-                let sizeCount = 0;
-                for (let rr = r + 1; rr < Math.min(g.nRows, r + 13); rr++) {
-                  if (isTextSize(g.grid[rr][candidateCol])) sizeCount++;
-                }
-                return sizeCount >= 3;
-              })
-            : undefined;
-          const sizeCol = textSizeCol ?? numCols[0];
-          const priceColumns = textSizeCol === undefined ? numCols.slice(1) : numCols;
-          if (priceColumns.length === 0) {
-            c++;
-            continue;
-          }
-          let last = r;
-          for (let rr = r + 1; rr < g.nRows; rr++) {
-            if (numCols.some((cc) => isNumericText(g.grid[rr][cc]))) last = rr;
-            else break;
-          }
-          if (last > r + 1) {
-            const priceCols: PriceColConfig[] = priceColumns.map((cc) => {
-              const h = `${g.grid[r][cc - 1] ?? ''} ${g.grid[r][cc] ?? ''} ${t}`;
-              const bm = h.match(/(\d+)\s*[件條對]/);
-              return {
-                col: idxToCol(cc), kind: bm ? 'bundle' as const : 'unit' as const,
-                bundleQty: bm ? parseInt(bm[1], 10) : undefined,
-                bundleUnit: bm ? bm[0].replace(/\d+\s*/, '') : undefined,
-              };
-            });
-            blocks.push({
-              id: `auto-${++n}`, name: t,
-              dataFirst: r + 2, dataLast: last + 1,
-              sizeCol: idxToCol(sizeCol), priceCols,
-            });
-            for (let cc = c; cc <= Math.max(...numCols); cc++) used.add(`${r},${cc}`);
-            c = Math.max(...numCols) + 1;
-            continue;
-          }
-        }
-      }
-      c++;
+interface GenericNameCell {
+  row: number;
+  col: number;
+  value: string;
+}
+
+interface NumericColumnStats {
+  median: number;
+  range: number;
+  integerRatio: number;
+  rangeSizeCount: number;
+  currencyCount: number;
+}
+
+const GENERIC_HEADER_TEXT = /^(?:size|尺碼|碼數|價錢|價格|單價|售價|價|product|款式|產品|項目|男|女|男裝|女裝|男生|女生|裁碼|均碼|腰圍|上圍|褲長|長度|連章|\d+\s*(?:件|條|對))$/i;
+const GENERIC_NOTE_PATTERNS = [/加\s*\$/, /或以上/, /同價/, /吋/, /寸/, /["”]/, /褲長/, /上圍|上圉/, /長度/];
+const GENERIC_NOTE_TEXT = new RegExp(GENERIC_NOTE_PATTERNS.map((pattern) => pattern.source).join('|'), 'i');
+const SIZE_HEADER_TEXT = /^(?:size|尺碼|碼數|腰圍|上圍|領圍)$/i;
+const PRICE_HEADER_TEXT = /^(?:單價|售價|價錢|價格|價錢|price)$/i;
+
+function isGenericNameCell(value: string): boolean {
+  const text = value.trim();
+  return text.length >= 2
+    && !GENERIC_HEADER_TEXT.test(text)
+    && !isSizeValue(text)
+    && !/價目表|價目|price\s*list|(?:中學|小學|書院|學院|學校).*(?:夏|冬)/i.test(text);
+}
+
+function isGenericNumericCell(value: string): boolean {
+  return isNumericText(value) && !GENERIC_NOTE_TEXT.test(value);
+}
+
+function numericColumnStats(g: SheetGrid, col: number, firstRow: number, lastRow: number): NumericColumnStats {
+  const values: number[] = [];
+  let rangeSizeCount = 0, currencyCount = 0;
+  for (let row = firstRow; row <= lastRow; row++) {
+    const text = g.grid[row]?.[col] ?? '';
+    if (!isGenericNumericCell(text)) continue;
+    const value = parsePriceText(text);
+    if (value === null) continue;
+    values.push(value);
+    if (/^\s*\d+(?:\.\d+)?\s*[-–~]\s*\d+(?:\.\d+)?\s*$/.test(text)) rangeSizeCount++;
+    if (/\$/.test(text)) currencyCount++;
+  }
+  values.sort((a, b) => a - b);
+  const middle = Math.floor(values.length / 2);
+  const median = values.length === 0
+    ? 0
+    : values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2;
+  return {
+    median,
+    range: values.length > 0 ? values[values.length - 1] - values[0] : 0,
+    integerRatio: values.length > 0 ? values.filter(Number.isInteger).length / values.length : 0,
+    rangeSizeCount,
+    currencyCount,
+  };
+}
+
+function isSizeValue(value: string): boolean {
+  return isTextSize(value) || expandSizeRange(value) !== null;
+}
+
+function findTextSizeColumn(g: SheetGrid, firstCol: number, lastCol: number, firstRow: number, lastRow: number): number | undefined {
+  let bestCol: number | undefined, bestCount = 0;
+  for (let col = firstCol; col <= lastCol; col++) {
+    let count = 0;
+    for (let row = firstRow; row <= lastRow; row++)
+      if (isSizeValue(g.grid[row]?.[col] ?? '')) count++;
+    if (count > bestCount) { bestCol = col; bestCount = count; }
+  }
+  return bestCount >= 3 ? bestCol : undefined;
+}
+
+function isColumnHeader(g: SheetGrid, col: number, firstRow: number, lastRow: number, pattern: RegExp): boolean {
+  for (let row = firstRow; row <= lastRow; row++)
+    if (pattern.test((g.grid[row]?.[col] ?? '').trim())) return true;
+  return false;
+}
+
+function scoreGenericName(
+  g: SheetGrid,
+  candidate: GenericNameCell,
+  priceCol: number,
+  dataFirst: number,
+  nameCandidates: GenericNameCell[],
+): number {
+  let score = candidate.row < dataFirst && dataFirst - candidate.row <= 3 ? 3 : 0;
+  const nearestLeft = nameCandidates
+    .filter((other) =>
+      other.row === candidate.row
+      && other.col <= priceCol
+      && !GENERIC_NOTE_TEXT.test(other.value)
+      && !isNumericText(other.value),
+    )
+    .sort((a, b) => b.col - a.col)[0];
+  if (nearestLeft?.row === candidate.row && nearestLeft.col === candidate.col) score += 2;
+  const headerStart = Math.max(0, candidate.row - 2);
+  const headerEnd = Math.min(g.nRows - 1, dataFirst);
+  const nearbyHeader = g.grid.slice(headerStart, headerEnd + 1).some((row) =>
+    row.some((value, col) => /款式|產品|項目/i.test(value)
+      && Math.min(Math.abs(col - candidate.col), Math.abs(col - priceCol)) <= 3),
+  );
+  if (nearbyHeader) score += 1;
+  for (const pattern of GENERIC_NOTE_PATTERNS)
+    if (pattern.test(candidate.value)) score -= 5;
+  if (isNumericText(candidate.value)) score -= 3;
+  if (candidate.value.includes('$')) score -= 2;
+  return score;
+}
+
+function hasBlankColumnBetween(g: SheetGrid, firstCol: number, lastCol: number): boolean {
+  const low = Math.min(firstCol, lastCol);
+  const high = Math.max(firstCol, lastCol);
+  for (let col = low + 1; col < high; col++)
+    if (g.grid.every((row) => !row[col]?.trim())) return true;
+  return false;
+}
+
+function hasCompetingNameBetween(
+  candidate: GenericNameCell,
+  targetCol: number,
+  nameCandidates: GenericNameCell[],
+): boolean {
+  const low = Math.min(candidate.col, targetCol);
+  const high = Math.max(candidate.col, targetCol);
+  return nameCandidates.some((other) => {
+    if (other.row < candidate.row - 1 || other.row > candidate.row + 3
+      || other.col === candidate.col || GENERIC_NOTE_TEXT.test(other.value)) return false;
+    const between = other.col >= low && other.col <= high
+      && !(other.row === candidate.row && Math.abs(other.col - candidate.col) === 1);
+    const adjacentLeftBlock = targetCol < candidate.col
+      && other.col < targetCol
+      && other.col >= targetCol - 1
+      && (other.row === candidate.row || other.row === candidate.row - 1);
+    return between || adjacentLeftBlock;
+  });
+}
+
+function detectBundleColumn(g: SheetGrid, col: number, firstRow: number, headerStart: number): PriceColConfig | undefined {
+  for (let row = firstRow - 1; row >= headerStart; row--) {
+    const ownHeader = g.grid[row]?.[col] ?? '';
+    const match = ownHeader.match(/(\d+)\s*([件條對])/);
+    if (match) return {
+      col: idxToCol(col), kind: 'bundle',
+      bundleQty: Number(match[1]), bundleUnit: match[2],
+    };
+    const adjacentHeader = g.grid[row]?.[col - 1] ?? '';
+    const adjacentMatch = adjacentHeader.match(/(\d+)\s*([件條對])/);
+    if (adjacentMatch && !ownHeader.trim()) return {
+      col: idxToCol(col), kind: 'bundle',
+      bundleQty: Number(adjacentMatch[1]), bundleUnit: adjacentMatch[2],
+    };
+  }
+  return undefined;
+}
+
+function detectGenericGender(g: SheetGrid, sizeCol: number, priceCols: number[]): string | undefined {
+  const middleCol = priceCols.length
+    ? (sizeCol + priceCols.reduce((sum, col) => sum + col, 0) / priceCols.length) / 2
+    : sizeCol;
+  const labels: { label: string; col: number }[] = [];
+  for (let row = 0; row < Math.min(TITLE_SCAN_ROWS, g.nRows); row++) {
+    for (let col = 0; col < g.nCols; col++) {
+      const text = g.grid[row]?.[col]?.replace(/\s+/g, '') ?? '';
+      if (/^(男女|男女生|男女裝)$/.test(text)) labels.push({ label: '男女', col });
+      else if (/^(男|男生|男裝)$/.test(text)) labels.push({ label: '男', col });
+      else if (/^(女|女生|女裝)$/.test(text)) labels.push({ label: '女', col });
     }
   }
-  return blocks;
+  return labels.sort((a, b) => Math.abs(a.col - middleCol) - Math.abs(b.col - middleCol))[0]?.label;
+}
+
+function detectGenericBlocks(g: SheetGrid): { blocks: BlockConfig[]; warnings: GenericDetectionWarning[] } {
+  const blocks: BlockConfig[] = [];
+  const warnings: GenericDetectionWarning[] = [];
+  const nameCandidates: GenericNameCell[] = [];
+  for (let row = 0; row < Math.min(45, g.nRows); row++) {
+    for (let col = 0; col < g.nCols; col++) {
+      const value = g.grid[row]?.[col] ?? '';
+      if (isGenericNameCell(value) && !isNumericText(value)) nameCandidates.push({ row, col, value });
+    }
+  }
+
+  const proposed: {
+    id: string;
+    name: string;
+    row: number;
+    dataFirst: number;
+    dataLast: number;
+    sizeCol: number;
+    priceCols: PriceColConfig[];
+    reviewNotes: string[];
+  }[] = [];
+  const diagnosed = new Set<string>();
+  const diagnose = (code: string, key: string, message: string) => {
+    if (diagnosed.has(key)) return;
+    diagnosed.add(key);
+    warnings.push({ code, message });
+  };
+
+  for (const candidate of nameCandidates) {
+    const minCol = Math.max(0, candidate.col - 2);
+    const maxCol = Math.min(g.nCols - 1, candidate.col + 6);
+    const scanLast = Math.min(g.nRows - 1, candidate.row + 13);
+    const numericRuns: { col: number; start: number; end: number }[] = [];
+    for (let col = minCol; col <= maxCol; col++) {
+      let runStart = -1, runLength = 0, bestRun = { start: -1, end: -1, length: 0 };
+      for (let row = candidate.row + 1; row <= scanLast; row++) {
+        if (isGenericNumericCell(g.grid[row]?.[col] ?? '')) {
+          if (runStart < 0) runStart = row;
+          runLength++;
+          if (runLength > bestRun.length) bestRun = { start: runStart, end: row, length: runLength };
+        } else {
+          runStart = -1;
+          runLength = 0;
+        }
+      }
+      if (bestRun.length >= 3 && !hasCompetingNameBetween(candidate, col, nameCandidates))
+        numericRuns.push({ col, start: bestRun.start, end: bestRun.end });
+    }
+    if (numericRuns.length === 0) continue;
+
+    const firstDataRow = Math.min(...numericRuns.map((run) => run.start));
+    const activeRuns = numericRuns.filter((run) => run.start <= firstDataRow + 1);
+    const numericCols = activeRuns.map((run) => run.col);
+    const dataLastRow = Math.max(...activeRuns.map((run) => run.end));
+
+    const textSizeCol = findTextSizeColumn(
+      g,
+      Math.max(0, candidate.col - 3),
+      Math.max(0, numericCols[0] - 1),
+      firstDataRow,
+      dataLastRow,
+    );
+    let sizeCol = textSizeCol;
+    let priceColumnIndexes = numericCols;
+    const reviewNotes: string[] = [];
+
+    if (sizeCol === undefined) {
+      const stats = numericCols.map((col) => ({
+        col,
+        stats: numericColumnStats(g, col, firstDataRow, dataLastRow),
+        sizeHeader: Math.abs(col - candidate.col) <= 2
+          && isColumnHeader(g, col, Math.max(0, candidate.row - 1), firstDataRow - 1, SIZE_HEADER_TEXT),
+        priceHeader: isColumnHeader(g, col, Math.max(0, candidate.row - 1), firstDataRow - 1, PRICE_HEADER_TEXT),
+      }));
+      const explicitSize = stats.find((entry) => entry.sizeHeader);
+      if (explicitSize) {
+        sizeCol = explicitSize.col;
+        priceColumnIndexes = numericCols.filter((col) => col !== sizeCol);
+      } else if (stats.length >= 2) {
+        const first = stats[0];
+        const next = stats.slice(1).find((entry) => entry.col > first.col);
+        const sizeScore = Number(first.stats.median >= 10 && first.stats.median <= 60)
+          + Number(first.stats.range <= 40)
+          + Number(first.stats.integerRatio >= 0.75)
+          + first.stats.rangeSizeCount * 2
+          + Number(Boolean(next && next.stats.median > first.stats.median * 1.25)) * 2;
+        const priceScore = Number(first.stats.median >= 30 && first.stats.median <= 500)
+          + Number(first.stats.range > 30)
+          + Number(first.stats.integerRatio < 1)
+          + first.stats.currencyCount * 2
+          + Number(first.priceHeader) * 4;
+        if (sizeScore >= priceScore + 1 && next && first.stats.median < next.stats.median * 0.9) {
+          sizeCol = first.col;
+          priceColumnIndexes = numericCols.filter((col) => col !== sizeCol);
+        } else {
+          const summary = stats.map(({ col, stats: values }) =>
+            `${idxToCol(col)}欄中位數 ${Number(values.median.toFixed(1))}、值域 ${Number(values.range.toFixed(1))}、整數 ${(values.integerRatio * 100).toFixed(0)}%`,
+          ).join('；');
+          diagnose(
+            'NUMERIC_COLUMN_AMBIGUOUS',
+            `numeric:${candidate.row}:${numericCols.join(',')}`,
+            `款式候選「${candidate.value}」${idxToCol(candidate.col)}${candidate.row + 1}附近，未能確定 ${numericCols.map(idxToCol).join('／')} 欄係尺碼定價錢（${summary}），未以呢組數字建立商品。`,
+          );
+          continue;
+        }
+      } else {
+        diagnose(
+          'NUMERIC_COLUMN_AMBIGUOUS',
+          `numeric:${candidate.row}:${numericCols.join(',')}`,
+          `款式候選「${candidate.value}」${idxToCol(candidate.col)}${candidate.row + 1}附近，未能確定 ${numericCols.map(idxToCol).join('／')} 欄係尺碼定價錢，未以呢組數字建立商品。`,
+        );
+        continue;
+      }
+    }
+    priceColumnIndexes = priceColumnIndexes.filter((col) => {
+      const adjacentProductName = nameCandidates.some((name) =>
+        name.col === col + 1
+        && name.row >= candidate.row - 1
+        && name.row <= candidate.row + 3
+        && !GENERIC_NOTE_TEXT.test(name.value),
+      );
+      if (!adjacentProductName) return true;
+      const stats = numericColumnStats(g, col, firstDataRow, dataLastRow);
+      const bundle = detectBundleColumn(g, col, firstDataRow, candidate.row);
+      const explicitPrice = isColumnHeader(g, col, Math.max(0, candidate.row - 1), firstDataRow - 1, PRICE_HEADER_TEXT);
+      const likelySize = stats.median >= 10 && stats.median <= 60
+        && stats.range <= 40 && stats.integerRatio >= 0.75;
+      return !likelySize || Boolean(bundle) || explicitPrice;
+    });
+    if (sizeCol === undefined || priceColumnIndexes.length === 0) continue;
+
+    const chosenNames = new Map<number, { name: GenericNameCell; score: number }>();
+    for (const priceCol of priceColumnIndexes) {
+      const nearby = nameCandidates
+        .filter((name) =>
+          Math.abs(name.col - priceCol) <= 6
+          && name.row < firstDataRow
+          && firstDataRow - name.row <= 3
+          && !hasCompetingNameBetween(name, priceCol, nameCandidates),
+        )
+        .map((name) => ({ name, score: scoreGenericName(g, name, priceCol, firstDataRow, nameCandidates) }))
+        .sort((a, b) => b.score - a.score);
+      const best = nearby[0];
+      if (!best || best.score < 0) {
+        diagnose(
+          'NO_PRODUCT_NAME',
+          `name:${firstDataRow}:${priceCol}`,
+          `${idxToCol(priceCol)} 欄附近搵唔到可信款式名稱，該價錢欄未匯入。`,
+        );
+        continue;
+      }
+      const tied = nearby.filter((entry) => entry.score === best.score && entry.name.value !== best.name.value);
+      if (tied.length > 0) {
+        diagnose(
+          'BLOCK_BOUNDARY_UNCERTAIN',
+          `boundary:${firstDataRow}:${priceCol}`,
+          `${idxToCol(priceCol)} 欄附近有多個同分款式名稱（${[best.name, ...tied.map((entry) => entry.name)].map((entry) => entry.value).join('、')}），未硬切區塊，該欄不作自動配對。`,
+        );
+        continue;
+      }
+      chosenNames.set(priceCol, best);
+    }
+
+    const candidateScore = [...chosenNames.values()]
+      .filter((entry) => entry.name.row === candidate.row && entry.name.col === candidate.col)
+      .sort((a, b) => b.score - a.score)[0];
+    if (!candidateScore) continue;
+
+    const ownedPriceCols = [...chosenNames.entries()]
+      .filter(([, entry]) => entry.name.row === candidate.row && entry.name.col === candidate.col);
+    if (ownedPriceCols.length === 0) continue;
+    const priceCols: PriceColConfig[] = ownedPriceCols.map(([col]) => {
+      const bundle = detectBundleColumn(g, col, firstDataRow, candidate.row);
+      return {
+        ...(bundle ?? { col: idxToCol(col), kind: 'unit' as const }),
+      };
+    });
+    if ([sizeCol, ...priceCols.map((price) => colToIdx(price.col))]
+      .some((col) => hasBlankColumnBetween(g, candidate.col, col))) {
+      reviewNotes.push('款式、尺碼與價錢之間有全空欄，系統按資料列對齊；請特別核對區塊邊界。');
+    }
+    const uniqueDataKey = `${candidate.row}:${firstDataRow}:${sizeCol}:${priceCols.map((price) => price.col).join(',')}`;
+    if (proposed.some((block) => block.id === uniqueDataKey)) continue;
+    if (candidateScore.score < 3) reviewNotes.push('款式名稱辨識信心偏低，請核對商品名稱。');
+    proposed.push({
+      id: uniqueDataKey,
+      name: candidate.value,
+      row: candidate.row,
+      dataFirst: firstDataRow + 1,
+      dataLast: dataLastRow + 1,
+      sizeCol,
+      priceCols,
+      reviewNotes,
+    });
+  }
+
+  const usedPriceRanges = new Set<string>();
+  for (const item of proposed) {
+    const available = item.priceCols.filter((price) => {
+      const key = `${item.dataFirst}:${item.dataLast}:${price.col}`;
+      if (usedPriceRanges.has(key)) {
+        diagnose(
+          'BLOCK_BOUNDARY_UNCERTAIN',
+          `overlap:${key}`,
+          `${price.col} 欄同時被多個候選區塊使用，未重複匯入；請核對區塊邊界。`,
+        );
+        return false;
+      }
+      usedPriceRanges.add(key);
+      return true;
+    });
+    if (available.length === 0) continue;
+    const index = blocks.length + 1;
+    blocks.push({
+      id: `auto-${index}`,
+      name: item.name,
+      gender: detectGenericGender(g, item.sizeCol, available.map((price) => colToIdx(price.col))),
+      dataFirst: item.dataFirst,
+      dataLast: item.dataLast,
+      sizeCol: idxToCol(item.sizeCol),
+      priceCols: available,
+      reviewNotes: item.reviewNotes,
+    });
+  }
+  return { blocks, warnings };
+}
+
+/** 冇設定檔時嘅啟發式偵測；結果只作預覽，必須人手核對。 */
+export function suggestBlocks(g: SheetGrid): BlockConfig[] {
+  return detectGenericBlocks(g).blocks;
 }
 
 /* ================= 每年格價：新舊價錢 diff（R22） ================= */

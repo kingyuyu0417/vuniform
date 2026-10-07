@@ -8,13 +8,14 @@ const item = (gender, size = "M") => ({
   gender,
   size,
   unitPrice: 100,
-  source: { sheet: "冬季", cell: "A1" },
+  source: { sheet: "冬季", cell: "A1", blockId: "auto-1" },
 });
 
 test("maps parser gender onto imported rows for new products", () => {
   const { rows, genderByName } = mapAnalyzerItems([item("男")]);
 
   assert.equal(rows[0].gender, "boys");
+  assert.equal(rows[0]["分析區塊"], "auto-1");
   assert.equal(genderByName.get("測試學校 校服"), "boys");
 });
 
@@ -29,6 +30,18 @@ test("maps unknown and unisex labels to the supported unisex value", () => {
   const { rows } = mapAnalyzerItems([item(undefined), item("男女生", "L")]);
 
   assert.deepEqual(rows.map((row) => row.gender), ["unisex", "unisex"]);
+});
+
+test("does not import bundle prices while preserving the single-unit price", () => {
+  const { rows } = mapAnalyzerItems([{
+    ...item("男"),
+    unitPrice: 50,
+    bundles: [{ qty: 2, unit: "件", price: 90 }],
+  }]);
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]["價錢"], 50);
+  assert.equal("bundles" in rows[0], false);
 });
 
 test("separates blocking parser errors from review warnings", () => {

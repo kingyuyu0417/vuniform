@@ -21,6 +21,7 @@ const YMCA_WINTER_2026: SheetLayoutConfig = {
   sheet: '冬 2026',
   school: '港青基信書院',
   season: '冬',
+  signature: 'v1-bee74a0403c2b314',
   ignoreCells: ['D2', 'P2', 'I3', 'I15', 'K15', 'I16', 'K16', 'I17', 'K17'],
   blocks: [
     // ---------- 男區 ----------
@@ -204,6 +205,7 @@ const ANTHONY_WINTER_2026: SheetLayoutConfig = {
   sheet: '冬 2026',
   school: '聖安多尼學校',
   season: '冬',
+  signature: 'v1-a0ecf8d02442db5f',
   ignoreCells: [],
   blocks: [
     {
@@ -284,6 +286,7 @@ const FUNG_YIU_KING_SUMMER_2026: SheetLayoutConfig = {
   sheet: 'Sheet1',
   school: '香港中國婦女會馮堯敬紀念中學',
   season: '夏',
+  signature: 'v1-b8a6ca54e525bc19',
   ignoreCells: [
     'B6', 'G6', 'F7', 'I7', 'L7', 'B17', 'F17', 'B18', 'F18', 'G18', 'I18',
     'B19', 'F19', 'G19', 'H19', 'I19', 'G20', 'I20', 'F23', 'I23',
