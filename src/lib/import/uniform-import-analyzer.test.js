@@ -118,7 +118,12 @@ test("detects a school title in row four and reads cells from a non-A1 range", (
   assert.deepEqual(result.items[0].bundles, [{ qty: 2, unit: "條", price: 174 }]);
   assert.equal(result.items.find((item) => item.item === "黑皮帶")?.unitPrice, 50);
   assert.equal(result.items.find((item) => item.item === "黑皮帶（38寸以上）")?.unitPrice, 60);
-  assert.equal(result.items.find((item) => item.size === "腰23／33-38.5寸")?.unitPrice, 76);
+  assert.deepEqual(
+    ["33寸", "34寸", "35寸", "36寸", "37寸", "38.5寸"].map((length) => (
+      result.items.find((item) => item.size === `腰23／${length}`)?.unitPrice
+    )),
+    [76, 76, 76, 76, 76, 76],
+  );
   assert.equal(result.items.find((item) => item.size === "腰23／43寸或以上")?.unitPrice, 106);
   assert.equal(result.warnings.some((warning) => warning.code === "SCHOOL_LAYOUT_MISMATCH"), false);
 });
@@ -221,7 +226,7 @@ test("matches verified real-school layouts after Excel copy suffixes without cha
   const fixtures = [
     { file: "anthony-winter-2026.xlsx", school: "聖安多尼學校", count: 100 },
     { file: "ymca-winter-2026.xlsx", school: "港青基信書院", count: 249 },
-    { file: "fung-yiu-king-summer.xlsx", school: "香港中國婦女會馮堯敬紀念中學", count: 216 },
+    { file: "fung-yiu-king-summer.xlsx", school: "香港中國婦女會馮堯敬紀念中學", count: 301 },
   ];
 
   for (const fixture of fixtures) {
@@ -270,13 +275,19 @@ test("expands Fung Yiu King tailored trouser and shirt sizes across their price 
   const shirts = result.items.filter((item) => item.source.blockId === "point-collar-shirt" && item.tailored);
   const mappedTailored = mapAnalyzerItems([...trousers, ...shirts]).rows.filter((row) => row.isTailored);
 
-  assert.equal(trousers.length, 9 * 4);
+  assert.equal(trousers.length, 9 * 9);
   assert.equal(shirts.length, 10 * 4);
   assert.equal(mappedTailored.length, trousers.length + shirts.length);
   assert.equal(trousers.some((item) => item.size === "裁碼"), false);
   assert.equal(shirts.some((item) => item.size === "裁碼"), false);
   assert.deepEqual(
-    [trousers.find((item) => item.size === "腰32／33-38.5寸")?.unitPrice,
+    ["33寸", "34寸", "35寸", "36寸", "37寸", "38.5寸"].map((length) => (
+      trousers.find((item) => item.size === `腰32／${length}`)?.unitPrice
+    )),
+    [134, 134, 134, 134, 134, 134],
+  );
+  assert.deepEqual(
+    [trousers.find((item) => item.size === "腰32／33寸")?.unitPrice,
       trousers.find((item) => item.size === "腰32／40寸")?.unitPrice],
     [134, 144],
   );

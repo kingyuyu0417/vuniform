@@ -324,7 +324,12 @@ const FUNG_YIU_KING_SUMMER_2026: SheetLayoutConfig = {
       secondDim: {
         label: '褲長',
         values: [
-          { label: '33-38.5寸', plus: 0 },
+          { label: '33寸', plus: 0 },
+          { label: '34寸', plus: 0 },
+          { label: '35寸', plus: 0 },
+          { label: '36寸', plus: 0 },
+          { label: '37寸', plus: 0 },
+          { label: '38.5寸', plus: 0 },
           { label: '40寸', plus: 10 },
           { label: '41.5寸', plus: 20 },
           { label: '43寸或以上', plus: 30 },
