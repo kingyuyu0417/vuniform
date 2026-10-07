@@ -221,7 +221,7 @@ test("matches verified real-school layouts after Excel copy suffixes without cha
   const fixtures = [
     { file: "anthony-winter-2026.xlsx", school: "聖安多尼學校", count: 100 },
     { file: "ymca-winter-2026.xlsx", school: "港青基信書院", count: 249 },
-    { file: "fung-yiu-king-summer.xlsx", school: "香港中國婦女會馮堯敬紀念中學", count: 142 },
+    { file: "fung-yiu-king-summer.xlsx", school: "香港中國婦女會馮堯敬紀念中學", count: 216 },
   ];
 
   for (const fixture of fixtures) {
@@ -258,6 +258,33 @@ test("matches verified real-school layouts after Excel copy suffixes without cha
     assert.deepEqual(normalizedItems(copied.items), normalizedItems(roundTrippedOriginal.items));
     assert.equal(copied.warnings.some((warning) => warning.code === "COPY_LAYOUT_CHANGED"), false);
   }
+});
+
+test("expands Fung Yiu King tailored trouser and shirt sizes across their price dimensions", async () => {
+  const result = analyzePriceWorkbook(
+    await fixtureBuffer("fung-yiu-king-summer.xlsx"),
+    SCHOOL_LAYOUTS,
+    { strict: false },
+  );
+  const trousers = result.items.filter((item) => item.source.blockId === "summer-trousers" && item.tailored);
+  const shirts = result.items.filter((item) => item.source.blockId === "point-collar-shirt" && item.tailored);
+  const mappedTailored = mapAnalyzerItems([...trousers, ...shirts]).rows.filter((row) => row.isTailored);
+
+  assert.equal(trousers.length, 9 * 4);
+  assert.equal(shirts.length, 10 * 4);
+  assert.equal(mappedTailored.length, trousers.length + shirts.length);
+  assert.equal(trousers.some((item) => item.size === "裁碼"), false);
+  assert.equal(shirts.some((item) => item.size === "裁碼"), false);
+  assert.deepEqual(
+    [trousers.find((item) => item.size === "腰32／33-38.5寸")?.unitPrice,
+      trousers.find((item) => item.size === "腰32／40寸")?.unitPrice],
+    [134, 144],
+  );
+  assert.deepEqual(
+    [shirts.find((item) => item.size === "領16.5／上圍32-38吋")?.unitPrice,
+      shirts.find((item) => item.size === "領16.5／上圍40吋")?.unitPrice],
+    [94, 104],
+  );
 });
 
 test("uses the verified YMCA layout for the exact real workbook named with (2)", async () => {

@@ -52,6 +52,7 @@ const row = {
 '尺碼': size,
 '價錢': price,
 '是否裁碼': tailored? '是': '',
+isTailored: tailored,
 '長度': '',
 // 下面兩個唔係畀 smartImportRows 用，係畀 preview 睇同埋 debug
 '分析備註': it.note || '',

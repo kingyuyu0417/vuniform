@@ -15,6 +15,9 @@ export const PRIMARY_SHIRT_CUSTOM_SIZES = ['13', '13.5', '14', '14.5', '15', '15
 /** 恤衫類細碼（推斷，用戶可刪減） */
 export const SHIRT_BELOW_MIN = ['10', '10.5', '11', '11.5'];
 
+const FUNG_TROUSER_CUSTOM_SIZES = ['32', '34', '36', '38', '40', '42', '44', '46', '48'];
+const FUNG_SHIRT_CUSTOM_SIZES = ['16.5', '17', '17.5', '18', '18.5', '19', '19.5', '20', '20.5', '21'];
+
 /* ================= 港青基信書院・冬 2026 ================= */
 
 const YMCA_WINTER_2026: SheetLayoutConfig = {
@@ -310,7 +313,12 @@ const FUNG_YIU_KING_SUMMER_2026: SheetLayoutConfig = {
       id: 'summer-trousers', name: '白長西褲',
       dataFirst: 8, dataLast: 16, sizeCol: 'G',
       priceCols: [
-        { col: 'H', kind: 'unit' },
+        {
+          col: 'H', kind: 'unit',
+          customSizes: FUNG_TROUSER_CUSTOM_SIZES,
+          customNote: '裁碼尺碼展開（沿用智能匯入規則）',
+          customNoteAppend: true,
+        },
         { col: 'I', kind: 'bundle', bundleQty: 2, bundleUnit: '條' },
       ],
       secondDim: {
@@ -330,7 +338,12 @@ const FUNG_YIU_KING_SUMMER_2026: SheetLayoutConfig = {
       id: 'point-collar-shirt', name: '白尖領恤',
       dataFirst: 8, dataLast: 17, sizeCol: 'J',
       priceCols: [
-        { col: 'K', kind: 'unit' },
+        {
+          col: 'K', kind: 'unit',
+          customSizes: FUNG_SHIRT_CUSTOM_SIZES,
+          customNote: '裁碼尺碼展開（沿用智能匯入規則）',
+          customNoteAppend: true,
+        },
         { col: 'L', kind: 'bundle', bundleQty: 2, bundleUnit: '件' },
       ],
       secondDim: {
