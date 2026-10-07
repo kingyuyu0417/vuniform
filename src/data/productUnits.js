@@ -1,7 +1,7 @@
 export const productUnit = (name = "", size = "") => {
   const normalizedName = String(name || "").replace(/\s+/g, "");
   const normalizedSize = String(typeof size === "object" && size !== null ? size.size || "" : size || "").replace(/\s+/g, "");
-  if (/襪/.test(normalizedName) && /^\d+對$/.test(normalizedSize)) return "包";
+  if (/襪/.test(normalizedName) && /^\d+對(?:裝)?$/.test(normalizedSize)) return "包";
   if (/襪.*[（(]?\d+對|[（(]3對[）)]/.test(normalizedName)) return "包";
   if (/襪|鞋|手套/.test(normalizedName)) return "對";
   if (/套裝|套服/.test(normalizedName)) return "套";
