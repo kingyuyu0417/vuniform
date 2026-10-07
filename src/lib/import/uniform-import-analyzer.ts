@@ -170,13 +170,21 @@ const LETTER_ORDER = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
 /** R10：範圍尺碼展開（16-18 → 16,17,18；S-XL → S,M,L,XL） */
 export function expandSizeRange(raw: string): string[] | null {
   const t = raw.trim();
-  let m = t.match(/^(\d+(?:\.\d+)?)\s*[-–~]\s*(\d+(?:\.\d+)?)$/);
+  let m = t.match(/^(\d+(?:\.\d+)?)\s*[-–~]\s*(\d+(?:\.\d+)?)\s*((?:寸|吋)(?:長)?)?$/i);
   if (m) {
     const a = parseFloat(m[1]), b = parseFloat(m[2]);
     if (b <= a || b - a > 40) return null;
-    const step = Number.isInteger(a) && Number.isInteger(b) ? 1 : 0.5;
+    const unit = m[3] ?? '';
+    const skipsPreviousWholeSize = Number.isInteger(a) && unit && b % 1 === 0.5;
+    const step = Number.isInteger(a) && (Number.isInteger(b) || skipsPreviousWholeSize)
+      ? 1
+      : 0.5;
     const out: string[] = [];
-    for (let v = a; v <= b + 1e-9; v += step) out.push(String(Number(v.toFixed(2))));
+    const lastRegularSize = skipsPreviousWholeSize ? Math.floor(b) - 1 : b;
+    for (let v = a; v <= lastRegularSize + 1e-9; v += step)
+      out.push(`${Number(v.toFixed(2))}${unit}`);
+    if (out.length && Number(out[out.length - 1].replace(/[^\d.]/g, '')) < b)
+      out.push(`${b}${unit}`);
     return out;
   }
   m = t.match(/^([A-Z]+)\s*[-–~]\s*([A-Z]+)$/i);
@@ -999,7 +1007,9 @@ function numericColumnStats(g: SheetGrid, col: number, firstRow: number, lastRow
 }
 
 function isSizeValue(value: string): boolean {
-  return isTextSize(value) || expandSizeRange(value) !== null;
+  return isTextSize(value)
+    || /^\d+(?:\.\d+)?(?:寸|吋)(?:長)?$/i.test(value.trim())
+    || expandSizeRange(value) !== null;
 }
 
 function findTextSizeColumn(g: SheetGrid, firstCol: number, lastCol: number, firstRow: number, lastRow: number): number | undefined {

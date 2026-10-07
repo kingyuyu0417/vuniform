@@ -399,6 +399,41 @@ test("scores product labels, keeps unit prices, and tags each generic block", ()
   assert.ok(mapped.rows.every((row) => row["分析區塊"]));
 });
 
+test("expands inch size ranges for schools without a dedicated layout", () => {
+  const workbook = XLSX.utils.book_new();
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ["新學校中學 夏季價目表"],
+    ["白長褲"],
+    ["款式", "尺碼", "單價"],
+    ["", "33-38.5吋", 76],
+    ["", "40吋", 86],
+    ["", "41.5吋", 96],
+  ]);
+  XLSX.utils.book_append_sheet(workbook, sheet, "Sheet1");
+
+  const result = analyzePriceWorkbook(
+    XLSX.write(workbook, { type: "array", bookType: "xlsx" }),
+    [],
+    { strict: false, fallbackSchool: "新學校中學" },
+  );
+
+  assert.equal(result.genericMode, true);
+  assert.deepEqual(
+    result.items.map((item) => [item.size, item.unitPrice]),
+    [
+      ["33吋", 76],
+      ["34吋", 76],
+      ["35吋", 76],
+      ["36吋", 76],
+      ["37吋", 76],
+      ["38.5吋", 76],
+      ["40吋", 86],
+      ["41.5吋", 96],
+    ],
+  );
+  assert.ok(result.warnings.some((warning) => warning.code === "GENERIC_LAYOUT"));
+});
+
 test("does not treat surcharge notes as product names and asks for preview review", () => {
   const workbook = XLSX.utils.book_new();
   const sheet = XLSX.utils.aoa_to_sheet([
