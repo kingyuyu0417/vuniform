@@ -22,6 +22,7 @@ import { getHongKongDate, QUEUE_SERVICE, queueOrderService } from "./services/qu
 import { findConflictingProductIds } from "./data/productConflictDetection";
 import { getProductGender, productGenderBackground, PRODUCT_GENDER_OPTIONS } from "./data/productGender";
 import { productUnit } from "./data/productUnits";
+import { validateAndDeduplicateImportRows } from "./lib/import/importDuplicateGuard";
 import baseSchoolCatalog from "./schoolCatalog.json";
 import workbookSchoolCatalog from "./workbookSchoolCatalog.json";
 import workbookSchoolOutlets from "./workbookSchoolOutlets.json";
@@ -752,20 +753,24 @@ const mergeCSVIntoProducts = (csvText, existingProducts) => {
 
 const normalizeImportHeader = (value) => String(value || "").replace(/\s+/g, "").toLowerCase();
 const HIGH_CONFIDENCE_IMPORT_THRESHOLD = 0.95;
-const smartImportRows = (rows, existingProducts) => {
+const smartImportRows = (rows, existingProducts, branchSchoolIds = {}) => {
   const headerAliases = {
     school: ["學校", "学校", "school"],
     name: ["款式名稱", "款式", "商品名稱", "品名", "name", "product"],
     length: ["長度", "袖長", "褲長", "裙長", "length"],
     size: ["尺碼", "碼數", "腰圍", "上圍", "領圍", "size"],
     price: ["價錢", "價格", "單價", "price"],
+    branchId: ["分店ID", "branch_id", "branch"],
+    gender: ["性別區", "性別", "gender"],
   };
   const aliases = Object.fromEntries(Object.entries(headerAliases).flatMap(([key, names]) => names.map((name) => [normalizeImportHeader(name), key])));
-  const mappedRows = rows.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [aliases[normalizeImportHeader(key)] || key, value])));
+  const mappedRows = rows.map((row, index) => ({
+    ...Object.fromEntries(Object.entries(row).map(([key, value]) => [aliases[normalizeImportHeader(key)] || key, value])),
+    __sourceRow: index + 2,
+  }));
   const previewRows = [];
   const errors = [];
   const next = normalizeProductState(existingProducts);
-  const importedPrices = new Map();
   let addedProducts = 0;
   let addedSizes = 0;
   let updatedSizes = 0;
@@ -773,6 +778,7 @@ const smartImportRows = (rows, existingProducts) => {
   const { rows: importRows, unresolvedNames } = splitCompositeImportRows(mappedRows);
   unresolvedNames.forEach((names) => errors.push(`「${names.join("／")}」未能按尺碼明確拆分，請先整理成每款獨立列再匯入。`));
 
+  const preparedRows = [];
   importRows.forEach((row, index) => {
     const school = String(row.school || "").trim();
     const name = String(row.name || "").trim();
@@ -791,22 +797,70 @@ const smartImportRows = (rows, existingProducts) => {
     const schoolKey = school || UNASSIGNED;
     const tailored = isTailoredFlag(row.isTailored) || size === "裁碼" || /^裁碼(?:\s|$)/.test(length);
     const normalizedLength = length.replace(/^裁碼\s*/, "");
-    const importKey = `${schoolKey}\u0000${name}\u0000${tailored ? "tailored" : "regular"}\u0000${normalizedLength}\u0000${size}`;
-    const previousImportPrice = importedPrices.get(importKey);
-    if (previousImportPrice !== undefined && previousImportPrice !== price) {
-      errors.push(`第${index + 2}行：「${name}」${length ? `${length}/` : ""}${size} 出現衝突價格 $${previousImportPrice} 和 $${price}，已停止自動覆蓋。`);
-      return;
-    }
-    importedPrices.set(importKey, price);
-    let product = next.find((item) => schoolOf(item) === schoolKey && item.name === name);
+    const branchId = String(row.branchId || branchSchoolIds[canonicalSchoolName(schoolKey)] || "").trim();
+    const gender = getProductGender({
+      name,
+      gender: ["boys", "girls", "unisex"].includes(String(row.gender || "").trim()) ? String(row.gender).trim() : "",
+    });
+    preparedRows.push({
+      school: schoolKey,
+      name,
+      size,
+      length,
+      normalizedLength,
+      price,
+      isTailored: tailored,
+      branchId,
+      gender,
+      note: String(row["分析備註"] || row.note || ""),
+      blockId: String(row["分析區塊"] || ""),
+      sourceLocation: String(row["來源"] || `第${row.__sourceRow || index + 2}行`),
+    });
+  });
+
+  const productIdentity = (product) => {
+    const parts = productIdentityParts(
+      canonicalSchoolName(schoolOf(product)),
+      product.name,
+      product.branch_id ?? product.branchId,
+      getProductGender(product),
+    );
+    return {
+      key: productIdentityKey(parts.school, parts.name, parts.branchId),
+      gender: parts.gender,
+    };
+  };
+  const duplicateCheck = validateAndDeduplicateImportRows({
+    rows: preparedRows,
+    existingProducts: Array.isArray(existingProducts) ? existingProducts : [],
+    getProductIdentity: productIdentity,
+    getSizeIdentity: sizeIdentityKey,
+    isIdentityCompatible: compatibleProductGenders,
+    getNotes: (row) => row.note,
+  });
+  errors.push(...duplicateCheck.errors);
+
+  duplicateCheck.rows.forEach((row) => {
+    const { school: schoolKey, name, size, length, normalizedLength, price, isTailored: tailored, branchId } = row;
+    const importedSize = { size, length: normalizedLength, isTailored: tailored };
+    const importedSizeKey = sizeIdentityKey(importedSize);
+    const rowIdentity = productIdentity(row);
+    let product = next.find((item) => {
+      const identity = productIdentity(item);
+      return identity.key === rowIdentity.key && compatibleProductGenders(identity.gender, rowIdentity.gender);
+    });
     if (!product) {
-      const gender = ["boys", "girls", "unisex"].includes(row.gender) ? row.gender : undefined;
-      product = { id: uid(), school: schoolKey === UNASSIGNED ? "" : schoolKey, name, ...(gender ? { gender } : {}), sizes: [] };
+      product = {
+        id: uid(),
+        school: schoolKey === UNASSIGNED ? "" : schoolKey,
+        name,
+        gender: row.gender,
+        ...(branchId ? { branch_id: branchId } : {}),
+        sizes: [],
+      };
       next.push(product);
       addedProducts++;
     }
-    const importedSize = { size, length: normalizedLength, isTailored: tailored };
-    const importedSizeKey = sizeIdentityKey(importedSize);
     const matchingSizes = product.sizes
       .map((item, itemIndex) => ({ item, itemIndex }))
       .filter(({ item }) => sizeIdentityKey(item) === importedSizeKey);
@@ -829,12 +883,35 @@ const smartImportRows = (rows, existingProducts) => {
       product.sizes.push({ size, length: normalizedLength, price, isTailored: tailored });
       addedSizes++;
     }
-    previewRows.push({ school: schoolKey, name, length, size, price, previousPrice, hasExistingSize: Boolean(existing), isTailored: tailored, normalizedLength, action, gender: getProductGender(product), blockId: String(row["分析區塊"] || "") });
+    previewRows.push({
+      school: schoolKey,
+      name,
+      length,
+      size,
+      price,
+      previousPrice,
+      hasExistingSize: Boolean(existing),
+      isTailored: tailored,
+      normalizedLength,
+      action,
+      gender: getProductGender(product),
+      branchId,
+      blockId: row.blockId,
+      sourceLocations: row.sourceLocations,
+      duplicateDetailsDiffer: row.duplicateDetailsDiffer,
+    });
   });
-  return { next, summary: { addedProducts, addedSizes, updatedSizes, rows: mappedRows.length }, errors, previewRows };
+  return {
+    next,
+    summary: { addedProducts, addedSizes, updatedSizes, rows: mappedRows.length },
+    errors,
+    blockingErrors: duplicateCheck.errors,
+    duplicateWarnings: duplicateCheck.warnings,
+    previewRows,
+  };
 };
 const pricePreviewHasChanged = (previousRows = [], nextRows = []) => {
-  const rowKey = (row) => `${row.school}\u0000${row.name}\u0000${row.isTailored ? "tailored" : "regular"}\u0000${row.normalizedLength || ""}\u0000${row.size}`;
+  const rowKey = (row) => `${row.school}\u0000${row.branchId || ""}\u0000${row.gender || ""}\u0000${row.name}\u0000${row.isTailored ? "tailored" : "regular"}\u0000${row.normalizedLength || ""}\u0000${row.size}`;
   const pricesByKey = (rows) => new Map(rows.map((row) => [rowKey(row), {
     price: row.previousPrice ?? null,
     exists: Boolean(row.hasExistingSize),
@@ -852,10 +929,12 @@ const pricePreviewHasChanged = (previousRows = [], nextRows = []) => {
 };
 const isHighConfidenceImport = ({ analysis, confidence, conversionWarnings = [] }) => {
   const errors = Array.isArray(analysis?.errors) ? analysis.errors : [];
+  const blockingErrors = Array.isArray(analysis?.blockingErrors) ? analysis.blockingErrors : [];
   const previewRows = Array.isArray(analysis?.previewRows) ? analysis.previewRows : [];
   return Number(confidence) >= HIGH_CONFIDENCE_IMPORT_THRESHOLD
     && previewRows.length > 0
     && errors.length === 0
+    && blockingErrors.length === 0
     && conversionWarnings.length === 0
     && previewRows.every((row) => row.school && row.school !== UNASSIGNED);
 };
@@ -5422,7 +5501,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
       const converted = isStandardFormat
         ? { rows: xlsx.utils.sheet_to_json(selectedSheet.sheet, { defval: "" }), warnings: [] }
         : convertIrregularPriceList(sheetRows);
-      const analysis = smartImportRows(converted.rows, products);
+      const analysis = smartImportRows(converted.rows, products, branchSchoolIds);
 
       // 基本信心評估（簡單版）：
       // - 以可解析行數比例為主體（最多 0.6）
@@ -5445,6 +5524,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
         timestamp,
         conversionMode: isStandardFormat ? "標準格式" : "價目表格式轉換",
         conversionWarnings: converted.warnings,
+        blockingErrors: analysis.blockingErrors || [],
         analysis,
         next: analysis.next,
         summary: analysis.summary,
@@ -5467,6 +5547,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
         conversionMode: isStandardFormat ? "標準格式" : "價目表格式轉換",
         conversionWarnings: converted.warnings,
         sourceRows: converted.rows,
+        blockingErrors: analysis.blockingErrors || [],
         ...analysis,
         errors: [...converted.warnings, ...analysis.errors],
         warning: priceChangesNeedReview ? "匯入包含現有價格更改，為避免誤改價錢，請核對現價與匯入價後再確認保存。" : "",
@@ -5485,12 +5566,13 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
           }
         }
         const latestProducts = await loadLatestProducts();
-        const latestAnalysis = smartImportRows(converted.rows, latestProducts);
+        const latestAnalysis = smartImportRows(converted.rows, latestProducts, branchSchoolIds);
         const priceChanged = pricePreviewHasChanged(analysis.previewRows, latestAnalysis.previewRows);
         if (priceChanged || latestAnalysis.errors.length > 0) {
           setImportPreview({
             ...preview,
             ...latestAnalysis,
+            blockingErrors: latestAnalysis.blockingErrors || [],
             errors: [...converted.warnings, ...latestAnalysis.errors],
             warning: priceChanged
               ? "預覽後商品現價已有更新，已刷新現價對照；請重新核對後再次確認保存。"
@@ -5598,13 +5680,14 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
       }
 
       const mapped = mapAnalyzerItems(items);
-      const analysis = smartImportRows(mapped.rows, products);
+      const analysis = smartImportRows(mapped.rows, products, branchSchoolIds);
       const reviewWarnings = [
         ...(genericMode
         ? ["通用辨識只供整理及預覽參考；確認匯入前，請逐項核對款式、尺碼、價格及所屬學校。", ...conversionWarnings]
         : conversionWarnings),
         ...(layoutLoadWarning ? [layoutLoadWarning] : []),
       ];
+      const blockingErrors = [...analyzerErrors, ...(analysis.blockingErrors || [])];
       const errors = [...analyzerErrors, ...analysis.errors];
       const totalRows = Math.max(1, mapped.rows.length);
       const confidence = Math.max(0, Math.min(genericMode ? 0.75 : 1, Number(((totalRows - errors.length) / totalRows).toFixed(2))));
@@ -5616,7 +5699,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
         timestamp,
         conversionMode,
         conversionWarnings: reviewWarnings,
-        blockingErrors: analyzerErrors,
+        blockingErrors,
         genericMode,
         learnedMode,
         requiresManualReview,
@@ -5639,7 +5722,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
         fileName: file.name,
         conversionMode,
         conversionWarnings: reviewWarnings,
-        blockingErrors: analyzerErrors,
+        blockingErrors,
         genericMode,
         learnedMode,
         requiresManualReview,
@@ -5689,7 +5772,20 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
         }
       }
       const latestProducts = await loadLatestProducts();
-      const analysis = smartImportRows(importPreview.sourceRows, latestProducts);
+      const analysis = smartImportRows(importPreview.sourceRows, latestProducts, branchSchoolIds);
+      if (analysis.blockingErrors?.length) {
+        setImportPreview({
+          ...importPreview,
+          ...analysis,
+          blockingErrors: analysis.blockingErrors,
+          errors: [...importPreview.conversionWarnings, ...analysis.errors],
+        });
+        setImportResult({
+          summary: null,
+          errors: ["匯入已暫停：保存前重驗發現相同規格的價格衝突，商品未有寫入。", ...analysis.blockingErrors],
+        });
+        return;
+      }
       if (pricePreviewHasChanged(importPreview.previewRows, analysis.previewRows)) {
         setImportPreview({
           ...importPreview,
@@ -6016,6 +6112,13 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                 {importPreview.conversionWarnings.length > 8 && <div>另有 {importPreview.conversionWarnings.length - 8} 項提示。</div>}
               </div>
             )}
+            {importPreview.duplicateWarnings?.length > 0 && (
+              <div style={{ marginTop: 6, color: "#166534" }}>
+                <div style={{ fontWeight: 600 }}>重複列已合併預覽：</div>
+                {importPreview.duplicateWarnings.slice(0, 8).map((warning, index) => <div key={index} style={{ marginTop: 2 }}>• {warning}</div>)}
+                {importPreview.duplicateWarnings.length > 8 && <div>另有 {importPreview.duplicateWarnings.length - 8} 項已合併重複列。</div>}
+              </div>
+            )}
             {importPreview.blockingErrors?.length > 0 && (
               <div style={{ marginTop: 6, color: "#B42318", fontWeight: 600 }}>
                 解析錯誤必須修正後才能匯入（{importPreview.blockingErrors.length} 項）。
@@ -6037,7 +6140,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                 <div style={{ maxHeight: 180, overflowY: "auto", marginTop: 5, background: "#fff", borderRadius: 6, padding: 6 }}>
                   {filteredImportPreviewRows.map((row, index) => (
                   <div key={index} style={{ padding: "3px 0", borderBottom: "1px solid #EEF2F7", color: row.hasExistingSize && (row.previousPrice === null || Number(row.previousPrice) !== Number(row.price)) ? "#B42318" : "#334155" }}>
-                    {row.school} · {row.blockId ? `區塊 ${row.blockId} · ` : ""}{row.name} · {PRODUCT_GENDER_OPTIONS.find(({ value }) => value === row.gender)?.label || "男女生"} · {row.length ? `${row.length}/` : ""}{row.size} · {!row.hasExistingSize ? "新增" : row.previousPrice === null ? "現價未設定" : `$${row.previousPrice}`} → ${row.price}（{row.action}）
+                    {row.school} · {row.blockId ? `區塊 ${row.blockId} · ` : ""}{row.name} · {PRODUCT_GENDER_OPTIONS.find(({ value }) => value === row.gender)?.label || "男女生"} · {row.length ? `${row.length}/` : ""}{row.size} · {!row.hasExistingSize ? "新增" : row.previousPrice === null ? "現價未設定" : `$${row.previousPrice}`} → ${row.price}（{row.action}）{row.sourceLocations?.length ? ` · 來源：${row.sourceLocations.join("、")}` : ""}{row.duplicateDetailsDiffer ? " · 備註或商品資料不同，請核對" : ""}
                   </div>
                   ))}
                   {filteredImportPreviewRows.length === 0 && <div style={{ padding: "8px 3px", color: "#64748B" }}>找不到符合資料。</div>}
@@ -6143,7 +6246,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                           if (snap && snap.value) {
                             const parsed = JSON.parse(snap.value);
                             setGenericImportAcknowledged(false);
-                            setImportPreview({ fileName: parsed.fileName || h.fileName, conversionMode: parsed.conversionMode || '', conversionWarnings: parsed.conversionWarnings || [], blockingErrors: parsed.blockingErrors || [], genericMode: Boolean(parsed.genericMode), learnedMode: Boolean(parsed.learnedMode), requiresManualReview: Boolean(parsed.requiresManualReview || parsed.genericMode || parsed.learnedMode), suggestedLayouts: parsed.suggestedLayouts || [], sourceRows: parsed.sourceRows || [], ...parsed.analysis, errors: parsed.errors || [], confidence: parsed.confidence, snapshotId: parsed.id, timestamp: parsed.timestamp });
+                            setImportPreview({ fileName: parsed.fileName || h.fileName, conversionMode: parsed.conversionMode || '', conversionWarnings: parsed.conversionWarnings || [], genericMode: Boolean(parsed.genericMode), learnedMode: Boolean(parsed.learnedMode), requiresManualReview: Boolean(parsed.requiresManualReview || parsed.genericMode || parsed.learnedMode), suggestedLayouts: parsed.suggestedLayouts || [], sourceRows: parsed.sourceRows || [], ...parsed.analysis, blockingErrors: parsed.blockingErrors || parsed.analysis?.blockingErrors || [], errors: parsed.errors || [], confidence: parsed.confidence, snapshotId: parsed.id, timestamp: parsed.timestamp });
                             setShowImportHistory(false);
                           } else {
                             alert('未能讀取該快照，可能已刪除。');
@@ -6158,7 +6261,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                           if (snap && snap.value) {
                             const parsed = JSON.parse(snap.value);
                             setGenericImportAcknowledged(false);
-                            setImportPreview({ fileName: parsed.fileName || h.fileName, conversionMode: parsed.conversionMode || '', conversionWarnings: parsed.conversionWarnings || [], blockingErrors: parsed.blockingErrors || [], genericMode: Boolean(parsed.genericMode), learnedMode: Boolean(parsed.learnedMode), requiresManualReview: Boolean(parsed.requiresManualReview || parsed.genericMode || parsed.learnedMode), suggestedLayouts: parsed.suggestedLayouts || [], sourceRows: parsed.sourceRows || [], ...parsed.analysis, errors: parsed.errors || [], confidence: parsed.confidence, snapshotId: parsed.id, timestamp: parsed.timestamp });
+                            setImportPreview({ fileName: parsed.fileName || h.fileName, conversionMode: parsed.conversionMode || '', conversionWarnings: parsed.conversionWarnings || [], genericMode: Boolean(parsed.genericMode), learnedMode: Boolean(parsed.learnedMode), requiresManualReview: Boolean(parsed.requiresManualReview || parsed.genericMode || parsed.learnedMode), suggestedLayouts: parsed.suggestedLayouts || [], sourceRows: parsed.sourceRows || [], ...parsed.analysis, blockingErrors: parsed.blockingErrors || parsed.analysis?.blockingErrors || [], errors: parsed.errors || [], confidence: parsed.confidence, snapshotId: parsed.id, timestamp: parsed.timestamp });
                             setShowImportHistory(false);
                           } else {
                             alert('未能讀取該快照，可能已刪除。');
@@ -6167,19 +6270,39 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                       }} style={{ padding: "6px 8px", borderRadius: 6, background: "#E6FFFA", border: "1px solid #C7F3E9", color: "#065F46", fontSize: 12 }}>合併到預覽</button>
 
                       <button className="pos-btn" onClick={async () => {
-                        if (!window.confirm('確定要把該快照直接套用到 Production(master) 嗎？此動作會覆蓋現有商品資料。')) return;
+                        if (!window.confirm('確定重新驗證並套用該快照到 Production(master) 嗎？')) return;
                         try {
                           const snap = await window.storage.get(`import_snapshot:${h.id}`, true).catch(() => null);
-                          if (snap && snap.value) {
-                            const parsed = JSON.parse(snap.value);
-                            await saveProducts(parsed.next);
-                            alert('已把該快照套用到產品資料。');
-                            setShowImportHistory(false);
-                          } else {
+                          if (!snap?.value) {
                             alert('未能讀取該快照，可能已刪除。');
+                            return;
                           }
-                        } catch (e) { console.error(e); alert('套用快照失敗'); }
-                      }} style={{ padding: "6px 8px", borderRadius: 6, background: "#1F3A5F", border: "1px solid #1F3A5F", color: "#FFFFFF", fontSize: 12 }}>合併到 master</button>
+                          const parsed = JSON.parse(snap.value);
+                          if (!Array.isArray(parsed.sourceRows) || parsed.blockingErrors?.length) {
+                            alert('此快照缺少可重新驗證的原始列，或已有阻擋錯誤；請重新分析檔案後再匯入。');
+                            return;
+                          }
+                          const latestProducts = await loadLatestProducts();
+                          const analysis = smartImportRows(parsed.sourceRows, latestProducts, branchSchoolIds);
+                          if (analysis.blockingErrors?.length) {
+                            alert(`匯入已暫停：重新驗證發現價格衝突，沒有寫入商品。\n${analysis.blockingErrors.join("\n")}`);
+                            return;
+                          }
+                          if (pricePreviewHasChanged(parsed.analysis?.previewRows, analysis.previewRows)) {
+                            alert('快照預覽後商品資料已有變更；為避免覆蓋新資料，請重新分析及核對後再匯入。');
+                            return;
+                          }
+                          if (!saveProducts(analysis.next) || !await saveProductsNow()) {
+                            alert('套用快照失敗：商品資料未能保存。');
+                            return;
+                          }
+                          alert('已重新驗證並套用快照。');
+                          setShowImportHistory(false);
+                        } catch (e) {
+                          console.error(e);
+                          alert(`套用快照失敗：${e?.message || "請重試"}`);
+                        }
+                      }} style={{ padding: "6px 8px", borderRadius: 6, background: "#1F3A5F", border: "1px solid #1F3A5F", color: "#FFFFFF", fontSize: 12 }}>重新驗證並套用</button>
                     </div>
                   </div>
                 ))}

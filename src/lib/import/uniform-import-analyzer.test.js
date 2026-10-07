@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import * as XLSX from "xlsx";
-import { analyzePriceWorkbook, parsePriceText } from "./uniform-import-analyzer.ts";
+import { analyzePriceWorkbook, parsePackagedSizePrice, parsePriceText } from "./uniform-import-analyzer.ts";
 import { SCHOOL_LAYOUTS } from "./school-layouts.ts";
 import { mapAnalyzerItems } from "./mapAnalyzerItems.js";
 
@@ -90,6 +90,72 @@ test("still applies a school layout when the workbook title matches it", () => {
 test("parses the currency amount when a size appears before the price", () => {
   assert.equal(parsePriceText("38寸以上$60"), 60);
   assert.equal(parsePriceText("$44/3對"), 44);
+});
+
+test("parses supported package prices as size labels without treating bundle discounts as packages", () => {
+  assert.deepEqual(
+    ["對", "隻", "包", "盒"].map((unit) => parsePackagedSizePrice(`$44/3${unit}`)),
+    [
+      { size: "3對裝", price: 44 },
+      { size: "3隻裝", price: 44 },
+      { size: "3包裝", price: 44 },
+      { size: "3盒裝", price: 44 },
+    ],
+  );
+  assert.equal(parsePackagedSizePrice("2件 $88"), null);
+  assert.equal(parsePackagedSizePrice("2條 $152"), null);
+});
+
+test("keeps Fung Yiu King package product names unchanged and maps package specs to sizes", () => {
+  const workbook = XLSX.utils.book_new();
+  const sheet = {};
+  XLSX.utils.sheet_add_aoa(sheet, [["香港中國婦女會馮堯敬紀念中學 夏季價目表"]], { origin: "F4" });
+  XLSX.utils.sheet_add_aoa(sheet, [["$44/3對"], ["$80/6對"]], { origin: "E37" });
+  XLSX.utils.sheet_add_aoa(sheet, [["$140/12對"]], { origin: "B39" });
+  XLSX.utils.book_append_sheet(workbook, sheet, "Sheet1");
+
+  const fungLayout = SCHOOL_LAYOUTS.find((candidate) => candidate.school === "香港中國婦女會馮堯敬紀念中學");
+  assert.ok(fungLayout);
+  const result = analyzePriceWorkbook(
+    XLSX.write(workbook, { type: "array", bookType: "xlsx" }),
+    [{ ...fungLayout, signature: undefined }],
+  );
+  const socks = result.items.filter((item) => item.source.blockId?.startsWith("white-socks-"));
+
+  assert.deepEqual(socks.map(({ item, size, unitPrice }) => [item, size, unitPrice]), [
+    ["白短襪", "3對裝", 44],
+    ["白短襪", "6對裝", 80],
+    ["白短襪", "12對裝", 140],
+  ]);
+  assert.deepEqual(
+    mapAnalyzerItems(socks).rows.map((row) => [row["款式名稱"], row["尺碼"], row["價錢"]]),
+    [
+      ["白短襪", "3對裝", 44],
+      ["白短襪", "6對裝", 80],
+      ["白短襪", "12對裝", 140],
+    ],
+  );
+  assert.equal(result.warnings.some((warning) => warning.code === "PACKAGED_SIZE_PARSE_FAIL"), false);
+});
+
+test("does not import a bundle discount as a Fung Yiu King package size", () => {
+  const workbook = XLSX.utils.book_new();
+  const sheet = {};
+  XLSX.utils.sheet_add_aoa(sheet, [["香港中國婦女會馮堯敬紀念中學 夏季價目表"]], { origin: "F4" });
+  XLSX.utils.sheet_add_aoa(sheet, [["2件 $88"]], { origin: "E37" });
+  XLSX.utils.book_append_sheet(workbook, sheet, "Sheet1");
+  const fungLayout = SCHOOL_LAYOUTS.find((candidate) => candidate.school === "香港中國婦女會馮堯敬紀念中學");
+  assert.ok(fungLayout);
+
+  const result = analyzePriceWorkbook(
+    XLSX.write(workbook, { type: "array", bookType: "xlsx" }),
+    [{ ...fungLayout, signature: undefined }],
+  );
+
+  assert.equal(result.items.some((item) => item.source.blockId === "white-socks-3-pair"), false);
+  assert.ok(result.warnings.some((warning) => (
+    warning.code === "PACKAGED_SIZE_PARSE_FAIL" && warning.severity === "error"
+  )));
 });
 
 test("detects a school title in row four and reads cells from a non-A1 range", () => {

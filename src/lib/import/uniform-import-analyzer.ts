@@ -44,6 +44,7 @@ export interface ImportWarning {
  *  NO_LAYOUT_CONFIG   搵唔到版面設定（自動偵測，需人手確認）
  *  CUSTOM_SIZE_USED   「裁碼」按大碼清單展開
  *  INFERRED_SIZE      推斷細碼（等用戶刪減）
+ *  PACKAGED_SIZE_PARSE_FAIL 包裝格格式無法確認
  */
 
 export interface BundleInfo { qty: number; unit: string; price: number; }
@@ -95,6 +96,7 @@ export interface BlockConfig {
   dataLast: number;
   sizeCol?: string | null;
   sizeKind?: 'normal' | 'pack';     // pack = 包裝單位（3對/6對），唔展開
+  packagePriceFromSourceCell?: boolean; // 價格與包裝規格同在款式來源格
   multiLine?: boolean;             // R18：一格多值（換行分隔），拆開對應
   sizeListCell?: string;           // R19：尺碼唔喺自己欄，去指定格攞（換行分隔）
   priceCols: PriceColConfig[];
@@ -156,6 +158,12 @@ export function parsePriceText(t: string): number | null {
   if (!cleaned) return null;
   const n = parseFloat(cleaned);
   return isNaN(n) ? null : n;
+}
+
+export function parsePackagedSizePrice(text: string): { size: string; price: number } | null {
+  const match = String(text || '').match(/^\s*\$\s*(\d+(?:\.\d{1,2})?)\s*\/\s*(\d+)\s*(對|隻|包|盒)\s*$/);
+  if (!match) return null;
+  return { size: `${Number(match[2])}${match[3]}裝`, price: Number(match[1]) };
 }
 const isNumericText = (t: string) =>
   t !== '' && /[0-9]/.test(t) && !isNaN(parseFloat(t.replace(/[$\s,，]/g, '')));
@@ -578,8 +586,13 @@ function parseBlock(
     } else if (b.nameCol) {
       const t = ((g.grid[ri] && g.grid[ri][colToIdx(b.nameCol)]) ?? '').trim();
       if (!t) continue;
-      rowName = alias(t);
-      entries.push({ sizeRaw: '__NOSIZE__', getRaw: cellRaw, dateFlag: false, sizeCell: `${b.nameCol}${r}` });
+      rowName = b.packagePriceFromSourceCell ? baseName : alias(t);
+      entries.push({
+        sizeRaw: b.packagePriceFromSourceCell ? t : '__NOSIZE__',
+        getRaw: cellRaw,
+        dateFlag: false,
+        sizeCell: `${b.nameCol}${r}`,
+      });
     } else if (b.sizeCol) {
       const sr = ((g.grid[ri] && g.grid[ri][colToIdx(b.sizeCol)]) ?? '').trim();
       if (!sr) continue;
@@ -615,8 +628,30 @@ function parseBlock(
     }
 
     for (const ent of entries) {
-      const sizeRaw = ent.sizeRaw;
+      let sizeRaw = ent.sizeRaw;
       if (!sizeRaw) continue;
+      const unitPc = b.priceCols.find((p) => p.kind === 'unit');
+      const packageSpec = b.packagePriceFromSourceCell
+        ? parsePackagedSizePrice(sizeRaw)
+        : null;
+      if (b.packagePriceFromSourceCell && !packageSpec) {
+        warnings.push({
+          sheet: g.name, cell: ent.sizeCell, code: 'PACKAGED_SIZE_PARSE_FAIL', severity: 'error',
+          message: `「${baseName}」包裝格「${sizeRaw}」格式無效，必須使用 $金額/數量單位（對、隻、包或盒）`,
+        });
+        continue;
+      }
+      if (packageSpec && !unitPc) {
+        warnings.push({
+          sheet: g.name, cell: ent.sizeCell, code: 'PACKAGED_SIZE_PARSE_FAIL', severity: 'error',
+          message: `「${baseName}」包裝格已識別規格，但版面沒有單價欄設定`,
+        });
+        continue;
+      }
+      if (packageSpec) {
+        rowName = baseName;
+        sizeRaw = packageSpec.size;
+      }
       if (ent.dateFlag) {
         warnings.push({
           sheet: g.name, cell: ent.sizeCell, code: 'DATE_AS_SIZE', severity: 'warn',
@@ -626,8 +661,9 @@ function parseBlock(
 
     // 尺碼展開（R10 / R14）
     const sizeJobs: SizeJob[] = [];
-    const unitPc = b.priceCols.find((p) => p.kind === 'unit');
-    if (sizeRaw !== '__NOSIZE__') {
+    if (packageSpec) {
+      sizeJobs.push({ size: packageSpec.size });
+    } else if (sizeRaw !== '__NOSIZE__') {
       if (sizeRaw === '裁碼' && unitPc?.customSizes?.length) {
         warnings.push({
           sheet: g.name, cell: ent.sizeCell, code: 'CUSTOM_SIZE_USED', severity: 'info',
@@ -657,7 +693,10 @@ function parseBlock(
       sizeJobs.push({ size: '__NOSIZE__' });
     }
 
-    emitRowItems(g, b, r, rowName, sizeJobs, ctx, items, warnings, marks, ent.getRaw);
+    const getRaw = packageSpec
+      ? (col: string) => col === unitPc?.col ? String(packageSpec.price) : ent.getRaw(col)
+      : ent.getRaw;
+    emitRowItems(g, b, r, rowName, sizeJobs, ctx, items, warnings, marks, getRaw);
     } // entries
   }
 

@@ -296,11 +296,6 @@ const FUNG_YIU_KING_SUMMER_2026: SheetLayoutConfig = {
     'B19', 'F19', 'G19', 'H19', 'I19', 'G20', 'I20', 'F23', 'I23',
     'K23', 'L23', 'F32', 'K32', 'L32',
   ],
-  nameAliases: {
-    '$44/3對': '白短襪（3對裝）',
-    '$80/6對': '白短襪（6對裝）',
-    '$140/12對': '白短襪（12對裝）',
-  },
   blocks: [
     {
       id: 'summer-skirt', gender: '女', name: '白裙',
@@ -412,16 +407,19 @@ const FUNG_YIU_KING_SUMMER_2026: SheetLayoutConfig = {
       ],
     },
     {
-      id: 'white-socks-3-pair', nameCol: 'E',
-      dataFirst: 37, dataLast: 37, priceCols: [{ col: 'E', kind: 'unit' }],
+      id: 'white-socks-3-pair', name: '白短襪', nameCol: 'E',
+      dataFirst: 37, dataLast: 37, packagePriceFromSourceCell: true, sizeKind: 'pack',
+      priceCols: [{ col: 'E', kind: 'unit' }],
     },
     {
-      id: 'white-socks-6-pair', nameCol: 'E',
-      dataFirst: 38, dataLast: 38, priceCols: [{ col: 'E', kind: 'unit' }],
+      id: 'white-socks-6-pair', name: '白短襪', nameCol: 'E',
+      dataFirst: 38, dataLast: 38, packagePriceFromSourceCell: true, sizeKind: 'pack',
+      priceCols: [{ col: 'E', kind: 'unit' }],
     },
     {
-      id: 'white-socks-12-pair', nameCol: 'B',
-      dataFirst: 39, dataLast: 39, priceCols: [{ col: 'B', kind: 'unit' }],
+      id: 'white-socks-12-pair', name: '白短襪', nameCol: 'B',
+      dataFirst: 39, dataLast: 39, packagePriceFromSourceCell: true, sizeKind: 'pack',
+      priceCols: [{ col: 'B', kind: 'unit' }],
     },
     {
       id: 'winter-sports-set', name: '冬季運衣',
