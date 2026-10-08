@@ -1,4 +1,5 @@
 import React, { lazy, Suspense, useState, useEffect, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import Papa from "papaparse";
 import qrcode from "qrcode-generator";
 import { useLocation, useNavigate, Routes, Route, Navigate } from "react-router-dom";
@@ -7649,7 +7650,7 @@ function ReceiptModal({ order, orders = [], language = "zh", onClose, canRedoSal
     anchor.remove();
   };
 
-  return (
+  return createPortal(
     <div className="receipt-modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 }}>
       <div className="receipt-modal-panel" role="dialog" aria-modal="true" aria-labelledby="receipt-modal-title" style={{ background: "#fff", borderRadius: 14, maxWidth: 340, width: "100%", padding: 20, maxHeight: "85vh", overflowY: "auto" }}>
         <div className="receipt-modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -7722,6 +7723,7 @@ function ReceiptModal({ order, orders = [], language = "zh", onClose, canRedoSal
         </button>
         {canRedoSale && (
           <button
+            type="button"
             className="pos-btn"
             onClick={() => onRedoSale?.(order)}
             title="將原單尚未退回的貨品帶入退換流程，完成後會保留原單及連結調整單"
@@ -7771,15 +7773,16 @@ function ReceiptModal({ order, orders = [], language = "zh", onClose, canRedoSal
                 </div>
               );
             })}
-            <button className="pos-btn" disabled={exchangeSelection.length === 0} onClick={() => onExchange?.(order, exchangeSelection)} style={{ width: "100%", padding: "10px", marginTop: 4, borderRadius: 8, background: "#166534", border: "none", color: "#fff", fontWeight: 700 }}>
+            <button type="button" className="pos-btn" disabled={exchangeSelection.length === 0} onClick={() => onExchange?.(order, exchangeSelection)} style={{ width: "100%", padding: "10px", marginTop: 4, borderRadius: 8, background: "#166534", border: "none", color: "#fff", fontWeight: 700 }}>
               確定換選貨品（{exchangeSelection.length}款）
             </button>
-            <button className="pos-btn" onClick={() => setExchangeSelection(null)} style={{ width: "100%", padding: "8px", borderRadius: 8, background: "transparent", color: "#9A3412" }}>
+            <button type="button" className="pos-btn" onClick={() => setExchangeSelection(null)} style={{ width: "100%", padding: "8px", borderRadius: 8, background: "transparent", color: "#9A3412" }}>
               取消
             </button>
           </div>
         ) : (
           <button
+            type="button"
             className="pos-btn"
             onClick={() => setExchangeSelection([])}
             title="選擇此收據一件或多件貨品進行換貨，並自動計算差額"
@@ -7807,7 +7810,8 @@ function ReceiptModal({ order, orders = [], language = "zh", onClose, canRedoSal
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
