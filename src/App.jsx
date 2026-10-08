@@ -27,6 +27,14 @@ import { createPriceListWorkbook } from "./data/priceListExport";
 import { clearCheckoutAttempt, getOrCreateCheckoutAttempt } from "./data/checkoutAttempt";
 import { getRemainingReturnQuantity, hasUntrackedExchangeHistory } from "./data/returnLimits";
 import { calculateCashSettlement, findPossibleDuplicateSale, PAYMENT_METHOD_LABELS, PAYMENT_METHOD_LABELS_EN, summarizeDailyCloseout } from "./data/salesCloseout";
+import {
+  createCustomerReceiptOrder,
+  englishReceiptProductUnit,
+  formatReceiptSize,
+  receiptProductUnit as sharedReceiptProductUnit,
+  translateReceiptProductName,
+  translateReceiptSchool,
+} from "../public/receipt-translations.js";
 import { validateAndDeduplicateImportRows } from "./lib/import/importDuplicateGuard";
 import baseSchoolCatalog from "./schoolCatalog.json";
 import workbookSchoolCatalog from "./workbookSchoolCatalog.json";
@@ -162,22 +170,12 @@ const sizeDimensionLabels = (product) => {
   const labels = dimensionLabels(product?.name);
   return `${labels.length} → ${labels.size}`;
 };
-// 用於電子銷售單中的清晰尺碼顯示
-const formatSizeForReceipt = (itemName, size, length) => {
-  const labels = dimensionLabels(itemName);
-  const sizeStr = String(size || "");
-  const lengthStr = String(length || "").replace(/^裁碼\s*/, "");
-  
-  if (lengthStr && sizeStr) {
-    return `${labels.length}：${lengthStr}（${labels.size}：${sizeStr}）`;
-  } else if (lengthStr) {
-    return `${labels.length}：${lengthStr}`;
-  } else if (sizeStr) {
-    return `${labels.size}：${sizeStr}`;
-  } else {
-    return `${labels.size}：-`;
-  }
-};
+const formatSizeForReceipt = (itemName, size, length, english = false) => formatReceiptSize(
+  itemName,
+  size,
+  String(length || "").replace(/^裁碼\s*/, ""),
+  english,
+);
 const naturalSizeSort = (first, second) => {
   const firstText = String(first ?? "").trim();
   const secondText = String(second ?? "").trim();
@@ -1682,17 +1680,16 @@ const DEFAULT_ACCOUNTS = [
   { id: "acc-staff2", name: "店員B", role: ROLES.STAFF, pin: "3333" },
 ];
 
-const ENGLISH_RECEIPT_SCHOOL = "港青基信書院";
-const receiptLanguageLabel = (language) => language === "en" ? "English" : "中文";
-const receiptProductUnit = (name, language, size = "") => {
-  const unit = productUnit(name, size);
-  if (language !== "en") return unit;
-  return { "件": "pcs", "對": "pairs", "包": "packs", "套": "sets", "條": "pcs", "個": "pcs" }[unit] || "pcs";
+const receiptProductUnit = (name, language, size = "", quantity = 1) => {
+  if (language === "en") return englishReceiptProductUnit(name, size, quantity);
+  return sharedReceiptProductUnit(name, size);
 };
 const receiptFieldLabels = (language) => language === "en" ? {
   school: "School",
   receiptNo: "Receipt No.",
   sourceReceipt: "Source Receipt",
+  duplicate: "Duplicate warning confirmed against",
+  adjustmentReason: "Return / exchange reason",
   date: "Date",
   customer: "Customer",
   phone: "Last 4 digits",
@@ -1707,10 +1704,17 @@ const receiptFieldLabels = (language) => language === "en" ? {
   exchangeTotal: "Exchange difference",
   cash: "Cash received",
   refund: "Refund due",
+  refundMethod: "Refund method",
+  paymentMethod: "Payment method",
+  collected: "Collected",
   change: "Change",
   status: "Status",
   completed: "Completed",
   exchanged: "Exchange completed",
+  voided: "Voided",
+  voidReason: "Void reason",
+  originalName: "Original name",
+  translationUnavailable: "English translation unavailable",
   exchangeOut: "Exchange out: ",
   returnPolicy: "Returns & exchanges: Within 30 days of purchase, present this receipt at the designated store to exchange the size, provided the item is unused, unwashed and unaltered.",
   careTitle: "Care instructions:",
@@ -1721,6 +1725,8 @@ const receiptFieldLabels = (language) => language === "en" ? {
   school: "學校",
   receiptNo: "收據編號",
   sourceReceipt: "來源單據",
+  duplicate: "疑似重複已確認（參照單號）",
+  adjustmentReason: "退換原因",
   date: "交易日期",
   customer: "客人",
   phone: "電話尾4位",
@@ -1735,10 +1741,17 @@ const receiptFieldLabels = (language) => language === "en" ? {
   exchangeTotal: "換貨差額",
   cash: "實收現金",
   refund: "應退客人",
+  refundMethod: "退款方式",
+  paymentMethod: "付款方式",
+  collected: "實收款",
   change: "找續",
   status: "交易狀態",
   completed: "已完成",
   exchanged: "換貨完成",
+  voided: "已作廢",
+  voidReason: "作廢原因",
+  originalName: "原商品名稱",
+  translationUnavailable: "未能完整翻譯英文",
   exchangeOut: "換出：",
   returnPolicy: "退換條款：購貨後 30 天內，憑收據且商品未經使用、洗滌或改動，可親臨指定門市辦理更換尺碼。",
   careTitle: "洗滌指引：",
@@ -1761,39 +1774,59 @@ const buildReceiptLines = (order, shopName, language = "zh") => {
   lines.push("================================");
   lines.push(`${labels.receiptNo}: #${(order.id || "").toUpperCase()}`);
   if (order.exchangeSourceReceiptId) lines.push(`${labels.sourceReceipt}: #${String(order.exchangeSourceReceiptId).toUpperCase()}`);
-  if (order.duplicateConfirmed && order.duplicateSourceReceiptId) lines.push(`${english ? "Duplicate warning confirmed against" : "疑似重複已確認（參照單號）"}: #${String(order.duplicateSourceReceiptId).toUpperCase()}`);
+  if (order.duplicateConfirmed && order.duplicateSourceReceiptId) lines.push(`${labels.duplicate}: #${String(order.duplicateSourceReceiptId).toUpperCase()}`);
+  if (order.adjustmentReason) {
+    const reason = english ? translateReceiptProductName(order.adjustmentReason) : { text: order.adjustmentReason, translated: true };
+    lines.push(`${labels.adjustmentReason}: ${reason.text}`);
+    if (english && !reason.translated) lines.push(`  ${labels.translationUnavailable}: ${reason.original}`);
+  }
+  if (order.voidReason) lines.push(`${labels.voidReason}: ${english ? translateReceiptProductName(order.voidReason).text : order.voidReason}`);
   lines.push(`${labels.date}: ${order.date || "-"} ${order.time || ""}`);
-  lines.push(`${labels.school}: ${english && order.school === ENGLISH_RECEIPT_SCHOOL ? "YMCA of Hong Kong Christian College" : order.school || shopName || "-"}`);
+  const school = english ? translateReceiptSchool(order.school) : { text: order.school || shopName || "-", translated: true };
+  lines.push(`${labels.school}: ${school.text || "-"}`);
+  if (english && !school.translated && order.school) lines.push(`  ${labels.translationUnavailable}: ${order.school}`);
   if (order.customerName || order.customerPhone) {
     lines.push(`${labels.customer}: ${customerSurname(order.customerName) || "-"}`);
     lines.push(`${labels.phone}: ${customerPhoneLast4(order.customerPhone) || "-"}`);
   }
   if (order.outletName) {
-    lines.push(`${labels.outlet}: ${order.outletName}`);
-    lines.push(`${labels.address}: ${order.outletAddress}`);
-    lines.push(`${labels.telephone}: ${order.outletPhone}`);
+    const outlet = english ? translateReceiptProductName(order.outletName) : { text: order.outletName, translated: true };
+    lines.push(`${labels.outlet}: ${outlet.text}`);
+    if (english && !outlet.translated) lines.push(`  ${labels.translationUnavailable}: ${outlet.original}`);
+    if (order.outletAddress) {
+      const address = english ? translateReceiptProductName(order.outletAddress) : { text: order.outletAddress, translated: true };
+      lines.push(`${labels.address}: ${address.text}`);
+      if (english && !address.translated) lines.push(`  ${labels.translationUnavailable}: ${address.original}`);
+    }
+    if (order.outletPhone) lines.push(`${labels.telephone}: ${order.outletPhone}`);
   }
-  if (order.cashierName) lines.push(`${labels.cashier}: ${order.cashierName}`);
+  if (order.cashierName) {
+    const cashier = english ? translateReceiptProductName(order.cashierName) : { text: order.cashierName, translated: true };
+    lines.push(`${labels.cashier}: ${cashier.text}`);
+    if (english && !cashier.translated) lines.push(`  ${labels.translationUnavailable}: ${cashier.original}`);
+  }
   lines.push("--------------------------------");
   lines.push(labels.items);
   order.items.forEach((it) => {
-    lines.push(`${it.exchangeReturn ? labels.exchangeOut : ""}${it.name}`);
-    lines.push(`  ${formatSizeForReceipt(it.name, it.size, it.length)}`);
-    lines.push(`  ${labels.quantity} ${it.qty} ${receiptProductUnit(it.name, language, it.size)} x ${fmt(Math.abs(it.price))} = ${fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}`);
+    const translation = english ? translateReceiptProductName(it.name) : { text: it.name, translated: true };
+    lines.push(`${it.exchangeReturn ? labels.exchangeOut : ""}${translation.text}`);
+    if (english && !translation.translated && translation.original) lines.push(`  ${labels.translationUnavailable}: ${translation.original}`);
+    lines.push(`  ${formatSizeForReceipt(it.name, it.size, it.length, english)}`);
+    lines.push(`  ${labels.quantity} ${it.qty} ${receiptProductUnit(it.name, language, it.size, it.qty)} x ${fmt(Math.abs(it.price))} = ${fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}`);
   });
   lines.push("--------------------------------");
   lines.push(`${labels.itemCount}: ${order.itemCount || 0}`);
   lines.push(`${order.exchangeSourceReceiptId ? labels.exchangeTotal : labels.total}: ${fmt(order.total)}`);
   if (order.refundDue > 0) {
-    lines.push(`${english ? "Refund method" : "退款方式"}: ${refundLabel}`);
+    lines.push(`${labels.refundMethod}: ${refundLabel}`);
     lines.push(`${labels.refund}: ${fmt(order.refundDue)}`);
   } else {
-    lines.push(`${english ? "Payment method" : "付款方式"}: ${paymentLabel}`);
+    lines.push(`${labels.paymentMethod}: ${paymentLabel}`);
     if (order.paymentMethod === "cash" && typeof order.cashReceived === "number") lines.push(`${labels.cash}: ${fmt(order.cashReceived)}`);
-    else lines.push(`${english ? "Collected" : "實收款"}: ${fmt(Math.max(0, Number(order.total || 0)))}`);
+    else lines.push(`${labels.collected}: ${fmt(Math.max(0, Number(order.total || 0)))}`);
     if (typeof order.changeDue === "number") lines.push(`${labels.change}: ${fmt(order.changeDue)}`);
   }
-  lines.push(`${labels.status}: ${order.exchangeSourceReceiptId ? labels.exchanged : labels.completed}`);
+  lines.push(`${labels.status}: ${order.voidedAt ? labels.voided : order.exchangeSourceReceiptId ? labels.exchanged : labels.completed}`);
   lines.push("--------------------------------");
   lines.push(labels.returnPolicy);
   lines.push(labels.careTitle);
@@ -1804,7 +1837,7 @@ const buildReceiptLines = (order, shopName, language = "zh") => {
 };
 
 const buildReceiptUrl = (order, language = "zh") => {
-  const json = JSON.stringify(order);
+  const json = JSON.stringify(createCustomerReceiptOrder(order));
   const bytes = new TextEncoder().encode(json);
   let binary = "";
   bytes.forEach((byte) => {
@@ -4408,33 +4441,57 @@ export default function UniformPOS() {
             {(() => {
               const labels = receiptFieldLabels(receiptLanguage);
               const english = receiptLanguage === "en";
+              const school = english ? translateReceiptSchool(receipt.school) : { text: receipt.school || "-", translated: true };
+              const translatedField = (value) => english ? translateReceiptProductName(value) : { text: value, translated: true };
+              const reason = translatedField(receipt.adjustmentReason || "");
+              const voidReason = translatedField(receipt.voidReason || "");
+              const outlet = translatedField(receipt.outletName || "");
+              const address = translatedField(receipt.outletAddress || "");
+              const cashier = translatedField(receipt.cashierName || "");
               return <>
             <div style={{ textAlign: "center", fontWeight: 700 }}>{english ? "Victoria Uniform" : "Victoria Uniform 校服銷售"}</div>
             <div style={{ textAlign: "center" }}>{english ? "ELECTRONIC RECEIPT" : "電子銷售單 ELECTRONIC RECEIPT"}</div>
             <div>{labels.receiptNo}: #{(receipt.id || "").toUpperCase()}</div>
             {receipt.exchangeSourceReceiptId && <div>{labels.sourceReceipt}: #{String(receipt.exchangeSourceReceiptId).toUpperCase()}</div>}
-            {receipt.duplicateConfirmed && receipt.duplicateSourceReceiptId && <div>疑似重複已確認（參照單號）：#{String(receipt.duplicateSourceReceiptId).toUpperCase()}</div>}
-            {receipt.adjustmentReason && <div>退換原因：{receipt.adjustmentReason}</div>}
+            {receipt.duplicateConfirmed && receipt.duplicateSourceReceiptId && <div>{labels.duplicate}: #{String(receipt.duplicateSourceReceiptId).toUpperCase()}</div>}
+            {receipt.adjustmentReason && <div>{labels.adjustmentReason}: {reason.text}{english && !reason.translated ? ` (${labels.translationUnavailable}: ${reason.original})` : ""}</div>}
+            {receipt.voidReason && <div>{labels.voidReason}: {voidReason.text}{english && !voidReason.translated ? ` (${labels.translationUnavailable}: ${voidReason.original})` : ""}</div>}
             <div>{labels.date}: {receipt.date} {receipt.time}</div>
-            <div>{labels.school}: {english && receipt.school === ENGLISH_RECEIPT_SCHOOL ? "YMCA of Hong Kong Christian College" : receipt.school || "-"}</div>
+            <div>{labels.school}: {school.text}{english && !school.translated ? ` (${labels.translationUnavailable}: ${receipt.school})` : ""}</div>
             <div>{labels.customer}: {customerSurname(receipt.customerName) || "-"}</div>
             <div>{labels.phone}: {customerPhoneLast4(receipt.customerPhone) || "-"}</div>
+            {receipt.outletName && <div>{labels.outlet}: {outlet.text}{english && !outlet.translated ? ` (${labels.translationUnavailable}: ${outlet.original})` : ""}</div>}
+            {receipt.outletAddress && <div>{labels.address}: {address.text}{english && !address.translated ? ` (${labels.translationUnavailable}: ${address.original})` : ""}</div>}
+            {receipt.outletPhone && <div>{labels.telephone}: {receipt.outletPhone}</div>}
+            {receipt.cashierName && <div>{labels.cashier}: {cashier.text}{english && !cashier.translated ? ` (${labels.translationUnavailable}: ${cashier.original})` : ""}</div>}
             <div>--------------------------------</div>
             <div>{labels.items}</div>
             {receipt.items.map((it, i) => (
               <div key={i}>
-                <div>{it.exchangeReturn ? labels.exchangeOut : ""}{it.name}</div>
-                <div>  {formatSizeForReceipt(it.name, it.size, it.length)}</div>
-                <div>  {labels.quantity} {it.qty} {receiptProductUnit(it.name, receiptLanguage, it.size)} x {fmt(it.price)} = {fmt((it.exchangeReturn ? -1 : 1) * it.price * it.qty)}</div>
+                {(() => {
+                  const translation = english ? translateReceiptProductName(it.name) : { text: it.name, translated: true };
+                  return <>
+                    <div>{it.exchangeReturn ? labels.exchangeOut : ""}{translation.text}</div>
+                    {english && !translation.translated && <div>  {labels.translationUnavailable}: {translation.original}</div>}
+                  </>;
+                })()}
+                <div>  {formatSizeForReceipt(it.name, it.size, it.length, english)}</div>
+                <div>  {labels.quantity} {it.qty} {receiptProductUnit(it.name, receiptLanguage, it.size, it.qty)} x {fmt(it.price)} = {fmt((it.exchangeReturn ? -1 : 1) * it.price * it.qty)}</div>
               </div>
             ))}
             <div>--------------------------------</div>
             <div>{labels.itemCount}: {receipt.itemCount}</div>
             <div style={{ fontWeight: 700 }}>{receipt.exchangeSourceReceiptId ? labels.exchangeTotal : labels.total}: {fmt(receipt.total)}</div>
             {receipt.refundDue > 0
-              ? <div>退款方式：{(english ? PAYMENT_METHOD_LABELS_EN : PAYMENT_METHOD_LABELS)[receipt.refundMethod || "cash"]}</div>
-              : <div>付款方式：{(english ? PAYMENT_METHOD_LABELS_EN : PAYMENT_METHOD_LABELS)[receipt.paymentMethod || "cash"]}</div>}
-            <div>{labels.status}: {receipt.exchangeSourceReceiptId ? labels.exchanged : labels.completed}</div>
+              ? <div>{labels.refundMethod}: {(english ? PAYMENT_METHOD_LABELS_EN : PAYMENT_METHOD_LABELS)[receipt.refundMethod || "cash"]}</div>
+              : <div>{labels.paymentMethod}: {(english ? PAYMENT_METHOD_LABELS_EN : PAYMENT_METHOD_LABELS)[receipt.paymentMethod || "cash"]}</div>}
+            {receipt.refundDue > 0
+              ? <div>{labels.refund}: {fmt(receipt.refundDue)}</div>
+              : <>
+                <div>{receipt.paymentMethod === "cash" ? `${labels.cash}: ${fmt(receipt.cashReceived ?? receipt.total)}` : `${labels.collected}: ${fmt(receipt.total)}`}</div>
+                <div>{labels.change}: {fmt(Math.max(receipt.changeDue ?? 0, 0))}</div>
+              </>}
+            <div>{labels.status}: {receipt.voidedAt ? labels.voided : receipt.exchangeSourceReceiptId ? labels.exchanged : labels.completed}</div>
             <div style={{ marginTop: 8, color: "#555", whiteSpace: "pre-line" }}>
               <strong>{labels.returnPolicy}</strong>{String.fromCharCode(10)}<strong>{labels.careTitle}</strong>{String.fromCharCode(10)}{labels.care}
             </div>
@@ -7529,7 +7586,7 @@ function ReceiptQR({ order, language = "zh" }) {
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "#1F3A5F", marginBottom: 10 }}>
-        <QrCode size={15} /> 客人專屬 QR Code
+        <QrCode size={15} /> {language === "en" ? "Customer receipt QR Code" : "客人專屬 QR Code"}
       </div>
 
       <div
@@ -7548,12 +7605,12 @@ function ReceiptQR({ order, language = "zh" }) {
         {status === "error" && (
           <div style={{ fontSize: 11, color: "#c33", textAlign: "center", padding: 10, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
             <AlertCircle size={16} />
-            無法產生 QR Code
+            {language === "en" ? "Unable to create the QR Code." : "無法產生 QR Code"}
             <br />
-            請重新開啟呢張收據再試
+            {language === "en" ? "Reopen this receipt and try again." : "請重新開啟呢張收據再試"}
           </div>
         )}
-        {status === "loading" && <div style={{ fontSize: 11, color: "#999" }}>產生緊…</div>}
+        {status === "loading" && <div style={{ fontSize: 11, color: "#999" }}>{language === "en" ? "Generating…" : "產生緊…"}</div>}
         {status === "ok" && modules && (
           <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: "block" }}>
             <rect x={0} y={0} width={size} height={size} fill="#fff" />
@@ -7568,11 +7625,11 @@ function ReceiptQR({ order, language = "zh" }) {
         )}
       </div>
 
-      <div style={{ fontSize: 11, color: "#999", marginTop: 8 }}>單號 {order.id}</div>
+      <div style={{ fontSize: 11, color: "#999", marginTop: 8 }}>{language === "en" ? "Receipt No." : "單號"} {order.id}</div>
       <div style={{ fontSize: 12, color: "#666", marginTop: 6, textAlign: "center", lineHeight: 1.5 }}>
-        請客人掃描後開啟電子收據頁，
+        {language === "en" ? "Scan to open this electronic receipt." : "請客人掃描後開啟電子收據頁，"}
         <br />
-        可列印或另存為 PDF
+        {language === "en" ? "Print or save as PDF." : "可列印或另存為 PDF"}
       </div>
     </div>
   );
@@ -7582,6 +7639,9 @@ function ReceiptModal({ order, orders = [], language = "zh", onLanguageChange, o
   const [exchangeSelection, setExchangeSelection] = useState(null);
   const english = language === "en";
   const labels = receiptFieldLabels(language);
+  const school = english ? translateReceiptSchool(order.school) : { text: order.school || "-", translated: true };
+  const adjustmentReason = english ? translateReceiptProductName(order.adjustmentReason || "") : { text: order.adjustmentReason || "", translated: true };
+  const voidReason = english ? translateReceiptProductName(order.voidReason || "") : { text: order.voidReason || "", translated: true };
   const openCustomerReceipt = () => {
     const receiptUrl = buildReceiptUrl(order, language);
     const anchor = document.createElement("a");
@@ -7610,38 +7670,44 @@ function ReceiptModal({ order, orders = [], language = "zh", onLanguageChange, o
           <div style={{ textAlign: "center", color: "#888", fontSize: 11 }}>{english ? "ELECTRONIC RECEIPT" : "電子銷售單 ELECTRONIC RECEIPT"}</div>
           <div style={{ marginTop: 4 }}>{labels.receiptNo}: #{(order.id || "").toUpperCase()}</div>
           {order.exchangeSourceReceiptId && <div>{labels.sourceReceipt}: #{String(order.exchangeSourceReceiptId).toUpperCase()}</div>}
-          {order.duplicateConfirmed && order.duplicateSourceReceiptId && <div>{english ? "Duplicate warning confirmed against" : "疑似重複已確認（參照單號）"}: #{String(order.duplicateSourceReceiptId).toUpperCase()}</div>}
-          {order.adjustmentReason && <div>退換原因：{order.adjustmentReason}</div>}
+          {order.duplicateConfirmed && order.duplicateSourceReceiptId && <div>{labels.duplicate}: #{String(order.duplicateSourceReceiptId).toUpperCase()}</div>}
+          {order.adjustmentReason && <div>{labels.adjustmentReason}: {adjustmentReason.text}{english && !adjustmentReason.translated ? ` (${labels.translationUnavailable}: ${adjustmentReason.original})` : ""}</div>}
+          {order.voidReason && <div>{labels.voidReason}: {voidReason.text}{english && !voidReason.translated ? ` (${labels.translationUnavailable}: ${voidReason.original})` : ""}</div>}
           <div>{labels.date}: {order.date} {order.time}</div>
-          <div>{labels.school}: {english ? "YMCA of Hong Kong Christian College" : order.school || "-"}</div>
+          <div>{labels.school}: {school.text}{english && !school.translated ? ` (${labels.translationUnavailable}: ${order.school})` : ""}</div>
           <div>{labels.customer}: {customerSurname(order.customerName) || "-"}</div>
           <div>{labels.phone}: {customerPhoneLast4(order.customerPhone) || "-"}</div>
+          {order.outletName && <div>{labels.outlet}: {english ? translateReceiptProductName(order.outletName).text : order.outletName}{english && !translateReceiptProductName(order.outletName).translated ? ` (${labels.translationUnavailable}: ${order.outletName})` : ""}</div>}
+          {order.outletAddress && <div>{labels.address}: {english ? translateReceiptProductName(order.outletAddress).text : order.outletAddress}{english && !translateReceiptProductName(order.outletAddress).translated ? ` (${labels.translationUnavailable}: ${order.outletAddress})` : ""}</div>}
+          {order.outletPhone && <div>{labels.telephone}: {order.outletPhone}</div>}
+          {order.cashierName && <div>{labels.cashier}: {english ? translateReceiptProductName(order.cashierName).text : order.cashierName}{english && !translateReceiptProductName(order.cashierName).translated ? ` (${labels.translationUnavailable}: ${order.cashierName})` : ""}</div>}
           <div>--------------------------------</div>
           <div>{labels.items}</div>
           {order.items.map((it, i) => (
             <div key={i}>
-              <div>{it.exchangeReturn ? labels.exchangeOut : ""}{it.name}</div>
-              <div>  {formatSizeForReceipt(it.name, it.size, it.length)}</div>
-              <div>  {labels.quantity} {it.qty} {receiptProductUnit(it.name, language, it.size)} x {fmt(Math.abs(it.price))} = {fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}</div>
+              <div>{it.exchangeReturn ? labels.exchangeOut : ""}{english ? translateReceiptProductName(it.name).text : it.name}</div>
+              {english && !translateReceiptProductName(it.name).translated && <div>  {labels.translationUnavailable}: {it.name}</div>}
+              <div>  {formatSizeForReceipt(it.name, it.size, it.length, english)}</div>
+              <div>  {labels.quantity} {it.qty} {receiptProductUnit(it.name, language, it.size, it.qty)} x {fmt(Math.abs(it.price))} = {fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}</div>
             </div>
           ))}
           <div>--------------------------------</div>
           <div>{labels.itemCount}: {order.itemCount}</div>
           <div>{order.exchangeSourceReceiptId ? labels.exchangeTotal : labels.total}: {fmt(order.total)}</div>
           {order.refundDue > 0 ? (
-            <div>{english ? "Refund method" : "退款方式"}: {(english ? PAYMENT_METHOD_LABELS_EN : PAYMENT_METHOD_LABELS)[order.refundMethod || "cash"]}</div>
+            <div>{labels.refundMethod}: {(english ? PAYMENT_METHOD_LABELS_EN : PAYMENT_METHOD_LABELS)[order.refundMethod || "cash"]}</div>
           ) : (
-            <div>{english ? "Payment method" : "付款方式"}: {(english ? PAYMENT_METHOD_LABELS_EN : PAYMENT_METHOD_LABELS)[order.paymentMethod || "cash"]}</div>
+            <div>{labels.paymentMethod}: {(english ? PAYMENT_METHOD_LABELS_EN : PAYMENT_METHOD_LABELS)[order.paymentMethod || "cash"]}</div>
           )}
           {order.refundDue > 0 ? (
             <div style={{ fontWeight: 700, color: "#166534" }}>{labels.refund}: {fmt(order.refundDue)}</div>
           ) : (
             <>
-              <div>{order.paymentMethod === "cash" ? `${labels.cash}: ${fmt(order.cashReceived ?? order.total)}` : `${english ? "Collected" : "實收款"}: ${fmt(order.total)}`}</div>
+              <div>{order.paymentMethod === "cash" ? `${labels.cash}: ${fmt(order.cashReceived ?? order.total)}` : `${labels.collected}: ${fmt(order.total)}`}</div>
               <div style={{ fontWeight: 700 }}>{labels.change}: {fmt(Math.max(order.changeDue ?? 0, 0))}</div>
             </>
           )}
-          <div>{labels.status}: {order.exchangeSourceReceiptId ? labels.exchanged : labels.completed}</div>
+          <div>{labels.status}: {order.voidedAt ? labels.voided : order.exchangeSourceReceiptId ? labels.exchanged : labels.completed}</div>
           <div style={{ marginTop: 8, color: "#555", lineHeight: 1.5 }}>
             <strong>{labels.returnPolicy}</strong><br />
             <strong>{labels.careTitle}</strong><br />
