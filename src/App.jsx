@@ -27,6 +27,7 @@ import { createSalesExportWorkbook } from "./data/salesExport";
 import { createPriceListWorkbook } from "./data/priceListExport";
 import { clearCheckoutAttempt, getOrCreateCheckoutAttempt } from "./data/checkoutAttempt";
 import { getRemainingReturnQuantity, hasUntrackedExchangeHistory } from "./data/returnLimits";
+import { canReplaceOrder, getReplacementSettlement } from "./data/orderReplacement";
 import { calculateCashSettlement, findPossibleDuplicateSale, PAYMENT_METHOD_LABELS, PAYMENT_METHOD_LABELS_EN, summarizeDailyCloseout } from "./data/salesCloseout";
 import {
   createCustomerReceiptOrder,
@@ -228,7 +229,9 @@ const localReceiptId = (salesLog) => {
   return `${prefix}${String(nextNumber).padStart(4, "0")}`;
 };
 
-const netOrderTotal = (order) => Number(order.total || 0) - Math.max(0, Number(order.refundDue || 0));
+const netOrderTotal = (order) => Number(order.total || 0) - (
+  order.replacementSourceReceiptId ? 0 : Math.max(0, Number(order.refundDue || 0))
+);
 
 // 只列出目前商品庫內實際有商品的學校，避免選到空商品學校
 const UNASSIGNED = "（未分類）";
@@ -1689,6 +1692,8 @@ const receiptFieldLabels = (language) => language === "en" ? {
   school: "School",
   receiptNo: "Receipt No.",
   sourceReceipt: "Source Receipt",
+  replacementSource: "Replaces receipt",
+  replacementDifference: "Replacement difference",
   duplicate: "Duplicate warning confirmed against",
   adjustmentReason: "Return / exchange reason",
   date: "Date",
@@ -1702,6 +1707,7 @@ const receiptFieldLabels = (language) => language === "en" ? {
   quantity: "Qty",
   itemCount: "Item count",
   total: "Total due",
+  replacementTotal: "New sale total",
   exchangeTotal: "Exchange difference",
   cash: "Cash received",
   refund: "Refund due",
@@ -1726,6 +1732,8 @@ const receiptFieldLabels = (language) => language === "en" ? {
   school: "學校",
   receiptNo: "收據編號",
   sourceReceipt: "來源單據",
+  replacementSource: "替換原單",
+  replacementDifference: "替換差額",
   duplicate: "疑似重複已確認（參照單號）",
   adjustmentReason: "退換原因",
   date: "交易日期",
@@ -1739,6 +1747,7 @@ const receiptFieldLabels = (language) => language === "en" ? {
   quantity: "數量",
   itemCount: "商品件數",
   total: "應付總額",
+  replacementTotal: "新單總額",
   exchangeTotal: "換貨差額",
   cash: "實收現金",
   refund: "應退客人",
@@ -1775,6 +1784,7 @@ const buildReceiptLines = (order, shopName, language = "zh") => {
   lines.push("================================");
   lines.push(`${labels.receiptNo}: #${(order.id || "").toUpperCase()}`);
   if (order.exchangeSourceReceiptId) lines.push(`${labels.sourceReceipt}: #${String(order.exchangeSourceReceiptId).toUpperCase()}`);
+  if (order.replacementSourceReceiptId) lines.push(`${labels.replacementSource}: #${String(order.replacementSourceReceiptId).toUpperCase()}`);
   if (order.duplicateConfirmed && order.duplicateSourceReceiptId) lines.push(`${labels.duplicate}: #${String(order.duplicateSourceReceiptId).toUpperCase()}`);
   if (order.adjustmentReason) {
     const reason = english ? translateReceiptProductName(order.adjustmentReason) : { text: order.adjustmentReason, translated: true };
@@ -1817,11 +1827,29 @@ const buildReceiptLines = (order, shopName, language = "zh") => {
   });
   lines.push("--------------------------------");
   lines.push(`${labels.itemCount}: ${order.itemCount || 0}`);
-  lines.push(`${order.exchangeSourceReceiptId ? labels.exchangeTotal : labels.total}: ${fmt(order.total)}`);
-  if (order.refundDue > 0) {
+  if (order.replacementSourceReceiptId) {
+    const delta = Number(order.settlementDelta || 0);
+    lines.push(`${labels.replacementTotal}: ${fmt(order.total)}`);
+    if (delta < 0) {
+      lines.push(`${labels.replacementDifference}: −${fmt(Math.abs(delta))}`);
+      lines.push(`${labels.refundMethod}: ${refundLabel}`);
+      lines.push(`${labels.refund}: ${fmt(Math.abs(delta))}`);
+    } else {
+      lines.push(`${labels.replacementDifference}: ${delta > 0 ? "+" : ""}${fmt(delta)}`);
+      lines.push(`${labels.paymentMethod}: ${paymentLabel}`);
+      if (order.paymentMethod === "cash") {
+        lines.push(`${labels.cash}: ${fmt(order.settlementCashReceived ?? 0)}`);
+        lines.push(`${labels.change}: ${fmt(order.settlementChangeDue ?? 0)}`);
+      } else {
+        lines.push(`${labels.collected}: ${fmt(delta)}`);
+      }
+    }
+  } else if (order.refundDue > 0) {
+    lines.push(`${order.exchangeSourceReceiptId ? labels.exchangeTotal : labels.total}: ${fmt(order.total)}`);
     lines.push(`${labels.refundMethod}: ${refundLabel}`);
     lines.push(`${labels.refund}: ${fmt(order.refundDue)}`);
   } else {
+    lines.push(`${order.exchangeSourceReceiptId ? labels.exchangeTotal : labels.total}: ${fmt(order.total)}`);
     lines.push(`${labels.paymentMethod}: ${paymentLabel}`);
     if (order.paymentMethod === "cash" && typeof order.cashReceived === "number") lines.push(`${labels.cash}: ${fmt(order.cashReceived)}`);
     else lines.push(`${labels.collected}: ${fmt(Math.max(0, Number(order.total || 0)))}`);
@@ -2032,6 +2060,7 @@ export default function UniformPOS() {
   const [pickupTickets, setPickupTickets] = useState([]);
   const [paymentOrders, setPaymentOrders] = useState([]);
   const [cart, setCart] = useState([]);
+  const [fullSaleReplacement, setFullSaleReplacement] = useState(null);
   const [heldSales, setHeldSales] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [pendingSaleProductId, setPendingSaleProductId] = useState("");
@@ -2158,6 +2187,7 @@ export default function UniformPOS() {
         return current;
       });
       setCart([]);
+      setFullSaleReplacement(null);
       setCashReceived("");
       setSelectedProduct(null);
       setExchangeReplacementQueue([]);
@@ -2180,15 +2210,27 @@ export default function UniformPOS() {
   };
 
   const clearCartWithConfirmation = () => {
-    if (cart.length === 0) return;
+    if (cart.length === 0 && !fullSaleReplacement) return;
     if (!window.confirm("確定要刪除購物車內所有款式嗎？此操作不能復原。")) return;
     setCart([]);
+    setFullSaleReplacement(null);
     setCashReceived("");
     setPaymentMethod("cash");
     setRefundMethod("cash");
     setSelectedProduct(null);
     setExchangeReplacementQueue([]);
     exchangeReplacementQueueRef.current = [];
+  };
+
+  const cancelFullSaleReplacement = () => {
+    if (!window.confirm("確定取消整單替換？目前修改不會儲存。")) return;
+    setCart([]);
+    setFullSaleReplacement(null);
+    setCashReceived("");
+    setPaymentMethod("cash");
+    setRefundMethod("cash");
+    setSelectedProduct(null);
+    setStorageError("");
   };
 
   const holdCurrentSale = () => {
@@ -2204,6 +2246,7 @@ export default function UniformPOS() {
     };
     persistHeldSales([hold, ...heldSales]);
     setCart([]);
+    setFullSaleReplacement(null);
     setCashReceived("");
     setPaymentMethod("cash");
     setRefundMethod("cash");
@@ -2214,6 +2257,7 @@ export default function UniformPOS() {
     if (cart.length > 0 && !window.confirm("目前購物車已有款式，確定要載入 HOLD 單並取代目前內容嗎？")) return;
     setSelectedSchool(hold.school || selectedSchool);
     setCart(hold.cart || []);
+    setFullSaleReplacement(null);
     setCashReceived(hold.cashReceived || "");
     setPaymentMethod(hold.paymentMethod || "cash");
     setRefundMethod(hold.refundMethod || "cash");
@@ -2616,7 +2660,7 @@ export default function UniformPOS() {
       const branchId = branchScoped ? session.branchId || "__unassigned__" : "";
       let query = supabase
         .from("orders")
-        .select("id, school, branch_id, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, adjustment_reason, payment_method, refund_method, refund_due, duplicate_confirmed, duplicate_source_receipt_id, voided_at, voided_by, void_reason, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, price, qty, is_return, source_order_item_id)")
+        .select("id, school, branch_id, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, replacement_source_receipt_id, replacement_reason, settlement_delta, replacement_cash_received, replacement_change_due, adjustment_reason, payment_method, refund_method, refund_due, duplicate_confirmed, duplicate_source_receipt_id, voided_at, voided_by, void_reason, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, price, qty, is_return, source_order_item_id)")
         .order("created_at", { ascending: false });
       if (branchScoped) query = query.eq("branch_id", branchId);
       let { data, error } = await query;
@@ -2669,6 +2713,11 @@ export default function UniformPOS() {
             customerName: order.customer_surname || "",
             customerPhone: order.customer_phone_last4 || "",
             exchangeSourceReceiptId: order.exchange_source_receipt_id || order.exchangeSourceReceiptId || order.source_receipt_id || "",
+            replacementSourceReceiptId: order.replacement_source_receipt_id || "",
+            replacementReason: order.replacement_reason || "",
+            settlementDelta: Number(order.settlement_delta || 0),
+            settlementCashReceived: Number(order.replacement_cash_received || 0),
+            settlementChangeDue: Number(order.replacement_change_due || 0),
             adjustmentReason: order.adjustment_reason || "",
             paymentMethod: order.payment_method || "cash",
             refundMethod: order.refund_method || "",
@@ -3026,38 +3075,58 @@ export default function UniformPOS() {
   const saveSalesLog = async (order, checkoutKey) => {
     try {
       let savedOrder;
+      let replacementAudit = null;
       if (isSupabaseAuthEnabled && supabase) {
         const persistedOrder = { ...order, total: Math.max(0, Number(order.total || 0)) };
-        const { data: receiptId, error } = await supabase.rpc("create_order_idempotently", {
-          order_data: {
-            ...persistedOrder,
-            cashier_id: order.cashierId,
-            cashier_name: order.cashierName,
-            branch_id: order.branchId || null,
-            item_count: order.itemCount,
-            outlet_name: order.outletName,
-            outlet_address: order.outletAddress,
-            outlet_phone: order.outletPhone,
-            customer_surname: customerSurname(order.customerName),
-            customer_phone_last4: customerPhoneLast4(order.customerPhone),
-            exchange_source_receipt_id: order.exchangeSourceReceiptId || null,
-            adjustment_reason: order.adjustmentReason || null,
-            payment_method: order.paymentMethod || "cash",
-            refund_method: order.refundMethod || null,
-            duplicate_confirmed: Boolean(order.duplicateConfirmed),
-            duplicate_source_receipt_id: order.duplicateSourceReceiptId || null,
-            refund_due: Math.max(0, Number(order.refundDue || 0)),
-            created_at: new Date().toISOString(),
-            items: (order.items || []).map((item) => ({
-              ...item,
-              is_return: Boolean(item.exchangeReturn),
-              source_order_item_id: item.sourceOrderItemId || null,
-            })),
-          },
-          p_checkout_key: checkoutKey,
-        });
-
-        if (error) throw error;
+        const orderData = {
+          ...persistedOrder,
+          cashier_id: order.cashierId,
+          cashier_name: order.cashierName,
+          branch_id: order.branchId || null,
+          item_count: order.itemCount,
+          outlet_name: order.outletName,
+          outlet_address: order.outletAddress,
+          outlet_phone: order.outletPhone,
+          customer_surname: customerSurname(order.customerName),
+          customer_phone_last4: customerPhoneLast4(order.customerPhone),
+          exchange_source_receipt_id: order.exchangeSourceReceiptId || null,
+          replacement_source_receipt_id: order.replacementSourceReceiptId || null,
+          replacement_reason: order.replacementReason || null,
+          settlement_delta: Number(order.settlementDelta || 0),
+          replacement_cash_received: Number(order.settlementCashReceived || 0),
+          replacement_change_due: Number(order.settlementChangeDue || 0),
+          adjustment_reason: order.adjustmentReason || order.replacementReason || null,
+          payment_method: order.paymentMethod || "cash",
+          refund_method: order.refundMethod || null,
+          duplicate_confirmed: Boolean(order.duplicateConfirmed),
+          duplicate_source_receipt_id: order.duplicateSourceReceiptId || null,
+          refund_due: Math.max(0, Number(order.refundDue || 0)),
+          created_at: new Date().toISOString(),
+          items: (order.items || []).map((item) => ({
+            ...item,
+            is_return: Boolean(item.exchangeReturn),
+            source_order_item_id: item.sourceOrderItemId || null,
+          })),
+        };
+        let receiptId;
+        if (order.replacementSourceReceiptId) {
+          const { data, error } = await supabase.rpc("replace_sales_order_idempotently", {
+            order_data: orderData,
+            p_checkout_key: checkoutKey,
+            p_source_order_id: order.replacementSourceReceiptId,
+            p_reason: order.replacementReason,
+          });
+          if (error) throw error;
+          replacementAudit = data;
+          receiptId = data?.receipt_id;
+        } else {
+          const { data, error } = await supabase.rpc("create_order_idempotently", {
+            order_data: orderData,
+            p_checkout_key: checkoutKey,
+          });
+          if (error) throw error;
+          receiptId = data;
+        }
         if (!receiptId) throw new Error("交易服務沒有回傳收據編號");
         const { data: savedItems, error: itemLoadError } = await supabase
           .from("order_items")
@@ -3079,11 +3148,22 @@ export default function UniformPOS() {
           })),
         };
       } else {
+        if (order.replacementSourceReceiptId) {
+          throw new Error("整單替換需要安全連線至正式交易資料庫，請檢查網絡後再試。");
+        }
         savedOrder = salesLog.find((entry) => entry.checkoutKey === checkoutKey)
           || { ...order, id: localReceiptId(salesLog), checkoutKey };
       }
 
-      const savedLog = [savedOrder, ...salesLog.filter((entry) => entry.id !== savedOrder.id)];
+      const savedLog = [savedOrder, ...salesLog.filter((entry) => entry.id !== savedOrder.id)]
+        .map((entry) => entry.id === savedOrder.replacementSourceReceiptId
+          ? {
+            ...entry,
+            voidedAt: replacementAudit?.voided_at || entry.voidedAt || new Date().toISOString(),
+            voidedBy: order.cashierId,
+            voidReason: replacementAudit?.void_reason || `整單已由新單 #${savedOrder.id} 替換：${order.replacementReason}`,
+          }
+          : entry);
       if (!isSupabaseAuthEnabled || !supabase) await window.storage.set("sales-log", JSON.stringify(savedLog), true);
       setSalesLog(savedLog);
       setStorageError("");
@@ -3092,7 +3172,9 @@ export default function UniformPOS() {
       console.error("儲存記錄失敗", e);
       const detail = e?.code ? `（${e.code}${e?.details ? `：${e.details}` : ""}）` : "";
       const migrationNote = e?.code === "PGRST202"
-        ? "請管理員先在 Supabase 執行 supabase/idempotent-sales-checkout.sql。"
+        ? order.replacementSourceReceiptId
+          ? "請管理員先在 Supabase 執行 supabase/replace-sales-order.sql。"
+          : "請管理員先在 Supabase 執行 supabase/idempotent-sales-checkout.sql。"
         : "";
       setStorageError(`交易結果未能確認${detail}。請勿另開新單；保持相同商品及金額後重試，系統會沿用同一交易識別碼。${migrationNote}`);
       return null;
@@ -3124,8 +3206,46 @@ export default function UniformPOS() {
 
   const removeItem = (key) => setCart((prev) => prev.filter((c) => c.key !== key));
 
+  const startFullSaleReplacement = (order) => {
+    if (!canReplaceOrder(order, salesLog)) {
+      setStorageError("此單已作廢或已有退換／替換記錄，不能再整單替換。請使用快速換貨流程或聯絡管理員核對。");
+      return false;
+    }
+    setStorageError("");
+    setFullSaleReplacement({ id: order.id, total: Number(order.total || 0), school: order.school || "" });
+    setSelectedSchool(order.school || selectedSchool);
+    setPaymentMethod(order.paymentMethod || "cash");
+    setRefundMethod(order.paymentMethod || "cash");
+    setCart((order.items || []).map((item) => {
+      const product = products.find((candidate) => candidate.name === item.name || candidate.id === item.productId);
+      const matchingSize = product?.sizes?.find((size) => sizeIdentityKey(size) === sizeIdentityKey(item));
+      return {
+        key: uid(),
+        productId: product?.id || item.productId || "",
+        name: item.name,
+        size: item.size,
+        length: item.length || "",
+        isTailored: isTailoredSize(item) || Boolean(matchingSize?.isTailored),
+        price: Math.abs(Number(item.price || 0)),
+        qty: Math.max(1, Number(item.qty || 1)),
+        replacementSourceOrderItemId: item.id ? String(item.id) : "",
+        sourceGuestName: order.customerName || "",
+        sourceGuestPhone: order.customerPhone || "",
+      };
+    }));
+    setCashReceived("");
+    setSelectedProduct(null);
+    exchangeReplacementQueueRef.current = [];
+    setExchangeReplacementQueue([]);
+    setReceipt(null);
+    setTab("sale");
+    navigate("/sale", { replace: true });
+    return true;
+  };
+
   const startExchange = (order, selectedItems) => {
     setStorageError("");
+    setFullSaleReplacement(null);
     const items = Array.isArray(selectedItems) ? selectedItems : [selectedItems];
     if (!order.id || items.some((item) => !item.id)) {
       setStorageError("退換貨必須連結原單貨品記錄，請重新載入原單後再試。");
@@ -3560,18 +3680,42 @@ export default function UniformPOS() {
   const cartTotal = cart.reduce((sum, c) => sum + (c.exchangeReturn ? -1 : 1) * c.price * c.qty, 0);
   const cartCount = cart.reduce((sum, c) => sum + c.qty, 0);
   const exchangeMode = cart.some((item) => item.exchangeReturn);
+  const replacementSettlement = fullSaleReplacement
+    ? getReplacementSettlement(fullSaleReplacement.total, cartTotal)
+    : null;
+  const fullReplacementMode = Boolean(fullSaleReplacement?.id);
+  const settlementDue = fullReplacementMode ? replacementSettlement.collectDue : cartTotal;
   const cartSourceMeta = cart.find((item) => item.sourceQueueNo || item.sourceGuestName) || {};
   const cashAmount = paymentMethod === "cash"
-    ? (cashReceived === "" ? (exchangeMode ? 0 : cartTotal) : Number(cashReceived || 0))
-    : Math.max(cartTotal, 0);
-  const changeDue = calculateCashSettlement(cartTotal, cashAmount).changeDue;
-  const refundDue = exchangeMode ? Math.max(-cartTotal, 0) : 0;
+    ? (cashReceived === "" ? (exchangeMode ? 0 : Math.max(0, settlementDue)) : Number(cashReceived || 0))
+    : Math.max(settlementDue, 0);
+  const changeDue = calculateCashSettlement(settlementDue, cashAmount).changeDue;
+  const refundDue = fullReplacementMode
+    ? replacementSettlement.refundDue
+    : exchangeMode ? Math.max(-cartTotal, 0) : 0;
 
   const submitCheckout = async (adjustmentReason = "", duplicateAudit = {}) => {
-    if (cart.length === 0) return;
+    if (cart.length === 0 && !fullReplacementMode) return;
+    if (fullReplacementMode && !adjustmentReason.trim()) {
+      setStorageError("整單替換必須記錄原因。");
+      return;
+    }
+    if (fullReplacementMode && (!isSupabaseAuthEnabled || !supabase)) {
+      setStorageError("整單替換需要安全連線至正式交易資料庫，請檢查網絡後再試。");
+      return;
+    }
     const conflictingProductIds = findUnresolvedPriceConflictProductIds(products);
     const priceIssues = cart.flatMap((item) => {
       if (item.exchangeReturn || item.sourceOrderId) return [];
+      const sourceItem = fullReplacementMode && item.replacementSourceOrderItemId
+        ? salesLog.find((entry) => entry.id === fullSaleReplacement.id)?.items
+          ?.find((entry) => String(entry.id || "") === item.replacementSourceOrderItemId)
+        : null;
+      if (sourceItem
+        && sourceItem.name === item.name
+        && String(sourceItem.size || "") === String(item.size || "")
+        && String(sourceItem.length || "") === String(item.length || "")
+        && Number(sourceItem.price) === Number(item.price)) return [];
       const product = products.find((candidate) => candidate.id === item.productId);
       if (!product) return [`${item.name}（${sizeLabel(item)}）已不在商品資料內`];
       if (conflictingProductIds.has(product.id)) return [`${product.name}（${sizeLabel(item)}）有相同尺碼價格衝突`];
@@ -3588,8 +3732,8 @@ export default function UniformPOS() {
     }
     const now = new Date();
     const received = paymentMethod === "cash"
-      ? (cashReceived === "" ? (exchangeMode ? 0 : cartTotal) : Number(cashReceived || 0))
-      : Math.max(cartTotal, 0);
+      ? (cashReceived === "" ? (exchangeMode ? 0 : Math.max(0, settlementDue)) : Number(cashReceived || 0))
+      : Math.max(settlementDue, 0);
     const sourceMeta = cart.find((item) => item.sourceQueueNo || item.sourceGuestName) || {};
     const order = {
       id: "",
@@ -3598,11 +3742,18 @@ export default function UniformPOS() {
       items: cart.map(({ name, size, length, isTailored, price, qty, exchangeReturn, exchangeSourceReceiptId, sourceOrderItemId }) => ({ name, size, length, isTailored, price, qty, exchangeReturn, exchangeSourceReceiptId, sourceOrderItemId })),
       total: Math.max(0, cartTotal),
       cashReceived: received,
-      changeDue: calculateCashSettlement(cartTotal, received).changeDue,
-      refundDue: exchangeMode ? Math.max(-cartTotal, 0) : 0,
-      adjustmentReason: exchangeMode ? adjustmentReason : "",
+      changeDue: calculateCashSettlement(settlementDue, received).changeDue,
+      refundDue,
+      adjustmentReason: exchangeMode || fullReplacementMode ? adjustmentReason : "",
+      replacementSourceReceiptId: fullSaleReplacement?.id || "",
+      replacementReason: fullReplacementMode ? adjustmentReason : "",
+      settlementDelta: replacementSettlement?.difference || 0,
+      settlementCashReceived: fullReplacementMode && replacementSettlement.collectDue > 0 && paymentMethod === "cash" ? received : 0,
+      settlementChangeDue: fullReplacementMode && replacementSettlement.collectDue > 0 && paymentMethod === "cash"
+        ? calculateCashSettlement(settlementDue, received).changeDue
+        : 0,
       paymentMethod,
-      refundMethod: exchangeMode && Math.max(-cartTotal, 0) > 0 ? refundMethod : "",
+      refundMethod: refundDue > 0 ? refundMethod : "",
       duplicateConfirmed: Boolean(duplicateAudit.confirmed),
       duplicateSourceReceiptId: duplicateAudit.sourceReceiptId || "",
       createdAt: now.toISOString(),
@@ -3685,6 +3836,7 @@ export default function UniformPOS() {
 
     setReceipt(savedOrder);
     setCart([]);
+    setFullSaleReplacement(null);
     setCashReceived("");
     setPaymentMethod("cash");
     setRefundMethod("cash");
@@ -3694,7 +3846,7 @@ export default function UniformPOS() {
   };
 
   const checkout = async (adjustmentReason = "", duplicateAudit = {}) => {
-    if (cart.length === 0 || checkoutSubmittingRef.current) return;
+    if ((cart.length === 0 && !fullReplacementMode) || checkoutSubmittingRef.current) return;
     checkoutSubmittingRef.current = true;
     setCheckoutSubmitting(true);
     try {
@@ -4244,6 +4396,8 @@ export default function UniformPOS() {
                 cashAmount={cashAmount}
                 exchangeMode={exchangeMode}
                 refundDue={refundDue}
+                fullSaleReplacement={fullSaleReplacement}
+                onCancelFullReplacement={cancelFullSaleReplacement}
                 exchangeReplacementQueue={exchangeReplacementQueue}
                 onExchangeReplacementAdded={advanceExchangeReplacement}
                 salesLog={salesLog}
@@ -4288,6 +4442,8 @@ export default function UniformPOS() {
                     cashAmount={cashAmount}
                     exchangeMode={exchangeMode}
                     refundDue={refundDue}
+                    fullSaleReplacement={fullSaleReplacement}
+                    onCancelFullReplacement={cancelFullSaleReplacement}
                     exchangeReplacementQueue={exchangeReplacementQueue}
                     onExchangeReplacementAdded={advanceExchangeReplacement}
                     salesLog={salesLog}
@@ -4419,11 +4575,9 @@ export default function UniformPOS() {
             && !receipt.voidedAt
             && receipt.items.some((item) => getRemainingReturnQuantity(item, salesLog) > 0),
           )}
+          canReplaceSale={canReplaceOrder(receipt, salesLog)}
           onRedoSale={(order) => {
-            const items = order.items
-              .map((item) => ({ ...item, qty: getRemainingReturnQuantity(item, salesLog) }))
-              .filter((item) => item.qty > 0);
-            const started = items.length > 0 && startExchange(order, items);
+            const started = startFullSaleReplacement(order);
             if (started) {
               setReceipt(null);
               setBtStatus({ state: "idle", msg: "" });
@@ -4535,6 +4689,8 @@ function SaleTab({
   cashAmount,
   exchangeMode = false,
   refundDue = 0,
+  fullSaleReplacement = null,
+  onCancelFullReplacement,
   exchangeReplacementQueue = [],
   onExchangeReplacementAdded,
   salesLog = [],
@@ -4593,16 +4749,23 @@ function SaleTab({
   const sortedProducts = filteredProducts;
   const selectedProductData = productsById.get(selectedProduct);
   const exchangeSourceReceiptId = cart.find((item) => item.exchangeSourceReceiptId)?.exchangeSourceReceiptId || "";
+  const fullReplacementMode = Boolean(fullSaleReplacement?.id);
+  const replacementSettlement = fullReplacementMode
+    ? getReplacementSettlement(fullSaleReplacement.total, cartTotal)
+    : null;
   useEffect(() => {
     setExchangeReason("");
     setExchangeReasonNote("");
     setExchangePreviewOpen(false);
-  }, [exchangeSourceReceiptId]);
+  }, [exchangeSourceReceiptId, fullSaleReplacement?.id]);
   const returnedCartItems = cart.filter((item) => item.exchangeReturn);
   const replacementCartItems = cart.filter((item) => !item.exchangeReturn);
-  const settlementMethod = exchangeMode && refundDue > 0 ? refundMethod : paymentMethod;
+  const settlementMethod = (exchangeMode || fullReplacementMode) && refundDue > 0 ? refundMethod : paymentMethod;
+  const settlementDue = fullReplacementMode
+    ? replacementSettlement.collectDue
+    : cartTotal;
   const cashShortfall = settlementMethod === "cash"
-    ? calculateCashSettlement(cartTotal, cashAmount).shortfall
+    ? calculateCashSettlement(settlementDue, cashAmount).shortfall
     : 0;
 
   useEffect(() => {
@@ -4615,6 +4778,11 @@ function SaleTab({
       return;
     }
     setPaymentWarning("");
+    if (fullReplacementMode) {
+      setExchangePreviewOpen(false);
+      checkout(adjustmentReason);
+      return;
+    }
     const duplicate = findPossibleDuplicateSale({
       cashierId,
       branchId,
@@ -4760,6 +4928,16 @@ function SaleTab({
         <div role="alert" style={{ marginBottom: 12, padding: 10, borderRadius: 9, border: "1px solid #F0C36D", background: "#FFFBEB", color: "#7C4A03", fontSize: 12 }}>
           <strong>{blockedPriceProducts.length} 款商品價格有衝突，已暫停銷售及換貨，避免收錯價。</strong>
           <div style={{ marginTop: 3 }}>請管理員先在商品頁核對或清除相關款式，再重新匯入正確價格。</div>
+        </div>
+      )}
+      {fullReplacementMode && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, padding: 12, borderRadius: 10, border: "1px solid #FCD34D", background: "#FFFBEB", color: "#78350F" }}>
+          <div style={{ flex: 1, fontSize: 13 }}>
+            <strong>整單替換：#{fullSaleReplacement.id}</strong>
+            <div>原單總額 {fmt(fullSaleReplacement.total)}；新單總額 {fmt(cartTotal)}；差額 {fmt(replacementSettlement.difference)}</div>
+            <div>完成後原單會作廢留底，新單按新總額計入收入，只收／退差額。</div>
+          </div>
+          <button type="button" className="pos-btn" onClick={onCancelFullReplacement} style={{ padding: "8px 10px", borderRadius: 8, background: "#fff", border: "1px solid #D97706", color: "#92400E", fontWeight: 700, whiteSpace: "nowrap" }}>取消替換</button>
         </div>
       )}
       <button
@@ -4959,11 +5137,11 @@ function SaleTab({
           <button className="pos-btn" onClick={() => setExchangeOrder(null)} style={{ width: "100%", marginTop: 6, padding: 7, background: "transparent", color: "#9A3412" }}>返回單據選擇</button>
         </div>
       )}
-      {exchangePreviewOpen && exchangeMode && createPortal(
+      {exchangePreviewOpen && (exchangeMode || fullReplacementMode) && createPortal(
         <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(15,23,42,0.55)" }}>
           <div role="dialog" aria-modal="true" aria-labelledby="exchange-preview-title" style={{ width: "min(560px, 100%)", maxHeight: "85vh", overflowY: "auto", boxSizing: "border-box", padding: 18, borderRadius: 14, background: "#fff", boxShadow: "0 20px 50px rgba(15,23,42,0.25)" }}>
-            <div id="exchange-preview-title" style={{ fontSize: 18, fontWeight: 800, color: "#1F3A5F" }}>退換貨結帳預覽</div>
-            <div style={{ marginTop: 6, color: "#64748B", fontSize: 13 }}>原單：#{exchangeSourceReceiptId || "未連結"}</div>
+            <div id="exchange-preview-title" style={{ fontSize: 18, fontWeight: 800, color: "#1F3A5F" }}>{fullReplacementMode ? "整單替換確認" : "退換貨結帳預覽"}</div>
+            <div style={{ marginTop: 6, color: "#64748B", fontSize: 13 }}>原單：#{fullSaleReplacement?.id || exchangeSourceReceiptId || "未連結"}</div>
             <label style={{ display: "grid", gap: 6, marginTop: 12, fontSize: 13, fontWeight: 700 }}>
               退換原因（必須記錄）
               <select value={exchangeReason} onChange={(event) => setExchangeReason(event.target.value)} style={{ padding: 9, border: "1px solid #CBD5E1", borderRadius: 8, fontSize: 15 }}>
@@ -4987,6 +5165,11 @@ function SaleTab({
               />
             )}
             {exchangeReason && <div style={{ color: "#475569", fontSize: 13 }}>記錄原因：{exchangeReason === "其他" ? `其他：${exchangeReasonNote.trim() || "（待填寫）"}` : exchangeReason}</div>}
+            {fullReplacementMode && (
+              <div style={{ marginTop: 14, padding: 10, borderRadius: 8, background: "#FEF3C7", color: "#78350F", fontSize: 13 }}>
+                舊單將保留作廢稽核紀錄。新單總額 {fmt(cartTotal)}；原單總額 {fmt(fullSaleReplacement.total)}；{replacementSettlement.difference > 0 ? `需收差額 ${fmt(replacementSettlement.collectDue)}` : replacementSettlement.difference < 0 ? `需退差額 ${fmt(replacementSettlement.refundDue)}` : "無須收退款"}。
+              </div>
+            )}
             <div style={{ marginTop: 14, fontWeight: 700, color: "#9A3412" }}>退回貨品</div>
             {returnedCartItems.map((item, index) => (
               <div key={`return-${item.key || index}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 6, fontSize: 14 }}>
@@ -5003,17 +5186,17 @@ function SaleTab({
             )) : <div style={{ marginTop: 6, color: "#64748B", fontSize: 13 }}>沒有換入貨品</div>}
             <div style={{ marginTop: 14, padding: 12, borderRadius: 10, background: "#F8FAFC", display: "grid", gap: 7 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                <span>本次對淨收入的影響</span><strong>{fmt(cartTotal)}</strong>
+                <span>{fullReplacementMode ? "新單總額" : "本次對淨收入的影響"}</span><strong>{fmt(cartTotal)}</strong>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                <span>{refundDue > 0 ? "應退款" : "客人需補款"}</span>
-                <strong>{fmt(refundDue > 0 ? refundDue : Math.max(cartTotal, 0))}</strong>
+                <span>{refundDue > 0 ? "應退款" : fullReplacementMode ? "需收差額" : "客人需補款"}</span>
+                <strong>{fmt(refundDue > 0 ? refundDue : Math.max(settlementDue, 0))}</strong>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                 <span>{refundDue > 0 ? "退款方式" : "補款方式"}</span>
                 <strong>{PAYMENT_METHOD_LABELS[refundDue > 0 ? refundMethod : paymentMethod] || "現金"}</strong>
               </div>
-              {settlementMethod === "cash" && cartTotal > 0 && (
+              {settlementMethod === "cash" && settlementDue > 0 && (
                 <>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                     <span>現金交付</span><strong>{fmt(cashAmount)}</strong>
@@ -5036,7 +5219,7 @@ function SaleTab({
                   requestCheckout(reason);
                 }}
                 style={{ flex: 1, padding: 11, borderRadius: 9, border: 0, background: !exchangeReason || (exchangeReason === "其他" && !exchangeReasonNote.trim()) ? "#9CA3AF" : "#1F3A5F", color: "#fff", fontWeight: 700 }}
-              >確認並完成退換</button>
+              >{fullReplacementMode ? "確認整單替換" : "確認並完成退換"}</button>
             </div>
           </div>
         </div>,
@@ -5293,13 +5476,13 @@ function SaleTab({
               </button>
             </div>
             <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", fontSize: 18, fontWeight: 700 }}>
-              <span>{exchangeMode ? "換貨應補／應退" : `總計（${cartCount}件）`}</span>
+              <span>{fullReplacementMode ? `新單總額（${cartCount}件）` : exchangeMode ? "換貨應補／應退" : `總計（${cartCount}件）`}</span>
               <span>{fmt(cartTotal)}</span>
             </div>
 
             <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, paddingTop: 10, borderTop: "1px solid #E5E5E0" }}>
               <label htmlFor="sale-payment-method" style={{ fontSize: 17, fontWeight: 600, color: "#45515F" }}>
-                {refundDue > 0 ? "退款方式" : exchangeMode ? "補款方式" : "付款方式"}
+                {refundDue > 0 ? "退款方式" : exchangeMode ? "補款方式" : fullReplacementMode ? "差額收款方式" : "付款方式"}
               </label>
               <select
                 id="sale-payment-method"
@@ -5313,9 +5496,9 @@ function SaleTab({
               </select>
             </div>
 
-            {settlementMethod === "cash" && !(exchangeMode && refundDue > 0) && cartTotal > 0 && (
+            {settlementMethod === "cash" && !(exchangeMode && refundDue > 0) && settlementDue > 0 && (
             <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, paddingTop: 10, borderTop: "1px solid #E5E5E0" }}>
-              <label htmlFor="cash-received" style={{ fontSize: 17, fontWeight: 600, color: "#45515F" }}>{exchangeMode ? "客人交付現金" : "實收現金"}</label>
+              <label htmlFor="cash-received" style={{ fontSize: 17, fontWeight: 600, color: "#45515F" }}>{exchangeMode || fullReplacementMode ? "客人交付現金" : "實收現金"}</label>
               <input
                 id="cash-received"
                 type="number"
@@ -5338,17 +5521,17 @@ function SaleTab({
             </div>
             )}
 
-            <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", fontSize: 18, fontWeight: 600, color: exchangeMode && refundDue > 0 ? "#166534" : "#1F3A5F" }}>
+            <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", fontSize: 18, fontWeight: 600, color: (exchangeMode || fullReplacementMode) && refundDue > 0 ? "#166534" : "#1F3A5F" }}>
               <span>
                 {refundDue > 0 ? "應退客人"
-                  : cashShortfall > 0 ? exchangeMode ? "尚欠補款" : "尚欠金額"
-                    : exchangeMode && paymentMethod !== "cash" && cartTotal > 0 ? "客人需補款"
+                  : cashShortfall > 0 ? (exchangeMode || fullReplacementMode) ? "尚欠補款" : "尚欠金額"
+                    : (exchangeMode || fullReplacementMode) && paymentMethod !== "cash" && settlementDue > 0 ? "客人需補款"
                       : "找續"}
               </span>
               <span>
                 {fmt(refundDue > 0 ? refundDue
                   : cashShortfall > 0 ? cashShortfall
-                    : exchangeMode && paymentMethod !== "cash" && cartTotal > 0 ? cartTotal
+                    : (exchangeMode || fullReplacementMode) && paymentMethod !== "cash" && settlementDue > 0 ? settlementDue
                       : changeDue)}
               </span>
             </div>
@@ -5364,24 +5547,26 @@ function SaleTab({
       <button
         className="pos-btn"
         onClick={() => {
-          if (exchangeMode) setExchangePreviewOpen(true);
+          if (exchangeMode || fullReplacementMode) setExchangePreviewOpen(true);
           else requestCheckout();
         }}
-        disabled={cart.length === 0 || checkoutSubmitting || cashShortfall > 0}
+        disabled={(cart.length === 0 && !fullReplacementMode) || checkoutSubmitting || cashShortfall > 0}
         style={{
           width: "100%",
           marginTop: 14,
           padding: "14px 0",
           borderRadius: 12,
-          background: cart.length === 0 || checkoutSubmitting ? "#9CA3AF" : "#1F3A5F",
+          background: (cart.length === 0 && !fullReplacementMode) || checkoutSubmitting ? "#9CA3AF" : "#1F3A5F",
           color: "#fff",
           fontSize: 18,
           fontWeight: 600,
         }}
       >
-        {checkoutSubmitting ? "正在確認交易…" : `${exchangeMode ? (refundDue > 0 ? `完成換貨／退回 ${fmt(refundDue)}` : `完成換貨${changeDue > 0 ? `／補回 ${fmt(changeDue)}` : ""}`) : "完成交易"}並開單`}
+        {checkoutSubmitting ? "正在確認交易…" : fullReplacementMode
+          ? `確認整單替換${refundDue > 0 ? `／退回 ${fmt(refundDue)}` : replacementSettlement.collectDue > 0 ? `／收取 ${fmt(replacementSettlement.collectDue)}` : ""}`
+          : `${exchangeMode ? (refundDue > 0 ? `完成換貨／退回 ${fmt(refundDue)}` : `完成換貨${changeDue > 0 ? `／補回 ${changeDue}` : ""}`) : "完成交易"}並開單`}
       </button>
-      {!exchangeMode && cart.length > 0 && (
+      {!exchangeMode && !fullReplacementMode && cart.length > 0 && (
         <button
           className="pos-btn"
           onClick={onHoldSale}
@@ -7226,13 +7411,12 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
   const availableSchools = Array.from(new Set(dateOrders.filter(outletMatches).map((o) => o.school).filter(Boolean)))
     .sort((a, b) => a.localeCompare(b, "zh-Hant"));
   const dayOrders = dateOrders.filter((o) => outletMatches(o) && (!schoolFilter || o.school === schoolFilter));
-  const closeoutOrders = branchOrders.filter((order) =>
-    order.date === effectiveDate
-    && outletMatches(order)
+  const closeoutScopeOrders = branchOrders.filter((order) =>
+    outletMatches(order)
     && (!schoolFilter || order.school === schoolFilter)
   );
   const activeDayOrders = dayOrders.filter((order) => !order.voidedAt);
-  const closeout = summarizeDailyCloseout(closeoutOrders);
+  const closeout = summarizeDailyCloseout(closeoutScopeOrders, effectiveDate);
   const dayTotal = activeDayOrders.reduce((s, o) => s + netOrderTotal(o), 0);
   const dayItems = activeDayOrders.reduce((s, o) => s + o.itemCount, 0);
   const knownCustomerPhones = new Set(activeDayOrders.map((o) => customerPhoneLast4(o.customerPhone || o.phone)).filter(Boolean));
@@ -7488,8 +7672,15 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
             </div>
             {o.voidedAt && <div style={{ fontSize: 11, color: "#B42318", marginTop: 3 }}>作廢原因：{o.voidReason || "未提供"}</div>}
             {o.exchangeSourceReceiptId && <div style={{ fontSize: 12, color: "#9A3412", fontWeight: 600 }}>來源單據：#{String(o.exchangeSourceReceiptId).toUpperCase()}</div>}
+            {o.replacementSourceReceiptId && <div style={{ fontSize: 12, color: "#9A3412", fontWeight: 600 }}>替換原單：#{String(o.replacementSourceReceiptId).toUpperCase()}</div>}
             {o.duplicateConfirmed && o.duplicateSourceReceiptId && <div style={{ fontSize: 11, color: "#9A3412", marginTop: 3 }}>曾確認疑似重複；參照單號 #{String(o.duplicateSourceReceiptId).toUpperCase()}</div>}
-            {!o.voidedAt && <div style={{ fontSize: 11, color: "#64748B", marginTop: 3 }}>{o.refundDue > 0 ? `退款：${PAYMENT_METHOD_LABELS[o.refundMethod || "cash"] || "現金"} ${fmt(o.refundDue)}` : `收款：${PAYMENT_METHOD_LABELS[o.paymentMethod || "cash"] || "現金"} ${fmt(netOrderTotal(o))}`}</div>}
+            {!o.voidedAt && <div style={{ fontSize: 11, color: "#64748B", marginTop: 3 }}>{o.replacementSourceReceiptId
+              ? Number(o.settlementDelta || 0) < 0
+                ? `整單替換退款：${PAYMENT_METHOD_LABELS[o.refundMethod || "cash"] || "現金"} ${fmt(Math.abs(Number(o.settlementDelta)))}`
+                : `整單替換補款：${PAYMENT_METHOD_LABELS[o.paymentMethod || "cash"] || "現金"} ${fmt(o.settlementDelta || 0)}`
+              : o.refundDue > 0
+                ? `退款：${PAYMENT_METHOD_LABELS[o.refundMethod || "cash"] || "現金"} ${fmt(o.refundDue)}`
+                : `收款：${PAYMENT_METHOD_LABELS[o.paymentMethod || "cash"] || "現金"} ${fmt(netOrderTotal(o))}`}</div>}
             <div style={{ fontSize: 12, color: "#888" }}>{o.items.map((it) => `${it.name}(${sizeLabel({ size: it.size, length: it.length })})x${it.qty}`).join("、")}</div>
             {o.cashierName && <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>開單：{o.cashierName}</div>}
           </div>
@@ -7638,7 +7829,7 @@ function ReceiptQR({ order, language = "zh" }) {
   );
 }
 
-function ReceiptModal({ order, orders = [], language = "zh", actionError = "", onClose, canRedoSale = false, onRedoSale, onExchange, onPrintBrowser, onPrintBluetooth, btStatus }) {
+function ReceiptModal({ order, orders = [], language = "zh", actionError = "", onClose, canRedoSale = false, canReplaceSale = false, onRedoSale, onExchange, onPrintBrowser, onPrintBluetooth, btStatus }) {
   const [exchangeSelection, setExchangeSelection] = useState(null);
   const english = language === "en";
   const labels = receiptFieldLabels(language);
@@ -7674,6 +7865,7 @@ function ReceiptModal({ order, orders = [], language = "zh", actionError = "", o
           <div style={{ textAlign: "center", color: "#888", fontSize: 11 }}>{english ? "ELECTRONIC RECEIPT" : "電子銷售單 ELECTRONIC RECEIPT"}</div>
           <div style={{ marginTop: 4 }}>{labels.receiptNo}: #{(order.id || "").toUpperCase()}</div>
           {order.exchangeSourceReceiptId && <div>{labels.sourceReceipt}: #{String(order.exchangeSourceReceiptId).toUpperCase()}</div>}
+          {order.replacementSourceReceiptId && <div>{labels.replacementSource}: #{String(order.replacementSourceReceiptId).toUpperCase()}</div>}
           {order.duplicateConfirmed && order.duplicateSourceReceiptId && <div>{labels.duplicate}: #{String(order.duplicateSourceReceiptId).toUpperCase()}</div>}
           {order.adjustmentReason && <div>{labels.adjustmentReason}: {adjustmentReason.text}{english && !adjustmentReason.translated ? ` (${labels.translationUnavailable}: ${adjustmentReason.original})` : ""}</div>}
           {order.voidReason && <div>{labels.voidReason}: {voidReason.text}{english && !voidReason.translated ? ` (${labels.translationUnavailable}: ${voidReason.original})` : ""}</div>}
@@ -7697,18 +7889,38 @@ function ReceiptModal({ order, orders = [], language = "zh", actionError = "", o
           ))}
           <div>--------------------------------</div>
           <div>{labels.itemCount}: {order.itemCount}</div>
-          <div>{order.exchangeSourceReceiptId ? labels.exchangeTotal : labels.total}: {fmt(order.total)}</div>
-          {order.refundDue > 0 ? (
-            <div>{labels.refundMethod}: {(english ? PAYMENT_METHOD_LABELS_EN : PAYMENT_METHOD_LABELS)[order.refundMethod || "cash"]}</div>
-          ) : (
-            <div>{labels.paymentMethod}: {(english ? PAYMENT_METHOD_LABELS_EN : PAYMENT_METHOD_LABELS)[order.paymentMethod || "cash"]}</div>
-          )}
-          {order.refundDue > 0 ? (
-            <div style={{ fontWeight: 700, color: "#166534" }}>{labels.refund}: {fmt(order.refundDue)}</div>
+          {order.replacementSourceReceiptId ? (
+            <>
+              <div>{labels.replacementTotal}: {fmt(order.total)}</div>
+              <div>{labels.replacementDifference}: {Number(order.settlementDelta || 0) < 0 ? `−${fmt(Math.abs(order.settlementDelta))}` : `${Number(order.settlementDelta || 0) > 0 ? "+" : ""}${fmt(order.settlementDelta || 0)}`}</div>
+              {Number(order.settlementDelta || 0) < 0 ? (
+                <>
+                  <div>{labels.refundMethod}: {(english ? PAYMENT_METHOD_LABELS_EN : PAYMENT_METHOD_LABELS)[order.refundMethod || "cash"]}</div>
+                  <div style={{ fontWeight: 700, color: "#166534" }}>{labels.refund}: {fmt(Math.abs(order.settlementDelta))}</div>
+                </>
+              ) : (
+                <>
+                  <div>{labels.paymentMethod}: {(english ? PAYMENT_METHOD_LABELS_EN : PAYMENT_METHOD_LABELS)[order.paymentMethod || "cash"]}</div>
+                  <div>{order.paymentMethod === "cash" ? `${labels.cash}: ${fmt(order.settlementCashReceived ?? 0)}` : `${labels.collected}: ${fmt(order.settlementDelta || 0)}`}</div>
+                  <div style={{ fontWeight: 700 }}>{labels.change}: {fmt(Math.max(order.settlementChangeDue ?? 0, 0))}</div>
+                </>
+              )}
+            </>
           ) : (
             <>
-              <div>{order.paymentMethod === "cash" ? `${labels.cash}: ${fmt(order.cashReceived ?? order.total)}` : `${labels.collected}: ${fmt(order.total)}`}</div>
-              <div style={{ fontWeight: 700 }}>{labels.change}: {fmt(Math.max(order.changeDue ?? 0, 0))}</div>
+              <div>{order.exchangeSourceReceiptId ? labels.exchangeTotal : labels.total}: {fmt(order.total)}</div>
+              {order.refundDue > 0 ? (
+                <>
+                  <div>{labels.refundMethod}: {(english ? PAYMENT_METHOD_LABELS_EN : PAYMENT_METHOD_LABELS)[order.refundMethod || "cash"]}</div>
+                  <div style={{ fontWeight: 700, color: "#166534" }}>{labels.refund}: {fmt(order.refundDue)}</div>
+                </>
+              ) : (
+                <>
+                  <div>{labels.paymentMethod}: {(english ? PAYMENT_METHOD_LABELS_EN : PAYMENT_METHOD_LABELS)[order.paymentMethod || "cash"]}</div>
+                  <div>{order.paymentMethod === "cash" ? `${labels.cash}: ${fmt(order.cashReceived ?? order.total)}` : `${labels.collected}: ${fmt(order.total)}`}</div>
+                  <div style={{ fontWeight: 700 }}>{labels.change}: {fmt(Math.max(order.changeDue ?? 0, 0))}</div>
+                </>
+              )}
             </>
           )}
           <div>{labels.status}: {order.voidedAt ? labels.voided : order.exchangeSourceReceiptId ? labels.exchanged : labels.completed}</div>
@@ -7734,15 +7946,15 @@ function ReceiptModal({ order, orders = [], language = "zh", actionError = "", o
         >
           <QrCode size={16} /> {english ? "View customer receipt" : "查看客人電子收據"}
         </button>
-        {canRedoSale && (
+        {canReplaceSale && (
           <button
             type="button"
             className="pos-btn"
             onClick={() => onRedoSale?.(order)}
-            title="將原單尚未退回的貨品帶入退換流程，完成後會保留原單及連結調整單"
+            title="將原單全部商品帶入可編輯購物車，完成後以新單取代原單並結算差額"
             style={{ width: "100%", padding: "13px 0", borderRadius: 10, background: "#FFF7ED", color: "#9A3412", border: "1px solid #FDBA74", fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 8 }}
           >
-            <ShoppingCart size={16} /> {english ? "Return / exchange this sale" : "退／換貨：重新進行此單銷售"}
+            <ShoppingCart size={16} /> {english ? "Replace this entire sale" : "整單替換：重新進行此單銷售"}
           </button>
         )}
         {canExchangeItems && (exchangeSelection ? (

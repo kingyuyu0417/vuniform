@@ -45,15 +45,31 @@ export const calculateCashSettlement = (amountDue, amountTendered) => {
   };
 };
 
-export const summarizeDailyCloseout = (orders) => {
-  const activeOrders = (Array.isArray(orders) ? orders : []).filter((order) => !order.voidedAt);
+export const summarizeDailyCloseout = (orders, reportDate = "") => {
+  const allOrders = Array.isArray(orders) ? orders : [];
+  const replacementSources = new Set(allOrders
+    .filter((order) => !order.voidedAt && order.replacementSourceReceiptId)
+    .map((order) => order.replacementSourceReceiptId));
+  const reportOrders = reportDate
+    ? allOrders.filter((order) => order.date === reportDate)
+    : allOrders;
   const channels = Object.fromEntries(PAYMENT_METHODS.map((method) => [method, { received: 0, refunded: 0 }]));
   let salesAmount = 0;
   let exchangeDifference = 0;
   let returnedGoodsAmount = 0;
   let untrackedReturnOrders = 0;
 
-  activeOrders.forEach((order) => {
+  reportOrders.forEach((order) => {
+    if (order.voidedAt) {
+      if (!replacementSources.has(order.id)) return;
+      const paymentMethod = channels[order.paymentMethod] ? order.paymentMethod : "cash";
+      const received = paymentMethod === "cash"
+        ? amountOf(order.cashReceived ?? order.total) - amountOf(order.changeDue)
+        : amountOf(order.total);
+      channels[paymentMethod].received += Math.max(0, received);
+      return;
+    }
+
     const refundDue = Math.max(0, amountOf(order.refundDue));
     const amount = Math.max(0, amountOf(order.total));
     const isAdjustment = Boolean(order.exchangeSourceReceiptId);
@@ -70,13 +86,22 @@ export const summarizeDailyCloseout = (orders) => {
     }
 
     const paymentMethod = channels[order.paymentMethod] ? order.paymentMethod : "cash";
-    const received = paymentMethod === "cash"
-      ? Math.max(0, amountOf(order.cashReceived ?? amount) - amountOf(order.changeDue))
-      : amount;
+    const replacementSettlement = order.replacementSourceReceiptId
+      ? amountOf(order.settlementDelta)
+      : null;
+    const received = replacementSettlement !== null
+      ? Math.max(0, paymentMethod === "cash"
+        ? amountOf(order.settlementCashReceived ?? replacementSettlement) - amountOf(order.settlementChangeDue)
+        : replacementSettlement)
+      : paymentMethod === "cash"
+        ? Math.max(0, amountOf(order.cashReceived ?? amount) - amountOf(order.changeDue))
+        : amount;
     channels[paymentMethod].received += received;
 
     const refundMethod = channels[order.refundMethod] ? order.refundMethod : "cash";
-    channels[refundMethod].refunded += refundDue;
+    channels[refundMethod].refunded += replacementSettlement !== null
+      ? Math.max(0, -replacementSettlement)
+      : refundDue;
   });
 
   return {

@@ -177,6 +177,10 @@ export const createCustomerReceiptOrder = (order = {}) => ({
   duplicateConfirmed: Boolean(order.duplicateConfirmed),
   duplicateSourceReceiptId: order.duplicateSourceReceiptId || "",
   adjustmentReason: order.adjustmentReason || "",
+  replacementSourceReceiptId: order.replacementSourceReceiptId || "",
+  settlementDelta: Number(order.settlementDelta) || 0,
+  settlementCashReceived: Number(order.settlementCashReceived) || 0,
+  settlementChangeDue: Number(order.settlementChangeDue) || 0,
   voidedAt: order.voidedAt || "",
   voidReason: order.voidReason || "",
 });

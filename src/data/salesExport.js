@@ -4,7 +4,9 @@ const amountOf = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
 const orderAmount = (order) => amountOf(order.total);
 const refundAmount = (order) => Math.max(0, amountOf(order.refundDue));
 const isVoided = (order) => Boolean(order.voidedAt);
-const netAmount = (order) => isVoided(order) ? 0 : orderAmount(order) - refundAmount(order);
+const netAmount = (order) => isVoided(order)
+  ? 0
+  : orderAmount(order) - (order.replacementSourceReceiptId ? 0 : refundAmount(order));
 const quantityOf = (item) => Math.max(0, item.qty === undefined || item.qty === null || item.qty === "" ? 1 : amountOf(item.qty));
 const itemAmount = (item) => Math.abs(amountOf(item.price)) * quantityOf(item);
 
@@ -75,7 +77,8 @@ export const buildSalesExportSheets = (orders, { outletForOrder, scope = "" } = 
   const totalAmount = activeOrders.reduce((sum, order) => sum + orderAmount(order), 0);
   const totalRefunds = activeOrders.reduce((sum, order) => sum + refundAmount(order), 0);
   const totalQuantity = activeOrders.reduce((sum, order) => sum + amountOf(order.itemCount), 0);
-  const closeout = summarizeDailyCloseout(activeOrders);
+  const netRevenue = activeOrders.reduce((sum, order) => sum + netAmount(order), 0);
+  const closeout = summarizeDailyCloseout(rows);
   const dateRange = dates.length === 0 ? "無交易" : dates.length === 1 ? dates[0] : `${dates[0]} 至 ${dates.at(-1)}`;
 
   return [
@@ -86,7 +89,7 @@ export const buildSalesExportSheets = (orders, { outletForOrder, scope = "" } = 
         ["匯出範圍", scope || "依匯出時套用的日期、門店、學校及搜尋條件"],
         ["訂單工作表", "每張單只佔一行；單據金額、退款及淨收入不會因商品行數重複。"],
         ["商品明細工作表", "每件商品佔一行；不包含單據總額欄，避免加總時重複計算。"],
-        ["淨收入", "有效單據金額 - 單據退款；已作廢單的淨收入為 0。"],
+        ["淨收入", "一般有效單據金額扣除退款；整單替換以新單全額計入，補退款差額不再重複扣減；已作廢單淨收入為 0。"],
         ["單據件數", "按訂單保存的件數欄位彙總；退換單可能同時計入退回及換入件數，分析商品數量請查看商品分析。"],
         ["商品分析", "按商品明細計算銷售及退回數量；舊單若沒有保存退回商品標記，退貨款式無法由單據退款反推。"],
         ["作廢記錄", "訂單工作表保留作廢單供稽核；總覽及分析表不把作廢單計入收入。"],
@@ -104,7 +107,7 @@ export const buildSalesExportSheets = (orders, { outletForOrder, scope = "" } = 
         ["已作廢單數", rows.length - activeOrders.length],
         ["有效單據金額", totalAmount],
         ["單據退款金額", totalRefunds],
-        ["淨收入", totalAmount - totalRefunds],
+        ["淨收入", netRevenue],
         ["有效單據件數", totalQuantity],
       ],
       widths: [30, 24],
