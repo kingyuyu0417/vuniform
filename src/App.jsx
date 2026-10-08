@@ -4952,94 +4952,95 @@ function SaleTab({
                     <span style={{ fontSize: 12 }}>{productUnit(item.name, item.size)}（最多 {remaining}）</span>
                   </div>
                 )}
-                {exchangePreviewOpen && exchangeMode && (
-                  <div style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(15,23,42,0.55)" }}>
-                    <div role="dialog" aria-modal="true" aria-labelledby="exchange-preview-title" style={{ width: "min(560px, 100%)", maxHeight: "85vh", overflowY: "auto", boxSizing: "border-box", padding: 18, borderRadius: 14, background: "#fff", boxShadow: "0 20px 50px rgba(15,23,42,0.25)" }}>
-                      <div id="exchange-preview-title" style={{ fontSize: 18, fontWeight: 800, color: "#1F3A5F" }}>退換貨結帳預覽</div>
-                      <div style={{ marginTop: 6, color: "#64748B", fontSize: 13 }}>原單：#{exchangeSourceReceiptId || "未連結"}</div>
-                      <label style={{ display: "grid", gap: 6, marginTop: 12, fontSize: 13, fontWeight: 700 }}>
-                        退換原因（必須記錄）
-                        <select value={exchangeReason} onChange={(event) => setExchangeReason(event.target.value)} style={{ padding: 9, border: "1px solid #CBD5E1", borderRadius: 8, fontSize: 15 }}>
-                          <option value="">請選擇原因</option>
-                          <option value="尺碼不合">尺碼不合</option>
-                          <option value="更換款式">更換款式</option>
-                          <option value="貨品問題">貨品問題</option>
-                          <option value="客人取消">客人取消</option>
-                          <option value="原單輸入錯誤">原單輸入錯誤</option>
-                          <option value="其他">其他</option>
-                        </select>
-                      </label>
-                      {exchangeReason === "其他" && (
-                        <input
-                          aria-label="其他退換原因"
-                          value={exchangeReasonNote}
-                          onChange={(event) => setExchangeReasonNote(event.target.value)}
-                          maxLength={500}
-                          placeholder="請填寫退換原因"
-                          style={{ width: "100%", boxSizing: "border-box", marginTop: 8, padding: 9, border: "1px solid #CBD5E1", borderRadius: 8, fontSize: 15 }}
-                        />
-                      )}
-                      {exchangeReason && <div style={{ color: "#475569", fontSize: 13 }}>記錄原因：{exchangeReason === "其他" ? `其他：${exchangeReasonNote.trim() || "（待填寫）"}` : exchangeReason}</div>}
-                      <div style={{ marginTop: 14, fontWeight: 700, color: "#9A3412" }}>退回貨品</div>
-                      {returnedCartItems.map((item, index) => (
-                        <div key={`return-${item.key || index}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 6, fontSize: 14 }}>
-                          <span>{item.name}（{sizeLabel(item)}）× {item.qty}</span>
-                          <span>−{fmt(Math.abs(item.price) * item.qty)}</span>
-                        </div>
-                      ))}
-                      <div style={{ marginTop: 14, fontWeight: 700, color: "#166534" }}>換入貨品</div>
-                      {replacementCartItems.length > 0 ? replacementCartItems.map((item, index) => (
-                        <div key={`replacement-${item.key || index}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 6, fontSize: 14 }}>
-                          <span>{item.name}（{sizeLabel(item)}）× {item.qty}</span>
-                          <span>{fmt(Math.abs(item.price) * item.qty)}</span>
-                        </div>
-                      )) : <div style={{ marginTop: 6, color: "#64748B", fontSize: 13 }}>沒有換入貨品</div>}
-                      <div style={{ marginTop: 14, padding: 12, borderRadius: 10, background: "#F8FAFC", display: "grid", gap: 7 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                          <span>本次對淨收入的影響</span><strong>{fmt(cartTotal)}</strong>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                          <span>{refundDue > 0 ? "應退款" : "客人需補款"}</span>
-                          <strong>{fmt(refundDue > 0 ? refundDue : Math.max(cartTotal, 0))}</strong>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                          <span>{refundDue > 0 ? "退款方式" : "補款方式"}</span>
-                          <strong>{PAYMENT_METHOD_LABELS[refundDue > 0 ? refundMethod : paymentMethod] || "現金"}</strong>
-                        </div>
-                        {settlementMethod === "cash" && cartTotal > 0 && (
-                          <>
-                            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                              <span>現金交付</span><strong>{fmt(cashAmount)}</strong>
-                            </div>
-                            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                              <span>{cashShortfall > 0 ? "尚欠補款" : "找續"}</span>
-                              <strong>{fmt(cashShortfall > 0 ? cashShortfall : changeDue)}</strong>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-                        <button type="button" className="pos-btn" onClick={() => setExchangePreviewOpen(false)} style={{ flex: 1, padding: 11, borderRadius: 9, background: "#F1F5F9", color: "#334155", fontWeight: 700 }}>返回修改</button>
-                        <button
-                          type="button"
-                          className="pos-btn"
-                          disabled={!exchangeReason || (exchangeReason === "其他" && !exchangeReasonNote.trim()) || cashShortfall > 0}
-                          onClick={() => {
-                            const reason = exchangeReason === "其他" ? `其他：${exchangeReasonNote.trim()}` : exchangeReason;
-                            requestCheckout(reason);
-                          }}
-                          style={{ flex: 1, padding: 11, borderRadius: 9, border: 0, background: !exchangeReason || (exchangeReason === "其他" && !exchangeReasonNote.trim()) ? "#9CA3AF" : "#1F3A5F", color: "#fff", fontWeight: 700 }}
-                        >確認並完成退換</button>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             );
           })}
           <button className="pos-btn" disabled={exchangeItems.length === 0} onClick={confirmExchangeItems} style={{ width: "100%", padding: 10, borderRadius: 8, background: "#166534", color: "#fff", fontWeight: 700 }}>確定換選貨品（{exchangeItems.length}款）</button>
           <button className="pos-btn" onClick={() => setExchangeOrder(null)} style={{ width: "100%", marginTop: 6, padding: 7, background: "transparent", color: "#9A3412" }}>返回單據選擇</button>
         </div>
+      )}
+      {exchangePreviewOpen && exchangeMode && createPortal(
+        <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(15,23,42,0.55)" }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="exchange-preview-title" style={{ width: "min(560px, 100%)", maxHeight: "85vh", overflowY: "auto", boxSizing: "border-box", padding: 18, borderRadius: 14, background: "#fff", boxShadow: "0 20px 50px rgba(15,23,42,0.25)" }}>
+            <div id="exchange-preview-title" style={{ fontSize: 18, fontWeight: 800, color: "#1F3A5F" }}>退換貨結帳預覽</div>
+            <div style={{ marginTop: 6, color: "#64748B", fontSize: 13 }}>原單：#{exchangeSourceReceiptId || "未連結"}</div>
+            <label style={{ display: "grid", gap: 6, marginTop: 12, fontSize: 13, fontWeight: 700 }}>
+              退換原因（必須記錄）
+              <select value={exchangeReason} onChange={(event) => setExchangeReason(event.target.value)} style={{ padding: 9, border: "1px solid #CBD5E1", borderRadius: 8, fontSize: 15 }}>
+                <option value="">請選擇原因</option>
+                <option value="尺碼不合">尺碼不合</option>
+                <option value="更換款式">更換款式</option>
+                <option value="貨品問題">貨品問題</option>
+                <option value="客人取消">客人取消</option>
+                <option value="原單輸入錯誤">原單輸入錯誤</option>
+                <option value="其他">其他</option>
+              </select>
+            </label>
+            {exchangeReason === "其他" && (
+              <input
+                aria-label="其他退換原因"
+                value={exchangeReasonNote}
+                onChange={(event) => setExchangeReasonNote(event.target.value)}
+                maxLength={500}
+                placeholder="請填寫退換原因"
+                style={{ width: "100%", boxSizing: "border-box", marginTop: 8, padding: 9, border: "1px solid #CBD5E1", borderRadius: 8, fontSize: 15 }}
+              />
+            )}
+            {exchangeReason && <div style={{ color: "#475569", fontSize: 13 }}>記錄原因：{exchangeReason === "其他" ? `其他：${exchangeReasonNote.trim() || "（待填寫）"}` : exchangeReason}</div>}
+            <div style={{ marginTop: 14, fontWeight: 700, color: "#9A3412" }}>退回貨品</div>
+            {returnedCartItems.map((item, index) => (
+              <div key={`return-${item.key || index}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 6, fontSize: 14 }}>
+                <span>{item.name}（{sizeLabel(item)}）× {item.qty}</span>
+                <span>−{fmt(Math.abs(item.price) * item.qty)}</span>
+              </div>
+            ))}
+            <div style={{ marginTop: 14, fontWeight: 700, color: "#166534" }}>換入貨品</div>
+            {replacementCartItems.length > 0 ? replacementCartItems.map((item, index) => (
+              <div key={`replacement-${item.key || index}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 6, fontSize: 14 }}>
+                <span>{item.name}（{sizeLabel(item)}）× {item.qty}</span>
+                <span>{fmt(Math.abs(item.price) * item.qty)}</span>
+              </div>
+            )) : <div style={{ marginTop: 6, color: "#64748B", fontSize: 13 }}>沒有換入貨品</div>}
+            <div style={{ marginTop: 14, padding: 12, borderRadius: 10, background: "#F8FAFC", display: "grid", gap: 7 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <span>本次對淨收入的影響</span><strong>{fmt(cartTotal)}</strong>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <span>{refundDue > 0 ? "應退款" : "客人需補款"}</span>
+                <strong>{fmt(refundDue > 0 ? refundDue : Math.max(cartTotal, 0))}</strong>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <span>{refundDue > 0 ? "退款方式" : "補款方式"}</span>
+                <strong>{PAYMENT_METHOD_LABELS[refundDue > 0 ? refundMethod : paymentMethod] || "現金"}</strong>
+              </div>
+              {settlementMethod === "cash" && cartTotal > 0 && (
+                <>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                    <span>現金交付</span><strong>{fmt(cashAmount)}</strong>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                    <span>{cashShortfall > 0 ? "尚欠補款" : "找續"}</span>
+                    <strong>{fmt(cashShortfall > 0 ? cashShortfall : changeDue)}</strong>
+                  </div>
+                </>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+              <button type="button" className="pos-btn" onClick={() => setExchangePreviewOpen(false)} style={{ flex: 1, padding: 11, borderRadius: 9, background: "#F1F5F9", color: "#334155", fontWeight: 700 }}>返回修改</button>
+              <button
+                type="button"
+                className="pos-btn"
+                disabled={!exchangeReason || (exchangeReason === "其他" && !exchangeReasonNote.trim()) || cashShortfall > 0}
+                onClick={() => {
+                  const reason = exchangeReason === "其他" ? `其他：${exchangeReasonNote.trim()}` : exchangeReason;
+                  requestCheckout(reason);
+                }}
+                style={{ flex: 1, padding: 11, borderRadius: 9, border: 0, background: !exchangeReason || (exchangeReason === "其他" && !exchangeReasonNote.trim()) ? "#9CA3AF" : "#1F3A5F", color: "#fff", fontWeight: 700 }}
+              >確認並完成退換</button>
+            </div>
+          </div>
+        </div>,
+        document.body,
       )}
       {(cartSourceMeta.sourceQueueNo || cartSourceMeta.sourceGuestName) && (
         <div style={{ background: "#EAF4FF", border: "1px solid #CFE0F9", borderRadius: 10, padding: "10px 12px", marginBottom: 12, fontSize: 13, color: "#1F3A5F" }}>
