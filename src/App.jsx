@@ -3138,15 +3138,17 @@ export default function UniformPOS() {
     const exchangeItems = items.map((item) => {
       const product = products.find((candidate) => candidate.name === item.name || candidate.id === item.productId);
       const originalSize = product?.sizes?.find((size) => sizeIdentityKey(size) === sizeIdentityKey(item))
-        || product?.sizes?.find((size) => String(size.size) === String(item.size) && isTailoredSize(size) === Boolean(item.isTailored));
+        || product?.sizes?.find((size) => String(size.size) === String(item.size) && isTailoredSize(size) === isTailoredSize(item))
+        || {
+          size: item.size || "",
+          length: item.length || "",
+          price: Number(item.price) || 0,
+          isTailored: isTailoredSize(item),
+        };
       return { item, product, originalSize };
     });
     if (exchangeItems.some(({ product }) => !product)) {
       setStorageError("找不到原有貨品款式，請先更新商品資料後再試。");
-      return false;
-    }
-    if (exchangeItems.some(({ originalSize }) => !originalSize)) {
-      setStorageError("找不到原有貨品碼數，請先更新商品資料後再試。");
       return false;
     }
     setSelectedSchool(order.school || selectedSchool);
@@ -3159,7 +3161,7 @@ export default function UniformPOS() {
       size: item.size,
       length: item.length || "",
       isTailored: Boolean(item.isTailored || originalSize.isTailored),
-      price: Math.abs(Number(item.price || originalSize.price || 0)),
+      price: Math.abs(Number(item.price ?? originalSize.price ?? 0)),
       qty: Math.max(1, Number(item.qty || 1)),
       exchangeReturn: true,
       exchangeSourceReceiptId: order.id || "",
