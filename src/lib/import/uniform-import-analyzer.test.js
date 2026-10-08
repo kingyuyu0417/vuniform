@@ -290,11 +290,11 @@ test("rejects generic detection without a recognized or selected school", () => 
   assert.ok(result.warnings.some((warning) => warning.code === "SCHOOL_NOT_IDENTIFIED" && warning.severity === "error"));
 });
 
-test("matches verified real-school layouts after Excel copy suffixes without changing parsed items", async () => {
+test("matches verified real-school layouts after Excel copy suffixes with tailored entries preserved", async () => {
   const fixtures = [
-    { file: "anthony-winter-2026.xlsx", school: "聖安多尼學校", count: 100 },
-    { file: "ymca-winter-2026.xlsx", school: "港青基信書院", count: 259 },
-    { file: "fung-yiu-king-summer.xlsx", school: "香港中國婦女會馮堯敬紀念中學", count: 318 },
+    { file: "anthony-winter-2026.xlsx", school: "聖安多尼學校", count: 91 },
+    { file: "ymca-winter-2026.xlsx", school: "港青基信書院", count: 241 },
+    { file: "fung-yiu-king-summer.xlsx", school: "香港中國婦女會馮堯敬紀念中學", count: 190 },
   ];
 
   for (const fixture of fixtures) {
@@ -333,7 +333,7 @@ test("matches verified real-school layouts after Excel copy suffixes without cha
   }
 });
 
-test("expands Fung Yiu King tailored trouser and shirt sizes across their price dimensions", async () => {
+test("keeps tailored entries as one manually extendable size without auto-adding variants", async () => {
   const result = analyzePriceWorkbook(
     await fixtureBuffer("fung-yiu-king-summer.xlsx"),
     SCHOOL_LAYOUTS,
@@ -343,27 +343,19 @@ test("expands Fung Yiu King tailored trouser and shirt sizes across their price 
   const shirts = result.items.filter((item) => item.source.blockId === "point-collar-shirt" && item.tailored);
   const mappedTailored = mapAnalyzerItems([...trousers, ...shirts]).rows.filter((row) => row.isTailored);
 
-  assert.equal(trousers.length, 9 * 10);
-  assert.equal(shirts.length, 10 * 4);
+  assert.equal(trousers.length, 1);
+  assert.equal(shirts.length, 1);
   assert.equal(mappedTailored.length, trousers.length + shirts.length);
-  assert.equal(trousers.some((item) => item.size === "裁碼"), false);
-  assert.equal(shirts.some((item) => item.size === "裁碼"), false);
   assert.deepEqual(
-    ["33寸", "34寸", "35寸", "36寸", "37寸", "38.5寸"].map((length) => (
-      trousers.find((item) => item.size === `腰32／${length}`)?.unitPrice
-    )),
-    [134, 134, 134, 134, 134, 134],
+    [...trousers, ...shirts].map((item) => [item.size, item.tailored, item.unitPrice]),
+    [["裁碼", true, 134], ["裁碼", true, 94]],
   );
-  assert.deepEqual(
-    [trousers.find((item) => item.size === "腰32／33寸")?.unitPrice,
-      trousers.find((item) => item.size === "腰32／40寸")?.unitPrice],
-    [134, 144],
-  );
-  assert.deepEqual(
-    [shirts.find((item) => item.size === "領16.5／上圍32-38吋")?.unitPrice,
-      shirts.find((item) => item.size === "領16.5／上圍40吋")?.unitPrice],
-    [94, 104],
-  );
+  assert.ok(result.items.some((item) => item.source.blockId === "summer-trousers"
+    && !item.tailored && item.size === "腰23／33寸" && item.unitPrice === 76));
+  assert.ok(result.items.some((item) => item.source.blockId === "point-collar-shirt"
+    && !item.tailored && item.size?.startsWith("領") && item.size.includes("上圍")));
+  assert.ok(result.warnings.some((warning) => warning.code === "CUSTOM_SIZE_USED"
+    && warning.message.includes("商品管理手動新增")));
 });
 
 test("uses the verified YMCA layout for the exact real workbook named with (2)", async () => {
@@ -379,7 +371,7 @@ test("uses the verified YMCA layout for the exact real workbook named with (2)",
   );
 
   assert.equal(copied.genericMode, false);
-  assert.equal(copied.items.length, 259);
+  assert.equal(copied.items.length, 241);
   assert.deepEqual(
     ["43寸", "44寸"].map((length) => (
       original.items.find((item) => item.source.blockId === "m-trousers" && item.size === `腰23／${length}`)?.unitPrice

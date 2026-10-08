@@ -32,7 +32,7 @@ test("maps unknown and unisex labels to the supported unisex value", () => {
   assert.deepEqual(rows.map((row) => row.gender), ["unisex", "unisex"]);
 });
 
-test("preserves the tailored flag for expanded sizes through the import mapper", () => {
+test("preserves the tailored flag for manually added sizes through the import mapper", () => {
   const { rows } = mapAnalyzerItems([{
     ...item("女", "領16.5／上圍32-38吋"),
     tailored: true,

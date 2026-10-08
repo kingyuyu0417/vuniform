@@ -8,15 +8,8 @@
 
 import type { SheetLayoutConfig } from './uniform-import-analyzer';
 
-/** 恤衫類裁碼大碼清單（用戶提供，兩間學校通用） */
-export const SHIRT_CUSTOM_SIZES = ['16.5', '17', '17.5', '18', '18.5', '19', '19.5', '20', '21', '22'];
-/** 小學恤衫裁碼（推斷：標準最大 12.5，0.5 一級向上；2026-10-06 用戶確認小學都要展開） */
-export const PRIMARY_SHIRT_CUSTOM_SIZES = ['13', '13.5', '14', '14.5', '15', '15.5', '16'];
 /** 恤衫類細碼（推斷，用戶可刪減） */
 export const SHIRT_BELOW_MIN = ['10', '10.5', '11', '11.5'];
-
-const FUNG_TROUSER_CUSTOM_SIZES = ['32', '34', '36', '38', '40', '42', '44', '46', '48'];
-const FUNG_SHIRT_CUSTOM_SIZES = ['16.5', '17', '17.5', '18', '18.5', '19', '19.5', '20', '20.5', '21'];
 
 /* ================= 港青基信書院・冬 2026 ================= */
 
@@ -37,7 +30,7 @@ const YMCA_WINTER_2026: SheetLayoutConfig = {
       id: 'm-shirt', gender: '男', name: '白色長袖恤衫', note: '連章已包，唔洗加錢',
       dataFirst: 5, dataLast: 14, sizeCol: 'D',
       priceCols: [
-        { col: 'E', kind: 'unit', customSizes: SHIRT_CUSTOM_SIZES, customNote: '裁碼展開（用戶提供清單）', customNoteAppend: true, belowMinSizes: SHIRT_BELOW_MIN },
+        { col: 'E', kind: 'unit', belowMinSizes: SHIRT_BELOW_MIN },
         { col: 'F', kind: 'bundle', bundleQty: 2, bundleUnit: '件' },
         { col: 'G', kind: 'bundle', bundleQty: 3, bundleUnit: '件' },
       ],
@@ -131,7 +124,7 @@ const YMCA_WINTER_2026: SheetLayoutConfig = {
       id: 'f-shirt', gender: '女', name: '白色長袖恤衫', note: '連章已包，唔洗加錢',
       dataFirst: 5, dataLast: 13, sizeCol: 'P',
       priceCols: [
-        { col: 'Q', kind: 'unit', customSizes: SHIRT_CUSTOM_SIZES, customNote: '裁碼展開（用戶提供清單）', customNoteAppend: true, belowMinSizes: SHIRT_BELOW_MIN },
+        { col: 'Q', kind: 'unit', belowMinSizes: SHIRT_BELOW_MIN },
         { col: 'R', kind: 'bundle', bundleQty: 2, bundleUnit: '件' },
         { col: 'S', kind: 'bundle', bundleQty: 3, bundleUnit: '件' },
       ],
@@ -224,7 +217,7 @@ const ANTHONY_WINTER_2026: SheetLayoutConfig = {
       id: 'shirt', name: '白長恤', note: '連章$4（字面似另加$4，待確認；港青基信嘅連章係包咗）',
       dataFirst: 5, dataLast: 12, sizeCol: 'E',
       priceCols: [
-        { col: 'F', kind: 'unit', customSizes: SHIRT_CUSTOM_SIZES, customNote: '套用恤衫裁碼清單（推斷）；15.5/16暫缺；連章$4待確認', belowMinSizes: SHIRT_BELOW_MIN },
+        { col: 'F', kind: 'unit', belowMinSizes: SHIRT_BELOW_MIN },
         { col: 'G', kind: 'bundle', bundleQty: 2, bundleUnit: '件' },
       ],
     },
@@ -309,12 +302,7 @@ const FUNG_YIU_KING_SUMMER_2026: SheetLayoutConfig = {
       id: 'summer-trousers', name: '白長西褲',
       dataFirst: 8, dataLast: 16, sizeCol: 'G',
       priceCols: [
-        {
-          col: 'H', kind: 'unit',
-          customSizes: FUNG_TROUSER_CUSTOM_SIZES,
-          customNote: '裁碼尺碼展開（沿用智能匯入規則）',
-          customNoteAppend: true,
-        },
+        { col: 'H', kind: 'unit' },
         { col: 'I', kind: 'bundle', bundleQty: 2, bundleUnit: '條' },
       ],
       secondDim: {
@@ -340,12 +328,7 @@ const FUNG_YIU_KING_SUMMER_2026: SheetLayoutConfig = {
       id: 'point-collar-shirt', name: '白尖領恤',
       dataFirst: 8, dataLast: 17, sizeCol: 'J',
       priceCols: [
-        {
-          col: 'K', kind: 'unit',
-          customSizes: FUNG_SHIRT_CUSTOM_SIZES,
-          customNote: '裁碼尺碼展開（沿用智能匯入規則）',
-          customNoteAppend: true,
-        },
+        { col: 'K', kind: 'unit' },
         { col: 'L', kind: 'bundle', bundleQty: 2, bundleUnit: '件' },
       ],
       secondDim: {
@@ -469,10 +452,7 @@ const KINGS_WINTER_2026: SheetLayoutConfig = {
       id: 'shirt', name: '白色長袖恤衫', note: '連章已包',
       dataFirst: 4, dataLast: 9, sizeCol: 'F',
       priceCols: [
-        {
-          col: 'G', kind: 'unit', belowMinSizes: ['9.5', '10'],
-          customSizes: PRIMARY_SHIRT_CUSTOM_SIZES, customNote: '套用小學恤衫裁碼清單（推斷）',
-        },
+        { col: 'G', kind: 'unit', belowMinSizes: ['9.5', '10'] },
         { col: 'H', kind: 'bundle', bundleQty: 2, bundleUnit: '件' },
       ],
     },

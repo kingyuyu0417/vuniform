@@ -5,7 +5,7 @@
  *
  * 做咩：
  *   將「唔係正規表格」嘅校服價目 Excel（多區塊並排、款式名拆散、
- *   日期陷阱、組合價、裁碼展開等）解析成標準商品記錄，
+ *   日期陷阱、組合價及裁碼標記等）解析成標準商品記錄，
  *   同時輸出所有可疑位（warnings）等人手確認。
  *
  * 用法：
@@ -42,7 +42,7 @@ export interface ImportWarning {
  *  STRAY_CELL         唔屬於任何區塊嘅文字格（雜訊）
  *  PRICE_PARSE_FAIL   價錢格讀唔到數字
  *  NO_LAYOUT_CONFIG   搵唔到版面設定（自動偵測，需人手確認）
- *  CUSTOM_SIZE_USED   「裁碼」按大碼清單展開
+ *  CUSTOM_SIZE_USED   「裁碼」保留為單一選項，其他尺碼需由管理員新增
  *  INFERRED_SIZE      推斷細碼（等用戶刪減）
  *  PACKAGED_SIZE_PARSE_FAIL 包裝格格式無法確認
  */
@@ -56,7 +56,7 @@ export interface AnalyzedItem {
   item: string;                    // 款式名（已套用官方名）
   size: string | null;             // 離散尺碼；null = 無尺碼（如校呔）
   unitPrice: number;
-  tailored?: boolean;              // true = 裁碼（展開或字面）
+  tailored?: boolean;              // true = 裁碼
   bundles: BundleInfo[];           // 2件 / 3件 / 2條 …
   setTotal?: number;               // 全套價（複合款式）
   note?: string;
@@ -70,9 +70,6 @@ export interface PriceColConfig {
   note?: string;                   // 該 label 專用備註（覆蓋 block.note）
   bundleQty?: number;
   bundleUnit?: string;
-  customSizes?: string[];          // R14：取代「裁碼」嘅大碼清單
-  customNote?: string;
-  customNoteAppend?: boolean;      // true = 備註接喺 block.note 後面；false = 取代
   belowMinSizes?: string[];        // R15：細過最細碼嘅清單
 }
 
@@ -664,23 +661,11 @@ function parseBlock(
     if (packageSpec) {
       sizeJobs.push({ size: packageSpec.size });
     } else if (sizeRaw !== '__NOSIZE__') {
-      if (sizeRaw === '裁碼' && unitPc?.customSizes?.length) {
-        warnings.push({
-          sheet: g.name, cell: ent.sizeCell, code: 'CUSTOM_SIZE_USED', severity: 'info',
-          message: `「${rowName}」裁碼已按設定展開做 ${unitPc.customSizes.length} 個尺碼`,
-        });
-        for (const s of unitPc.customSizes)
-          sizeJobs.push({
-            size: s,
-            extraNote: unitPc.customNote ?? '裁碼展開',
-            replaceNote: !unitPc.customNoteAppend,
-            tailored: true,
-          });
-      } else if (sizeRaw === '裁碼') {
+      if (sizeRaw === '裁碼') {
         sizeJobs.push({ size: '裁碼', tailored: true });
         warnings.push({
           sheet: g.name, cell: ent.sizeCell, code: 'CUSTOM_SIZE_USED', severity: 'warn',
-          message: `「${rowName}」有「裁碼」但冇大碼清單，已保留「裁碼」選項`,
+          message: `「${rowName}」保留單一「裁碼」選項；需要的實際尺碼請在商品管理手動新增`,
         });
       } else if (b.expandRanges !== false && b.sizeKind !== 'pack') {
         const expanded = expandSizeRange(sizeRaw);
@@ -864,7 +849,7 @@ function emitRowItems(
 
   for (const sj of sizeJobs) {
     const isNoSize = sj.size === '__NOSIZE__';
-    const isTailor = sj.size === '裁碼'; // 冇 customSizes 展開先會剩低「裁碼」
+    const isTailor = sj.size === '裁碼';
     const tailorNote = isTailor ? b.secondDim?.tailorNote : undefined;
 
     if (b.secondDim && !isNoSize && !isTailor) {
