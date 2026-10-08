@@ -3425,65 +3425,100 @@ export default function UniformPOS() {
   };
 
   const handleConfirmPayment = async (payment) => {
-    try {
-      const paidOrder = paymentOrders.find((order) => order.id === payment.orderId) || null;
-      const localRecord = paidOrder
-        ? {
-            id: payment.orderId || `receipt-${Date.now()}`,
-            date: todayStr(),
-            time: new Date().toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit" }),
-            createdAt: new Date().toISOString(),
-            items: (paidOrder.items || []).map((item) => ({
-              name: item.productName,
-              size: item.size,
-              length: item.length || "",
-              isTailored: Boolean(item.isTailored || item.is_tailored),
-              price: Number(item.price || 0),
-              qty: Number(item.quantity || item.qty || 1),
-            })),
-            total: Number(payment.totalPrice || paidOrder.totalPrice || 0),
-            cashReceived: Number(payment.cashReceived || payment.totalPrice || 0),
-            changeDue: Number(payment.changeDue || 0),
-            paymentMethod: payment.paymentMethod || "cash",
-            itemCount: (paidOrder.items || []).reduce((sum, item) => sum + Number(item.quantity || item.qty || 1), 0),
-            cashierId: session ? session.id : null,
-            cashierName: session ? session.name : "",
-            branchId: session?.branchId || "",
-            school: paidOrder.school || selectedSchool || "",
-            customerName: paidOrder.guestName || paidOrder.customerName || "",
-            customerPhone: paidOrder.customerPhone || paidOrder.phone || "",
-            outletName: paidOrder.outletName || outletNameForSchool(paidOrder.school || selectedSchool || "", schoolMeta),
-            outletAddress: paidOrder.outletAddress || "",
-            outletPhone: paidOrder.outletPhone || "",
-          }
-        : null;
+    if (isSupabaseConfigured && supabase && !isSupabaseAuthEnabled) {
+      throw new Error("請先登入收銀員帳戶，才能安全保存付款記錄");
+    }
+    const paidOrder = payment.customerOrder
+      || paymentOrders.find((order) => order.id === payment.orderId)
+      || null;
+    if (!paidOrder?.id || !Array.isArray(paidOrder.items) || paidOrder.items.length === 0) {
+      throw new Error("找不到待付款訂單或商品資料，未建立銷售記錄");
+    }
 
-      if (localRecord) {
-        setSalesLog((prev) => [localRecord, ...prev]);
-        if (!isSupabaseConfigured || !supabase) {
-          try {
-            await window.storage.set("sales-log", JSON.stringify([localRecord, ...salesLog]), true);
-          } catch (error) {
-            console.error("保存本地付款記錄失敗", error);
-          }
+    const school = paidOrder.school_id || paidOrder.school || selectedSchool || "";
+    const saleItems = paidOrder.items.map((item) => ({
+      name: item.productName || item.product_name || item.name || "未知產品",
+      size: item.size || "",
+      length: item.length || "",
+      isTailored: Boolean(item.isTailored || item.is_tailored),
+      price: Number(item.price || 0),
+      qty: Number(item.quantity || item.qty || 1),
+    }));
+    const total = Number(payment.totalPrice ?? paidOrder.totalPrice ?? 0);
+    const order = {
+      id: "",
+      date: todayStr(),
+      time: new Date(payment.completedAt || Date.now()).toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit" }),
+      createdAt: paidOrder.created_at || payment.completedAt || new Date().toISOString(),
+      items: saleItems,
+      total,
+      cashReceived: Number(payment.cashReceived ?? total),
+      changeDue: Number(payment.changeDue || 0),
+      paymentMethod: payment.paymentMethod || "cash",
+      itemCount: saleItems.reduce((sum, item) => sum + item.qty, 0),
+      cashierId: session?.id || null,
+      cashierName: session?.name || "",
+      branchId: session?.branchId || "",
+      school,
+      customerName: paidOrder.guestName || paidOrder.customerName || "",
+      customerPhone: paidOrder.customerPhone || paidOrder.phone || "",
+      outletName: paidOrder.outletName || outletNameForSchool(school, schoolMeta),
+      outletAddress: paidOrder.outletAddress || "",
+      outletPhone: paidOrder.outletPhone || "",
+    };
+    const checkoutKey = `cashier-payment:${paidOrder.id}`;
+    const savedOrder = await saveSalesLog(order, checkoutKey);
+    if (!savedOrder) throw new Error("銷售記錄未能確認；請留在此頁並重試，不要另開新單");
+
+    if (isSupabaseConfigured && supabase && paidOrder.school_id) {
+      const paymentAudit = {
+        orderId: payment.orderId,
+        receiptId: savedOrder.id,
+        totalPrice: total,
+        paymentMethod: payment.paymentMethod,
+        cashReceived: payment.cashReceived,
+        changeDue: payment.changeDue,
+        status: "paid",
+        completedAt: payment.completedAt,
+      };
+      const existingTailorInfo = typeof paidOrder.tailor_info === "object" && paidOrder.tailor_info
+        ? paidOrder.tailor_info
+        : {};
+      const { data: completedOrder, error: completionError } = await supabase
+        .from("customer_orders")
+        .update({
+          status: "COMPLETED",
+          tailor_info: { ...existingTailorInfo, paid_at: payment.completedAt, payment: paymentAudit },
+        })
+        .eq("id", paidOrder.id)
+        .eq("school_id", paidOrder.school_id)
+        .in("status", [ORDER_STATUS.READY, ORDER_STATUS.COMPLETED])
+        .select("id, status, tailor_info")
+        .maybeSingle();
+      if (completionError) throw completionError;
+
+      if (!completedOrder) {
+        const { data: currentOrder, error: loadError } = await supabase
+          .from("customer_orders")
+          .select("id, status, tailor_info")
+          .eq("id", paidOrder.id)
+          .eq("school_id", paidOrder.school_id)
+          .maybeSingle();
+        if (loadError) throw loadError;
+        if (currentOrder?.status !== ORDER_STATUS.COMPLETED
+          || currentOrder.tailor_info?.payment?.receiptId !== savedOrder.id) {
+          throw new Error("銷售記錄已保存，但取貨訂單未能確認完成；請留在此頁重試");
         }
       }
+    }
 
-      setPaymentOrders((prev) => prev.map((order) => order.id === payment.orderId ? { ...order, status: "paid" } : order));
-      setTab("records");
-      navigate("/records", { replace: true });
-      
-      // 異步刷新雲端數據，但不阻止導航
-      if (refreshFromCloud) {
-        refreshFromCloud({ skipProductsWhileEditing: false }).catch((error) => {
-          console.error("同步支付後記錄失敗，但已安全返回到銷售記錄頁", error);
-        });
-      }
-    } catch (error) {
-      console.error("handleConfirmPayment 錯誤", error);
-      // 即使發生錯誤也應該返回到 records 頁面
-      setTab("records");
-      navigate("/records", { replace: true });
+    setPaymentOrders((prev) => prev.map((orderItem) => orderItem.id === payment.orderId ? { ...orderItem, status: "paid" } : orderItem));
+    setTab("records");
+    navigate("/records", { replace: true });
+    if (refreshFromCloud) {
+      refreshFromCloud({ skipProductsWhileEditing: false }).catch((error) => {
+        console.error("刷新付款後銷售記錄失敗", error);
+      });
     }
   };
 

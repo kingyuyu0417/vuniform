@@ -152,11 +152,16 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
     setIsLoading(true);
 
     try {
-      const amount = parseInt(cashReceived) || selectedTotal;
+      const amount = paymentMethod === "cash" ? Number(cashReceived) : selectedTotal;
+      if (!Number.isFinite(amount) || amount < selectedTotal) {
+        setError("實收金額不足，請核對後再確認");
+        return;
+      }
       const changeDue = Math.max(0, amount - selectedTotal);
 
       const payment = {
         orderId: selectedOrder.id,
+        customerOrder: selectedOrder,
         guestName: selectedOrder.guestName,
         queueNo: selectedOrder.queueNo,
         totalPrice: selectedTotal,
@@ -167,111 +172,12 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
         completedAt: new Date().toISOString(),
       };
 
-      if (!isSupabaseConfigured || !supabase) {
-        console.warn("Supabase 未設定，使用離線模式");
-        // 即使 Supabase 未設定，仍然應該通知父元件支付成功
-        setSubmitted(payment);
-        setOrders((current) => {
-          const remaining = current.filter((order) => order.id !== selectedOrder.id);
-          setSelectedOrder((remaining[0] && remaining[0].id !== selectedOrder.id) ? remaining[0] : null);
-          return remaining;
-        });
-        onConfirmPayment?.(payment);
-        setPaymentMethod("");
-        setCashReceived("");
-        return;
+      if (typeof onConfirmPayment !== "function") {
+        throw new Error("付款記錄服務未設定，請聯絡管理員");
       }
+      await onConfirmPayment(payment);
 
-      const receiptId = `receipt-${selectedOrder.id}`;
-      const saleItems = selectedOrder.items.map((item) => ({
-        order_id: receiptId,
-        name: item.productName,
-        size: item.size,
-        length: item.length || null,
-        price: item.price,
-        qty: item.quantity,
-      }));
-
-      // 優先更新訂單狀態（最重要的操作）
-      let completedOrder = null;
-      try {
-        const { data, error: completionError } = await supabase
-          .from("customer_orders")
-          .update({
-            status: "COMPLETED",
-            tailor_info: { ...(selectedOrder.tailor_info || {}), paid_at: payment.completedAt, payment },
-          })
-          .eq("id", selectedOrder.id)
-          .eq("school_id", selectedOrder.school_id)
-          .in("status", [ORDER_STATUS.READY, ORDER_STATUS.COMPLETED])
-          .select()
-          .single();
-        
-        if (completionError) {
-          console.error("更新訂單狀態失敗", completionError);
-          throw completionError;
-        } else {
-          completedOrder = data;
-        }
-        if (!completedOrder?.id || completedOrder.status !== "COMPLETED") {
-          throw new Error("訂單狀態未成功更新為 COMPLETED");
-        }
-      } catch (error) {
-        console.error("更新訂單狀態異常", error);
-        throw error;
-      }
-
-      // 嘗試保存銷售記錄（不成功也不應停止流程）
-      try {
-        const orderPayload = {
-          id: receiptId,
-          school: selectedOrder.school_id || "香港中國婦女會馮堯敬紀念中學",
-          total: selectedTotal,
-          item_count: saleItems.reduce((count, item) => count + item.qty, 0),
-          created_at: new Date().toISOString(),
-        };
-
-        if (selectedOrder.cashier_id !== undefined || selectedOrder.cashierId !== undefined) {
-          orderPayload.cashier_id = selectedOrder.cashier_id ?? selectedOrder.cashierId ?? null;
-        }
-        if (selectedOrder.cashier_name || selectedOrder.cashierName) {
-          orderPayload.cashier_name = selectedOrder.cashier_name || selectedOrder.cashierName || "收銀員";
-        }
-
-        const { error: saleError } = await supabase.from("orders").insert(orderPayload);
-        if (saleError && saleError.code !== "23505") {
-          const message = String(saleError.message || "");
-          const hasMissingColumn = /column .* does not exist|42703/i.test(message);
-          if (hasMissingColumn) {
-            const fallbackPayload = Object.fromEntries(
-              Object.entries(orderPayload).filter(([key]) => !["cashier_id", "cashier_name"].includes(key))
-            );
-            const { error: fallbackError } = await supabase.from("orders").insert(fallbackPayload);
-            if (fallbackError && fallbackError.code !== "23505") {
-              console.warn("保存訂單記錄失敗（使用備用欄位）", fallbackError);
-            }
-          } else {
-            console.warn("保存訂單記錄失敗", saleError);
-          }
-        }
-
-        const safeSaleItems = saleItems.map(({ length, ...item }) => ({ ...item, ...(length ? { length } : {}) }));
-        const { error: itemError } = await supabase.from("order_items").insert(safeSaleItems);
-        if (itemError && /column .*length.* does not exist|42703/i.test(String(itemError.message || ""))) {
-          const fallbackItems = safeSaleItems.map(({ length, ...item }) => item);
-          const { error: fallbackItemError } = await supabase.from("order_items").insert(fallbackItems);
-          if (fallbackItemError) {
-            console.warn("保存訂單項目失敗（使用備用欄位）", fallbackItemError);
-          }
-        } else if (itemError) {
-          console.warn("保存訂單項目失敗", itemError);
-        }
-      } catch (error) {
-        console.error("保存銷售記錄異常", error);
-        // 不中斷流程，只記錄警告
-      }
-
-      // 更新 UI 並通知父元件
+      // 付款記錄和取貨單狀態確認後，才從待付款清單移除
       setSubmitted(payment);
       setOrders((current) => {
         const remaining = current.filter((order) => order.id !== selectedOrder.id);
@@ -279,21 +185,10 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
         return remaining;
       });
       
-      try {
-        onConfirmPayment?.(payment);
-      } catch (callbackError) {
-        console.error("onConfirmPayment 回調錯誤", callbackError);
-      }
-
       setPaymentMethod("");
       setCashReceived("");
       
-      // 異步重新加載訂單，但不阻止 UI 更新
-      try {
-        await syncReadyOrders();
-      } catch (error) {
-        console.error("重新加載訂單失敗", error);
-      }
+      if (isSupabaseConfigured && supabase) await syncReadyOrders();
     } catch (err) {
       console.error("handleConfirmPayment 未預期的錯誤", err);
       setError("記錄支付失敗：" + (err.message || "未知錯誤"));
