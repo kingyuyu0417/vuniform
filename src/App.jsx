@@ -2625,14 +2625,14 @@ export default function UniformPOS() {
         console.warn("orders 表結構版本不相容，嘗試使用簡化查詢", error);
         ({ data, error } = await supabase
           .from("orders")
-          .select("id, school, exchange_source_receipt_id, cashier_id, cashier_name, total, item_count, created_at, order_items(name, size, price, qty)")
+          .select("id, school, exchange_source_receipt_id, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, price, qty)")
           .order("created_at", { ascending: false }));
       }
       if (error?.code === "42703" && !branchScoped) {
         console.warn("來源單據欄位尚未同步，使用基本訂單查詢", error);
         ({ data, error } = await supabase
           .from("orders")
-          .select("id, school, cashier_id, cashier_name, total, item_count, created_at, order_items(name, size, price, qty)")
+          .select("id, school, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, price, qty)")
           .order("created_at", { ascending: false }));
       }
       
@@ -2651,7 +2651,7 @@ export default function UniformPOS() {
             time: created.toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit" }),
             items: (order.order_items || []).map((item) => ({
               ...item,
-              id: String(item.id),
+              id: item.id == null ? "" : String(item.id),
               length: item.length || "",
               exchangeReturn: Boolean(item.is_return),
               sourceOrderItemId: item.source_order_item_id || "",
@@ -3125,6 +3125,7 @@ export default function UniformPOS() {
   const removeItem = (key) => setCart((prev) => prev.filter((c) => c.key !== key));
 
   const startExchange = (order, selectedItems) => {
+    setStorageError("");
     const items = Array.isArray(selectedItems) ? selectedItems : [selectedItems];
     if (!order.id || items.some((item) => !item.id)) {
       setStorageError("退換貨必須連結原單貨品記錄，請重新載入原單後再試。");
@@ -4405,8 +4406,10 @@ export default function UniformPOS() {
           order={receipt}
           orders={salesLog}
           language={receiptLanguage}
+          actionError={storageError}
           onClose={() => {
             setReceipt(null);
+            setStorageError("");
             setBtStatus({ state: "idle", msg: "" });
           }}
           canRedoSale={Boolean(
@@ -7632,10 +7635,11 @@ function ReceiptQR({ order, language = "zh" }) {
   );
 }
 
-function ReceiptModal({ order, orders = [], language = "zh", onClose, canRedoSale = false, onRedoSale, onExchange, onPrintBrowser, onPrintBluetooth, btStatus }) {
+function ReceiptModal({ order, orders = [], language = "zh", actionError = "", onClose, canRedoSale = false, onRedoSale, onExchange, onPrintBrowser, onPrintBluetooth, btStatus }) {
   const [exchangeSelection, setExchangeSelection] = useState(null);
   const english = language === "en";
   const labels = receiptFieldLabels(language);
+  const canExchangeItems = canRedoSale && order.items.some((item) => getRemainingReturnQuantity(item, orders) > 0);
   const school = english ? translateReceiptSchool(order.school) : { text: order.school || "-", translated: true };
   const adjustmentReason = english ? translateReceiptProductName(order.adjustmentReason || "") : { text: order.adjustmentReason || "", translated: true };
   const voidReason = english ? translateReceiptProductName(order.voidReason || "") : { text: order.voidReason || "", translated: true };
@@ -7713,6 +7717,12 @@ function ReceiptModal({ order, orders = [], language = "zh", onClose, canRedoSal
           <div style={{ textAlign: "center", marginTop: 6, color: "#888" }}>{labels.thanks}</div>
         </div>
 
+        {actionError && (
+          <div role="alert" style={{ marginBottom: 10, padding: "10px 12px", borderRadius: 8, background: "#FFF1F0", color: "#B42318", fontSize: 13, lineHeight: 1.5 }}>
+            {actionError}
+          </div>
+        )}
+
         <button
           className="pos-btn"
           onClick={openCustomerReceipt}
@@ -7732,7 +7742,7 @@ function ReceiptModal({ order, orders = [], language = "zh", onClose, canRedoSal
             <ShoppingCart size={16} /> {english ? "Return / exchange this sale" : "退／換貨：重新進行此單銷售"}
           </button>
         )}
-        {exchangeSelection ? (
+        {canExchangeItems && (exchangeSelection ? (
           <div style={{ background: "#FFF7ED", border: "1px solid #FDBA74", borderRadius: 10, padding: 12, marginBottom: 8 }}>
             <div style={{ color: "#9A3412", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>揀選需要更換的貨品（可多選）</div>
             {order.items.map((item, index) => {
@@ -7790,7 +7800,7 @@ function ReceiptModal({ order, orders = [], language = "zh", onClose, canRedoSal
           >
             快速換貨／補差額（可換多件）
           </button>
-        )}
+        ))}
         <button
           className="pos-btn"
           onClick={() => onPrintBluetooth?.(language)}

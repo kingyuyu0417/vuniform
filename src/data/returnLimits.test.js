@@ -22,6 +22,8 @@ test("does not count returns from voided adjustments", () => {
 
 test("does not allow returns without a source item reference", () => {
   assert.equal(getRemainingReturnQuantity({ qty: 3 }, []), 0);
+  assert.equal(getRemainingReturnQuantity({ id: "undefined", qty: 3 }, []), 0);
+  assert.equal(getRemainingReturnQuantity({ id: "null", qty: 3 }, []), 0);
   assert.equal(getRemainingReturnQuantity({ id: 21, qty: 3, exchangeReturn: true }, []), 0);
 });
 
