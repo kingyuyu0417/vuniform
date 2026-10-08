@@ -2037,10 +2037,7 @@ export default function UniformPOS() {
   const [exchangeReplacementQueue, setExchangeReplacementQueue] = useState([]);
   const exchangeReplacementQueueRef = useRef([]);
   const [receipt, setReceipt] = useState(null);
-  const [receiptLanguage, setReceiptLanguage] = useState("zh");
-  useEffect(() => {
-    if (receipt) setReceiptLanguage("zh");
-  }, [receipt]);
+  const receiptLanguage = "zh";
   const [cashReceived, setCashReceived] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [refundMethod, setRefundMethod] = useState("cash");
@@ -4407,7 +4404,6 @@ export default function UniformPOS() {
           order={receipt}
           orders={salesLog}
           language={receiptLanguage}
-          onLanguageChange={setReceiptLanguage}
           onClose={() => {
             setReceipt(null);
             setBtStatus({ state: "idle", msg: "" });
@@ -7635,7 +7631,7 @@ function ReceiptQR({ order, language = "zh" }) {
   );
 }
 
-function ReceiptModal({ order, orders = [], language = "zh", onLanguageChange, onClose, canRedoSale = false, onRedoSale, onExchange, onPrintBrowser, onPrintBluetooth, btStatus }) {
+function ReceiptModal({ order, orders = [], language = "zh", onClose, canRedoSale = false, onRedoSale, onExchange, onPrintBrowser, onPrintBluetooth, btStatus }) {
   const [exchangeSelection, setExchangeSelection] = useState(null);
   const english = language === "en";
   const labels = receiptFieldLabels(language);
@@ -7716,13 +7712,6 @@ function ReceiptModal({ order, orders = [], language = "zh", onLanguageChange, o
           <div style={{ textAlign: "center", marginTop: 6, color: "#888" }}>{labels.thanks}</div>
         </div>
 
-        <button
-          className="pos-btn"
-          onClick={() => onLanguageChange?.(english ? "zh" : "en")}
-          style={{ width: "100%", padding: "11px 0", borderRadius: 10, background: english ? "#EAF0F8" : "#FFF7ED", color: "#1F3A5F", border: "1px solid #B8CBE1", fontSize: 13, fontWeight: 700, marginBottom: 8 }}
-        >
-          {english ? "切換中文收據" : "轉換英文收據"}
-        </button>
         <button
           className="pos-btn"
           onClick={openCustomerReceipt}
