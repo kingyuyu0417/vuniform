@@ -23,6 +23,7 @@ import { findConflictingProductIds } from "./data/productConflictDetection";
 import { getProductGender, productGenderBackground, PRODUCT_GENDER_OPTIONS } from "./data/productGender";
 import { productUnit } from "./data/productUnits";
 import { createSalesExportWorkbook } from "./data/salesExport";
+import { createPriceListWorkbook } from "./data/priceListExport";
 import { clearCheckoutAttempt, getOrCreateCheckoutAttempt } from "./data/checkoutAttempt";
 import { getRemainingReturnQuantity, hasUntrackedExchangeHistory } from "./data/returnLimits";
 import { calculateCashSettlement, findPossibleDuplicateSale, PAYMENT_METHOD_LABELS, PAYMENT_METHOD_LABELS_EN, summarizeDailyCloseout } from "./data/salesCloseout";
@@ -5790,8 +5791,19 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     setExpanded(null);
   };
 
-  const handleExport = () => {
-    downloadCSV(productsToCSV(products), `校服資料_${todayStr()}.csv`);
+  const handleExport = async () => {
+    const xlsx = await import("xlsx");
+    const workbook = createPriceListWorkbook(xlsx, products, schoolOf);
+    const output = xlsx.write(workbook, { bookType: "xlsx", type: "array" });
+    const blob = new Blob([output], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `校服價目表_${todayStr()}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const handleImportFile = async (e) => {
@@ -6248,7 +6260,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
         {productsSaveState === "pending" && <span style={{ fontSize: 12, color: "#9A6700" }}>有未保存修改</span>}
         {productsSaveState === "saved" && <span style={{ fontSize: 12, color: "#28784B" }}>已保存</span>}
       </div>
-      {/* 匯入 / 匯出 CSV（只有ADMIN先見到，管理員先可以做批量價格調整） */}
+      {/* 匯入 / 匯出價目表（只有ADMIN先見到，管理員先可以做批量價格調整） */}
       {canImportExport && (
       <div style={{ background: "#F7F7F5", borderRadius: 12, padding: 14, marginBottom: 14 }}>
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>學校通告分析</div>
@@ -6321,10 +6333,13 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
           </button>
           <button
             className="pos-btn"
-            onClick={handleExport}
+            onClick={() => handleExport().catch((error) => {
+              console.error("匯出 Excel 價目表失敗", error);
+              setImportResult({ summary: null, errors: [`匯出 Excel 失敗：${error?.message || "請稍後重試。"}`] });
+            })}
             style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "#fff", border: "1px solid #1F3A5F", color: "#1F3A5F", fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
           >
-            <Download size={14} /> 匯出 CSV
+            <Download size={14} /> 匯出 Excel
           </button>
 
           <button
