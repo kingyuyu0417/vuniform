@@ -143,7 +143,11 @@ create table if not exists public.orders (
   item_count integer default 0,
   exchange_source_receipt_id text,
   adjustment_reason text,
+  payment_method text not null default 'cash' check (payment_method in ('cash', 'card', 'transfer')),
+  refund_method text check (refund_method is null or refund_method in ('cash', 'card', 'transfer')),
   refund_due integer not null default 0 check (refund_due >= 0),
+  duplicate_confirmed boolean not null default false,
+  duplicate_source_receipt_id text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

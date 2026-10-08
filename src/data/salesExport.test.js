@@ -48,6 +48,8 @@ test("exports order amounts once per order and keeps item rows separate", () => 
   assert.equal(orders.length, 3);
   assert.deepEqual(orders[1].slice(7, 11), [3, 300, 20, 280]);
   assert.deepEqual(orders[2].slice(7, 11), [1, 500, 0, 0]);
+  assert.equal(orders[1][13], "現金");
+  assert.equal(findSheet(sheets, "收市對數").rows[5][1], 300);
 
   const items = findSheet(sheets, "商品明細").rows;
   assert.equal(items.length, 4);
@@ -98,8 +100,8 @@ test("creates a readable multi-sheet Excel workbook with filters", () => {
   const output = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
   const reopened = XLSX.read(output, { type: "array" });
 
-  assert.deepEqual(reopened.SheetNames, ["閱讀指引", "總覽", "訂單", "商品明細", "按學校", "按門店", "按員工", "商品分析"]);
-  assert.equal(reopened.Sheets["訂單"]["!autofilter"].ref, "A1:M2");
+  assert.deepEqual(reopened.SheetNames, ["閱讀指引", "總覽", "收市對數", "訂單", "商品明細", "按學校", "按門店", "按員工", "商品分析"]);
+  assert.equal(reopened.Sheets["訂單"]["!autofilter"].ref, "A1:R2");
   assert.equal(reopened.Sheets["商品明細"]["!autofilter"].ref, "A1:M2");
   assert.equal(reopened.Sheets["總覽"].B8.v, 100);
 });

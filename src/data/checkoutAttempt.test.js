@@ -56,6 +56,31 @@ test("keeps the exchange reason bound to an unresolved checkout attempt", () => 
   );
 });
 
+test("keeps the payment channel bound to an unresolved checkout attempt", () => {
+  const storage = createStorage();
+  getOrCreateCheckoutAttempt(storage, { ...order, paymentMethod: "cash" }, () => "attempt-1");
+
+  assert.throws(
+    () => getOrCreateCheckoutAttempt(storage, { ...order, paymentMethod: "card" }, () => "attempt-2"),
+    /上次結帳結果尚未確認/,
+  );
+});
+
+test("keeps duplicate-warning acknowledgement bound to an unresolved checkout attempt", () => {
+  const storage = createStorage();
+  const confirmedOrder = {
+    ...order,
+    duplicateConfirmed: true,
+    duplicateSourceReceiptId: "receipt-1",
+  };
+  getOrCreateCheckoutAttempt(storage, confirmedOrder, () => "attempt-1");
+
+  assert.throws(
+    () => getOrCreateCheckoutAttempt(storage, { ...confirmedOrder, duplicateSourceReceiptId: "receipt-2" }, () => "attempt-2"),
+    /上次結帳結果尚未確認/,
+  );
+});
+
 test("clears only the matching cashier checkout key after confirmed success", () => {
   const storage = createStorage();
   getOrCreateCheckoutAttempt(storage, order, () => "attempt-1");

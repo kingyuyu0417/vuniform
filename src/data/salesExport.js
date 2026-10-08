@@ -1,3 +1,5 @@
+import { PAYMENT_METHOD_LABELS, summarizeDailyCloseout } from "./salesCloseout.js";
+
 const amountOf = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
 const orderAmount = (order) => amountOf(order.total);
 const refundAmount = (order) => Math.max(0, amountOf(order.refundDue));
@@ -73,6 +75,7 @@ export const buildSalesExportSheets = (orders, { outletForOrder, scope = "" } = 
   const totalAmount = activeOrders.reduce((sum, order) => sum + orderAmount(order), 0);
   const totalRefunds = activeOrders.reduce((sum, order) => sum + refundAmount(order), 0);
   const totalQuantity = activeOrders.reduce((sum, order) => sum + amountOf(order.itemCount), 0);
+  const closeout = summarizeDailyCloseout(activeOrders);
   const dateRange = dates.length === 0 ? "無交易" : dates.length === 1 ? dates[0] : `${dates[0]} 至 ${dates.at(-1)}`;
 
   return [
@@ -107,9 +110,30 @@ export const buildSalesExportSheets = (orders, { outletForOrder, scope = "" } = 
       widths: [30, 24],
     },
     {
+      name: "收市對數",
+      rows: [
+        ["項目", "金額"],
+        ["銷售額", closeout.salesAmount],
+        ["退回貨品額（參考，不重複扣減）", closeout.returnedGoodsAmount],
+        ["換貨補／退款差額", closeout.exchangeDifference],
+        ["淨收入", closeout.netRevenue],
+        ["實收款", closeout.totalReceived],
+        ["退款實付", closeout.totalRefunded],
+        [],
+        ["支付方式", "實收", "退款實付", "淨額"],
+        ...Object.entries(PAYMENT_METHOD_LABELS).map(([method, label]) => [
+          label,
+          closeout.channels[method].received,
+          closeout.channels[method].refunded,
+          closeout.channels[method].received - closeout.channels[method].refunded,
+        ]),
+      ],
+      widths: [38, 18, 18, 18],
+    },
+    {
       name: "訂單",
       rows: [
-        ["日期", "時間", "單號", "狀態", "學校", "門店", "開單員工", "單據件數", "單據金額", "單據退款", "淨收入", "來源單號", "作廢原因"],
+        ["日期", "時間", "單號", "狀態", "學校", "門店", "開單員工", "單據件數", "單據金額", "單據退款", "淨收入", "來源單號", "作廢原因", "付款方式", "退款方式", "退換原因", "疑似重複已確認", "重複參照單號"],
         ...rows.map((order) => [
           order.date || "",
           order.time || "",
@@ -124,9 +148,14 @@ export const buildSalesExportSheets = (orders, { outletForOrder, scope = "" } = 
           netAmount(order),
           order.exchangeSourceReceiptId || "",
           order.voidReason || "",
+          PAYMENT_METHOD_LABELS[order.paymentMethod] || PAYMENT_METHOD_LABELS.cash,
+          PAYMENT_METHOD_LABELS[order.refundMethod] || "",
+          order.adjustmentReason || "",
+          order.duplicateConfirmed ? "是" : "",
+          order.duplicateSourceReceiptId || "",
         ]),
       ],
-      widths: [13, 12, 24, 15, 32, 16, 16, 12, 14, 14, 14, 24, 28],
+      widths: [13, 12, 24, 15, 32, 16, 16, 12, 14, 14, 14, 24, 28, 14, 14, 32, 18, 24],
     },
     {
       name: "商品明細",

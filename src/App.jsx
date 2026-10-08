@@ -25,6 +25,7 @@ import { productUnit } from "./data/productUnits";
 import { createSalesExportWorkbook } from "./data/salesExport";
 import { clearCheckoutAttempt, getOrCreateCheckoutAttempt } from "./data/checkoutAttempt";
 import { getRemainingReturnQuantity, hasUntrackedExchangeHistory } from "./data/returnLimits";
+import { calculateCashSettlement, findPossibleDuplicateSale, PAYMENT_METHOD_LABELS, PAYMENT_METHOD_LABELS_EN, summarizeDailyCloseout } from "./data/salesCloseout";
 import { validateAndDeduplicateImportRows } from "./lib/import/importDuplicateGuard";
 import baseSchoolCatalog from "./schoolCatalog.json";
 import workbookSchoolCatalog from "./workbookSchoolCatalog.json";
@@ -1750,12 +1751,16 @@ const receiptFieldLabels = (language) => language === "en" ? {
 const buildReceiptLines = (order, shopName, language = "zh") => {
   const labels = receiptFieldLabels(language);
   const english = language === "en";
+  const paymentLabels = english ? PAYMENT_METHOD_LABELS_EN : PAYMENT_METHOD_LABELS;
+  const paymentLabel = paymentLabels[order.paymentMethod] || paymentLabels.cash;
+  const refundLabel = paymentLabels[order.refundMethod] || paymentLabel;
   const lines = [];
   lines.push(english ? "Victoria Uniform" : "Victoria Uniform 校服銷售");
   lines.push(english ? "ELECTRONIC RECEIPT" : "電子銷售單 ELECTRONIC RECEIPT");
   lines.push("================================");
   lines.push(`${labels.receiptNo}: #${(order.id || "").toUpperCase()}`);
   if (order.exchangeSourceReceiptId) lines.push(`${labels.sourceReceipt}: #${String(order.exchangeSourceReceiptId).toUpperCase()}`);
+  if (order.duplicateConfirmed && order.duplicateSourceReceiptId) lines.push(`${english ? "Duplicate warning confirmed against" : "疑似重複已確認（參照單號）"}: #${String(order.duplicateSourceReceiptId).toUpperCase()}`);
   lines.push(`${labels.date}: ${order.date || "-"} ${order.time || ""}`);
   lines.push(`${labels.school}: ${english && order.school === ENGLISH_RECEIPT_SCHOOL ? "YMCA of Hong Kong Christian College" : order.school || shopName || "-"}`);
   if (order.customerName || order.customerPhone) {
@@ -1778,9 +1783,15 @@ const buildReceiptLines = (order, shopName, language = "zh") => {
   lines.push("--------------------------------");
   lines.push(`${labels.itemCount}: ${order.itemCount || 0}`);
   lines.push(`${order.exchangeSourceReceiptId ? labels.exchangeTotal : labels.total}: ${fmt(order.total)}`);
-  if (typeof order.cashReceived === "number") lines.push(`${labels.cash}: ${fmt(order.cashReceived)}`);
-  if (order.refundDue > 0) lines.push(`${labels.refund}: ${fmt(order.refundDue)}`);
-  else if (typeof order.changeDue === "number") lines.push(`${labels.change}: ${fmt(order.changeDue)}`);
+  if (order.refundDue > 0) {
+    lines.push(`${english ? "Refund method" : "退款方式"}: ${refundLabel}`);
+    lines.push(`${labels.refund}: ${fmt(order.refundDue)}`);
+  } else {
+    lines.push(`${english ? "Payment method" : "付款方式"}: ${paymentLabel}`);
+    if (order.paymentMethod === "cash" && typeof order.cashReceived === "number") lines.push(`${labels.cash}: ${fmt(order.cashReceived)}`);
+    else lines.push(`${english ? "Collected" : "實收款"}: ${fmt(Math.max(0, Number(order.total || 0)))}`);
+    if (typeof order.changeDue === "number") lines.push(`${labels.change}: ${fmt(order.changeDue)}`);
+  }
   lines.push(`${labels.status}: ${order.exchangeSourceReceiptId ? labels.exchanged : labels.completed}`);
   lines.push("--------------------------------");
   lines.push(labels.returnPolicy);
@@ -1956,6 +1967,7 @@ export class AppErrorBoundary extends React.Component {
             >
               重新整理
             </button>
+            {paymentWarning && <div role="alert" style={{ marginTop: 8, color: "#B42318", fontWeight: 700, fontSize: 13 }}>{paymentWarning}</div>}
           </div>
         </div>
       );
@@ -1996,6 +2008,8 @@ export default function UniformPOS() {
     if (receipt) setReceiptLanguage("zh");
   }, [receipt]);
   const [cashReceived, setCashReceived] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [refundMethod, setRefundMethod] = useState("cash");
   const [btStatus, setBtStatus] = useState({ state: "idle", msg: "" });
   const printAreaRef = useRef(null);
   const checkoutSubmittingRef = useRef(false);
@@ -2138,6 +2152,8 @@ export default function UniformPOS() {
     if (!window.confirm("確定要刪除購物車內所有款式嗎？此操作不能復原。")) return;
     setCart([]);
     setCashReceived("");
+    setPaymentMethod("cash");
+    setRefundMethod("cash");
     setSelectedProduct(null);
     setExchangeReplacementQueue([]);
     exchangeReplacementQueueRef.current = [];
@@ -2151,10 +2167,14 @@ export default function UniformPOS() {
       school: selectedSchool || "",
       cart,
       cashReceived,
+      paymentMethod,
+      refundMethod,
     };
     persistHeldSales([hold, ...heldSales]);
     setCart([]);
     setCashReceived("");
+    setPaymentMethod("cash");
+    setRefundMethod("cash");
     setSelectedProduct(null);
   };
 
@@ -2163,6 +2183,8 @@ export default function UniformPOS() {
     setSelectedSchool(hold.school || selectedSchool);
     setCart(hold.cart || []);
     setCashReceived(hold.cashReceived || "");
+    setPaymentMethod(hold.paymentMethod || "cash");
+    setRefundMethod(hold.refundMethod || "cash");
     setSelectedProduct(null);
     persistHeldSales(heldSales.filter((item) => item.id !== hold.id));
   };
@@ -2443,6 +2465,8 @@ export default function UniformPOS() {
     setSelectedProduct(null);
     setCart([]);
     setCashReceived("");
+    setPaymentMethod("cash");
+    setRefundMethod("cash");
     setReceipt(null);
     setStorageError("");
     setSchoolPanelOpen(false);
@@ -2560,7 +2584,7 @@ export default function UniformPOS() {
       const branchId = branchScoped ? session.branchId || "__unassigned__" : "";
       let query = supabase
         .from("orders")
-        .select("id, school, branch_id, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, adjustment_reason, refund_due, voided_at, voided_by, void_reason, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, price, qty, is_return, source_order_item_id)")
+        .select("id, school, branch_id, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, adjustment_reason, payment_method, refund_method, refund_due, duplicate_confirmed, duplicate_source_receipt_id, voided_at, voided_by, void_reason, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, price, qty, is_return, source_order_item_id)")
         .order("created_at", { ascending: false });
       if (branchScoped) query = query.eq("branch_id", branchId);
       let { data, error } = await query;
@@ -2614,6 +2638,11 @@ export default function UniformPOS() {
             customerPhone: order.customer_phone_last4 || "",
             exchangeSourceReceiptId: order.exchange_source_receipt_id || order.exchangeSourceReceiptId || order.source_receipt_id || "",
             adjustmentReason: order.adjustment_reason || "",
+            paymentMethod: order.payment_method || "cash",
+            refundMethod: order.refund_method || "",
+            duplicateConfirmed: Boolean(order.duplicate_confirmed),
+            duplicateSourceReceiptId: order.duplicate_source_receipt_id || "",
+            createdAt: order.created_at || "",
             voidedAt: order.voided_at || "",
             voidedBy: order.voided_by || "",
             voidReason: order.void_reason || "",
@@ -2981,6 +3010,10 @@ export default function UniformPOS() {
             customer_phone_last4: customerPhoneLast4(order.customerPhone),
             exchange_source_receipt_id: order.exchangeSourceReceiptId || null,
             adjustment_reason: order.adjustmentReason || null,
+            payment_method: order.paymentMethod || "cash",
+            refund_method: order.refundMethod || null,
+            duplicate_confirmed: Boolean(order.duplicateConfirmed),
+            duplicate_source_receipt_id: order.duplicateSourceReceiptId || null,
             refund_due: Math.max(0, Number(order.refundDue || 0)),
             created_at: new Date().toISOString(),
             items: (order.items || []).map((item) => ({
@@ -3084,6 +3117,8 @@ export default function UniformPOS() {
       return false;
     }
     setSelectedSchool(order.school || selectedSchool);
+    setPaymentMethod(order.paymentMethod || "cash");
+    setRefundMethod(order.paymentMethod || "cash");
     setCart(exchangeItems.map(({ item, product, originalSize }) => ({
       key: uid(),
       productId: product.id,
@@ -3381,6 +3416,8 @@ export default function UniformPOS() {
     if (order.school) setSelectedSchool(order.school);
     setCart(readyItems);
     setCashReceived("");
+    setPaymentMethod("cash");
+    setRefundMethod("cash");
     setSelectedProduct(null);
     setTab("sale");
     navigate("/sale", { replace: true });
@@ -3395,6 +3432,7 @@ export default function UniformPOS() {
             id: payment.orderId || `receipt-${Date.now()}`,
             date: todayStr(),
             time: new Date().toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit" }),
+            createdAt: new Date().toISOString(),
             items: (paidOrder.items || []).map((item) => ({
               name: item.productName,
               size: item.size,
@@ -3406,6 +3444,7 @@ export default function UniformPOS() {
             total: Number(payment.totalPrice || paidOrder.totalPrice || 0),
             cashReceived: Number(payment.cashReceived || payment.totalPrice || 0),
             changeDue: Number(payment.changeDue || 0),
+            paymentMethod: payment.paymentMethod || "cash",
             itemCount: (paidOrder.items || []).reduce((sum, item) => sum + Number(item.quantity || item.qty || 1), 0),
             cashierId: session ? session.id : null,
             cashierName: session ? session.name : "",
@@ -3452,14 +3491,13 @@ export default function UniformPOS() {
   const cartCount = cart.reduce((sum, c) => sum + c.qty, 0);
   const exchangeMode = cart.some((item) => item.exchangeReturn);
   const cartSourceMeta = cart.find((item) => item.sourceQueueNo || item.sourceGuestName) || {};
-  const cashAmount = exchangeMode
-    ? (cashReceived === "" ? 0 : Number(cashReceived || 0))
-    : (cashReceived === "" ? cartTotal : Number(cashReceived || 0));
-  const settlementDifference = cashAmount - cartTotal;
-  const changeDue = exchangeMode ? Math.max(cartTotal - cashAmount, 0) : Math.max(settlementDifference, 0);
-  const refundDue = exchangeMode ? Math.max(-cartTotal - cashAmount, 0) : 0;
+  const cashAmount = paymentMethod === "cash"
+    ? (cashReceived === "" ? (exchangeMode ? 0 : cartTotal) : Number(cashReceived || 0))
+    : Math.max(cartTotal, 0);
+  const changeDue = calculateCashSettlement(cartTotal, cashAmount).changeDue;
+  const refundDue = exchangeMode ? Math.max(-cartTotal, 0) : 0;
 
-  const submitCheckout = async (adjustmentReason = "") => {
+  const submitCheckout = async (adjustmentReason = "", duplicateAudit = {}) => {
     if (cart.length === 0) return;
     const conflictingProductIds = findUnresolvedPriceConflictProductIds(products);
     const priceIssues = cart.flatMap((item) => {
@@ -3479,20 +3517,25 @@ export default function UniformPOS() {
       return;
     }
     const now = new Date();
-    const received = cashReceived === ""
-      ? (exchangeMode ? 0 : cartTotal)
-      : Number(cashReceived || 0);
+    const received = paymentMethod === "cash"
+      ? (cashReceived === "" ? (exchangeMode ? 0 : cartTotal) : Number(cashReceived || 0))
+      : Math.max(cartTotal, 0);
     const sourceMeta = cart.find((item) => item.sourceQueueNo || item.sourceGuestName) || {};
     const order = {
       id: "",
       date: todayStr(),
       time: now.toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit" }),
       items: cart.map(({ name, size, length, isTailored, price, qty, exchangeReturn, exchangeSourceReceiptId, sourceOrderItemId }) => ({ name, size, length, isTailored, price, qty, exchangeReturn, exchangeSourceReceiptId, sourceOrderItemId })),
-      total: cartTotal,
+      total: Math.max(0, cartTotal),
       cashReceived: received,
-      changeDue: exchangeMode ? Math.max(cartTotal - received, 0) : Math.max(received - cartTotal, 0),
-      refundDue: exchangeMode ? Math.max(-cartTotal - received, 0) : 0,
+      changeDue: calculateCashSettlement(cartTotal, received).changeDue,
+      refundDue: exchangeMode ? Math.max(-cartTotal, 0) : 0,
       adjustmentReason: exchangeMode ? adjustmentReason : "",
+      paymentMethod,
+      refundMethod: exchangeMode && Math.max(-cartTotal, 0) > 0 ? refundMethod : "",
+      duplicateConfirmed: Boolean(duplicateAudit.confirmed),
+      duplicateSourceReceiptId: duplicateAudit.sourceReceiptId || "",
+      createdAt: now.toISOString(),
       itemCount: cartCount,
       cashierId: session ? session.id : null,
       cashierName: session ? session.name : "",
@@ -3572,17 +3615,20 @@ export default function UniformPOS() {
 
     setReceipt(savedOrder);
     setCart([]);
+    setCashReceived("");
+    setPaymentMethod("cash");
+    setRefundMethod("cash");
     setSelectedProduct(null);
     exchangeReplacementQueueRef.current = [];
     setExchangeReplacementQueue([]);
   };
 
-  const checkout = async (adjustmentReason = "") => {
+  const checkout = async (adjustmentReason = "", duplicateAudit = {}) => {
     if (cart.length === 0 || checkoutSubmittingRef.current) return;
     checkoutSubmittingRef.current = true;
     setCheckoutSubmitting(true);
     try {
-      await submitCheckout(adjustmentReason);
+      await submitCheckout(adjustmentReason, duplicateAudit);
     } finally {
       checkoutSubmittingRef.current = false;
       setCheckoutSubmitting(false);
@@ -3644,6 +3690,8 @@ export default function UniformPOS() {
   useEffect(() => {
     if (cart.length === 0) {
       setCashReceived("");
+      setPaymentMethod("cash");
+      setRefundMethod("cash");
     }
   }, [cart.length]);
 
@@ -4112,6 +4160,12 @@ export default function UniformPOS() {
                 cartCount={cartCount}
                 checkout={checkout}
                 checkoutSubmitting={checkoutSubmitting}
+                cashierId={session?.id || ""}
+                branchId={session?.branchId || ""}
+                paymentMethod={paymentMethod}
+                setPaymentMethod={(value) => { setPaymentMethod(value); setCashReceived(""); }}
+                refundMethod={refundMethod}
+                setRefundMethod={setRefundMethod}
                 selectedSchool={selectedSchool}
                 storageError={storageError}
                 cashReceived={cashReceived}
@@ -4150,6 +4204,12 @@ export default function UniformPOS() {
                     cartCount={cartCount}
                     checkout={checkout}
                     checkoutSubmitting={checkoutSubmitting}
+                    cashierId={session?.id || ""}
+                    branchId={session?.branchId || ""}
+                    paymentMethod={paymentMethod}
+                    setPaymentMethod={(value) => { setPaymentMethod(value); setCashReceived(""); }}
+                    refundMethod={refundMethod}
+                    setRefundMethod={setRefundMethod}
                     selectedSchool={selectedSchool}
                     storageError={storageError}
                     cashReceived={cashReceived}
@@ -4317,6 +4377,7 @@ export default function UniformPOS() {
             <div style={{ textAlign: "center" }}>{english ? "ELECTRONIC RECEIPT" : "電子銷售單 ELECTRONIC RECEIPT"}</div>
             <div>{labels.receiptNo}: #{(receipt.id || "").toUpperCase()}</div>
             {receipt.exchangeSourceReceiptId && <div>{labels.sourceReceipt}: #{String(receipt.exchangeSourceReceiptId).toUpperCase()}</div>}
+            {receipt.duplicateConfirmed && receipt.duplicateSourceReceiptId && <div>疑似重複已確認（參照單號）：#{String(receipt.duplicateSourceReceiptId).toUpperCase()}</div>}
             {receipt.adjustmentReason && <div>退換原因：{receipt.adjustmentReason}</div>}
             <div>{labels.date}: {receipt.date} {receipt.time}</div>
             <div>{labels.school}: {english && receipt.school === ENGLISH_RECEIPT_SCHOOL ? "YMCA of Hong Kong Christian College" : receipt.school || "-"}</div>
@@ -4334,6 +4395,9 @@ export default function UniformPOS() {
             <div>--------------------------------</div>
             <div>{labels.itemCount}: {receipt.itemCount}</div>
             <div style={{ fontWeight: 700 }}>{receipt.exchangeSourceReceiptId ? labels.exchangeTotal : labels.total}: {fmt(receipt.total)}</div>
+            {receipt.refundDue > 0
+              ? <div>退款方式：{(english ? PAYMENT_METHOD_LABELS_EN : PAYMENT_METHOD_LABELS)[receipt.refundMethod || "cash"]}</div>
+              : <div>付款方式：{(english ? PAYMENT_METHOD_LABELS_EN : PAYMENT_METHOD_LABELS)[receipt.paymentMethod || "cash"]}</div>}
             <div>{labels.status}: {receipt.exchangeSourceReceiptId ? labels.exchanged : labels.completed}</div>
             <div style={{ marginTop: 8, color: "#555", whiteSpace: "pre-line" }}>
               <strong>{labels.returnPolicy}</strong>{String.fromCharCode(10)}<strong>{labels.careTitle}</strong>{String.fromCharCode(10)}{labels.care}
@@ -4362,10 +4426,16 @@ function SaleTab({
   cartCount,
   checkout,
   checkoutSubmitting = false,
+  cashierId = "",
+  branchId = "",
   selectedSchool,
   storageError,
   cashReceived,
   setCashReceived,
+  paymentMethod = "cash",
+  setPaymentMethod = () => {},
+  refundMethod = "cash",
+  setRefundMethod = () => {},
   changeDue,
   cashAmount,
   exchangeMode = false,
@@ -4391,6 +4461,10 @@ function SaleTab({
   const [exchangePreviewOpen, setExchangePreviewOpen] = useState(false);
   const [exchangeReason, setExchangeReason] = useState("");
   const [exchangeReasonNote, setExchangeReasonNote] = useState("");
+  const [possibleDuplicateOrder, setPossibleDuplicateOrder] = useState(null);
+  const [pendingDuplicateReason, setPendingDuplicateReason] = useState("");
+  const [pendingDuplicateIsExchange, setPendingDuplicateIsExchange] = useState(false);
+  const [paymentWarning, setPaymentWarning] = useState("");
   const [directExchangeOpen, setDirectExchangeOpen] = useState(false);
   const [directExchangeProductId, setDirectExchangeProductId] = useState("");
   const [directExchangeLength, setDirectExchangeLength] = useState("");
@@ -4431,6 +4505,39 @@ function SaleTab({
   }, [exchangeSourceReceiptId]);
   const returnedCartItems = cart.filter((item) => item.exchangeReturn);
   const replacementCartItems = cart.filter((item) => !item.exchangeReturn);
+  const settlementMethod = exchangeMode && refundDue > 0 ? refundMethod : paymentMethod;
+  const cashShortfall = settlementMethod === "cash"
+    ? calculateCashSettlement(cartTotal, cashAmount).shortfall
+    : 0;
+
+  useEffect(() => {
+    if (cashShortfall === 0) setPaymentWarning("");
+  }, [cashShortfall]);
+
+  const requestCheckout = (adjustmentReason = "") => {
+    if (cashShortfall > 0) {
+      setPaymentWarning(`現金仍欠 ${fmt(cashShortfall)}，收足款項後才可完成交易。`);
+      return;
+    }
+    setPaymentWarning("");
+    const duplicate = findPossibleDuplicateSale({
+      cashierId,
+      branchId,
+      school: selectedSchool || "",
+      total: Math.max(0, cartTotal),
+      refundDue,
+      items: cart,
+      createdAt: new Date().toISOString(),
+    }, salesLog);
+    if (duplicate) {
+      setPossibleDuplicateOrder(duplicate);
+      setPendingDuplicateReason(adjustmentReason);
+      setPendingDuplicateIsExchange(exchangeMode);
+      return;
+    }
+    if (exchangeMode) setExchangePreviewOpen(false);
+    checkout(adjustmentReason);
+  };
 
   useEffect(() => {
     if (
@@ -4798,19 +4905,33 @@ function SaleTab({
                         </div>
                         <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                           <span>{refundDue > 0 ? "應退款" : "客人需補款"}</span>
-                          <strong>{fmt(refundDue > 0 ? refundDue : changeDue)}</strong>
+                          <strong>{fmt(refundDue > 0 ? refundDue : Math.max(cartTotal, 0))}</strong>
                         </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                          <span>{refundDue > 0 ? "退款方式" : "補款方式"}</span>
+                          <strong>{PAYMENT_METHOD_LABELS[refundDue > 0 ? refundMethod : paymentMethod] || "現金"}</strong>
+                        </div>
+                        {settlementMethod === "cash" && cartTotal > 0 && (
+                          <>
+                            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                              <span>現金交付</span><strong>{fmt(cashAmount)}</strong>
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                              <span>{cashShortfall > 0 ? "尚欠補款" : "找續"}</span>
+                              <strong>{fmt(cashShortfall > 0 ? cashShortfall : changeDue)}</strong>
+                            </div>
+                          </>
+                        )}
                       </div>
                       <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
                         <button type="button" className="pos-btn" onClick={() => setExchangePreviewOpen(false)} style={{ flex: 1, padding: 11, borderRadius: 9, background: "#F1F5F9", color: "#334155", fontWeight: 700 }}>返回修改</button>
                         <button
                           type="button"
                           className="pos-btn"
-                          disabled={!exchangeReason || (exchangeReason === "其他" && !exchangeReasonNote.trim())}
+                          disabled={!exchangeReason || (exchangeReason === "其他" && !exchangeReasonNote.trim()) || cashShortfall > 0}
                           onClick={() => {
                             const reason = exchangeReason === "其他" ? `其他：${exchangeReasonNote.trim()}` : exchangeReason;
-                            setExchangePreviewOpen(false);
-                            checkout(reason);
+                            requestCheckout(reason);
                           }}
                           style={{ flex: 1, padding: 11, borderRadius: 9, border: 0, background: !exchangeReason || (exchangeReason === "其他" && !exchangeReasonNote.trim()) ? "#9CA3AF" : "#1F3A5F", color: "#fff", fontWeight: 700 }}
                         >確認並完成退換</button>
@@ -5081,14 +5202,30 @@ function SaleTab({
             </div>
 
             <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, paddingTop: 10, borderTop: "1px solid #E5E5E0" }}>
-              <label htmlFor="cash-received" style={{ fontSize: 17, fontWeight: 600, color: "#45515F" }}>{exchangeMode ? "補回現金" : "實收現金"}</label>
+              <label htmlFor="sale-payment-method" style={{ fontSize: 17, fontWeight: 600, color: "#45515F" }}>
+                {refundDue > 0 ? "退款方式" : exchangeMode ? "補款方式" : "付款方式"}
+              </label>
+              <select
+                id="sale-payment-method"
+                value={refundDue > 0 ? refundMethod : paymentMethod}
+                onChange={(event) => refundDue > 0 ? setRefundMethod(event.target.value) : setPaymentMethod(event.target.value)}
+                style={{ maxWidth: 180, padding: "10px 8px", borderRadius: 8, border: "1px solid #cfd6dd", fontSize: 16 }}
+              >
+                <option value="cash">現金</option>
+                <option value="card">信用卡</option>
+                <option value="transfer">轉帳</option>
+              </select>
+            </div>
+
+            {settlementMethod === "cash" && !(exchangeMode && refundDue > 0) && cartTotal > 0 && (
+            <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, paddingTop: 10, borderTop: "1px solid #E5E5E0" }}>
+              <label htmlFor="cash-received" style={{ fontSize: 17, fontWeight: 600, color: "#45515F" }}>{exchangeMode ? "客人交付現金" : "實收現金"}</label>
               <input
                 id="cash-received"
                 type="number"
                 min="0"
                 step="1"
-                value={exchangeMode && refundDue > 0 ? 0 : cashReceived}
-                disabled={exchangeMode && refundDue > 0}
+                value={cashReceived}
                 onFocus={(e) => {
                   e.target.select();
                   if (cashReceived === "" || Number(cashReceived || 0) === 0) {
@@ -5103,15 +5240,26 @@ function SaleTab({
                 style={{ width: 140, padding: "10px", borderRadius: 8, border: "1px solid #cfd6dd", fontSize: 18, textAlign: "right" }}
               />
             </div>
+            )}
 
             <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", fontSize: 18, fontWeight: 600, color: exchangeMode && refundDue > 0 ? "#166534" : "#1F3A5F" }}>
-              <span>{exchangeMode && refundDue > 0 ? "應退客人" : exchangeMode ? "應補差額" : "找續"}</span>
-              <span>{fmt(exchangeMode && refundDue > 0 ? refundDue : exchangeMode ? changeDue : changeDue)}</span>
+              <span>
+                {refundDue > 0 ? "應退客人"
+                  : cashShortfall > 0 ? exchangeMode ? "尚欠補款" : "尚欠金額"
+                    : exchangeMode && paymentMethod !== "cash" && cartTotal > 0 ? "客人需補款"
+                      : "找續"}
+              </span>
+              <span>
+                {fmt(refundDue > 0 ? refundDue
+                  : cashShortfall > 0 ? cashShortfall
+                    : exchangeMode && paymentMethod !== "cash" && cartTotal > 0 ? cartTotal
+                      : changeDue)}
+              </span>
             </div>
 
             <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", fontSize: 16, color: "#666" }}>
-              <span>已收</span>
-              <span>{fmt(cashAmount)}</span>
+              <span>{refundDue > 0 ? "退款金額" : paymentMethod === "cash" ? "現金交付" : "電子收款"}</span>
+              <span>{fmt(refundDue > 0 ? refundDue : cashAmount)}</span>
             </div>
           </>
         )}
@@ -5121,9 +5269,9 @@ function SaleTab({
         className="pos-btn"
         onClick={() => {
           if (exchangeMode) setExchangePreviewOpen(true);
-          else checkout();
+          else requestCheckout();
         }}
-        disabled={cart.length === 0 || checkoutSubmitting}
+        disabled={cart.length === 0 || checkoutSubmitting || cashShortfall > 0}
         style={{
           width: "100%",
           marginTop: 14,
@@ -5145,6 +5293,45 @@ function SaleTab({
         >
           HOLD 單（稍後繼續）
         </button>
+      )}
+      {possibleDuplicateOrder && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(15,23,42,0.6)" }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="duplicate-order-title" style={{ width: "min(480px, 100%)", maxHeight: "80vh", overflowY: "auto", padding: 18, borderRadius: 14, background: "#fff", boxShadow: "0 20px 50px rgba(15,23,42,0.25)" }}>
+            <div id="duplicate-order-title" style={{ fontSize: 18, fontWeight: 800, color: "#9A3412" }}>可能重複交易</div>
+            <div style={{ marginTop: 8, color: "#475569", fontSize: 14 }}>
+              同一收銀員在兩分鐘內曾開出商品、數量和金額相同的單。系統不會自動阻止，請核對後選擇。
+            </div>
+            <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: "#FFF7ED", fontSize: 13 }}>
+              <div>上一張單：#{String(possibleDuplicateOrder.id || "").toUpperCase()} · {possibleDuplicateOrder.time || ""}</div>
+              <div style={{ marginTop: 4 }}>{(possibleDuplicateOrder.items || []).map((item) => `${item.name}（${sizeLabel(item)}）×${item.qty}`).join("、")}</div>
+              <strong style={{ display: "block", marginTop: 5 }}>金額：{fmt(possibleDuplicateOrder.total)}</strong>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+              <button
+                type="button"
+                className="pos-btn"
+                onClick={() => {
+                  setPossibleDuplicateOrder(null);
+                  if (pendingDuplicateIsExchange) setExchangePreviewOpen(true);
+                }}
+                style={{ flex: 1, padding: 11, borderRadius: 9, background: "#F1F5F9", color: "#334155", fontWeight: 700 }}
+              >返回檢查</button>
+              <button
+                type="button"
+                className="pos-btn"
+                disabled={checkoutSubmitting || cashShortfall > 0}
+                onClick={() => {
+                  const reason = pendingDuplicateReason;
+                  const sourceReceiptId = possibleDuplicateOrder.id || "";
+                  setPossibleDuplicateOrder(null);
+                  setExchangePreviewOpen(false);
+                  checkout(reason, { confirmed: true, sourceReceiptId });
+                }}
+                style={{ flex: 1, padding: 11, borderRadius: 9, background: "#9A3412", color: "#fff", fontWeight: 700 }}
+              >確認仍要結帳</button>
+            </div>
+          </div>
+        </div>
       )}
       {heldSales.length > 0 && (
         <div style={{ marginTop: 14, background: "#F8FAFC", border: "1px solid #CBD5E1", borderRadius: 10, padding: 12 }}>
@@ -6929,7 +7116,13 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
   const availableSchools = Array.from(new Set(dateOrders.filter(outletMatches).map((o) => o.school).filter(Boolean)))
     .sort((a, b) => a.localeCompare(b, "zh-Hant"));
   const dayOrders = dateOrders.filter((o) => outletMatches(o) && (!schoolFilter || o.school === schoolFilter));
+  const closeoutOrders = branchOrders.filter((order) =>
+    order.date === effectiveDate
+    && outletMatches(order)
+    && (!schoolFilter || order.school === schoolFilter)
+  );
   const activeDayOrders = dayOrders.filter((order) => !order.voidedAt);
+  const closeout = summarizeDailyCloseout(closeoutOrders);
   const dayTotal = activeDayOrders.reduce((s, o) => s + netOrderTotal(o), 0);
   const dayItems = activeDayOrders.reduce((s, o) => s + o.itemCount, 0);
   const knownCustomerPhones = new Set(activeDayOrders.map((o) => customerPhoneLast4(o.customerPhone || o.phone)).filter(Boolean));
@@ -7094,6 +7287,48 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
           {missingCustomerPhoneCount > 0 && <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>另有 {missingCustomerPhoneCount} 張單無電話資料</div>}
         </div>
       </div>
+      <section aria-label="每日收市支付渠道對數" style={{ marginBottom: 14, padding: 14, border: "1px solid #CBD5E1", borderRadius: 12, background: "#F8FAFC" }}>
+        <div style={{ fontSize: 17, fontWeight: 800, color: "#1F3A5F" }}>每日收市對數 · {effectiveDate}</div>
+        <div style={{ marginTop: 4, marginBottom: 12, color: "#64748B", fontSize: 12 }}>
+          按目前門店／學校篩選；不受電話或單號搜尋影響。實收及退款按單據支付方式統計。
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8, marginBottom: 12 }}>
+          {[
+            ["銷售額", closeout.salesAmount],
+            ["退回貨品額（參考）", closeout.returnedGoodsAmount],
+            ["換貨補／退款差額", closeout.exchangeDifference],
+            ["淨收入", closeout.netRevenue],
+          ].map(([label, value]) => (
+            <div key={label} style={{ padding: 10, borderRadius: 8, background: "#fff", border: "1px solid #E2E8F0" }}>
+              <div style={{ color: "#64748B", fontSize: 12 }}>{label}</div>
+              <strong style={{ display: "block", marginTop: 3, fontSize: 17 }}>{fmt(value)}</strong>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 1fr", gap: 6, alignItems: "center", fontSize: 13 }}>
+          <strong>收付款方式</strong><strong>實收</strong><strong>退款實付</strong><strong>淨額</strong>
+          {Object.entries(PAYMENT_METHOD_LABELS).map(([method, label]) => {
+            const channel = closeout.channels[method];
+            return (
+              <React.Fragment key={method}>
+                <span>{label}</span>
+                <span>{fmt(channel.received)}</span>
+                <span>{fmt(channel.refunded)}</span>
+                <strong>{fmt(channel.received - channel.refunded)}</strong>
+              </React.Fragment>
+            );
+          })}
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginTop: 10, paddingTop: 8, borderTop: "1px solid #CBD5E1", fontWeight: 700, fontSize: 14 }}>
+          <span>總實收 {fmt(closeout.totalReceived)}</span>
+          <span>退款實付 {fmt(closeout.totalRefunded)}</span>
+        </div>
+        {closeout.untrackedReturnOrders > 0 && (
+          <div role="alert" style={{ marginTop: 8, color: "#9A3412", fontSize: 12 }}>
+            有 {closeout.untrackedReturnOrders} 張舊退換單未記錄退回貨品明細，退回貨品額可能不完整；淨收入及退款仍按單據金額計算。
+          </div>
+        )}
+      </section>
       {Object.keys(byOutlet).length > 0 && (
         <div style={{ marginBottom: 10 }}>
           <div style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>按門店收入</div>
@@ -7143,6 +7378,8 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
             </div>
             {o.voidedAt && <div style={{ fontSize: 11, color: "#B42318", marginTop: 3 }}>作廢原因：{o.voidReason || "未提供"}</div>}
             {o.exchangeSourceReceiptId && <div style={{ fontSize: 12, color: "#9A3412", fontWeight: 600 }}>來源單據：#{String(o.exchangeSourceReceiptId).toUpperCase()}</div>}
+            {o.duplicateConfirmed && o.duplicateSourceReceiptId && <div style={{ fontSize: 11, color: "#9A3412", marginTop: 3 }}>曾確認疑似重複；參照單號 #{String(o.duplicateSourceReceiptId).toUpperCase()}</div>}
+            {!o.voidedAt && <div style={{ fontSize: 11, color: "#64748B", marginTop: 3 }}>{o.refundDue > 0 ? `退款：${PAYMENT_METHOD_LABELS[o.refundMethod || "cash"] || "現金"} ${fmt(o.refundDue)}` : `收款：${PAYMENT_METHOD_LABELS[o.paymentMethod || "cash"] || "現金"} ${fmt(netOrderTotal(o))}`}</div>}
             <div style={{ fontSize: 12, color: "#888" }}>{o.items.map((it) => `${it.name}(${sizeLabel({ size: it.size, length: it.length })})x${it.qty}`).join("、")}</div>
             {o.cashierName && <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>開單：{o.cashierName}</div>}
           </div>
@@ -7323,6 +7560,7 @@ function ReceiptModal({ order, orders = [], language = "zh", onLanguageChange, o
           <div style={{ textAlign: "center", color: "#888", fontSize: 11 }}>{english ? "ELECTRONIC RECEIPT" : "電子銷售單 ELECTRONIC RECEIPT"}</div>
           <div style={{ marginTop: 4 }}>{labels.receiptNo}: #{(order.id || "").toUpperCase()}</div>
           {order.exchangeSourceReceiptId && <div>{labels.sourceReceipt}: #{String(order.exchangeSourceReceiptId).toUpperCase()}</div>}
+          {order.duplicateConfirmed && order.duplicateSourceReceiptId && <div>{english ? "Duplicate warning confirmed against" : "疑似重複已確認（參照單號）"}: #{String(order.duplicateSourceReceiptId).toUpperCase()}</div>}
           {order.adjustmentReason && <div>退換原因：{order.adjustmentReason}</div>}
           <div>{labels.date}: {order.date} {order.time}</div>
           <div>{labels.school}: {english ? "YMCA of Hong Kong Christian College" : order.school || "-"}</div>
@@ -7340,11 +7578,18 @@ function ReceiptModal({ order, orders = [], language = "zh", onLanguageChange, o
           <div>--------------------------------</div>
           <div>{labels.itemCount}: {order.itemCount}</div>
           <div>{order.exchangeSourceReceiptId ? labels.exchangeTotal : labels.total}: {fmt(order.total)}</div>
-          <div>{labels.cash}: {fmt(order.cashReceived ?? order.total)}</div>
+          {order.refundDue > 0 ? (
+            <div>{english ? "Refund method" : "退款方式"}: {(english ? PAYMENT_METHOD_LABELS_EN : PAYMENT_METHOD_LABELS)[order.refundMethod || "cash"]}</div>
+          ) : (
+            <div>{english ? "Payment method" : "付款方式"}: {(english ? PAYMENT_METHOD_LABELS_EN : PAYMENT_METHOD_LABELS)[order.paymentMethod || "cash"]}</div>
+          )}
           {order.refundDue > 0 ? (
             <div style={{ fontWeight: 700, color: "#166534" }}>{labels.refund}: {fmt(order.refundDue)}</div>
           ) : (
-            <div style={{ fontWeight: 700 }}>{labels.change}: {fmt(Math.max(order.changeDue ?? 0, 0))}</div>
+            <>
+              <div>{order.paymentMethod === "cash" ? `${labels.cash}: ${fmt(order.cashReceived ?? order.total)}` : `${english ? "Collected" : "實收款"}: ${fmt(order.total)}`}</div>
+              <div style={{ fontWeight: 700 }}>{labels.change}: {fmt(Math.max(order.changeDue ?? 0, 0))}</div>
+            </>
           )}
           <div>{labels.status}: {order.exchangeSourceReceiptId ? labels.exchanged : labels.completed}</div>
           <div style={{ marginTop: 8, color: "#555", lineHeight: 1.5 }}>

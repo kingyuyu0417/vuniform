@@ -7,6 +7,12 @@ alter table public.orders
   add column if not exists checkout_key text,
   add column if not exists checkout_payload_hash text,
   add column if not exists adjustment_reason text,
+  add column if not exists payment_method text not null default 'cash'
+    check (payment_method in ('cash', 'card', 'transfer')),
+  add column if not exists refund_method text
+    check (refund_method is null or refund_method in ('cash', 'card', 'transfer')),
+  add column if not exists duplicate_confirmed boolean not null default false,
+  add column if not exists duplicate_source_receipt_id text,
   add column if not exists voided_at timestamptz;
 
 do $$
@@ -42,7 +48,17 @@ declare
   receipt_number integer;
   receipt_id text;
   request_key text := nullif(p_checkout_key, '');
-  payload_hash text := md5((order_data - 'created_at' - 'date' - 'time' - 'id')::text);
+  payload_hash text := md5((
+    order_data - 'created_at' - 'date' - 'time' - 'id' - 'createdAt'
+      - case when coalesce(order_data ->> 'payment_method', 'cash') = 'cash' then 'payment_method' else '' end
+      - case when coalesce(order_data ->> 'paymentMethod', 'cash') = 'cash' then 'paymentMethod' else '' end
+      - case when coalesce(nullif(order_data ->> 'refund_method', ''), 'cash') = 'cash' then 'refund_method' else '' end
+      - case when coalesce(nullif(order_data ->> 'refundMethod', ''), 'cash') = 'cash' then 'refundMethod' else '' end
+      - case when coalesce((order_data ->> 'duplicate_confirmed')::boolean, false) then '' else 'duplicate_confirmed' end
+      - case when coalesce((order_data ->> 'duplicateConfirmed')::boolean, false) then '' else 'duplicateConfirmed' end
+      - case when nullif(order_data ->> 'duplicate_source_receipt_id', '') is null then 'duplicate_source_receipt_id' else '' end
+      - case when nullif(order_data ->> 'duplicateSourceReceiptId', '') is null then 'duplicateSourceReceiptId' else '' end
+  )::text);
   existing_hash text;
   requested_return record;
   original_qty integer;
@@ -62,6 +78,20 @@ begin
   if nullif(order_data ->> 'exchange_source_receipt_id', '') is not null
      and nullif(btrim(order_data ->> 'adjustment_reason'), '') is null then
     raise exception 'An exchange reason is required';
+  end if;
+
+  if coalesce(order_data ->> 'payment_method', 'cash') not in ('cash', 'card', 'transfer') then
+    raise exception 'Unsupported payment method';
+  end if;
+
+  if greatest(coalesce((order_data ->> 'refund_due')::integer, 0), 0) > 0
+     and coalesce(order_data ->> 'refund_method', '') not in ('cash', 'card', 'transfer') then
+    raise exception 'A valid refund method is required';
+  end if;
+
+  if coalesce((order_data ->> 'duplicate_confirmed')::boolean, false)
+     and nullif(order_data ->> 'duplicate_source_receipt_id', '') is null then
+    raise exception 'Confirmed duplicate warnings must reference the matching receipt';
   end if;
 
   perform pg_advisory_xact_lock(hashtextextended(actor_id::text || ':' || request_key, 0));
@@ -179,7 +209,9 @@ begin
 
   insert into public.orders (
     id, school, branch_id, outlet_name, outlet_address, outlet_phone,
-    customer_surname, customer_phone_last4, exchange_source_receipt_id, adjustment_reason, refund_due,
+    customer_surname, customer_phone_last4, exchange_source_receipt_id, adjustment_reason,
+    payment_method, refund_method, refund_due,
+    duplicate_confirmed, duplicate_source_receipt_id,
     cashier_id, cashier_name, total, item_count, created_at,
     checkout_key, checkout_payload_hash
   )
@@ -194,7 +226,11 @@ begin
     nullif(order_data ->> 'customer_phone_last4', ''),
     nullif(order_data ->> 'exchange_source_receipt_id', ''),
     nullif(btrim(order_data ->> 'adjustment_reason'), ''),
+    coalesce(order_data ->> 'payment_method', 'cash'),
+    nullif(order_data ->> 'refund_method', ''),
     greatest(coalesce((order_data ->> 'refund_due')::integer, 0), 0),
+    coalesce((order_data ->> 'duplicate_confirmed')::boolean, false),
+    nullif(order_data ->> 'duplicate_source_receipt_id', ''),
     actor_id,
     coalesce(order_data ->> 'cashier_name', ''),
     greatest((order_data ->> 'total')::integer, 0),

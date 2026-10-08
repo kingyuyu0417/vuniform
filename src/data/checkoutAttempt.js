@@ -29,7 +29,13 @@ const checkoutFingerprint = (order) => JSON.stringify({
   changeDue: Number(order.changeDue || 0),
   refundDue: Number(order.refundDue || 0),
   exchangeSourceReceiptId: order.exchangeSourceReceiptId || "",
-  adjustmentReason: order.adjustmentReason || "",
+  ...(order.adjustmentReason ? { adjustmentReason: order.adjustmentReason } : {}),
+  ...(order.paymentMethod && order.paymentMethod !== "cash" ? { paymentMethod: order.paymentMethod } : {}),
+  ...(order.refundMethod && order.refundMethod !== "cash" ? { refundMethod: order.refundMethod } : {}),
+  ...(order.duplicateConfirmed ? {
+    duplicateConfirmed: true,
+    duplicateSourceReceiptId: order.duplicateSourceReceiptId || "",
+  } : {}),
 });
 
 export const getOrCreateCheckoutAttempt = (storage, order, createId = createCheckoutKey) => {
