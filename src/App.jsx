@@ -2669,14 +2669,14 @@ export default function UniformPOS() {
         console.warn("orders 表結構版本不相容，嘗試使用簡化查詢", error);
         ({ data, error } = await supabase
           .from("orders")
-          .select("id, school, exchange_source_receipt_id, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, price, qty)")
+          .select("id, school, exchange_source_receipt_id, payment_method, refund_method, refund_due, voided_at, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, price, qty)")
           .order("created_at", { ascending: false }));
       }
       if (error?.code === "42703" && !branchScoped) {
         console.warn("來源單據欄位尚未同步，使用基本訂單查詢", error);
         ({ data, error } = await supabase
           .from("orders")
-          .select("id, school, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, price, qty)")
+          .select("id, school, exchange_source_receipt_id, payment_method, refund_method, refund_due, voided_at, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, price, qty)")
           .order("created_at", { ascending: false }));
       }
       

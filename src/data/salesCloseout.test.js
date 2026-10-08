@@ -179,3 +179,22 @@ test("keeps original payments on their original date while settling replacements
   assert.equal(replacementDay.salesAmount, 140);
   assert.equal(replacementDay.totalReceived, 40);
 });
+
+test("subtracts an $8 cash refund from the linked sale's closeout revenue", () => {
+  const summary = summarizeDailyCloseout([
+    { id: "original-sale", total: 484, cashReceived: 484, paymentMethod: "cash" },
+    {
+      id: "exchange-refund",
+      total: 0,
+      refundDue: 8,
+      refundMethod: "cash",
+      exchangeSourceReceiptId: "original-sale",
+    },
+  ]);
+
+  assert.equal(summary.salesAmount, 484);
+  assert.equal(summary.exchangeDifference, -8);
+  assert.equal(summary.netRevenue, 476);
+  assert.equal(summary.totalReceived, 484);
+  assert.equal(summary.totalRefunded, 8);
+});
