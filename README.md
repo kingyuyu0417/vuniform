@@ -102,6 +102,8 @@ npm run build
 
 Cloudflare Pages 會在每次 `git push` 後自動部署。專案的 Cloudflare Pages 設定保存在 `wrangler.toml`；請不要再使用 Netlify 或 Vercel 設定。
 
+部署商品英文收據名稱功能前，請先在 Supabase SQL Editor 執行 [product-receipt-name-en.sql](./supabase/product-receipt-name-en.sql)，再執行更新後的 [idempotent-sales-checkout.sql](./supabase/idempotent-sales-checkout.sql) 以更新交易 RPC，最後才部署前端。這會為商品及銷售項目新增英文收據名稱欄位，舊資料預設為空白。
+
 目前 schema 的匿名政策只適合測試。正式公開前，必須改用 Supabase Auth 和更嚴格的 Row Level Security，避免任何人讀寫全部 POS 資料。
 
 ## 預設登入 PIN

@@ -26,7 +26,8 @@ $$;
 alter table public.order_items
   add column if not exists length text,
   add column if not exists is_return boolean not null default false,
-  add column if not exists source_order_item_id text;
+  add column if not exists source_order_item_id text,
+  add column if not exists receipt_name_en text not null default '';
 
 create unique index if not exists orders_cashier_checkout_key_unique
   on public.orders (cashier_id, checkout_key)
@@ -240,7 +241,7 @@ begin
     payload_hash
   );
 
-  insert into public.order_items (order_id, name, size, length, price, qty, is_return, source_order_item_id)
+  insert into public.order_items (order_id, name, size, length, price, qty, is_return, source_order_item_id, receipt_name_en)
   select
     receipt_id,
     item.name,
@@ -249,7 +250,8 @@ begin
     item.price,
     item.qty,
     coalesce(item.is_return, false),
-    nullif(item.source_order_item_id, '')
+    nullif(item.source_order_item_id, ''),
+    coalesce(item.receipt_name_en, '')
   from jsonb_to_recordset(order_data -> 'items')
     as item(
       name text,
@@ -258,7 +260,8 @@ begin
       price integer,
       qty integer,
       is_return boolean,
-      source_order_item_id text
+      source_order_item_id text,
+      receipt_name_en text
     );
 
   return receipt_id;

@@ -78,7 +78,7 @@ test("customer receipt payload masks direct customer identifiers and only includ
     id: "receipt-1",
     customerName: "陳小明",
     customerPhone: "91234567",
-    items: [{ name: "恤衫", qty: 1, price: 100, size: "M", privateNote: "do not expose" }],
+    items: [{ name: "恤衫", receiptNameEn: "Custom Shirt", qty: 1, price: 100, size: "M", privateNote: "do not expose" }],
     replacementSourceReceiptId: "old-receipt",
     settlementDelta: 25,
     settlementCashReceived: 30,
@@ -92,6 +92,7 @@ test("customer receipt payload masks direct customer identifiers and only includ
   assert.equal(JSON.stringify(safeOrder).includes("91234567"), false);
   assert.equal(JSON.stringify(safeOrder).includes("privateNote"), false);
   assert.equal(safeOrder.items[0].privateNote, undefined);
+  assert.equal(safeOrder.items[0].receiptNameEn, "Custom Shirt");
   assert.equal(safeOrder.replacementSourceReceiptId, "old-receipt");
   assert.equal(safeOrder.settlementDelta, 25);
   assert.equal(safeOrder.settlementCashReceived, 30);

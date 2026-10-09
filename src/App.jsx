@@ -25,6 +25,7 @@ import { getProductGender, productGenderBackground, PRODUCT_GENDER_OPTIONS } fro
 import { productUnit } from "./data/productUnits";
 import { createSalesExportWorkbook } from "./data/salesExport";
 import { createPriceListWorkbook } from "./data/priceListExport";
+import { buildReceiptNameCandidates } from "./data/receiptProductNames";
 import { clearCheckoutAttempt, getOrCreateCheckoutAttempt } from "./data/checkoutAttempt";
 import { getRemainingReturnQuantity, hasUntrackedExchangeHistory } from "./data/returnLimits";
 import { canReplaceOrder, getReplacementSettlement } from "./data/orderReplacement";
@@ -179,7 +180,9 @@ const formatSizeForReceipt = (itemName, size, length, english = false) => format
   String(length || "").replace(/^裁碼\s*/, ""),
   english,
 );
-const receiptEnglishName = (value) => receiptTranslationText(translateReceiptProductName(value));
+const receiptEnglishName = (value, configuredName = "") => (
+  String(configuredName || "").trim() || receiptTranslationText(translateReceiptProductName(value))
+);
 const receiptEnglishSchool = (value) => receiptTranslationText(translateReceiptSchool(value));
 const naturalSizeSort = (first, second) => {
   const firstText = String(first ?? "").trim();
@@ -1807,7 +1810,7 @@ const buildReceiptLines = (order, shopName, language = "zh") => {
   lines.push("--------------------------------");
   lines.push(labels.items);
   order.items.forEach((it) => {
-    lines.push(`${it.exchangeReturn ? labels.exchangeOut : ""}${english ? receiptEnglishName(it.name) : it.name}`);
+    lines.push(`${it.exchangeReturn ? labels.exchangeOut : ""}${english ? receiptEnglishName(it.name, it.receiptNameEn) : it.name}`);
     lines.push(`  ${formatSizeForReceipt(it.name, it.size, it.length, english)}`);
     lines.push(`  ${labels.quantity} ${it.qty} ${receiptProductUnit(it.name, language, it.size, it.qty)} x ${fmt(Math.abs(it.price))} = ${fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}`);
   });
@@ -2646,7 +2649,7 @@ export default function UniformPOS() {
       const branchId = branchScoped ? session.branchId || "__unassigned__" : "";
       let query = supabase
         .from("orders")
-        .select("id, school, branch_id, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, replacement_source_receipt_id, replacement_reason, settlement_delta, replacement_cash_received, replacement_change_due, adjustment_reason, payment_method, refund_method, refund_due, duplicate_confirmed, duplicate_source_receipt_id, voided_at, voided_by, void_reason, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, price, qty, is_return, source_order_item_id)")
+        .select("id, school, branch_id, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, replacement_source_receipt_id, replacement_reason, settlement_delta, replacement_cash_received, replacement_change_due, adjustment_reason, payment_method, refund_method, refund_due, duplicate_confirmed, duplicate_source_receipt_id, voided_at, voided_by, void_reason, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, receipt_name_en, price, qty, is_return, source_order_item_id)")
         .order("created_at", { ascending: false });
       if (branchScoped) query = query.eq("branch_id", branchId);
       let { data, error } = await query;
@@ -2655,14 +2658,14 @@ export default function UniformPOS() {
         console.warn("orders 表結構版本不相容，嘗試使用簡化查詢", error);
         ({ data, error } = await supabase
           .from("orders")
-          .select("id, school, exchange_source_receipt_id, payment_method, refund_method, refund_due, voided_at, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, price, qty)")
+          .select("id, school, exchange_source_receipt_id, payment_method, refund_method, refund_due, voided_at, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, receipt_name_en, price, qty)")
           .order("created_at", { ascending: false }));
       }
       if (error?.code === "42703" && !branchScoped) {
         console.warn("來源單據欄位尚未同步，使用基本訂單查詢", error);
         ({ data, error } = await supabase
           .from("orders")
-          .select("id, school, exchange_source_receipt_id, payment_method, refund_method, refund_due, voided_at, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, price, qty)")
+          .select("id, school, exchange_source_receipt_id, payment_method, refund_method, refund_due, voided_at, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, receipt_name_en, price, qty)")
           .order("created_at", { ascending: false }));
       }
       
@@ -2682,6 +2685,7 @@ export default function UniformPOS() {
             items: (order.order_items || []).map((item) => ({
               ...item,
               id: item.id == null ? "" : String(item.id),
+              receiptNameEn: item.receipt_name_en || "",
               length: item.length || "",
               exchangeReturn: Boolean(item.is_return),
               sourceOrderItemId: item.source_order_item_id || "",
@@ -2727,7 +2731,7 @@ export default function UniformPOS() {
 
   const loadSecureProducts = async () => {
     if (!supabase) return [];
-    const { data, error } = await supabase.from("products").select("id, school, name, gender, sizes, display_order, branch_id").order("display_order", { ascending: true, nullsFirst: false }).order("name");
+    const { data, error } = await supabase.from("products").select("id, school, name, receipt_name_en, gender, sizes, display_order, branch_id").order("display_order", { ascending: true, nullsFirst: false }).order("name");
     if (error) throw error;
     return data || [];
   };
@@ -3090,6 +3094,7 @@ export default function UniformPOS() {
           created_at: new Date().toISOString(),
           items: (order.items || []).map((item) => ({
             ...item,
+            receipt_name_en: item.receiptNameEn || "",
             is_return: Boolean(item.exchangeReturn),
             source_order_item_id: item.sourceOrderItemId || null,
           })),
@@ -3116,11 +3121,16 @@ export default function UniformPOS() {
         if (!receiptId) throw new Error("交易服務沒有回傳收據編號");
         const { data: savedItems, error: itemLoadError } = await supabase
           .from("order_items")
-          .select("id, name, size, length, price, qty, is_return, source_order_item_id")
+          .select("id, name, size, length, receipt_name_en, price, qty, is_return, source_order_item_id")
           .eq("order_id", receiptId);
         if (itemLoadError) throw itemLoadError;
         if (!Array.isArray(savedItems) || savedItems.length !== order.items.length) {
           throw new Error("交易已建立，但未能核對全部商品明細；請保持購物車並重試確認。");
+        }
+        const expectedReceiptNames = order.items.map((item) => item.receiptNameEn || "").sort();
+        const savedReceiptNames = savedItems.map((item) => item.receipt_name_en || "").sort();
+        if (JSON.stringify(savedReceiptNames) !== JSON.stringify(expectedReceiptNames)) {
+          throw new Error("交易已建立，但未能核對英文收據名稱；請保持購物車並重試確認。");
         }
         savedOrder = {
           ...order,
@@ -3128,6 +3138,7 @@ export default function UniformPOS() {
           items: savedItems.map((item) => ({
             ...item,
             id: String(item.id),
+            receiptNameEn: item.receipt_name_en || "",
             length: item.length || "",
             exchangeReturn: Boolean(item.is_return),
             sourceOrderItemId: item.source_order_item_id || "",
@@ -3178,7 +3189,7 @@ export default function UniformPOS() {
         next[idx] = { ...next[idx], qty: next[idx].qty + qty };
         return next;
       }
-      return [...prev, { key: uid(), productId: product.id, name: product.name, size: sizeObj.size, length: sizeObj.length || "", isTailored: Boolean(sizeObj.isTailored), price: sizeObj.price, qty }];
+      return [...prev, { key: uid(), productId: product.id, name: product.name, receiptNameEn: product.receiptNameEn || "", size: sizeObj.size, length: sizeObj.length || "", isTailored: Boolean(sizeObj.isTailored), price: sizeObj.price, qty }];
     });
   };
 
@@ -3209,6 +3220,7 @@ export default function UniformPOS() {
         key: uid(),
         productId: product?.id || item.productId || "",
         name: item.name,
+        receiptNameEn: item.receiptNameEn || product?.receiptNameEn || "",
         size: item.size,
         length: item.length || "",
         isTailored: isTailoredSize(item) || Boolean(matchingSize?.isTailored),
@@ -3264,6 +3276,7 @@ export default function UniformPOS() {
       key: uid(),
       productId: product.id,
       name: item.name,
+      receiptNameEn: item.receiptNameEn || product.receiptNameEn || "",
       size: item.size,
       length: item.length || "",
       isTailored: Boolean(item.isTailored || originalSize.isTailored),
@@ -3725,7 +3738,18 @@ export default function UniformPOS() {
       id: "",
       date: todayStr(),
       time: now.toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit" }),
-      items: cart.map(({ name, size, length, isTailored, price, qty, exchangeReturn, exchangeSourceReceiptId, sourceOrderItemId }) => ({ name, size, length, isTailored, price, qty, exchangeReturn, exchangeSourceReceiptId, sourceOrderItemId })),
+      items: cart.map((item) => ({
+        name: item.name,
+        receiptNameEn: item.receiptNameEn || products.find((product) => product.id === item.productId)?.receiptNameEn || "",
+        size: item.size,
+        length: item.length,
+        isTailored: item.isTailored,
+        price: item.price,
+        qty: item.qty,
+        exchangeReturn: item.exchangeReturn,
+        exchangeSourceReceiptId: item.exchangeSourceReceiptId,
+        sourceOrderItemId: item.sourceOrderItemId,
+      })),
       total: Math.max(0, cartTotal),
       cashReceived: received,
       changeDue: calculateCashSettlement(settlementDue, received).changeDue,
@@ -4606,7 +4630,7 @@ export default function UniformPOS() {
             {receipt.items.map((it, i) => (
               <div key={i}>
                 {(() => {
-                  const itemName = english ? receiptEnglishName(it.name) : it.name;
+                  const itemName = english ? receiptEnglishName(it.name, it.receiptNameEn) : it.name;
                   return <>
                     <div>{it.exchangeReturn ? labels.exchangeOut : ""}{itemName}</div>
                   </>;
@@ -5636,6 +5660,9 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
   const [showImportHistory, setShowImportHistory] = useState(false);
   const [noticeAnalyzing, setNoticeAnalyzing] = useState(false);
   const [noticePreview, setNoticePreview] = useState(null);
+  const [noticeReceiptNameDrafts, setNoticeReceiptNameDrafts] = useState({});
+  const [noticeReceiptNameMessage, setNoticeReceiptNameMessage] = useState("");
+  const [savingNoticeReceiptNames, setSavingNoticeReceiptNames] = useState(false);
   const [autoApplyHighConfidence, setAutoApplyHighConfidence] = useState(false);
   const [catalogCleanupMessage, setCatalogCleanupMessage] = useState("");
   const IMPORT_HISTORY_KEY = "import_history_v1";
@@ -6396,6 +6423,8 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
       else if (["jpg", "jpeg", "png", "webp"].includes(extension)) text = await noticeTextFromImage(file);
       else throw new Error("只支援 PDF、DOCX、JPG、PNG 或 WEBP 通告。");
       setNoticePreview(analyzeNoticeText(text, file.name));
+      setNoticeReceiptNameDrafts({});
+      setNoticeReceiptNameMessage("");
     } catch (error) {
       console.error("通告分析失敗", error);
       setNoticePreview({ fileName: file.name, warnings: [error.message || "通告分析失敗，請重試。"], text: "" });
@@ -6422,6 +6451,44 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
   const noticeImportFusion = noticePreview && importPreview
     ? buildNoticeImportFusion(noticePreview, importPreview)
     : null;
+  const noticeReceiptNameCandidates = noticePreview
+    ? buildReceiptNameCandidates(noticePreview, products, noticePreview.school || activeSchool || "")
+    : [];
+
+  const saveNoticeReceiptNames = async () => {
+    if (!canManageSchools || savingNoticeReceiptNames) return;
+    const candidateById = new Map(noticeReceiptNameCandidates.map((candidate) => [candidate.productId, candidate]));
+    const updates = [...candidateById].flatMap(([productId, candidate]) => {
+      const value = String(
+        Object.prototype.hasOwnProperty.call(noticeReceiptNameDrafts, productId)
+          ? noticeReceiptNameDrafts[productId]
+          : candidate.existingEnglishName || candidate.suggestedEnglishName,
+      ).trim();
+      return value && value !== candidate.existingEnglishName ? [[productId, value]] : [];
+    });
+    if (updates.length === 0) {
+      setNoticeReceiptNameMessage("沒有新的英文名稱需要保存。");
+      return;
+    }
+
+    const updatesById = new Map(updates);
+    const nextProducts = productsRef.current.map((product) => (
+      updatesById.has(product.id)
+        ? { ...product, receiptNameEn: updatesById.get(product.id) }
+        : product
+    ));
+    setSavingNoticeReceiptNames(true);
+    setNoticeReceiptNameMessage("");
+    saveProductChanges(nextProducts);
+    try {
+      const saved = await saveProductsNow();
+      setNoticeReceiptNameMessage(saved
+        ? `已保存 ${updates.length} 款英文收據名稱；新交易收據會使用已確認名稱。`
+        : "英文名稱未能保存，請檢查商品資料錯誤後重試。");
+    } finally {
+      setSavingNoticeReceiptNames(false);
+    }
+  };
 
   const clearProductsPendingReview = async () => {
     if (productsPendingReviewCount === 0) return;
@@ -6521,6 +6588,64 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                 <div style={{ marginTop: 5, maxHeight: 140, overflowY: "auto", whiteSpace: "pre-wrap", background: "#fff", padding: 6, borderRadius: 6 }}>{noticePreview.text}</div>
               </details>
             )}
+            <div style={{ marginTop: 10, padding: 9, background: "#fff", border: "1px solid #FDBA74", borderRadius: 7 }}>
+              <div style={{ fontWeight: 700, color: "#7C2D12" }}>英文電子收據名稱</div>
+              <div style={{ marginTop: 3, color: "#7C2D12" }}>
+                系統會按通告商品配對目前學校的款式，先提供本地詞典候選；請確認或修改後再保存。
+              </div>
+              {!noticeReceiptNameCandidates.length ? (
+                <div style={{ marginTop: 6, color: "#92400E" }}>
+                  {noticePreview.productsFound?.length
+                    ? `未能在「${noticePreview.school || activeSchool || "目前所選"}」商品中配對通告款式。`
+                    : "通告未識別到產品款式。"}
+                </div>
+              ) : (
+                <>
+                  <div style={{ marginTop: 6, maxHeight: 230, overflowY: "auto" }}>
+                    {noticeReceiptNameCandidates.map((candidate) => {
+                      const value = Object.prototype.hasOwnProperty.call(noticeReceiptNameDrafts, candidate.productId)
+                        ? noticeReceiptNameDrafts[candidate.productId]
+                        : candidate.existingEnglishName || candidate.suggestedEnglishName;
+                      return (
+                        <label key={candidate.productId} style={{ display: "block", padding: "7px 0", borderTop: "1px solid #FFEDD5" }}>
+                          <span style={{ display: "block", marginBottom: 4, color: "#334155" }}>
+                            {candidate.productName}
+                            <span style={{ color: "#9A6700" }}>（通告：{candidate.noticeName}）</span>
+                          </span>
+                          <input
+                            value={value}
+                            onChange={(event) => {
+                              setNoticeReceiptNameDrafts((current) => ({ ...current, [candidate.productId]: event.target.value }));
+                              setNoticeReceiptNameMessage("");
+                            }}
+                            placeholder={candidate.needsManualTranslation ? "未能自動完整翻譯，請輸入英文名稱" : "輸入英文收據名稱"}
+                            disabled={!canManageSchools || savingNoticeReceiptNames}
+                            aria-label={`${candidate.productName} 的英文收據名稱`}
+                            style={{ width: "100%", boxSizing: "border-box", padding: 7, border: "1px solid #CBD5E1", borderRadius: 6, fontSize: 12 }}
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {canManageSchools && (
+                    <button
+                      type="button"
+                      className="pos-btn"
+                      onClick={() => saveNoticeReceiptNames().catch((error) => {
+                        console.error("保存英文收據名稱失敗", error);
+                        setNoticeReceiptNameMessage(`保存失敗：${error?.message || "請重試。"}`);
+                      })}
+                      disabled={savingNoticeReceiptNames}
+                      style={{ width: "100%", marginTop: 8, padding: 8, borderRadius: 7, background: "#28784B", color: "#fff", fontWeight: 700 }}
+                    >
+                      {savingNoticeReceiptNames ? "保存緊…" : "確認並保存英文收據名稱"}
+                    </button>
+                  )}
+                  {!canManageSchools && <div style={{ marginTop: 7, color: "#92400E" }}>只有商品管理員可以保存英文收據名稱。</div>}
+                  {noticeReceiptNameMessage && <div role="status" style={{ marginTop: 6, color: noticeReceiptNameMessage.startsWith("已保存") ? "#166534" : "#B42318" }}>{noticeReceiptNameMessage}</div>}
+                </>
+              )}
+            </div>
             <button className="pos-btn" onClick={() => setNoticePreview(null)} style={{ marginTop: 8, padding: "6px 10px", borderRadius: 7, background: "#fff", color: "#7C2D12", border: "1px solid #FDBA74" }}>清除通告預覽</button>
           </div>
         )}
@@ -7028,6 +7153,14 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                 onChange={(e) => updateProduct(p.id, { ...p, name: e.target.value })}
                 placeholder="款式名稱"
                 style={{ width: "100%", padding: 8, marginBottom: 10, borderRadius: 8, border: "1px solid #ccc", fontSize: 14, boxSizing: "border-box" }}
+              />
+              <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>英文電子收據名稱（選填）</div>
+              <input
+                value={p.receiptNameEn || ""}
+                onChange={(e) => updateProduct(p.id, { ...p, receiptNameEn: e.target.value })}
+                placeholder="未填時使用自動翻譯；無法翻譯則保留原名"
+                disabled={!canManageSchools}
+                style={{ width: "100%", padding: 8, marginBottom: 10, borderRadius: 8, border: "1px solid #ccc", fontSize: 14, boxSizing: "border-box", background: canManageSchools ? "#fff" : "#F0F0EC", color: canManageSchools ? "#000" : "#888" }}
               />
               <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>適用性別</div>
               <select
@@ -7860,7 +7993,7 @@ function ReceiptModal({ order, orders = [], language = "zh", actionError = "", o
           <div>{labels.items}</div>
           {order.items.map((it, i) => (
             <div key={i}>
-              <div>{it.exchangeReturn ? labels.exchangeOut : ""}{displayField(it.name)}</div>
+              <div>{it.exchangeReturn ? labels.exchangeOut : ""}{english ? receiptEnglishName(it.name, it.receiptNameEn) : it.name}</div>
               <div>  {formatSizeForReceipt(it.name, it.size, it.length, english)}</div>
               <div>  {labels.quantity} {it.qty} {receiptProductUnit(it.name, language, it.size, it.qty)} x {fmt(Math.abs(it.price))} = {fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}</div>
             </div>

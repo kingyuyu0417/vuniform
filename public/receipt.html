@@ -140,7 +140,9 @@
       const schoolDisplay = english ? translateSchoolName(order.school) : { text: order.school || "", translated: true };
       const translatedItems = items.map((item) => ({
         item,
-        translation: english ? translateProductName(item.name) : { text: item.name, translated: true },
+        translation: english && !String(item.receiptNameEn || "").trim()
+          ? translateProductName(item.name)
+          : { text: item.receiptNameEn || item.name, translated: true, original: item.name },
       }));
       document.documentElement.lang = english ? "en" : "zh-Hant";
       app.innerHTML = `

@@ -190,6 +190,7 @@ export const createCustomerReceiptOrder = (order = {}) => ({
   cashierName: order.cashierName || "",
   items: (Array.isArray(order.items) ? order.items : []).map((item) => ({
     name: item.name || "",
+    receiptNameEn: String(item.receiptNameEn || "").trim(),
     size: item.size || "",
     length: item.length || "",
     qty: Number(item.qty) || 0,
