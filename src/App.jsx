@@ -5314,8 +5314,22 @@ function SaleTab({
                   const reason = exchangeReason === "其他" ? `其他：${exchangeReasonNote.trim()}` : exchangeReason;
                   requestCheckout(reason);
                 }}
-                style={{ flex: 1, padding: 11, borderRadius: 9, border: 0, background: !exchangeReason || (exchangeReason === "其他" && !exchangeReasonNote.trim()) ? "#9CA3AF" : "#1F3A5F", color: "#fff", fontWeight: 700 }}
-              >{fullReplacementMode ? "確認整單替換" : "確認並完成退換"}</button>
+                style={{
+                  flex: 1,
+                  padding: 11,
+                  borderRadius: 9,
+                  border: 0,
+                  background: !exchangeReason || (exchangeReason === "其他" && !exchangeReasonNote.trim()) || cashShortfall > 0 ? "#9CA3AF" : "#1F3A5F",
+                  color: "#fff",
+                  fontWeight: 700,
+                  opacity: cashShortfall > 0 ? 0.7 : 1,
+                  cursor: cashShortfall > 0 ? "not-allowed" : "pointer",
+                }}
+              >{fullReplacementMode
+                ? "確認整單替換"
+                : cashShortfall > 0
+                  ? `輸入補款 $${fmt(cashShortfall)} 後完成退換`
+                  : "確認並完成退換"}</button>
             </div>
           </div>
         </div>,
