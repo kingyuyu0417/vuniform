@@ -41,6 +41,22 @@ const checkoutFingerprint = (order) => JSON.stringify({
   } : {}),
 });
 
+const isReplacementBranchOnlyRetry = (previousFingerprint, nextFingerprint) => {
+  let previous;
+  let next;
+  try {
+    previous = JSON.parse(previousFingerprint);
+    next = JSON.parse(nextFingerprint);
+  } catch {
+    return false;
+  }
+  if (!previous?.replacementSourceReceiptId
+    || previous.replacementSourceReceiptId !== next?.replacementSourceReceiptId) return false;
+  delete previous.branchId;
+  delete next.branchId;
+  return JSON.stringify(previous) === JSON.stringify(next);
+};
+
 export const getOrCreateCheckoutAttempt = (storage, order, createId = createCheckoutKey) => {
   const storageKey = checkoutStorageKey(order.cashierId);
   const fingerprint = checkoutFingerprint(order);
@@ -56,7 +72,8 @@ export const getOrCreateCheckoutAttempt = (storage, order, createId = createChec
     if (!pending || typeof pending.checkoutKey !== "string" || typeof pending.fingerprint !== "string") {
       throw new Error("上次結帳狀態不完整；為避免重覆落單，請聯絡管理員處理後再結帳。");
     }
-    if (pending.fingerprint !== fingerprint) {
+    if (pending.fingerprint !== fingerprint
+      && !isReplacementBranchOnlyRetry(pending.fingerprint, fingerprint)) {
       throw new Error("上次結帳結果尚未確認。請恢復相同商品及金額後重試，避免產生重覆單。");
     }
     return pending.checkoutKey;

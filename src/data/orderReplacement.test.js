@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { canReplaceOrder, getReplacementSettlement } from "./orderReplacement.js";
+import { canReplaceOrder, getReplacementBranchId, getReplacementSettlement } from "./orderReplacement.js";
 
 test("settles the difference between the original and replacement totals", () => {
   assert.deepEqual(getReplacementSettlement(100, 140), { difference: 40, collectDue: 40, refundDue: 0 });
@@ -12,6 +12,13 @@ test("settles the difference between the original and replacement totals", () =>
 test("rejects invalid replacement totals", () => {
   assert.throws(() => getReplacementSettlement(-1, 10), /non-negative/);
   assert.throws(() => getReplacementSettlement(10, Number.NaN), /non-negative/);
+});
+
+test("keeps a replacement in the source sale branch", () => {
+  assert.equal(getReplacementBranchId({ branchId: "branch-a" }, "branch-b"), "branch-a");
+  assert.equal(getReplacementBranchId({ branch_id: "branch-a" }, "branch-b"), "branch-a");
+  assert.equal(getReplacementBranchId({ branchId: "" }, "branch-b"), "");
+  assert.equal(getReplacementBranchId({}, "branch-b"), "branch-b");
 });
 
 test("allows replacement only when there are no active changes to the source receipt", () => {

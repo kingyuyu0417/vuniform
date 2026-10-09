@@ -41,6 +41,17 @@ test("refuses to replace an unresolved checkout key when transaction details cha
   );
 });
 
+test("reuses the pending replacement key when only its source branch is corrected", () => {
+  const storage = createStorage();
+  const replacement = { ...order, branchId: "staff-branch", replacementSourceReceiptId: "receipt-1" };
+  getOrCreateCheckoutAttempt(storage, replacement, () => "attempt-1");
+
+  assert.equal(
+    getOrCreateCheckoutAttempt(storage, { ...replacement, branchId: "source-branch" }, () => "attempt-2"),
+    "attempt-1",
+  );
+});
+
 test("keeps the exchange reason bound to an unresolved checkout attempt", () => {
   const storage = createStorage();
   const exchangeOrder = {

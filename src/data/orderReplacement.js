@@ -13,6 +13,10 @@ export const getReplacementSettlement = (originalTotal, replacementTotal) => {
   };
 };
 
+export const getReplacementBranchId = (order, fallbackBranchId = "") => (
+  String(order?.branchId ?? order?.branch_id ?? fallbackBranchId ?? "")
+);
+
 export const canReplaceOrder = (order, orders) => Boolean(
   order?.id
   && !order.voidedAt

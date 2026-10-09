@@ -28,7 +28,7 @@ import { createPriceListWorkbook } from "./data/priceListExport";
 import { buildReceiptNameCandidates } from "./data/receiptProductNames";
 import { clearCheckoutAttempt, getOrCreateCheckoutAttempt } from "./data/checkoutAttempt";
 import { getRemainingReturnQuantity, hasUntrackedExchangeHistory } from "./data/returnLimits";
-import { canReplaceOrder, getReplacementSettlement } from "./data/orderReplacement";
+import { canReplaceOrder, getReplacementBranchId, getReplacementSettlement } from "./data/orderReplacement";
 import { calculateCashSettlement, findPossibleDuplicateSale, PAYMENT_METHOD_LABELS, PAYMENT_METHOD_LABELS_EN, summarizeDailyCloseout } from "./data/salesCloseout";
 import {
   createCustomerReceiptOrder,
@@ -3167,7 +3167,10 @@ export default function UniformPOS() {
       return savedOrder;
     } catch (e) {
       console.error("儲存記錄失敗", e);
-      const detail = e?.code ? `（${e.code}${e?.details ? `：${e.details}` : ""}）` : "";
+      const errorReason = [e?.message, e?.details, e?.hint].filter(Boolean).join("：");
+      const detail = e?.code
+        ? `（${e.code}${errorReason ? `：${errorReason}` : ""}）`
+        : errorReason ? `（${errorReason}）` : "";
       const migrationNote = e?.code === "PGRST202"
         ? order.replacementSourceReceiptId
           ? "請管理員先在 Supabase 執行 supabase/replace-sales-order.sql。"
@@ -3209,7 +3212,12 @@ export default function UniformPOS() {
       return false;
     }
     setStorageError("");
-    setFullSaleReplacement({ id: order.id, total: Number(order.total || 0), school: order.school || "" });
+    setFullSaleReplacement({
+      id: order.id,
+      total: Number(order.total || 0),
+      school: order.school || "",
+      branchId: getReplacementBranchId(order, session?.branchId || ""),
+    });
     setSelectedSchool(order.school || selectedSchool);
     setPaymentMethod(order.paymentMethod || "cash");
     setRefundMethod(order.paymentMethod || "cash");
@@ -3770,8 +3778,8 @@ export default function UniformPOS() {
       itemCount: cartCount,
       cashierId: session ? session.id : null,
       cashierName: session ? session.name : "",
-      branchId: session?.branchId || "",
-      school: selectedSchool || "",
+      branchId: fullReplacementMode ? fullSaleReplacement.branchId : session?.branchId || "",
+      school: fullReplacementMode ? fullSaleReplacement.school : selectedSchool || "",
       queueNo: sourceMeta.sourceQueueNo || "",
       guestName: sourceMeta.sourceGuestName || "",
       customerName: sourceMeta.sourceGuestName || "",
