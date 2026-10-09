@@ -170,6 +170,7 @@ create table if not exists public.order_items (
   length text,
   price numeric default 0,
   qty integer default 1,
+  receipt_name_en text not null default '',
   created_at timestamptz not null default now()
 );
 

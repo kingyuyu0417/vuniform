@@ -3,6 +3,8 @@ alter table public.orders
   add column if not exists exchange_source_receipt_id text;
 alter table public.orders
   add column if not exists refund_due integer not null default 0 check (refund_due >= 0);
+alter table public.order_items
+  add column if not exists receipt_name_en text not null default '';
 
 create or replace function public.create_order_with_items(order_data jsonb)
 returns text
@@ -47,9 +49,9 @@ begin
     coalesce((order_data ->> 'created_at')::timestamptz, now())
   );
 
-  insert into public.order_items (order_id, name, size, length, price, qty)
-  select receipt_id, item.name, item.size, nullif(item.length, ''), item.price, item.qty
-  from jsonb_to_recordset(order_data -> 'items') as item(name text, size text, length text, price integer, qty integer);
+  insert into public.order_items (order_id, name, size, length, receipt_name_en, price, qty)
+  select receipt_id, item.name, item.size, nullif(item.length, ''), coalesce(item.receipt_name_en, ''), item.price, item.qty
+  from jsonb_to_recordset(order_data -> 'items') as item(name text, size text, length text, receipt_name_en text, price integer, qty integer);
 
   return receipt_id;
 end;

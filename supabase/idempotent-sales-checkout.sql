@@ -29,6 +29,9 @@ alter table public.order_items
   add column if not exists source_order_item_id text,
   add column if not exists receipt_name_en text not null default '';
 
+alter table public.products
+  add column if not exists receipt_name_en text not null default '';
+
 create unique index if not exists orders_cashier_checkout_key_unique
   on public.orders (cashier_id, checkout_key)
   where checkout_key is not null;
@@ -108,6 +111,26 @@ begin
     if existing_hash is distinct from payload_hash then
       raise exception 'checkout_key was already used for a different order';
     end if;
+    update public.order_items as saved_item
+       set receipt_name_en = coalesce(item.receipt_name_en, '')
+    from jsonb_to_recordset(order_data -> 'items') as item(
+      name text,
+      size text,
+      length text,
+      price integer,
+      qty integer,
+      is_return boolean,
+      source_order_item_id text,
+      receipt_name_en text
+    )
+    where saved_item.order_id = receipt_id
+      and saved_item.name is not distinct from item.name
+      and saved_item.size is not distinct from item.size
+      and saved_item.length is not distinct from nullif(item.length, '')
+      and saved_item.price = item.price
+      and saved_item.qty = item.qty
+      and saved_item.is_return = coalesce(item.is_return, false)
+      and saved_item.source_order_item_id is not distinct from nullif(item.source_order_item_id, '');
     return receipt_id;
   end if;
 

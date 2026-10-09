@@ -16,12 +16,15 @@ create table if not exists public.products (
   id text primary key,
   school text not null default '',
   name text not null,
+  receipt_name_en text not null default '',
   sizes jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
-alter table public.products add column if not exists display_order integer;
+alter table public.products
+  add column if not exists display_order integer,
+  add column if not exists receipt_name_en text not null default '';
 
 create table if not exists public.orders (
   id text primary key,
@@ -46,11 +49,14 @@ create table if not exists public.order_items (
   order_id text not null references public.orders(id) on delete cascade,
   name text not null,
   size text not null,
+  receipt_name_en text not null default '',
   price integer not null check (price >= 0),
   qty integer not null check (qty > 0)
 );
 
-alter table public.order_items add column if not exists length text;
+alter table public.order_items
+  add column if not exists length text,
+  add column if not exists receipt_name_en text not null default '';
 
 create table if not exists public.daily_receipt_sequences (
   receipt_date date primary key,
@@ -109,9 +115,9 @@ begin
     coalesce((order_data ->> 'created_at')::timestamptz, now())
   );
 
-  insert into public.order_items (order_id, name, size, length, price, qty)
-  select receipt_id, item.name, item.size, nullif(item.length, ''), item.price, item.qty
-  from jsonb_to_recordset(order_data -> 'items') as item(name text, size text, length text, price integer, qty integer);
+  insert into public.order_items (order_id, name, size, length, receipt_name_en, price, qty)
+  select receipt_id, item.name, item.size, nullif(item.length, ''), coalesce(item.receipt_name_en, ''), item.price, item.qty
+  from jsonb_to_recordset(order_data -> 'items') as item(name text, size text, length text, receipt_name_en text, price integer, qty integer);
 
   return receipt_id;
 end;

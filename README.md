@@ -52,6 +52,8 @@ Auth 模式的銷售交易會用 `create_order_idempotently` 一次寫入 `order
 
 收據編號由 Supabase 每日流水號自動產生，格式為 `VU-YYYYMMDD-0001`。啟用新版結帳及退貨數量防護前，先執行 `supabase/secure-migration.sql`，再執行 `supabase/idempotent-sales-checkout.sql`。此 migration 同時記錄退貨所屬原單商品、退換原因及付款／退款渠道，並在資料庫阻止超退、缺少原因或無效支付方式的退換；舊版無法追蹤退貨商品的換貨記錄會先被視為未核實，需管理員檢查。新版 App 只會呼叫具冪等保護的 RPC；若 migration 尚未執行，結帳會保留購物車並提示管理員，不會退回非原子寫入方式。
 
+`supabase/idempotent-sales-checkout.sql` 亦會建立商品及訂單項目的英文收據名稱欄位。若結帳顯示 `42703: column order_items.receipt_name_en does not exist`，請在 Supabase SQL Editor 重新執行這份 SQL，再於原銷售分頁保持原商品及金額重試；同一交易識別碼會用來完成已建立但尚未確認的收據。
+
 銷售記錄作廢只供管理員操作，需重新輸入管理員密碼並填寫原因。作廢會保留原單及稽核記錄，但不計入收入、件數或客人統計。啟用前須在 Supabase SQL Editor 執行 `supabase/void-sales-order.sql`；資料庫 RPC 亦會驗證管理員角色及最近 5 分鐘內的重新登入憑證。
 
 銷售結帳可記錄現金、信用卡或轉帳；退換退款可獨立記錄退款渠道。銷售記錄頁的每日收市對數會分渠道列出實收及退款，並分開顯示銷售、退回貨品參考額、換貨淨差額及淨收入。相同收銀員兩分鐘內開出完全相同商品、數量及金額時，系統只會顯示非阻擋式警示，店員確認後仍可完成真實交易。
