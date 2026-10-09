@@ -17,7 +17,7 @@ const statusLabel = {
 
 const activeStatuses = [ORDER_STATUS.PENDING, ORDER_STATUS.PREPARING, ORDER_STATUS.READY];
 
-export default function QueuePage({ visits = [], currentSchoolId = "", outletName = "", calledBy = "", serviceType = QUEUE_SERVICE.FITTING, onViewGuest, onAssign, onReadyForSale }) {
+function QueuePanel({ visits = [], currentSchoolId = "", outletName = "", calledBy = "", serviceType = QUEUE_SERVICE.FITTING, onViewGuest, onAssign, onReadyForSale }) {
   const navigate = useNavigate();
   const counterName = serviceType === QUEUE_SERVICE.PICKUP ? "pickup" : "fitting";
   const [syncedVisits, setSyncedVisits] = useState(null);
@@ -522,6 +522,79 @@ export default function QueuePage({ visits = [], currentSchoolId = "", outletNam
         </div>
         )}
       </div>
+    </div>
+  );
+}
+
+export default function QueuePage({
+  visits = [],
+  currentSchoolId = "",
+  outletName = "",
+  calledBy = "",
+  onViewGuest,
+  onAssign,
+  onReadyForSale,
+}) {
+  const [serviceType, setServiceType] = useState(QUEUE_SERVICE.FITTING);
+  const services = [
+    { type: QUEUE_SERVICE.FITTING, label: "度身排隊管理" },
+    { type: QUEUE_SERVICE.PICKUP, label: "取貨排隊管理" },
+  ];
+
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      <div
+        role="group"
+        aria-label="選擇排隊管理"
+        style={{
+          position: "sticky",
+          top: 8,
+          zIndex: 5,
+          display: "grid",
+          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+          gap: 8,
+          padding: 8,
+          border: "1px solid #D8E1EC",
+          borderRadius: 12,
+          background: "rgba(255,255,255,0.97)",
+          boxShadow: "0 4px 12px rgba(31,58,95,0.1)",
+        }}
+      >
+        {services.map((service) => {
+          const selected = service.type === serviceType;
+          return (
+            <button
+              key={service.type}
+              type="button"
+              className="pos-btn"
+              aria-pressed={selected}
+              onClick={() => setServiceType(service.type)}
+              style={{
+                minHeight: 48,
+                padding: "10px 8px",
+                borderRadius: 9,
+                border: selected ? "1px solid #1F3A5F" : "1px solid #CBD5E1",
+                background: selected ? "#1F3A5F" : "#F8FAFC",
+                color: selected ? "#fff" : "#334155",
+                fontSize: 15,
+                fontWeight: 800,
+              }}
+            >
+              {service.label}
+            </button>
+          );
+        })}
+      </div>
+      <QueuePanel
+        visits={visits}
+        currentSchoolId={currentSchoolId}
+        outletName={outletName}
+        calledBy={calledBy}
+        serviceType={serviceType}
+        onViewGuest={onViewGuest}
+        onAssign={onAssign}
+        onReadyForSale={onReadyForSale}
+      />
     </div>
   );
 }
