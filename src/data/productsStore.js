@@ -94,6 +94,10 @@ const isKnownAuthoritativeProductSet = (products = []) => {
   return [...schools].some((school) => authorities.includes(school));
 };
 
+export const isMissingReceiptNameColumnError = (error) => (
+  error?.code === "42703" && /receipt_name_en/i.test(error.message || "")
+);
+
 export const loadProducts = async ({ storage, supabase, isSupabaseAuthEnabled, fallbackProducts = [] }) => {
   let authoritativeStoreWasEmpty = false;
   try {
@@ -113,7 +117,18 @@ export const loadProducts = async ({ storage, supabase, isSupabaseAuthEnabled, f
         console.warn("[productsStore] Supabase products query returned no rows; preserving the current catalog.");
       }
 
-      if (error) {
+      if (isMissingReceiptNameColumnError(error)) {
+        console.warn("[productsStore] English receipt name column is not installed; loading products without it.", error);
+        const { data: legacyData, error: legacyError } = await supabase
+          .from("products")
+          .select("id, school, name, gender, sizes, display_order, branch_id")
+          .order("display_order", { ascending: true, nullsFirst: false })
+          .order("name");
+        if (!legacyError && Array.isArray(legacyData) && legacyData.length > 0) {
+          return normalizeProducts(legacyData);
+        }
+        if (legacyError) console.warn("[productsStore] Legacy Supabase products read failed.", legacyError);
+      } else if (error) {
         console.warn("Supabase products read failed; falling back to local data", error);
       }
     }

@@ -46,6 +46,7 @@ import workbookSchoolOutlets from "./workbookSchoolOutlets.json";
 import databaseProductsSnapshot from "../database-products-snapshot.json";
 import {
   loadProducts,
+  isMissingReceiptNameColumnError,
   saveProducts as saveProductsToStore,
   deleteProductsByIds as deleteProductsFromStore,
   insertProduct as insertProductToStore,
@@ -2654,24 +2655,23 @@ export default function UniformPOS() {
       if (branchScoped) query = query.eq("branch_id", branchId);
       let { data, error } = await query;
       
-      if (error?.code === "42703" && !branchScoped) {
-        console.warn("orders 表結構版本不相容，嘗試使用簡化查詢", error);
-        ({ data, error } = await supabase
+      if (isMissingReceiptNameColumnError(error)) {
+        console.warn("資料庫尚未安裝英文收據名稱欄位，改用相容查詢載入銷售記錄。", error);
+        let legacyQuery = supabase
           .from("orders")
-          .select("id, school, exchange_source_receipt_id, payment_method, refund_method, refund_due, voided_at, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, receipt_name_en, price, qty)")
-          .order("created_at", { ascending: false }));
+          .select("id, school, branch_id, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, replacement_source_receipt_id, replacement_reason, settlement_delta, replacement_cash_received, replacement_change_due, adjustment_reason, payment_method, refund_method, refund_due, duplicate_confirmed, duplicate_source_receipt_id, voided_at, voided_by, void_reason, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, price, qty, is_return, source_order_item_id)")
+          .order("created_at", { ascending: false });
+        if (branchScoped) legacyQuery = legacyQuery.eq("branch_id", branchId);
+        ({ data, error } = await legacyQuery);
       }
-      if (error?.code === "42703" && !branchScoped) {
-        console.warn("來源單據欄位尚未同步，使用基本訂單查詢", error);
-        ({ data, error } = await supabase
-          .from("orders")
-          .select("id, school, exchange_source_receipt_id, payment_method, refund_method, refund_due, voided_at, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, receipt_name_en, price, qty)")
-          .order("created_at", { ascending: false }));
-      }
-      
       if (error) {
         console.error("loadSecureOrders 查詢失敗", error);
         // 查詢失敗時保留現有記錄，避免同步錯誤清空畫面。
+        return null;
+      }
+
+      if (!data) {
+        console.error("loadSecureOrders 沒有回傳銷售記錄資料。");
         return null;
       }
       
@@ -2731,7 +2731,18 @@ export default function UniformPOS() {
 
   const loadSecureProducts = async () => {
     if (!supabase) return [];
-    const { data, error } = await supabase.from("products").select("id, school, name, receipt_name_en, gender, sizes, display_order, branch_id").order("display_order", { ascending: true, nullsFirst: false }).order("name");
+    const queryProducts = (includeReceiptName) => supabase
+      .from("products")
+      .select(includeReceiptName
+        ? "id, school, name, receipt_name_en, gender, sizes, display_order, branch_id"
+        : "id, school, name, gender, sizes, display_order, branch_id")
+      .order("display_order", { ascending: true, nullsFirst: false })
+      .order("name");
+    let { data, error } = await queryProducts(true);
+    if (isMissingReceiptNameColumnError(error)) {
+      console.warn("資料庫尚未安裝英文收據名稱欄位，改用相容查詢載入商品。", error);
+      ({ data, error } = await queryProducts(false));
+    }
     if (error) throw error;
     return data || [];
   };
@@ -3941,6 +3952,7 @@ export default function UniformPOS() {
   const publicQueueService = (new URLSearchParams(location.search).get("service") || "").toUpperCase();
   const routeId = new URLSearchParams(location.search).get("id");
   const isDirectoryPage = location.pathname === "/menu";
+  const canSwitchSchool = isDirectoryPage || location.pathname === "/sale";
 
   useEffect(() => {
     if (location.pathname === "/" && publicRouteSchool) {
@@ -3949,10 +3961,10 @@ export default function UniformPOS() {
   }, [location.pathname, publicRouteSchool, navigate]);
 
   useEffect(() => {
-    if (!isDirectoryPage && schoolPanelOpen) {
+    if (!canSwitchSchool && schoolPanelOpen) {
       setSchoolPanelOpen(false);
     }
-  }, [isDirectoryPage, schoolPanelOpen]);
+  }, [canSwitchSchool, schoolPanelOpen]);
 
   const handleTabChange = (nextTab) => {
     setTab(nextTab);
@@ -4163,7 +4175,7 @@ export default function UniformPOS() {
           </div>
         )}
 
-        <div style={{ background: "linear-gradient(135deg, #1F3A5F 0%, #294D78 100%)", color: "#fff", padding: "18px 20px", borderRadius: isDirectoryPage && schoolPanelOpen ? "0" : "0 0 16px 16px", position: "relative", boxShadow: "0 3px 12px rgba(31, 58, 95, 0.18)" }}>
+        <div style={{ background: "linear-gradient(135deg, #1F3A5F 0%, #294D78 100%)", color: "#fff", padding: "18px 20px", borderRadius: canSwitchSchool && schoolPanelOpen ? "0" : "0 0 16px 16px", position: "relative", boxShadow: "0 3px 12px rgba(31, 58, 95, 0.18)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           {session.role === ROLES.GUEST ? (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -4173,7 +4185,7 @@ export default function UniformPOS() {
               </div>
             </div>
           ) : schools.length > 0 ? (
-            isDirectoryPage ? (
+            canSwitchSchool ? (
             <button
               className="pos-btn"
               onClick={() => setSchoolPanelOpen((v) => !v)}
@@ -4247,7 +4259,7 @@ export default function UniformPOS() {
           </div>
         </div>
 
-        {isDirectoryPage && schoolPanelOpen && schools.length > 0 && session.role !== ROLES.GUEST && (
+        {canSwitchSchool && schoolPanelOpen && schools.length > 0 && session.role !== ROLES.GUEST && (
           <StoreSchoolSwitcher
             schools={schools}
             schoolMeta={schoolMeta}
@@ -4258,7 +4270,7 @@ export default function UniformPOS() {
           />
         )}
       </div>
-      {isDirectoryPage && schoolPanelOpen && <div style={{ height: 16, background: "#294D78", borderRadius: "0 0 16px 16px" }} />}
+      {canSwitchSchool && schoolPanelOpen && <div style={{ height: 16, background: "#294D78", borderRadius: "0 0 16px 16px" }} />}
 
       {session.role !== ROLES.GUEST && !isDirectoryPage && (
         <div style={{ padding: "12px 16px 0" }}>
