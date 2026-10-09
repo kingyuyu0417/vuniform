@@ -1,12 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  englishReceiptProductUnit,
   createCustomerReceiptOrder,
+  englishReceiptProductUnit,
   formatReceiptSize,
   receiptProductTranslationTerms,
   translateReceiptProductName,
   translateReceiptAttribute,
+  translateReceiptSchool,
 } from "../../public/receipt-translations.js";
 
 test("translates multi-pair sock sizes and uses pack quantity units", () => {
@@ -26,6 +27,16 @@ test("preserves ordinary sock pair units", () => {
   assert.equal(englishReceiptProductUnit("長襪", "均碼", 1), "pairs");
 });
 
+test("translates the school, branch, and products on the provided receipt", () => {
+  assert.deepEqual(translateReceiptSchool("培僑小學"), {
+    text: "Pui Kiu Primary School",
+    translated: true,
+  });
+  assert.equal(translateReceiptProductName("藍開胸長袖冷衫").text, "Blue Open-front Long-sleeve Jumper");
+  assert.equal(translateReceiptProductName("炮台山分店").text, "Fortress Hill Branch");
+  assert.equal(translateReceiptProductName("店長").text, "Store Manager");
+});
+
 test("retains original names when an English product translation is partial", () => {
   assert.deepEqual(translateReceiptProductName("測試短襪"), {
     text: "Short Socks",
@@ -36,24 +47,6 @@ test("retains original names when an English product translation is partial", ()
     text: "Untranslated",
     translated: false,
     original: "自訂新商品",
-  });
-});
-
-test("translates names shown on the provided English receipt", () => {
-  assert.deepEqual(translateReceiptProductName("藍開胸長袖冷衫"), {
-    text: "Blue Open-front Long-sleeve Jumper",
-    translated: true,
-    original: "藍開胸長袖冷衫",
-  });
-  assert.deepEqual(translateReceiptProductName("炮台山分店"), {
-    text: "Fortress Hill Branch",
-    translated: true,
-    original: "炮台山分店",
-  });
-  assert.deepEqual(translateReceiptProductName("店長"), {
-    text: "Store Manager",
-    translated: true,
-    original: "店長",
   });
 });
 
@@ -69,6 +62,10 @@ test("customer receipt payload masks direct customer identifiers and only includ
     customerName: "陳小明",
     customerPhone: "91234567",
     items: [{ name: "恤衫", qty: 1, price: 100, size: "M", privateNote: "do not expose" }],
+    replacementSourceReceiptId: "old-receipt",
+    settlementDelta: 25,
+    settlementCashReceived: 30,
+    settlementChangeDue: 5,
     privateNote: "do not expose",
   });
 
@@ -78,4 +75,8 @@ test("customer receipt payload masks direct customer identifiers and only includ
   assert.equal(JSON.stringify(safeOrder).includes("91234567"), false);
   assert.equal(JSON.stringify(safeOrder).includes("privateNote"), false);
   assert.equal(safeOrder.items[0].privateNote, undefined);
+  assert.equal(safeOrder.replacementSourceReceiptId, "old-receipt");
+  assert.equal(safeOrder.settlementDelta, 25);
+  assert.equal(safeOrder.settlementCashReceived, 30);
+  assert.equal(safeOrder.settlementChangeDue, 5);
 });

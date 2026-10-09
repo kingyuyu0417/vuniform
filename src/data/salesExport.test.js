@@ -88,6 +88,30 @@ test("groups by school, outlet, cashier, and item without counting voided sales"
   assert.deepEqual(findSheet(sheets, "商品分析").rows[1], ["恤衫", "M", "", 2, 1, 200, 100, 100]);
 });
 
+test("keeps replacement revenue at the new full total while exporting only the refund difference", () => {
+  const sheets = buildSalesExportSheets([
+    { id: "old-receipt", date: "2026-09-24", total: 100, cashReceived: 100, voidedAt: "2026-09-25" },
+    {
+      id: "replacement-receipt",
+      date: "2026-09-25",
+      total: 60,
+      refundDue: 40,
+      refundMethod: "cash",
+      replacementSourceReceiptId: "old-receipt",
+      settlementDelta: -40,
+      itemCount: 1,
+      items: [{ name: "恤衫", size: "M", price: 60, qty: 1 }],
+    },
+  ]);
+
+  const overview = findSheet(sheets, "總覽").rows;
+  assert.equal(overview[5][1], 60);
+  assert.equal(overview[6][1], 40);
+  assert.equal(overview[7][1], 60);
+  assert.equal(findSheet(sheets, "收市對數").rows[5][1], 100);
+  assert.equal(findSheet(sheets, "收市對數").rows[6][1], 40);
+});
+
 test("creates a readable multi-sheet Excel workbook with filters", () => {
   const workbook = createSalesExportWorkbook(XLSX, [{
     id: "receipt-1",

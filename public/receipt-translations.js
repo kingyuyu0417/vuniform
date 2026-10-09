@@ -137,6 +137,7 @@ export const formatReceiptSize = (productName, size, length, english = false) =>
     length: labels.length === "裙長" ? "Skirt length" : labels.length === "袖長" ? "Sleeve length" : labels.length === "褲長" ? "Trouser length" : "Length",
     size: labels.size === "上圍" ? "Chest" : labels.size === "領圍" ? "Collar" : labels.size === "腰圍" ? "Waist" : "Size",
   };
+  const displayLabels = english ? englishLabels : labels;
   const formattedValue = (value) => {
     if (!english) return String(value || "");
     const translated = translateReceiptAttributeDetails(value);
@@ -144,7 +145,6 @@ export const formatReceiptSize = (productName, size, length, english = false) =>
   };
   const displayedLength = formattedValue(length);
   const displayedSize = formattedValue(size);
-  const displayLabels = english ? englishLabels : labels;
   if (length && size) return english
     ? `${displayLabels.length}: ${displayedLength} (${displayLabels.size}: ${displayedSize})`
     : `${displayLabels.length}：${displayedLength}（${displayLabels.size}：${displayedSize}）`;
@@ -182,6 +182,10 @@ export const createCustomerReceiptOrder = (order = {}) => ({
   duplicateConfirmed: Boolean(order.duplicateConfirmed),
   duplicateSourceReceiptId: order.duplicateSourceReceiptId || "",
   adjustmentReason: order.adjustmentReason || "",
+  replacementSourceReceiptId: order.replacementSourceReceiptId || "",
+  settlementDelta: Number(order.settlementDelta) || 0,
+  settlementCashReceived: Number(order.settlementCashReceived) || 0,
+  settlementChangeDue: Number(order.settlementChangeDue) || 0,
   voidedAt: order.voidedAt || "",
   voidReason: order.voidReason || "",
 });

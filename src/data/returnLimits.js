@@ -5,7 +5,14 @@ export const hasUntrackedExchangeHistory = (sourceOrder, orders) => orders.some(
 );
 
 export const getRemainingReturnQuantity = (sourceItem, orders) => {
-  if (!sourceItem?.id || sourceItem.exchangeReturn) return 0;
+  const rawSourceItemId = sourceItem?.id;
+  if (
+    rawSourceItemId == null
+    || rawSourceItemId === ""
+    || rawSourceItemId === "undefined"
+    || rawSourceItemId === "null"
+    || sourceItem.exchangeReturn
+  ) return 0;
   const sourceItemId = String(sourceItem.id);
   const sourceOrder = orders.find((order) => (order.items || [])
     .some((item) => String(item.id || "") === sourceItemId));
