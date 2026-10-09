@@ -53,6 +53,7 @@
       englishReceiptProductUnit,
       formatReceiptSize as sharedFormatReceiptSize,
       receiptProductUnit,
+      receiptTranslationText,
       translateReceiptProductName as sharedTranslateReceiptProductName,
       translateReceiptSchool as sharedTranslateReceiptSchool,
     } from "./receipt-translations.js";
@@ -123,7 +124,7 @@
       const displayValue = (value) => {
         if (!english) return text(value);
         const translation = translateProductName(value);
-        return text(translation.translated ? translation.text : translation.original);
+        return text(receiptTranslationText(translation));
       };
       const replacementDelta = Number(order.settlementDelta) || 0;
       const totalMarkup = order.replacementSourceReceiptId
@@ -154,7 +155,7 @@
             ${order.replacementSourceReceiptId ? `<dt>${labels.replacementSource}</dt><dd>#${text(order.replacementSourceReceiptId).toUpperCase()}</dd>` : ""}
             ${order.duplicateConfirmed && order.duplicateSourceReceiptId ? `<dt>${labels.duplicate}</dt><dd>#${text(order.duplicateSourceReceiptId).toUpperCase()}</dd>` : ""}
             <dt>${labels.date}</dt><dd>${text(order.date)} ${text(english ? englishTime(order.time) : order.time, "")}</dd>
-            <dt>${labels.school}</dt><dd>${text(english && !schoolDisplay.translated ? order.school : schoolDisplay.text)}</dd>
+            <dt>${labels.school}</dt><dd>${text(english ? receiptTranslationText(schoolDisplay) : schoolDisplay.text)}</dd>
             <dt>${labels.customer}</dt><dd>${text(customerSurname(order.customerName))}</dd>
             <dt>${labels.phone}</dt><dd>${text(customerPhoneLast4(order.customerPhone))}</dd>
             ${order.outletName ? `<dt>${labels.outlet}</dt><dd>${displayValue(order.outletName)}</dd>` : ""}
@@ -167,7 +168,7 @@
           <div class="items">
               ${translatedItems.map(({ item, translation: translatedName }) => {
                 const sign = item.exchangeReturn ? -1 : 1;
-                const itemName = english && !translatedName.translated ? translatedName.original : translatedName.text;
+                const itemName = english ? receiptTranslationText(translatedName) : translatedName.text;
                 return `<div class="item"><div class="item-main"><span>${item.exchangeReturn ? (english ? "Exchange out: " : "換出：") : ""}${text(itemName)}</span><span>${money(sign * Number(item.price) * Number(item.qty))}</span></div><div class="item-sub"><span>${formatSizeDisplay(item.name, item.size, item.length, english)}</span></div><div class="item-sub"><span>${labels.quantity}</span><span>${text(item.qty, "0")} ${english ? englishProductUnit(item.name, item.size) : productUnit(item.name, item.size)} × ${money(item.price)}</span></div></div>`;
               }).join("")}
           </div>

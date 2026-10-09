@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/generate-receipt-school-translations.js",
     "build": "vite build",
     "deploy:check": "npm run build && node scripts/verify-authoritative-products.js && node scripts/verify-all-schools.js",
     "preview": "vite preview",

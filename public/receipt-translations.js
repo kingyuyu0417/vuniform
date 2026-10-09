@@ -1,3 +1,7 @@
+import { receiptSchoolTranslations } from "./receipt-school-translations.js";
+
+export { receiptSchoolTranslations };
+
 export const receiptProductTranslationTerms = {
   "環保袋": "Reusable Bag",
   "膠袋": "Plastic Bag",
@@ -31,6 +35,10 @@ const productTerms = {
   "灰色": "Grey", "黑色": "Black", "白色": "White", "啡色": "Brown",
   "杏色": "Beige", "綠色": "Green", "黃色": "Yellow", "紅色": "Red",
   "男女生": "Unisex", "男生": "Boys'", "女生": "Girls'", "男裝": "Men's", "女裝": "Women's",
+  "新款": "New", "春夏": "Spring / Summer", "秋冬": "Autumn / Winter",
+  "厚": "Thick", "薄": "Lightweight", "防水": "Waterproof", "連帽": "Hooded",
+  "拉鏈": "Zip-up", "拉鍊": "Zip-up", "百褶裙": "Pleated Skirt", "背帶裙": "Pinafore Dress",
+  "牛仔褲": "Jeans", "襯衣": "Shirt", "印花": "Printed",
   "半截校裙": "Half-length School Skirt", "連身校裙": "One-piece School Dress",
   "西裝褸配厚抓毛背心": "Blazer with Fleece Waistcoat", "西裝褸配背心": "Blazer with Waistcoat",
   "長西褲": "Long Trousers", "短西褲": "Short Trousers", "運動短褲": "Sports Shorts",
@@ -56,6 +64,11 @@ const productTerms = {
   "尺碼不合": "Wrong size", "款式不合": "Style not suitable", "品質問題": "Quality issue",
   "買錯": "Bought by mistake", "更換款式": "Style exchange", "整單更正": "Full transaction correction",
   "不合身退貨": "Fit issue",
+  "加大碼": "Plus Size", "特大碼": "Extra Large", "大碼": "Large", "中碼": "Medium",
+  "細碼": "Small", "加細碼": "Extra Small", "幼碼": "Extra Small",
+  "成人碼": "Adult Size", "童裝碼": "Child Size",
+  "領圍": "Collar", "上圍": "Chest", "褲長": "Trouser Length", "裙長": "Skirt Length",
+  "袖長": "Sleeve Length", "長度": "Length",
   ...receiptProductTranslationTerms,
 };
 
@@ -67,6 +80,13 @@ export const translateReceiptAttribute = (value) => {
   if (pairSize) return `${pairSize[1]} pairs`;
   const numericSize = normalized.match(/^(\d+)\s*碼$/);
   if (numericSize) return numericSize[1];
+  const measurement = normalized.match(/^(\d+(?:\.\d+)?)\s*(吋|寸|英寸|厘米|公分)$/);
+  if (measurement) {
+    const unit = /吋|寸|英寸/.test(measurement[2])
+      ? Number(measurement[1]) === 1 ? "inch" : "inches"
+      : "cm";
+    return `${measurement[1]} ${unit}`;
+  }
   if (normalized === "均碼") return "One size";
   return productTerms[normalized] || normalized;
 };
@@ -120,8 +140,13 @@ export const translateReceiptSchool = (value) => {
   const name = String(value || "").trim();
   if (name === "港青基信書院") return { text: "YMCA of Hong Kong Christian College", translated: true };
   if (name === "培僑小學") return { text: "Pui Kiu Primary School", translated: true };
-  return { text: name, translated: !/[\u3400-\u9fff]/.test(name) };
+  if (receiptSchoolTranslations[name]) return { text: receiptSchoolTranslations[name], translated: true };
+  return { text: name, translated: !/[\u3400-\u9fff]/.test(name), original: name };
 };
+
+export const receiptTranslationText = (translation) => (
+  translation.translated ? translation.text : translation.original || translation.text
+);
 
 export const receiptDimensionLabels = (productName = "") => {
   const name = String(productName || "").replace(/\s+/g, "");

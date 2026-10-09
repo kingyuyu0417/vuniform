@@ -5,6 +5,8 @@ import {
   englishReceiptProductUnit,
   formatReceiptSize,
   receiptProductTranslationTerms,
+  receiptTranslationText,
+  receiptSchoolTranslations,
   translateReceiptProductName,
   translateReceiptAttribute,
   translateReceiptSchool,
@@ -48,12 +50,27 @@ test("retains original names when an English product translation is partial", ()
     translated: false,
     original: "自訂新商品",
   });
+  assert.equal(receiptTranslationText(translateReceiptProductName("自訂新商品")), "自訂新商品");
+  assert.equal(receiptTranslationText(translateReceiptSchool("未列入字典的新學校")), "未列入字典的新學校");
+});
+
+test("translates catalog schools, composable product names, common sizes, and measurements", () => {
+  assert.equal(receiptSchoolTranslations["天主教明德學校"], "MENG TAK CATHOLIC SCHOOL");
+  assert.ok(Object.keys(receiptSchoolTranslations).length > 0);
+  assert.equal(
+    receiptTranslationText(translateReceiptProductName("男女生 - 新款拉鏈連帽運動外套")),
+    "Unisex - New Zip-up Hooded Sports Jacket",
+  );
+  assert.equal(translateReceiptAttribute("加大碼"), "Plus Size");
+  assert.equal(translateReceiptAttribute("特大碼"), "Extra Large");
+  assert.equal(translateReceiptAttribute("26吋"), "26 inches");
+  assert.equal(translateReceiptAttribute("120厘米"), "120 cm");
 });
 
 test("formats translated receipt dimensions in English", () => {
   assert.equal(formatReceiptSize("長褲", "30", "40", true), "Trouser length: 40 (Waist: 30)");
   assert.equal(formatReceiptSize("長褲", "30", "40", false), "褲長：40（腰圍：30）");
-  assert.equal(formatReceiptSize("上衣", "特大碼", "", true), "Size: 特大碼");
+  assert.equal(formatReceiptSize("上衣", "特大碼", "", true), "Size: Extra Large");
 });
 
 test("customer receipt payload masks direct customer identifiers and only includes receipt fields", () => {

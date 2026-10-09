@@ -33,6 +33,7 @@ import {
   createCustomerReceiptOrder,
   englishReceiptProductUnit,
   formatReceiptSize,
+  receiptTranslationText,
   receiptProductUnit as sharedReceiptProductUnit,
   translateReceiptProductName,
   translateReceiptSchool,
@@ -178,6 +179,8 @@ const formatSizeForReceipt = (itemName, size, length, english = false) => format
   String(length || "").replace(/^裁碼\s*/, ""),
   english,
 );
+const receiptEnglishName = (value) => receiptTranslationText(translateReceiptProductName(value));
+const receiptEnglishSchool = (value) => receiptTranslationText(translateReceiptSchool(value));
 const naturalSizeSort = (first, second) => {
   const firstText = String(first ?? "").trim();
   const secondText = String(second ?? "").trim();
@@ -1720,8 +1723,6 @@ const receiptFieldLabels = (language) => language === "en" ? {
   exchanged: "Exchange completed",
   voided: "Voided",
   voidReason: "Void reason",
-  originalName: "Original name",
-  translationUnavailable: "English translation unavailable",
   exchangeOut: "Exchange out: ",
   returnPolicy: "Returns & exchanges: Within 30 days of purchase, present this receipt at the designated store to exchange the size, provided the item is unused, unwashed and unaltered.",
   careTitle: "Care instructions:",
@@ -1760,8 +1761,6 @@ const receiptFieldLabels = (language) => language === "en" ? {
   exchanged: "換貨完成",
   voided: "已作廢",
   voidReason: "作廢原因",
-  originalName: "原商品名稱",
-  translationUnavailable: "未能完整翻譯英文",
   exchangeOut: "換出：",
   returnPolicy: "退換條款：購貨後 30 天內，憑收據且商品未經使用、洗滌或改動，可親臨指定門市辦理更換尺碼。",
   careTitle: "洗滌指引：",
@@ -1786,42 +1785,29 @@ const buildReceiptLines = (order, shopName, language = "zh") => {
   if (order.exchangeSourceReceiptId) lines.push(`${labels.sourceReceipt}: #${String(order.exchangeSourceReceiptId).toUpperCase()}`);
   if (order.replacementSourceReceiptId) lines.push(`${labels.replacementSource}: #${String(order.replacementSourceReceiptId).toUpperCase()}`);
   if (order.duplicateConfirmed && order.duplicateSourceReceiptId) lines.push(`${labels.duplicate}: #${String(order.duplicateSourceReceiptId).toUpperCase()}`);
-  if (order.adjustmentReason) {
-    const reason = english ? translateReceiptProductName(order.adjustmentReason) : { text: order.adjustmentReason, translated: true };
-    lines.push(`${labels.adjustmentReason}: ${reason.text}`);
-    if (english && !reason.translated) lines.push(`  ${labels.translationUnavailable}: ${reason.original}`);
-  }
-  if (order.voidReason) lines.push(`${labels.voidReason}: ${english ? translateReceiptProductName(order.voidReason).text : order.voidReason}`);
+  if (order.adjustmentReason) lines.push(`${labels.adjustmentReason}: ${english ? receiptEnglishName(order.adjustmentReason) : order.adjustmentReason}`);
+  if (order.voidReason) lines.push(`${labels.voidReason}: ${english ? receiptEnglishName(order.voidReason) : order.voidReason}`);
   lines.push(`${labels.date}: ${order.date || "-"} ${order.time || ""}`);
-  const school = english ? translateReceiptSchool(order.school) : { text: order.school || shopName || "-", translated: true };
-  lines.push(`${labels.school}: ${school.text || "-"}`);
-  if (english && !school.translated && order.school) lines.push(`  ${labels.translationUnavailable}: ${order.school}`);
+  const school = english ? receiptEnglishSchool(order.school) : order.school || shopName || "-";
+  lines.push(`${labels.school}: ${school || "-"}`);
   if (order.customerName || order.customerPhone) {
     lines.push(`${labels.customer}: ${customerSurname(order.customerName) || "-"}`);
     lines.push(`${labels.phone}: ${customerPhoneLast4(order.customerPhone) || "-"}`);
   }
   if (order.outletName) {
-    const outlet = english ? translateReceiptProductName(order.outletName) : { text: order.outletName, translated: true };
-    lines.push(`${labels.outlet}: ${outlet.text}`);
-    if (english && !outlet.translated) lines.push(`  ${labels.translationUnavailable}: ${outlet.original}`);
+    lines.push(`${labels.outlet}: ${english ? receiptEnglishName(order.outletName) : order.outletName}`);
     if (order.outletAddress) {
-      const address = english ? translateReceiptProductName(order.outletAddress) : { text: order.outletAddress, translated: true };
-      lines.push(`${labels.address}: ${address.text}`);
-      if (english && !address.translated) lines.push(`  ${labels.translationUnavailable}: ${address.original}`);
+      lines.push(`${labels.address}: ${english ? receiptEnglishName(order.outletAddress) : order.outletAddress}`);
     }
     if (order.outletPhone) lines.push(`${labels.telephone}: ${order.outletPhone}`);
   }
   if (order.cashierName) {
-    const cashier = english ? translateReceiptProductName(order.cashierName) : { text: order.cashierName, translated: true };
-    lines.push(`${labels.cashier}: ${cashier.text}`);
-    if (english && !cashier.translated) lines.push(`  ${labels.translationUnavailable}: ${cashier.original}`);
+    lines.push(`${labels.cashier}: ${english ? receiptEnglishName(order.cashierName) : order.cashierName}`);
   }
   lines.push("--------------------------------");
   lines.push(labels.items);
   order.items.forEach((it) => {
-    const translation = english ? translateReceiptProductName(it.name) : { text: it.name, translated: true };
-    lines.push(`${it.exchangeReturn ? labels.exchangeOut : ""}${translation.text}`);
-    if (english && !translation.translated && translation.original) lines.push(`  ${labels.translationUnavailable}: ${translation.original}`);
+    lines.push(`${it.exchangeReturn ? labels.exchangeOut : ""}${english ? receiptEnglishName(it.name) : it.name}`);
     lines.push(`  ${formatSizeForReceipt(it.name, it.size, it.length, english)}`);
     lines.push(`  ${labels.quantity} ${it.qty} ${receiptProductUnit(it.name, language, it.size, it.qty)} x ${fmt(Math.abs(it.price))} = ${fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}`);
   });
@@ -4597,38 +4583,32 @@ export default function UniformPOS() {
             {(() => {
               const labels = receiptFieldLabels(receiptLanguage);
               const english = receiptLanguage === "en";
-              const school = english ? translateReceiptSchool(receipt.school) : { text: receipt.school || "-", translated: true };
-              const translatedField = (value) => english ? translateReceiptProductName(value) : { text: value, translated: true };
-              const reason = translatedField(receipt.adjustmentReason || "");
-              const voidReason = translatedField(receipt.voidReason || "");
-              const outlet = translatedField(receipt.outletName || "");
-              const address = translatedField(receipt.outletAddress || "");
-              const cashier = translatedField(receipt.cashierName || "");
+              const school = english ? receiptEnglishSchool(receipt.school) : receipt.school || "-";
+              const displayField = (value) => english ? receiptEnglishName(value) : value;
               return <>
             <div style={{ textAlign: "center", fontWeight: 700 }}>{english ? "Victoria Uniform" : "Victoria Uniform 校服銷售"}</div>
             <div style={{ textAlign: "center" }}>{english ? "ELECTRONIC RECEIPT" : "電子銷售單 ELECTRONIC RECEIPT"}</div>
             <div>{labels.receiptNo}: #{(receipt.id || "").toUpperCase()}</div>
             {receipt.exchangeSourceReceiptId && <div>{labels.sourceReceipt}: #{String(receipt.exchangeSourceReceiptId).toUpperCase()}</div>}
             {receipt.duplicateConfirmed && receipt.duplicateSourceReceiptId && <div>{labels.duplicate}: #{String(receipt.duplicateSourceReceiptId).toUpperCase()}</div>}
-            {receipt.adjustmentReason && <div>{labels.adjustmentReason}: {reason.text}{english && !reason.translated ? ` (${labels.translationUnavailable}: ${reason.original})` : ""}</div>}
-            {receipt.voidReason && <div>{labels.voidReason}: {voidReason.text}{english && !voidReason.translated ? ` (${labels.translationUnavailable}: ${voidReason.original})` : ""}</div>}
+            {receipt.adjustmentReason && <div>{labels.adjustmentReason}: {displayField(receipt.adjustmentReason)}</div>}
+            {receipt.voidReason && <div>{labels.voidReason}: {displayField(receipt.voidReason)}</div>}
             <div>{labels.date}: {receipt.date} {receipt.time}</div>
-            <div>{labels.school}: {school.text}{english && !school.translated ? ` (${labels.translationUnavailable}: ${receipt.school})` : ""}</div>
+            <div>{labels.school}: {school}</div>
             <div>{labels.customer}: {customerSurname(receipt.customerName) || "-"}</div>
             <div>{labels.phone}: {customerPhoneLast4(receipt.customerPhone) || "-"}</div>
-            {receipt.outletName && <div>{labels.outlet}: {outlet.text}{english && !outlet.translated ? ` (${labels.translationUnavailable}: ${outlet.original})` : ""}</div>}
-            {receipt.outletAddress && <div>{labels.address}: {address.text}{english && !address.translated ? ` (${labels.translationUnavailable}: ${address.original})` : ""}</div>}
+            {receipt.outletName && <div>{labels.outlet}: {displayField(receipt.outletName)}</div>}
+            {receipt.outletAddress && <div>{labels.address}: {displayField(receipt.outletAddress)}</div>}
             {receipt.outletPhone && <div>{labels.telephone}: {receipt.outletPhone}</div>}
-            {receipt.cashierName && <div>{labels.cashier}: {cashier.text}{english && !cashier.translated ? ` (${labels.translationUnavailable}: ${cashier.original})` : ""}</div>}
+            {receipt.cashierName && <div>{labels.cashier}: {displayField(receipt.cashierName)}</div>}
             <div>--------------------------------</div>
             <div>{labels.items}</div>
             {receipt.items.map((it, i) => (
               <div key={i}>
                 {(() => {
-                  const translation = english ? translateReceiptProductName(it.name) : { text: it.name, translated: true };
+                  const itemName = english ? receiptEnglishName(it.name) : it.name;
                   return <>
-                    <div>{it.exchangeReturn ? labels.exchangeOut : ""}{translation.text}</div>
-                    {english && !translation.translated && <div>  {labels.translationUnavailable}: {translation.original}</div>}
+                    <div>{it.exchangeReturn ? labels.exchangeOut : ""}{itemName}</div>
                   </>;
                 })()}
                 <div>  {formatSizeForReceipt(it.name, it.size, it.length, english)}</div>
@@ -7834,9 +7814,8 @@ function ReceiptModal({ order, orders = [], language = "zh", actionError = "", o
   const english = language === "en";
   const labels = receiptFieldLabels(language);
   const canExchangeItems = canRedoSale && order.items.some((item) => getRemainingReturnQuantity(item, orders) > 0);
-  const school = english ? translateReceiptSchool(order.school) : { text: order.school || "-", translated: true };
-  const adjustmentReason = english ? translateReceiptProductName(order.adjustmentReason || "") : { text: order.adjustmentReason || "", translated: true };
-  const voidReason = english ? translateReceiptProductName(order.voidReason || "") : { text: order.voidReason || "", translated: true };
+  const school = english ? receiptEnglishSchool(order.school) : order.school || "-";
+  const displayField = (value) => english ? receiptEnglishName(value) : value;
   const openCustomerReceipt = () => {
     const receiptUrl = buildReceiptUrl(order, language);
     const anchor = document.createElement("a");
@@ -7867,22 +7846,21 @@ function ReceiptModal({ order, orders = [], language = "zh", actionError = "", o
           {order.exchangeSourceReceiptId && <div>{labels.sourceReceipt}: #{String(order.exchangeSourceReceiptId).toUpperCase()}</div>}
           {order.replacementSourceReceiptId && <div>{labels.replacementSource}: #{String(order.replacementSourceReceiptId).toUpperCase()}</div>}
           {order.duplicateConfirmed && order.duplicateSourceReceiptId && <div>{labels.duplicate}: #{String(order.duplicateSourceReceiptId).toUpperCase()}</div>}
-          {order.adjustmentReason && <div>{labels.adjustmentReason}: {adjustmentReason.text}{english && !adjustmentReason.translated ? ` (${labels.translationUnavailable}: ${adjustmentReason.original})` : ""}</div>}
-          {order.voidReason && <div>{labels.voidReason}: {voidReason.text}{english && !voidReason.translated ? ` (${labels.translationUnavailable}: ${voidReason.original})` : ""}</div>}
+          {order.adjustmentReason && <div>{labels.adjustmentReason}: {displayField(order.adjustmentReason)}</div>}
+          {order.voidReason && <div>{labels.voidReason}: {displayField(order.voidReason)}</div>}
           <div>{labels.date}: {order.date} {order.time}</div>
-          <div>{labels.school}: {school.text}{english && !school.translated ? ` (${labels.translationUnavailable}: ${order.school})` : ""}</div>
+          <div>{labels.school}: {school}</div>
           <div>{labels.customer}: {customerSurname(order.customerName) || "-"}</div>
           <div>{labels.phone}: {customerPhoneLast4(order.customerPhone) || "-"}</div>
-          {order.outletName && <div>{labels.outlet}: {english ? translateReceiptProductName(order.outletName).text : order.outletName}{english && !translateReceiptProductName(order.outletName).translated ? ` (${labels.translationUnavailable}: ${order.outletName})` : ""}</div>}
-          {order.outletAddress && <div>{labels.address}: {english ? translateReceiptProductName(order.outletAddress).text : order.outletAddress}{english && !translateReceiptProductName(order.outletAddress).translated ? ` (${labels.translationUnavailable}: ${order.outletAddress})` : ""}</div>}
+          {order.outletName && <div>{labels.outlet}: {displayField(order.outletName)}</div>}
+          {order.outletAddress && <div>{labels.address}: {displayField(order.outletAddress)}</div>}
           {order.outletPhone && <div>{labels.telephone}: {order.outletPhone}</div>}
-          {order.cashierName && <div>{labels.cashier}: {english ? translateReceiptProductName(order.cashierName).text : order.cashierName}{english && !translateReceiptProductName(order.cashierName).translated ? ` (${labels.translationUnavailable}: ${order.cashierName})` : ""}</div>}
+          {order.cashierName && <div>{labels.cashier}: {displayField(order.cashierName)}</div>}
           <div>--------------------------------</div>
           <div>{labels.items}</div>
           {order.items.map((it, i) => (
             <div key={i}>
-              <div>{it.exchangeReturn ? labels.exchangeOut : ""}{english ? translateReceiptProductName(it.name).text : it.name}</div>
-              {english && !translateReceiptProductName(it.name).translated && <div>  {labels.translationUnavailable}: {it.name}</div>}
+              <div>{it.exchangeReturn ? labels.exchangeOut : ""}{displayField(it.name)}</div>
               <div>  {formatSizeForReceipt(it.name, it.size, it.length, english)}</div>
               <div>  {labels.quantity} {it.qty} {receiptProductUnit(it.name, language, it.size, it.qty)} x {fmt(Math.abs(it.price))} = {fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}</div>
             </div>
