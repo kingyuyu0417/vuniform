@@ -31,14 +31,12 @@ test("reuses the same key for an unchanged checkout retry", () => {
   assert.equal(generated, 1);
 });
 
-test("refuses to replace an unresolved checkout key when transaction details change", () => {
+test("starts a new attempt when unresolved transaction details change", () => {
   const storage = createStorage();
   getOrCreateCheckoutAttempt(storage, order, () => "attempt-1");
 
-  assert.throws(
-    () => getOrCreateCheckoutAttempt(storage, { ...order, total: 200 }, () => "attempt-2"),
-    /上次結帳結果尚未確認/,
-  );
+  assert.equal(getOrCreateCheckoutAttempt(storage, { ...order, total: 200 }, () => "attempt-2"), "attempt-2");
+  assert.equal(getOrCreateCheckoutAttempt(storage, { ...order, total: 200 }, () => "attempt-3"), "attempt-2");
 });
 
 test("reuses the pending replacement key when only its source branch is corrected", () => {
@@ -52,7 +50,7 @@ test("reuses the pending replacement key when only its source branch is correcte
   );
 });
 
-test("keeps the exchange reason bound to an unresolved checkout attempt", () => {
+test("starts a new attempt when the exchange reason changes", () => {
   const storage = createStorage();
   const exchangeOrder = {
     ...order,
@@ -61,23 +59,17 @@ test("keeps the exchange reason bound to an unresolved checkout attempt", () => 
   };
   getOrCreateCheckoutAttempt(storage, exchangeOrder, () => "attempt-1");
 
-  assert.throws(
-    () => getOrCreateCheckoutAttempt(storage, { ...exchangeOrder, adjustmentReason: "更換款式" }, () => "attempt-2"),
-    /上次結帳結果尚未確認/,
-  );
+  assert.equal(getOrCreateCheckoutAttempt(storage, { ...exchangeOrder, adjustmentReason: "更換款式" }, () => "attempt-2"), "attempt-2");
 });
 
-test("keeps the payment channel bound to an unresolved checkout attempt", () => {
+test("starts a new attempt when the payment channel changes", () => {
   const storage = createStorage();
   getOrCreateCheckoutAttempt(storage, { ...order, paymentMethod: "cash" }, () => "attempt-1");
 
-  assert.throws(
-    () => getOrCreateCheckoutAttempt(storage, { ...order, paymentMethod: "card" }, () => "attempt-2"),
-    /上次結帳結果尚未確認/,
-  );
+  assert.equal(getOrCreateCheckoutAttempt(storage, { ...order, paymentMethod: "card" }, () => "attempt-2"), "attempt-2");
 });
 
-test("keeps duplicate-warning acknowledgement bound to an unresolved checkout attempt", () => {
+test("starts a new attempt when duplicate-warning acknowledgement changes", () => {
   const storage = createStorage();
   const confirmedOrder = {
     ...order,
@@ -86,10 +78,7 @@ test("keeps duplicate-warning acknowledgement bound to an unresolved checkout at
   };
   getOrCreateCheckoutAttempt(storage, confirmedOrder, () => "attempt-1");
 
-  assert.throws(
-    () => getOrCreateCheckoutAttempt(storage, { ...confirmedOrder, duplicateSourceReceiptId: "receipt-2" }, () => "attempt-2"),
-    /上次結帳結果尚未確認/,
-  );
+  assert.equal(getOrCreateCheckoutAttempt(storage, { ...confirmedOrder, duplicateSourceReceiptId: "receipt-2" }, () => "attempt-2"), "attempt-2");
 });
 
 test("clears only the matching cashier checkout key after confirmed success", () => {
@@ -102,12 +91,10 @@ test("clears only the matching cashier checkout key after confirmed success", ()
   assert.equal(getOrCreateCheckoutAttempt(storage, order, () => "attempt-2"), "attempt-2");
 });
 
-test("refuses to silently discard a corrupted pending checkout record", () => {
+test("replaces a corrupted pending checkout record so checkout can proceed", () => {
   const storage = createStorage();
   storage.setItem("uniform-pos-pending-checkout:cashier-1", "not-json");
 
-  assert.throws(
-    () => getOrCreateCheckoutAttempt(storage, order, () => "attempt-1"),
-    /為避免重覆落單/,
-  );
+  assert.equal(getOrCreateCheckoutAttempt(storage, order, () => "attempt-1"), "attempt-1");
+  assert.equal(getOrCreateCheckoutAttempt(storage, order, () => "attempt-2"), "attempt-1");
 });

@@ -63,20 +63,26 @@ export const getOrCreateCheckoutAttempt = (storage, order, createId = createChec
   const stored = storage.getItem(storageKey);
 
   if (stored) {
-    let pending;
+    let pending = null;
     try {
       pending = JSON.parse(stored);
     } catch {
-      throw new Error("上次結帳狀態無法讀取；為避免重覆落單，請聯絡管理員處理後再結帳。");
+      pending = null;
     }
-    if (!pending || typeof pending.checkoutKey !== "string" || typeof pending.fingerprint !== "string") {
-      throw new Error("上次結帳狀態不完整；為避免重覆落單，請聯絡管理員處理後再結帳。");
+    if (pending
+      && typeof pending.checkoutKey === "string"
+      && pending.checkoutKey
+      && pending.fingerprint === fingerprint) {
+      return pending.checkoutKey;
     }
-    if (pending.fingerprint !== fingerprint
-      && !isReplacementBranchOnlyRetry(pending.fingerprint, fingerprint)) {
-      throw new Error("上次結帳結果尚未確認。請恢復相同商品及金額後重試，避免產生重覆單。");
+    if (pending
+      && typeof pending.checkoutKey === "string"
+      && pending.checkoutKey
+      && typeof pending.fingerprint === "string"
+      && (pending.fingerprint === fingerprint
+        || isReplacementBranchOnlyRetry(pending.fingerprint, fingerprint))) {
+      return pending.checkoutKey;
     }
-    return pending.checkoutKey;
   }
 
   const checkoutKey = createId();
