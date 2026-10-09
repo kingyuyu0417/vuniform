@@ -2084,6 +2084,8 @@ export default function UniformPOS() {
   const productCatalogMigrationStateRef = useRef("idle");
   const productsRef = useRef(products);
   const tabRef = useRef(tab);
+  const productReceiptNameColumnAvailableRef = useRef(true);
+  const orderReceiptNameColumnAvailableRef = useRef(true);
   useEffect(() => { tabRef.current = tab; }, [tab]);
 
   const [selectedSchool, setSelectedSchool] = useState(() => {
@@ -2648,19 +2650,18 @@ export default function UniformPOS() {
     try {
       const branchScoped = Boolean(session && session.role !== ROLES.ADMIN);
       const branchId = branchScoped ? session.branchId || "__unassigned__" : "";
-      let query = supabase
+      const selectOrders = (includeReceiptName) => supabase
         .from("orders")
-        .select("id, school, branch_id, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, replacement_source_receipt_id, replacement_reason, settlement_delta, replacement_cash_received, replacement_change_due, adjustment_reason, payment_method, refund_method, refund_due, duplicate_confirmed, duplicate_source_receipt_id, voided_at, voided_by, void_reason, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, receipt_name_en, price, qty, is_return, source_order_item_id)")
+        .select(`id, school, branch_id, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, replacement_source_receipt_id, replacement_reason, settlement_delta, replacement_cash_received, replacement_change_due, adjustment_reason, payment_method, refund_method, refund_due, duplicate_confirmed, duplicate_source_receipt_id, voided_at, voided_by, void_reason, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, ${includeReceiptName ? "receipt_name_en, " : ""}price, qty, is_return, source_order_item_id)`)
         .order("created_at", { ascending: false });
+      let query = selectOrders(orderReceiptNameColumnAvailableRef.current);
       if (branchScoped) query = query.eq("branch_id", branchId);
       let { data, error } = await query;
       
       if (isMissingReceiptNameColumnError(error)) {
         console.warn("資料庫尚未安裝英文收據名稱欄位，改用相容查詢載入銷售記錄。", error);
-        let legacyQuery = supabase
-          .from("orders")
-          .select("id, school, branch_id, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, replacement_source_receipt_id, replacement_reason, settlement_delta, replacement_cash_received, replacement_change_due, adjustment_reason, payment_method, refund_method, refund_due, duplicate_confirmed, duplicate_source_receipt_id, voided_at, voided_by, void_reason, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, price, qty, is_return, source_order_item_id)")
-          .order("created_at", { ascending: false });
+        orderReceiptNameColumnAvailableRef.current = false;
+        let legacyQuery = selectOrders(false);
         if (branchScoped) legacyQuery = legacyQuery.eq("branch_id", branchId);
         ({ data, error } = await legacyQuery);
       }
@@ -2738,9 +2739,10 @@ export default function UniformPOS() {
         : "id, school, name, gender, sizes, display_order, branch_id")
       .order("display_order", { ascending: true, nullsFirst: false })
       .order("name");
-    let { data, error } = await queryProducts(true);
+    let { data, error } = await queryProducts(productReceiptNameColumnAvailableRef.current);
     if (isMissingReceiptNameColumnError(error)) {
       console.warn("資料庫尚未安裝英文收據名稱欄位，改用相容查詢載入商品。", error);
+      productReceiptNameColumnAvailableRef.current = false;
       ({ data, error } = await queryProducts(false));
     }
     if (error) throw error;
