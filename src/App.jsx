@@ -4836,6 +4836,9 @@ function SaleTab({
   const cashShortfall = settlementMethod === "cash"
     ? calculateCashSettlement(settlementDue, cashAmount).shortfall
     : 0;
+  const checkoutActionDisabled = (cart.length === 0 && !fullReplacementMode)
+    || checkoutSubmitting
+    || (cashShortfall > 0 && !exchangeMode && !fullReplacementMode);
 
   useEffect(() => {
     if (cashShortfall === 0) setPaymentWarning("");
@@ -5283,6 +5286,24 @@ function SaleTab({
                 </>
               )}
             </div>
+            {settlementMethod === "cash" && settlementDue > 0 && (
+              <label style={{ display: "grid", gap: 6, marginTop: 12, fontSize: 13, fontWeight: 700 }}>
+                客人交付現金
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  inputMode="numeric"
+                  value={cashReceived}
+                  onChange={(event) => {
+                    const raw = event.target.value;
+                    setCashReceived(raw === "" ? "" : raw.replace(/^0+(?=\d)/, ""));
+                  }}
+                  style={{ width: "100%", boxSizing: "border-box", padding: 10, borderRadius: 8, border: "1px solid #CBD5E1", fontSize: 16 }}
+                />
+                {cashShortfall > 0 && <span role="status" style={{ color: "#B42318", fontWeight: 500 }}>尚欠補款 {fmt(cashShortfall)}；收足後即可完成開單。</span>}
+              </label>
+            )}
             <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
               <button type="button" className="pos-btn" onClick={() => setExchangePreviewOpen(false)} style={{ flex: 1, padding: 11, borderRadius: 9, background: "#F1F5F9", color: "#334155", fontWeight: 700 }}>返回修改</button>
               <button
@@ -5625,13 +5646,13 @@ function SaleTab({
           if (exchangeMode || fullReplacementMode) setExchangePreviewOpen(true);
           else requestCheckout();
         }}
-        disabled={(cart.length === 0 && !fullReplacementMode) || checkoutSubmitting || cashShortfall > 0}
+        disabled={checkoutActionDisabled}
         style={{
           width: "100%",
           marginTop: 14,
           padding: "14px 0",
           borderRadius: 12,
-          background: (cart.length === 0 && !fullReplacementMode) || checkoutSubmitting ? "#9CA3AF" : "#1F3A5F",
+          background: checkoutActionDisabled ? "#9CA3AF" : "#1F3A5F",
           color: "#fff",
           fontSize: 18,
           fontWeight: 600,
