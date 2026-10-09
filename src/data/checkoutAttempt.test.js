@@ -62,6 +62,20 @@ test("starts a new attempt when the exchange reason changes", () => {
   assert.equal(getOrCreateCheckoutAttempt(storage, { ...exchangeOrder, adjustmentReason: "更換款式" }, () => "attempt-2"), "attempt-2");
 });
 
+test("starts a distinct attempt for a receiptless exchange", () => {
+  const storage = createStorage();
+  const sale = { ...order, items: [{ name: "恤衫", size: "M", price: 100, qty: 1 }] };
+  getOrCreateCheckoutAttempt(storage, sale, () => "sale-attempt");
+
+  const exchange = {
+    ...sale,
+    untrackedExchange: true,
+    adjustmentReason: "更換款式",
+    items: [{ name: "恤衫", size: "M", price: 100, qty: 1, exchangeReturn: true }],
+  };
+  assert.equal(getOrCreateCheckoutAttempt(storage, exchange, () => "exchange-attempt"), "exchange-attempt");
+});
+
 test("starts a new attempt when the payment channel changes", () => {
   const storage = createStorage();
   getOrCreateCheckoutAttempt(storage, { ...order, paymentMethod: "cash" }, () => "attempt-1");

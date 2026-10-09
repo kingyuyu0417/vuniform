@@ -1,4 +1,4 @@
-import { PAYMENT_METHOD_LABELS, summarizeDailyCloseout } from "./salesCloseout.js";
+import { isExchangeAdjustmentOrder, PAYMENT_METHOD_LABELS, summarizeDailyCloseout } from "./salesCloseout.js";
 
 const amountOf = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
 const orderAmount = (order) => amountOf(order.total);
@@ -141,7 +141,7 @@ export const buildSalesExportSheets = (orders, { outletForOrder, scope = "" } = 
           order.date || "",
           order.time || "",
           order.id || "",
-          isVoided(order) ? "已作廢" : order.exchangeSourceReceiptId ? "退換／更正單" : "有效",
+          isVoided(order) ? "已作廢" : order.untrackedExchange ? "無原單退換" : isExchangeAdjustmentOrder(order) ? "退換／更正單" : "有效",
           order.school || "",
           outletForOrder?.(order) || order.outletName || order.outlet_name || "",
           order.cashierName || "",

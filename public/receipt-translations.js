@@ -205,6 +205,7 @@ export const createCustomerReceiptOrder = (order = {}) => ({
   refundDue: Number(order.refundDue) || 0,
   refundMethod: order.refundMethod || "cash",
   exchangeSourceReceiptId: order.exchangeSourceReceiptId || "",
+  untrackedExchange: Boolean(order.untrackedExchange),
   duplicateConfirmed: Boolean(order.duplicateConfirmed),
   duplicateSourceReceiptId: order.duplicateSourceReceiptId || "",
   adjustmentReason: order.adjustmentReason || "",

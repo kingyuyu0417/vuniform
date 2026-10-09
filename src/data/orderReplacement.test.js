@@ -29,5 +29,6 @@ test("allows replacement only when there are no active changes to the source rec
   assert.equal(canReplaceOrder(source, [{ replacementSourceReceiptId: "sale-1" }]), false);
   assert.equal(canReplaceOrder({ ...source, voidedAt: "now" }, []), false);
   assert.equal(canReplaceOrder({ ...source, exchangeSourceReceiptId: "sale-0" }, []), false);
+  assert.equal(canReplaceOrder({ ...source, untrackedExchange: true }, []), false);
   assert.equal(canReplaceOrder({ ...source, replacementSourceReceiptId: "sale-0" }, []), false);
 });

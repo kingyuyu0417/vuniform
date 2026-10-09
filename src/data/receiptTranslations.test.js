@@ -83,6 +83,7 @@ test("customer receipt payload masks direct customer identifiers and only includ
     settlementDelta: 25,
     settlementCashReceived: 30,
     settlementChangeDue: 5,
+    untrackedExchange: true,
     privateNote: "do not expose",
   });
 
@@ -97,4 +98,5 @@ test("customer receipt payload masks direct customer identifiers and only includ
   assert.equal(safeOrder.settlementDelta, 25);
   assert.equal(safeOrder.settlementCashReceived, 30);
   assert.equal(safeOrder.settlementChangeDue, 5);
+  assert.equal(safeOrder.untrackedExchange, true);
 });

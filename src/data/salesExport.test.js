@@ -112,6 +112,28 @@ test("keeps replacement revenue at the new full total while exporting only the r
   assert.equal(findSheet(sheets, "收市對數").rows[6][1], 40);
 });
 
+test("exports receiptless exchanges as adjustments without inventing a source receipt", () => {
+  const sheets = buildSalesExportSheets([{
+    id: "receiptless-exchange",
+    date: "2026-09-24",
+    total: 30,
+    cashReceived: 30,
+    untrackedExchange: true,
+    adjustmentReason: "更換款式",
+    itemCount: 2,
+    items: [
+      { name: "恤衫", size: "M", price: 100, qty: 1, exchangeReturn: true },
+      { name: "長褲", size: "30", price: 130, qty: 1 },
+    ],
+  }]);
+
+  const orderRow = findSheet(sheets, "訂單").rows[1];
+  assert.equal(orderRow[3], "無原單退換");
+  assert.equal(orderRow[11], "");
+  assert.equal(orderRow[10], 30);
+  assert.equal(findSheet(sheets, "收市對數").rows[3][1], 30);
+});
+
 test("creates a readable multi-sheet Excel workbook with filters", () => {
   const workbook = createSalesExportWorkbook(XLSX, [{
     id: "receipt-1",

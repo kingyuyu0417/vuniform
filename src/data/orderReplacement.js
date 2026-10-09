@@ -20,6 +20,7 @@ export const getReplacementBranchId = (order, fallbackBranchId = "") => (
 export const canReplaceOrder = (order, orders) => Boolean(
   order?.id
   && !order.voidedAt
+  && !order.untrackedExchange
   && !order.exchangeSourceReceiptId
   && !order.replacementSourceReceiptId
   && !orders.some((candidate) => (

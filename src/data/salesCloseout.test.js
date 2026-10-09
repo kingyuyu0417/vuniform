@@ -102,6 +102,40 @@ test("falls back to cash for historical payment data and flags refunds without r
   assert.equal(summary.netRevenue, 70);
 });
 
+test("accounts for receiptless exchanges as adjustments using current catalog credit", () => {
+  const summary = summarizeDailyCloseout([
+    { id: "original-sale", total: 100, paymentMethod: "cash" },
+    {
+      id: "receiptless-exchange",
+      total: 30,
+      untrackedExchange: true,
+      paymentMethod: "cash",
+      cashReceived: 30,
+      adjustmentReason: "更換款式",
+      items: [
+        { name: "退回恤衫", qty: 1, price: 100, exchangeReturn: true },
+        { name: "換入長褲", qty: 1, price: 130 },
+      ],
+    },
+    {
+      id: "receiptless-refund",
+      total: 0,
+      refundDue: 20,
+      refundMethod: "card",
+      untrackedExchange: true,
+      items: [{ name: "退回襪", qty: 1, price: 20, exchangeReturn: true }],
+    },
+  ]);
+
+  assert.equal(summary.salesAmount, 100);
+  assert.equal(summary.returnedGoodsAmount, 120);
+  assert.equal(summary.exchangeDifference, 10);
+  assert.equal(summary.netRevenue, 110);
+  assert.equal(summary.totalReceived, 130);
+  assert.equal(summary.totalRefunded, 20);
+  assert.equal(summary.channels.card.refunded, 20);
+});
+
 test("counts replacement sales at the new full value but settles only the difference", () => {
   const summary = summarizeDailyCloseout([
     { id: "old-sale", total: 100, voidedAt: "2026-10-08T10:00:00Z" },

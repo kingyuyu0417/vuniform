@@ -42,6 +42,7 @@ alter table public.orders add column if not exists outlet_phone text;
 alter table public.orders add column if not exists customer_surname text;
 alter table public.orders add column if not exists customer_phone_last4 text;
 alter table public.orders add column if not exists exchange_source_receipt_id text;
+alter table public.orders add column if not exists untracked_exchange boolean not null default false;
 alter table public.orders add column if not exists refund_due integer not null default 0 check (refund_due >= 0);
 
 create table if not exists public.order_items (

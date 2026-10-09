@@ -95,7 +95,7 @@
       const english = receiptLanguage === "en";
       const labels = english ? {
         school: "School", receiptNo: "Receipt No.", source: "Source Receipt", replacementSource: "Replaces receipt", replacementDifference: "Replacement difference", date: "Date", customer: "Customer", phone: "Last 4 digits",
-        duplicate: "Duplicate warning confirmed against", adjustmentReason: "Return / exchange reason",
+        duplicate: "Duplicate warning confirmed against", adjustmentReason: "Return / exchange reason", untrackedExchange: "Receiptless exchange",
         outlet: "Outlet", address: "Address", telephone: "Telephone", cashier: "Staff",
         items: "Items", quantity: "Qty", itemCount: "Item count", total: "Total due", replacementTotal: "New sale total", exchangeTotal: "Exchange difference",
         paymentMethod: "Payment method", refundMethod: "Refund method", cash: "Cash received", collected: "Collected",
@@ -106,7 +106,7 @@
         thanks: "Thank you for your purchase. We look forward to serving you again.",
       } : {
         school: "學校", receiptNo: "收據編號", source: "來源單據", replacementSource: "替換原單", replacementDifference: "替換差額", date: "交易日期", customer: "客人", phone: "電話尾4位",
-        duplicate: "疑似重複已確認（參照單號）", adjustmentReason: "退換原因",
+        duplicate: "疑似重複已確認（參照單號）", adjustmentReason: "退換原因", untrackedExchange: "無原單退換",
         outlet: "門店", address: "地址", telephone: "電話", cashier: "服務員",
         items: "商品明細", quantity: "數量", itemCount: "商品件數", total: "應付總額", replacementTotal: "新單總額", exchangeTotal: "換貨差額",
         paymentMethod: "付款方式", refundMethod: "退款方式", cash: "實收現金", collected: "實收款",
@@ -129,7 +129,7 @@
       const replacementDelta = Number(order.settlementDelta) || 0;
       const totalMarkup = order.replacementSourceReceiptId
         ? `<div class="total"><span>${labels.replacementTotal}</span><span>${money(order.total)}</span></div>`
-        : `<div class="total"><span>${sourceReceiptId(order) ? labels.exchangeTotal : labels.total}</span><span>${money(order.total)}</span></div>`;
+        : `<div class="total"><span>${sourceReceiptId(order) || order.untrackedExchange ? labels.exchangeTotal : labels.total}</span><span>${money(order.total)}</span></div>`;
       const settlementMarkup = order.replacementSourceReceiptId
         ? `<div class="item-sub" style="margin-top:8px"><span>${labels.replacementDifference}</span><span>${replacementDelta < 0 ? `−${money(Math.abs(replacementDelta))}` : `${replacementDelta > 0 ? "+" : ""}${money(replacementDelta)}`}</span></div>${replacementDelta < 0 ? `<div class="item-sub"><span>${labels.refundMethod}</span><span>${text(paymentLabel(order.refundMethod))}</span></div><div class="item-sub"><span>${labels.refund}</span><span>${money(Math.abs(replacementDelta))}</span></div>` : `<div class="item-sub"><span>${labels.paymentMethod}</span><span>${text(paymentLabel(order.paymentMethod))}</span></div><div class="item-sub"><span>${order.paymentMethod === "cash" ? labels.cash : labels.collected}</span><span>${money(order.paymentMethod === "cash" ? order.settlementCashReceived : replacementDelta)}</span></div><div class="item-sub"><span>${labels.change}</span><span>${money(Math.max(Number(order.settlementChangeDue) || 0, 0))}</span></div>`}`
         : Number(order.refundDue) > 0
@@ -154,6 +154,7 @@
           <dl>
             <dt>${labels.receiptNo}</dt><dd>#${text(order.id).toUpperCase()}</dd>
             ${sourceReceiptId(order) ? `<dt>${labels.source}</dt><dd>#${text(sourceReceiptId(order)).toUpperCase()}</dd>` : ""}
+            ${order.untrackedExchange ? `<dt>${labels.untrackedExchange}</dt><dd>${english ? "New receipt" : "新單，不連結來源收據"}</dd>` : ""}
             ${order.replacementSourceReceiptId ? `<dt>${labels.replacementSource}</dt><dd>#${text(order.replacementSourceReceiptId).toUpperCase()}</dd>` : ""}
             ${order.duplicateConfirmed && order.duplicateSourceReceiptId ? `<dt>${labels.duplicate}</dt><dd>#${text(order.duplicateSourceReceiptId).toUpperCase()}</dd>` : ""}
             <dt>${labels.date}</dt><dd>${text(order.date)} ${text(english ? englishTime(order.time) : order.time, "")}</dd>
@@ -178,7 +179,7 @@
             <div class="item-sub"><span>${labels.itemCount}</span><span>${text(order.itemCount, "0")}</span></div>
             ${totalMarkup}
             ${settlementMarkup}
-            <div class="item-sub" style="margin-top:8px"><span>${labels.status}</span><span>${order.voidedAt ? labels.voided : sourceReceiptId(order) ? labels.exchanged : labels.completed}</span></div>
+            <div class="item-sub" style="margin-top:8px"><span>${labels.status}</span><span>${order.voidedAt ? labels.voided : sourceReceiptId(order) || order.untrackedExchange ? labels.exchanged : labels.completed}</span></div>
           </div>
           <div class="policy"><strong>${labels.returnPolicy}</strong><br><strong>${labels.careTitle}</strong><br>${labels.care}</div>
           <footer>${labels.thanks}</footer>

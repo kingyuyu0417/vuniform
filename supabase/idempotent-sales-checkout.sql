@@ -1,5 +1,6 @@
 -- Run after secure-migration.sql. Checkout keys prevent duplicate receipts;
--- linked return-item references let the database reject over-returns atomically.
+-- Linked returns are quantity-checked; receiptless returns require the explicit
+-- untracked_exchange marker and remain separate from source-linked exchanges.
 begin;
 
 alter table public.orders
@@ -7,6 +8,7 @@ alter table public.orders
   add column if not exists checkout_key text,
   add column if not exists checkout_payload_hash text,
   add column if not exists adjustment_reason text,
+  add column if not exists untracked_exchange boolean not null default false,
   add column if not exists payment_method text not null default 'cash'
     check (payment_method in ('cash', 'card', 'transfer')),
   add column if not exists refund_method text
@@ -70,6 +72,7 @@ declare
   original_school text;
   original_voided_at timestamptz;
   already_returned integer;
+  is_untracked_exchange boolean := coalesce((order_data ->> 'untracked_exchange')::boolean, false);
 begin
   if actor_id is null or nullif(order_data ->> 'cashier_id', '')::uuid is distinct from actor_id then
     raise exception 'cashier_id must match the signed-in user';
@@ -79,9 +82,42 @@ begin
     raise exception 'A valid checkout_key is required';
   end if;
 
-  if nullif(order_data ->> 'exchange_source_receipt_id', '') is not null
+  if (nullif(order_data ->> 'exchange_source_receipt_id', '') is not null or is_untracked_exchange)
      and nullif(btrim(order_data ->> 'adjustment_reason'), '') is null then
     raise exception 'An exchange reason is required';
+  end if;
+
+  if is_untracked_exchange then
+    if nullif(order_data ->> 'exchange_source_receipt_id', '') is not null
+       or not exists (
+         select 1
+         from jsonb_to_recordset(order_data -> 'items') as item(
+           is_return boolean,
+           source_order_item_id text
+         )
+         where coalesce(item.is_return, false)
+       )
+       or exists (
+         select 1
+         from jsonb_to_recordset(order_data -> 'items') as item(
+           is_return boolean,
+           source_order_item_id text
+         )
+         where coalesce(item.is_return, false)
+           and nullif(item.source_order_item_id, '') is not null
+       ) then
+      raise exception 'Receiptless exchanges must contain only unlinked returns and no source receipt';
+    end if;
+  elsif exists (
+    select 1
+    from jsonb_to_recordset(order_data -> 'items') as item(
+      is_return boolean,
+      source_order_item_id text
+    )
+    where coalesce(item.is_return, false)
+      and nullif(item.source_order_item_id, '') is null
+  ) then
+    raise exception 'Every returned item must reference its original order item';
   end if;
 
   if coalesce(order_data ->> 'payment_method', 'cash') not in ('cash', 'card', 'transfer') then
@@ -146,6 +182,7 @@ begin
       source_order_item_id text
     )
     where coalesce(item.is_return, false)
+      and nullif(item.source_order_item_id, '') is not null
     group by item.source_order_item_id
     order by item.source_order_item_id
   loop
@@ -234,6 +271,7 @@ begin
   insert into public.orders (
     id, school, branch_id, outlet_name, outlet_address, outlet_phone,
     customer_surname, customer_phone_last4, exchange_source_receipt_id, adjustment_reason,
+    untracked_exchange,
     payment_method, refund_method, refund_due,
     duplicate_confirmed, duplicate_source_receipt_id,
     cashier_id, cashier_name, total, item_count, created_at,
@@ -250,6 +288,7 @@ begin
     nullif(order_data ->> 'customer_phone_last4', ''),
     nullif(order_data ->> 'exchange_source_receipt_id', ''),
     nullif(btrim(order_data ->> 'adjustment_reason'), ''),
+    is_untracked_exchange,
     coalesce(order_data ->> 'payment_method', 'cash'),
     nullif(order_data ->> 'refund_method', ''),
     greatest(coalesce((order_data ->> 'refund_due')::integer, 0), 0),

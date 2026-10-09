@@ -2,6 +2,7 @@ const PAYMENT_METHODS = ["cash", "card", "transfer"];
 
 const amountOf = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
 const orderNet = (order) => amountOf(order.total) - Math.max(0, amountOf(order.refundDue));
+export const isExchangeAdjustmentOrder = (order) => Boolean(order?.exchangeSourceReceiptId || order?.untrackedExchange);
 const orderTime = (order) => {
   const value = order.createdAt || (order.date && order.time ? `${order.date}T${order.time}:00` : "");
   const timestamp = Date.parse(value);
@@ -72,7 +73,7 @@ export const summarizeDailyCloseout = (orders, reportDate = "") => {
 
     const refundDue = Math.max(0, amountOf(order.refundDue));
     const amount = Math.max(0, amountOf(order.total));
-    const isAdjustment = Boolean(order.exchangeSourceReceiptId);
+    const isAdjustment = isExchangeAdjustmentOrder(order);
     if (isAdjustment) {
       exchangeDifference += orderNet(order);
       const returnItems = (Array.isArray(order.items) ? order.items : []).filter((item) => item.exchangeReturn);

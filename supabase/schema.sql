@@ -142,6 +142,7 @@ create table if not exists public.orders (
   total numeric default 0,
   item_count integer default 0,
   exchange_source_receipt_id text,
+  untracked_exchange boolean not null default false,
   adjustment_reason text,
   payment_method text not null default 'cash' check (payment_method in ('cash', 'card', 'transfer')),
   refund_method text check (refund_method is null or refund_method in ('cash', 'card', 'transfer')),

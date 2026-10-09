@@ -28,6 +28,7 @@ const checkoutFingerprint = (order) => JSON.stringify({
   cashReceived: Number(order.cashReceived || 0),
   changeDue: Number(order.changeDue || 0),
   refundDue: Number(order.refundDue || 0),
+  ...(order.untrackedExchange ? { untrackedExchange: true } : {}),
   exchangeSourceReceiptId: order.exchangeSourceReceiptId || "",
   replacementSourceReceiptId: order.replacementSourceReceiptId || "",
   replacementReason: order.replacementReason || "",
