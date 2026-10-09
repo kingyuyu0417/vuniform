@@ -2090,7 +2090,9 @@ export default function UniformPOS() {
 
   const [selectedSchool, setSelectedSchool] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    const schoolFromUrl = params.get("school_id") || params.get("school");
+    const schoolFromUrl = window.location.pathname === "/menu"
+      ? params.get("school_id") || params.get("school")
+      : "";
     if (schoolFromUrl) return schoolFromUrl;
     try {
       return window.localStorage.getItem("last-school")?.trim() || DESIGNATED_SCHOOL;
@@ -2247,7 +2249,10 @@ export default function UniformPOS() {
 
   const resumeHeldSale = (hold) => {
     if (cart.length > 0 && !window.confirm("目前購物車已有款式，確定要載入 HOLD 單並取代目前內容嗎？")) return;
-    setSelectedSchool(hold.school || selectedSchool);
+    if (hold.school && hold.school !== selectedSchool) {
+      setStorageError("此 HOLD 單所屬學校與目前選擇不同，請返回「目錄」選擇相應學校後再載入。");
+      return;
+    }
     setCart(hold.cart || []);
     setFullSaleReplacement(null);
     setCashReceived(hold.cashReceived || "");
@@ -2506,7 +2511,7 @@ export default function UniformPOS() {
 
   useEffect(() => {
     if (!loaded) return;
-    if (!["/menu", "/sale", "/products"].includes(location.pathname)) return;
+    if (location.pathname !== "/menu") return;
     const routeSchool = new URLSearchParams(location.search).get("school_id")
       || new URLSearchParams(location.search).get("school");
     if (routeSchool && schools.includes(routeSchool) && routeSchool !== selectedSchool) {
@@ -2539,7 +2544,7 @@ export default function UniformPOS() {
     setStorageError("");
     setSchoolPanelOpen(false);
     window.storage.set("last-school", nextSchool, false).catch((e) => console.error("記住學校選擇失敗", e));
-    if (["/menu", "/sale", "/products"].includes(location.pathname)) {
+    if (location.pathname === "/menu") {
       navigate(`${location.pathname}?school_id=${encodeURIComponent(nextSchool)}`);
     }
   };
@@ -3220,6 +3225,10 @@ export default function UniformPOS() {
   const removeItem = (key) => setCart((prev) => prev.filter((c) => c.key !== key));
 
   const startFullSaleReplacement = (order) => {
+    if (order.school && order.school !== selectedSchool) {
+      setStorageError("此單所屬學校與目前選擇不同，請返回「目錄」選擇相應學校後再開始整單替換。");
+      return false;
+    }
     if (!canReplaceOrder(order, salesLog)) {
       setStorageError("此單已作廢或已有退換／替換記錄，不能再整單替換。請使用快速換貨流程或聯絡管理員核對。");
       return false;
@@ -3231,7 +3240,6 @@ export default function UniformPOS() {
       school: order.school || "",
       branchId: getReplacementBranchId(order, session?.branchId || ""),
     });
-    setSelectedSchool(order.school || selectedSchool);
     setPaymentMethod(order.paymentMethod || "cash");
     setRefundMethod(order.paymentMethod || "cash");
     setCart((order.items || []).map((item) => {
@@ -3263,6 +3271,10 @@ export default function UniformPOS() {
   };
 
   const startExchange = (order, selectedItems) => {
+    if (order.school && order.school !== selectedSchool) {
+      setStorageError("此單所屬學校與目前選擇不同，請返回「目錄」選擇相應學校後再開始退換。");
+      return false;
+    }
     setStorageError("");
     setFullSaleReplacement(null);
     const items = Array.isArray(selectedItems) ? selectedItems : [selectedItems];
@@ -3290,7 +3302,6 @@ export default function UniformPOS() {
       setStorageError("找不到原有貨品款式，請先更新商品資料後再試。");
       return false;
     }
-    setSelectedSchool(order.school || selectedSchool);
     setPaymentMethod(order.paymentMethod || "cash");
     setRefundMethod(order.paymentMethod || "cash");
     setCart(exchangeItems.map(({ item, product, originalSize }) => ({
@@ -3588,7 +3599,10 @@ export default function UniformPOS() {
       setStorageError("此訂單沒有可銷售商品，請返回取貨頁重新載入訂單。");
       return false;
     }
-    if (order.school) setSelectedSchool(order.school);
+    if (order.school && order.school !== selectedSchool) {
+      setStorageError("此取貨訂單所屬學校與目前選擇不同，請返回「目錄」選擇相應學校後再開始銷售。");
+      return false;
+    }
     setCart(readyItems);
     setCashReceived("");
     setPaymentMethod("cash");
@@ -3954,7 +3968,7 @@ export default function UniformPOS() {
   const publicQueueService = (new URLSearchParams(location.search).get("service") || "").toUpperCase();
   const routeId = new URLSearchParams(location.search).get("id");
   const isDirectoryPage = location.pathname === "/menu";
-  const canSwitchSchool = isDirectoryPage || location.pathname === "/sale";
+  const canSwitchSchool = isDirectoryPage;
 
   useEffect(() => {
     if (location.pathname === "/" && publicRouteSchool) {
@@ -4365,11 +4379,9 @@ export default function UniformPOS() {
                 saveSchoolMeta={saveSchoolMeta}
                 setDeletedSchools={setDeletedSchools}
                 selectedSchool={selectedSchool}
-                setSelectedSchool={setSelectedSchool}
                 branchSchoolIds={branchSchoolIds}
                 branchId={session.role === ROLES.ADMIN ? "" : session.branchId}
                 availableSchools={schools}
-                onPickSchool={pickSchool}
               />
             }
           />
@@ -4533,11 +4545,9 @@ export default function UniformPOS() {
                     saveSchoolMeta={saveSchoolMeta}
                     setDeletedSchools={setDeletedSchools}
                     selectedSchool={selectedSchool}
-                    setSelectedSchool={setSelectedSchool}
                     branchSchoolIds={branchSchoolIds}
                     branchId={session.role === ROLES.ADMIN ? "" : session.branchId}
                     availableSchools={schools}
-                    onPickSchool={pickSchool}
                   />
                 )}
                 {tab === "records" && (
@@ -5260,7 +5270,7 @@ function SaleTab({
       )}
       {schools.length > 1 && (
         <div style={{ fontSize: 12, color: "#999", marginBottom: 10 }}>
-          㩒返上面標題「{selectedSchool || "校服銷售"}」可以切換學校
+          如需轉換學校，請返回「目錄」選擇。
         </div>
       )}
 
@@ -5667,7 +5677,7 @@ function SaleTab({
   );
 }
 
-function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogProducts, loadLatestProducts, importResult, setImportResult, productsSaveError = "", productsSaveState = "saved", productsCatalogWarning = "", sourceIntegrityWarning = "", canManageSchools = true, canImportExport = true, schoolMeta = {}, saveSchoolMeta = async () => {}, setDeletedSchools = () => {}, selectedSchool = null, setSelectedSchool = () => {}, branchSchoolIds = {}, branchId = "", availableSchools, onPickSchool = setSelectedSchool }) {
+function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogProducts, loadLatestProducts, importResult, setImportResult, productsSaveError = "", productsSaveState = "saved", productsCatalogWarning = "", sourceIntegrityWarning = "", canManageSchools = true, canImportExport = true, schoolMeta = {}, saveSchoolMeta = async () => {}, setDeletedSchools = () => {}, selectedSchool = null, branchSchoolIds = {}, branchId = "", availableSchools }) {
   const [expanded, setExpanded] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
@@ -6035,7 +6045,6 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
       addProduct(name, { ...schoolMeta, [name]: schoolMetaEntry });
     }
     saveSchoolMeta({ ...schoolMeta, [name]: schoolMetaEntry });
-    setSelectedSchool(name);
     setAddingSchool(false);
     setNewSchoolName("");
     setNewSchoolError("");
@@ -6061,7 +6070,6 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     const nextDeletedSchools = [...deletedSchoolsRuntime];
     setDeletedSchools(nextDeletedSchools);
     window.storage.set("deleted-schools", JSON.stringify(nextDeletedSchools), false).catch((e) => console.error("儲存已刪除學校清單失敗", e));
-    setSelectedSchool(null);
     setExpanded(null);
   };
 
@@ -7015,17 +7023,9 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
       </div>
       )}
 
-      <div style={{ background: "#1F3A5F", color: "#fff", borderRadius: 10, padding: "4px 12px", marginBottom: 12 }}>
-        <StoreSchoolSwitcher
-          schools={schools}
-          schoolMeta={schoolMeta}
-          branchSchoolIds={branchSchoolIds}
-          branchId={branchId}
-          selectedSchool={selectedSchool}
-          onPick={(school) => {
-            if (school && school !== "all") onPickSchool(school);
-          }}
-        />
+      <div style={{ background: "#1F3A5F", color: "#fff", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+        <div style={{ fontSize: 14, fontWeight: 700 }}>{activeSchool || "未選學校"}</div>
+        <div style={{ fontSize: 11, opacity: 0.8, marginTop: 3 }}>學校請於「目錄」選擇；本頁跟隨目前選擇。</div>
       </div>
 
       {/* 學校分類管理：幫每間學校設定 階段/地區/18區，令「銷售」分頁揀學校更好搵 */}
