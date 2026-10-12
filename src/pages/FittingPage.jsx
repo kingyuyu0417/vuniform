@@ -13,6 +13,9 @@ import { queueOrderService, ORDER_STATUS } from "../services/queueOrderService";
 import { supabase, isSupabaseConfigured } from "../supabaseClient";
 import { productGenderBackground } from "../data/productGender.js";
 import { lengthDimensionLabel, sizeDimensionLabel } from "../data/productDimensions.js";
+import { findQueueOrders, normalizeQueueLookup } from "../data/queueOrderLookup.js";
+import { getFittingDraft, removeFittingDraft, setFittingDraft } from "../data/fittingDrafts.js";
+import { getActiveFittingOrder } from "../data/fittingOrderState.js";
 
 const STORAGE_DRAFT_KEY = "uniform-pos-fitting-drafts";
 
@@ -101,14 +104,18 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const nextItemRef = useRef(null);
+  const selectedOrderIdRef = useRef("");
 
   const safeSetSelectedOrder = (order) => {
     if (!order || typeof order !== "object") {
+      selectedOrderIdRef.current = "";
       setSelectedOrder(null);
       return;
     }
 
-    setSelectedOrder(getSafeOrder(order));
+    const normalized = getSafeOrder(order);
+    selectedOrderIdRef.current = normalized.id || "";
+    setSelectedOrder(normalized);
   };
 
   const syncOrders = async () => {
@@ -117,7 +124,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
     if (!queueOrderService || typeof queueOrderService.listOrders !== "function") {
       setLoadError("排隊服務不可用，請重新整理頁面後再試。");
       setOrders([]);
-      setSelectedOrder(null);
+      safeSetSelectedOrder(null);
       return;
     }
 
@@ -140,7 +147,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       setLastUpdatedAt(new Date());
 
       const matchByTarget = (row) => {
-        const target = String(selectedOrderId || "").trim();
+        const target = String(selectedOrderIdRef.current || selectedOrderId || "").trim();
         if (!target) return false;
         return (
           row.id === selectedOrderId ||
@@ -162,6 +169,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
             safeSetSelectedOrder(fallbackMatch);
             setNotice("");
           } else {
+            safeSetSelectedOrder(fallbackMatch);
             setNotice(`此訂單狀態為 ${fallbackMatch.status}，無法在度身頁面編輯`);
           }
           return;
@@ -188,7 +196,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
     } catch (error) {
       console.error("FittingPage syncOrders failed", error);
       setOrders([]);
-      setSelectedOrder(null);
+      safeSetSelectedOrder(null);
       setLoadError("目前無法載入排隊資料，請確認網絡或資料來源正常後重試。");
     }
   };
@@ -216,9 +224,15 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
             setOrders(pendingOnly);
             setLastUpdatedAt(new Date());
 
-            if (selectedOrder) {
-              const next = pendingOnly.find((o) => o.id === selectedOrder.id);
-              safeSetSelectedOrder(next || null);
+            const activeOrderId = selectedOrderIdRef.current || String(selectedOrderId || "").trim();
+            if (activeOrderId) {
+              const activeOrder = filtered.find((order) => order.id === activeOrderId);
+              if (activeOrder?.status === ORDER_STATUS.PENDING) {
+                safeSetSelectedOrder(activeOrder);
+              } else if (activeOrder) {
+                safeSetSelectedOrder(activeOrder);
+                setNotice(`此訂單已進入 ${activeOrder.status}，度身內容已暫存。`);
+              }
             } else if (pendingOnly.length) {
               safeSetSelectedOrder(pendingOnly[0]);
             }
@@ -241,7 +255,10 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
 
   // 當 selectedOrderId 改變時重新嘗試查找（處理異步加載延遲）
   useEffect(() => {
-    if (!selectedOrderId || selectedOrder) return;
+    const target = String(selectedOrderId || "").trim();
+    if (!target || selectedOrderIdRef.current === target) return;
+    safeSetSelectedOrder(null);
+    setSelection([{ ...emptySelection }]);
 
     // 延遲重試，確保訂單數據已被加載
     const timer = setTimeout(() => {
@@ -253,13 +270,13 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
 
   useEffect(() => {
     const drafts = readDrafts();
-    const saved = currentSchoolId ? drafts[currentSchoolId]?.[selectedOrder?.id] : null;
+    const saved = getFittingDraft(drafts, currentSchoolId, selectedOrder?.id);
     if (saved && Array.isArray(saved.items)) {
       setSelection(saved.items);
     } else {
       setSelection([{ ...emptySelection }]);
     }
-  }, [selectedOrder, currentSchoolId]);
+  }, [selectedOrder?.id, currentSchoolId]);
 
   useEffect(() => () => {
     if (streamRef.current) {
@@ -273,7 +290,12 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
   }, [orders]);
 
-  const activeOrder = selectedOrder || ticketOptions[0] || null;
+  const activeOrder = getActiveFittingOrder(
+    selectedOrder,
+    ticketOptions,
+    selectedOrderId,
+    selectedOrderIdRef.current,
+  );
 
   const handleSelectOrder = (order) => {
     if (!order) return;
@@ -309,14 +331,19 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
   const handleScanValue = async (rawValue) => {
     const cleaned = String(rawValue || "").trim();
     if (!cleaned) return;
+    const target = normalizeQueueLookup(cleaned);
 
     try {
-      const found = orders.find((o) => (o.queue_number || "").toUpperCase() === cleaned.toUpperCase());
-      if (found) {
-        safeSetSelectedOrder(found);
-        setScanOpen(false);
+      const matches = findQueueOrders(orders, target);
+      if (matches.length > 1) {
+        stopCameraScan();
+        setNotice(`籌號 ${target} 有多位客人，請按上方姓名及籌號選擇正確客人。`);
+        return;
+      }
+      if (matches[0]) {
+        safeSetSelectedOrder(matches[0]);
+        stopCameraScan();
         setScanText("");
-        setCameraReady(false);
         return;
       }
 
@@ -326,16 +353,23 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       }
 
       const rows = await queueOrderService.listOrders({ schoolId: currentSchoolId });
-      const fallback = (Array.isArray(rows) ? rows : []).find((o) => (o.queue_number || o.queueNumber || "").toUpperCase() === cleaned.toUpperCase());
-      if (fallback) {
+      const fallbackMatches = findQueueOrders(rows, target);
+      if (fallbackMatches.length > 1) {
+        stopCameraScan();
+        setNotice(`籌號 ${target} 有多位客人，請返回排隊頁按姓名選擇正確客人。`);
+        return;
+      }
+      const fallback = fallbackMatches[0];
+      if (fallback?.status === ORDER_STATUS.PENDING) {
         safeSetSelectedOrder(fallback);
-        setScanOpen(false);
+        stopCameraScan();
         setScanText("");
-        setCameraReady(false);
         return;
       }
 
-      setNotice("找不到此排隊號，請確認學校或號碼正確");
+      setNotice(fallback
+        ? `此訂單狀態為 ${fallback.status}，無法在度身頁面編輯。`
+        : "找不到此排隊號，請確認學校或號碼正確");
     } catch (error) {
       console.error("FittingPage handleScanValue failed", error);
       setNotice("掃碼查詢失敗，請檢查資料來源或手動輸入排隊號");
@@ -398,10 +432,8 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       if (appendNext && index === prev.length - 1) next.push({ ...emptySelection });
       try {
         const drafts = readDrafts();
-        const base = drafts[currentSchoolId] || {};
-        base[selectedOrder?.id] = { items: next };
-        drafts[currentSchoolId] = base;
-        writeDrafts(drafts);
+        const orderId = selectedOrderIdRef.current;
+        if (orderId) writeDrafts(setFittingDraft(drafts, currentSchoolId, orderId, next));
       } catch (error) {
         console.error("FittingPage draft save failed", error);
       }
@@ -430,7 +462,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
   };
 
   const handleSubmit = async () => {
-    const current = activeOrder || selectedOrder;
+    const current = activeOrder;
     if (!current?.id) {
       setNotice("請先選擇客人");
       return;
@@ -497,10 +529,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       setNotice("已更新為 PREPARING，等待倉務執貨");
 
       const drafts = readDrafts();
-      const schoolDrafts = drafts[currentSchoolId] || {};
-      delete schoolDrafts[current.id];
-      drafts[currentSchoolId] = schoolDrafts;
-      writeDrafts(drafts);
+      writeDrafts(removeFittingDraft(drafts, currentSchoolId, current.id));
 
       setSelection([{ ...emptySelection }]);
       onComplete?.(result);
@@ -508,10 +537,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       console.error("FittingPage submit failed", error);
       try {
         const drafts = readDrafts();
-        const schoolDrafts = drafts[currentSchoolId] || {};
-        schoolDrafts[current.id] = { items: Array.isArray(selection) ? selection : [{ ...emptySelection }] };
-        drafts[currentSchoolId] = schoolDrafts;
-        writeDrafts(drafts);
+        writeDrafts(setFittingDraft(drafts, currentSchoolId, current.id, selection));
       } catch (draftError) {
         console.error("FittingPage draft save failed after submit error", draftError);
       }
@@ -540,10 +566,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
       onStatusChange?.({ id: activeOrder.id, status: ORDER_STATUS.SKIPPED });
       setOrders((prev) => prev.filter((order) => order.id !== activeOrder.id));
       const drafts = readDrafts();
-      const schoolDrafts = drafts[currentSchoolId] || {};
-      delete schoolDrafts[activeOrder.id];
-      drafts[currentSchoolId] = schoolDrafts;
-      writeDrafts(drafts);
+      writeDrafts(removeFittingDraft(drafts, currentSchoolId, activeOrder.id));
       setSelection([{ ...emptySelection }]);
       safeSetSelectedOrder(null);
     } catch (error) {
@@ -588,9 +611,9 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
             onClick={() => handleSelectOrder(order)}
             style={{
               ...styles.queueChip,
-              background: activeOrder?.id === order.id ? "#1f3a5f" : "#fff",
-              color: activeOrder?.id === order.id ? "#fff" : "#1f3a5f",
-              borderColor: activeOrder?.id === order.id ? "#1f3a5f" : "#dfe7f1",
+              background: selectedOrder?.id === order.id ? "#1f3a5f" : "#fff",
+              color: selectedOrder?.id === order.id ? "#fff" : "#1f3a5f",
+              borderColor: selectedOrder?.id === order.id ? "#1f3a5f" : "#dfe7f1",
             }}
           >
             {order.queue_number || "未分配"} · {order.customer_info?.guestName || "客人"}
@@ -598,7 +621,11 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
         ))}
       </div>
 
-      {activeOrder ? (
+      {selectedOrder && selectedOrder.status !== ORDER_STATUS.PENDING ? (
+        <div role="status" style={{ ...styles.empty, background: "#FFF7ED", border: "1px solid #FED7AA", color: "#9A3412" }}>
+          此訂單已進入「{selectedOrder.status}」，度身內容已按此客人暫存。請選擇上方另一位客人繼續。
+        </div>
+      ) : activeOrder ? (
         <div style={styles.card}>
           <div style={styles.cardHeader}>
             <div>

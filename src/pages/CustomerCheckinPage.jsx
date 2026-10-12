@@ -201,14 +201,14 @@ export default function CustomerCheckinPage({ onSubmit, school = "", schools = [
         school: schoolId,
       };
 
-      const statusUrl = `${window.location.origin}/queue-status?id=${encodeURIComponent(record.queueNo)}&school_id=${encodeURIComponent(schoolId)}`;
+      const statusUrl = `${window.location.origin}/queue-status?id=${encodeURIComponent(record.id)}&school_id=${encodeURIComponent(schoolId)}`;
       record.recordUrl = statusUrl;
       generateQRCode(statusUrl);
 
       setSubmitted(record);
       onSubmit?.(record);
       setForm(emptyForm);
-      navigate(`/queue-status?id=${encodeURIComponent(record.queueNo)}&school_id=${encodeURIComponent(schoolId)}`, { replace: true });
+      navigate(`/queue-status?id=${encodeURIComponent(record.id)}&school_id=${encodeURIComponent(schoolId)}`, { replace: true });
     } catch (err) {
       setError("登記失敗：" + (err.message || "未知錯誤"));
     } finally {

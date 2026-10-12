@@ -8,6 +8,7 @@ export const ORDER_STATUS = {
   SKIPPED: "SKIPPED",
 };
 export const QUEUE_SERVICE = { FITTING: "FITTING", PICKUP: "PICKUP" };
+export const QUEUE_MANAGEMENT_SERVICE_KEY = "uniform-pos-queue-management-service";
 
 const STORAGE_KEY = "uniform-pos-customer-flow-cache";
 const COUNTER_STORAGE_KEY = "uniform-pos-queue-counter-cache";
@@ -15,7 +16,6 @@ export const getHongKongDate = (value = new Date()) => new Intl.DateTimeFormat("
   timeZone: "Asia/Hong_Kong",
 }).format(new Date(value));
 const hongKongDate = getHongKongDate;
-const DAY_PREFIX = () => hongKongDate().replace(/-/g, "");
 export const isQueueOrderToday = (value) => hongKongDate(value) === hongKongDate();
 const getHongKongDayBounds = () => {
   const today = hongKongDate();
@@ -98,25 +98,24 @@ const normalizeOrderRow = (row) => ({
 
 export const generateQueueNumber = async (schoolId) => {
   const normalizedSchoolId = safeSchoolId(schoolId);
-  const today = DAY_PREFIX();
   const localRows = readQueueCache();
   let nextSequence = 1;
 
   if (isSupabaseConfigured && supabase) {
+    const { start, end } = getHongKongDayBounds();
     const { data, error } = await supabase
       .from("customer_orders")
       .select("queue_number")
       .eq("school_id", normalizedSchoolId)
-      .gte("created_at", `${today.slice(0, 4)}-${today.slice(4, 6)}-${today.slice(6, 8)}T00:00:00+08:00`)
-      .lt("created_at", `${today.slice(0, 4)}-${today.slice(4, 6)}-${today.slice(6, 8)}T23:59:59.999+08:00`)
-      .order("created_at", { ascending: false })
-      .limit(1);
+      .gte("created_at", start)
+      .lt("created_at", end);
 
-    if (!error && data && data.length) {
-      const lastQueue = data[0]?.queue_number || "";
-      const match = String(lastQueue).match(/(\d+)$/);
-      if (match) nextSequence = Number(match[1]) + 1;
-    }
+    if (error) throw error;
+    const maxNumber = (data || []).reduce((maximum, row) => {
+      const match = String(row.queue_number || "").match(/(\d+)$/);
+      return Math.max(maximum, match ? Number(match[1]) : 0);
+    }, 0);
+    nextSequence = maxNumber + 1;
   }
 
   const existing = localRows.filter((row) => safeSchoolId(row.school_id) === normalizedSchoolId && hongKongDate(row.created_at) === hongKongDate());
@@ -160,13 +159,13 @@ export const queueOrderService = {
 
   // Public pages only receive sanitized queue data from RPCs. They must never
   // query customer_orders directly because it contains personal information.
-  async getPublicQueueStatus({ schoolId = "", queueNumber = "", phoneLast4 = "" } = {}) {
+  async getPublicQueueStatus({ schoolId = "", queueNumber = "", phoneLast4 = "", orderId = "" } = {}) {
     if (!isSupabaseConfigured || !supabase) return null;
-    const { data, error } = await supabase.rpc("get_public_queue_status", {
-      p_school_id: safeSchoolId(schoolId),
-      p_queue_number: queueNumber || null,
-      p_phone_last4: phoneLast4 || null,
-    });
+    const rpcName = orderId ? "get_public_queue_status_by_id" : "get_public_queue_status";
+    const params = orderId
+      ? { p_school_id: safeSchoolId(schoolId), p_order_id: orderId }
+      : { p_school_id: safeSchoolId(schoolId), p_queue_number: queueNumber || null, p_phone_last4: phoneLast4 || null };
+    const { data, error } = await supabase.rpc(rpcName, params);
     if (error) throw error;
     return data || null;
   },
@@ -237,6 +236,9 @@ export const queueOrderService = {
     };
 
     if (!isSupabaseConfigured || !supabase) {
+      const localQueueNumber = queueNumber || await generateQueueNumber(schoolId);
+      record.queue_number = localQueueNumber;
+      record.queueNumber = localQueueNumber;
       const localRows = readQueueCache();
       const nextRows = [record, ...localRows.filter((row) => row.id !== record.id)];
       writeQueueCache(nextRows);
@@ -246,42 +248,18 @@ export const queueOrderService = {
     try {
       const rpcResult = await supabase.rpc("create_customer_order", {
         order_data: {
-          id: record.id,
           school_id: record.school_id,
-          queue_number: record.queue_number,
           customer_info: record.customer_info,
-          tailor_info: record.tailor_info,
-          created_at: record.created_at,
         },
       });
-      if (!rpcResult.error) {
-        const normalized = normalizeOrderRow(rpcResult.data);
-        writeQueueCache([normalized, ...readQueueCache().filter((row) => row.id !== normalized.id)]);
-        return normalized;
+      if (["42883", "PGRST202"].includes(rpcResult.error?.code)) {
+        throw new Error("排隊資料庫尚未啟用安全籌號登記，請先套用最新 customer-flow SQL。");
       }
-      if (rpcResult.error.code && rpcResult.error.code !== "42883") throw rpcResult.error;
+      if (rpcResult.error) throw rpcResult.error;
+      if (!rpcResult.data?.id || !rpcResult.data?.queue_number) throw new Error("安全籌號登記未傳回有效訂單資料。");
 
-      const fallbackQueue = record.queue_number || await generateQueueNumber(schoolId);
-      const { data, error } = await supabase
-        .from("customer_orders")
-        .insert([
-          {
-            id: record.id,
-            school_id: record.school_id,
-            queue_number: fallbackQueue,
-            customer_info: record.customer_info,
-            tailor_info: record.tailor_info,
-            status: record.status,
-            created_at: record.created_at,
-          },
-        ])
-        .select();
-
-      if (error) throw error;
-      const saved = (data && data[0]) || { ...record, queue_number: fallbackQueue };
-      const normalized = normalizeOrderRow(saved);
-      const localRows = readQueueCache();
-      writeQueueCache([normalized, ...localRows.filter((row) => row.id !== normalized.id)]);
+      const normalized = normalizeOrderRow(rpcResult.data);
+      writeQueueCache([normalized, ...readQueueCache().filter((row) => row.id !== normalized.id)]);
       return normalized;
     } catch (error) {
       console.error("createOrder failed to sync with Supabase", error);

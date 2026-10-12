@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import { Search, Check, AlertCircle, Camera, QrCode, Zap } from "lucide-react";
 import { BrowserQRCodeReader } from "@zxing/browser";
 import { queueOrderService } from "../services/queueOrderService";
+import { findQueueOrders, normalizeQueueLookup } from "../data/queueOrderLookup.js";
 
 const statusLabel = {
   PENDING: "排隊中",
@@ -15,13 +16,13 @@ const statusLabel = {
 
 const getStatusLabel = (status) => statusLabel[status] || "進行中";
 
-const getQueueProgress = (visitsList, targetQueue) => {
+const getQueueProgress = (visitsList, targetVisit) => {
   const activeVisits = [...visitsList]
-    .filter((item) => item.queueNo && item.status !== "ready_for_pickup" && item.status !== "completed")
+    .filter((item) => item.queueNo && !["COMPLETED", "SKIPPED", "ready_for_pickup", "completed"].includes(item.status))
     .sort((a, b) => new Date(a.createdAt || a.created_at || 0) - new Date(b.createdAt || b.created_at || 0));
 
-  if (!targetQueue) return null;
-  const index = activeVisits.findIndex((item) => (item.queueNo || "").toUpperCase() === targetQueue.toUpperCase());
+  if (!targetVisit?.id) return null;
+  const index = activeVisits.findIndex((item) => item.id === targetVisit.id);
   if (index === -1) return null;
 
   return {
@@ -34,6 +35,7 @@ const getQueueProgress = (visitsList, targetQueue) => {
 const StaffOrderTracking = ({ visits = [], currentSchoolId = "", onStatusUpdate }) => {
   const [searchQueue, setSearchQueue] = useState("");
   const [selectedVisit, setSelectedVisit] = useState(null);
+  const [matchingVisits, setMatchingVisits] = useState([]);
   const [syncedVisits, setSyncedVisits] = useState(visits);
   const [error, setError] = useState("");
   const [scanning, setScanning] = useState(false);
@@ -95,10 +97,10 @@ const StaffOrderTracking = ({ visits = [], currentSchoolId = "", onStatusUpdate 
   useEffect(() => {
     setLastUpdatedAt(new Date());
     if (selectedVisit) {
-      const liveMatch = visibleVisits.find((visit) => (visit.queueNo || "").toUpperCase() === (selectedVisit.queueNo || "").toUpperCase());
+      const liveMatch = visibleVisits.find((visit) => visit.id === selectedVisit.id);
       if (liveMatch) {
         setSelectedVisit(liveMatch);
-      } else if (!visibleVisits.some((visit) => (visit.queueNo || "").toUpperCase() === (selectedVisit.queueNo || "").toUpperCase())) {
+      } else {
         setSelectedVisit(null);
       }
     }
@@ -118,7 +120,7 @@ const StaffOrderTracking = ({ visits = [], currentSchoolId = "", onStatusUpdate 
         return;
       }
 
-      const queue = normalizeQueue(result.getText());
+      const queue = normalizeQueueLookup(result.getText());
       if (!queue) return;
       stopCamera();
       handleSearch(queue);
@@ -143,38 +145,31 @@ const StaffOrderTracking = ({ visits = [], currentSchoolId = "", onStatusUpdate 
     };
   }, [scanning]);
 
-  const normalizeQueue = (value) => {
-    const text = (value || "").trim();
-    if (!text) return "";
-    if (text.includes("queue=")) {
-      try {
-        const url = new URL(text);
-        return url.searchParams.get("queue") || text;
-      } catch {
-        const match = text.match(/[?&]queue=([^&]+)/i);
-        return match ? decodeURIComponent(match[1]) : text;
-      }
-    }
-    return text.toUpperCase();
-  };
-
   const handleSearch = (manualQueue = searchQueue) => {
     setError("");
-    const queue = normalizeQueue(manualQueue);
+    const queue = normalizeQueueLookup(manualQueue);
     if (!queue) {
       setError("請輸入排隊號");
       return;
     }
 
     setSearchQueue(queue);
-    const found = visibleVisits.find((v) => (v.queueNo || "").toUpperCase() === queue.toUpperCase());
-    if (!found) {
+    const found = findQueueOrders(visibleVisits, queue);
+    if (!found.length) {
       setError(`找不到排隊號：${queue}`);
       setSelectedVisit(null);
+      setMatchingVisits([]);
       return;
     }
 
-    setSelectedVisit(found);
+    setMatchingVisits(found.length > 1 ? found : []);
+    if (found.length > 1) {
+      setSelectedVisit(null);
+      setError(`籌號 ${queue} 有 ${found.length} 位客人，請核對姓名及班級後選擇。`);
+      return;
+    }
+    setError("");
+    setSelectedVisit(found[0]);
   };
 
   const handleScanQr = async () => {
@@ -199,7 +194,7 @@ const StaffOrderTracking = ({ visits = [], currentSchoolId = "", onStatusUpdate 
     }
   };
 
-  const queueProgress = selectedVisit ? getQueueProgress(visibleVisits, selectedVisit.queueNo) : null;
+  const queueProgress = selectedVisit ? getQueueProgress(visibleVisits, selectedVisit) : null;
 
   return (
     <div style={styles.container}>
@@ -224,7 +219,11 @@ const StaffOrderTracking = ({ visits = [], currentSchoolId = "", onStatusUpdate 
           <input
             type="text"
             value={searchQueue}
-            onChange={(e) => setSearchQueue(e.target.value)}
+            onChange={(e) => {
+              setSearchQueue(e.target.value);
+              setMatchingVisits([]);
+              setError("");
+            }}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
             placeholder="例如：FYM-001"
             autoFocus
@@ -272,6 +271,31 @@ const StaffOrderTracking = ({ visits = [], currentSchoolId = "", onStatusUpdate 
         }}>
           <AlertCircle size={16} style={{ marginRight: "8px" }} />
           {error}
+        </div>
+      )}
+
+      {matchingVisits.length > 1 && (
+        <div style={styles.visitsList} aria-label="相同籌號的客人">
+          {matchingVisits.map((visit) => (
+            <button
+              key={visit.id}
+              type="button"
+              className="pos-btn"
+              onClick={() => {
+                setSelectedVisit(visit);
+                setMatchingVisits([]);
+                setError("");
+              }}
+              style={{ ...styles.visitItem, width: "100%", textAlign: "left" }}
+            >
+              <span style={styles.visitQueueNo}>{visit.queueNo}</span>
+              <span>
+                <span style={styles.visitName}>{visit.guestName || "未提供姓名"}</span>
+                <span style={styles.visitClass}>{visit.className || "未提供班級"}</span>
+              </span>
+              <span style={styles.status}>{getStatusLabel(visit.status)}</span>
+            </button>
+          ))}
         </div>
       )}
 

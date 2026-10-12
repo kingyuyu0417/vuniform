@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { PackageCheck, Zap } from "lucide-react";
-import { ORDER_STATUS, isQueueOrderToday } from "../services/queueOrderService";
+import { ORDER_STATUS, QUEUE_MANAGEMENT_SERVICE_KEY, QUEUE_SERVICE, isQueueOrderToday } from "../services/queueOrderService";
 import { supabase, isSupabaseAuthEnabled, isSupabaseConfigured } from "../supabaseClient";
+import { lengthDimensionLabel, sizeDimensionLabel } from "../data/productDimensions.js";
 
 const statusLabel = {
   [ORDER_STATUS.PENDING]: "排隊中",
@@ -131,6 +132,11 @@ export default function PickupPage({ currentSchoolId = "" }) {
       if (error) throw error;
       if (!updated?.id) throw new Error("找不到要更新的訂單");
 
+      try {
+        window.sessionStorage.setItem(QUEUE_MANAGEMENT_SERVICE_KEY, QUEUE_SERVICE.PICKUP);
+      } catch (storageError) {
+        console.warn("queue management service preference could not be saved", storageError);
+      }
       setOrders((previous) => previous.filter((item) => item.id !== orderId));
       const nextOrders = await syncOrders();
       if (!nextOrders) return;
@@ -183,7 +189,12 @@ export default function PickupPage({ currentSchoolId = "" }) {
               {getOrderItems(order).map((item, index) => (
                 <div key={`${item.product_name}-${item.size}-${index}`} style={styles.itemRow}>
                   <span>{item.product_name}</span>
-                  <span>{item.size}</span>
+                  <span>
+                    {item.length && lengthDimensionLabel({ name: item.product_name })
+                      ? `${lengthDimensionLabel({ name: item.product_name })} ${item.length} × `
+                      : ""}
+                    {item.isTailored || item.is_tailored ? "裁碼" : sizeDimensionLabel({ name: item.product_name })} {item.size}
+                  </span>
                   <strong>{item.quantity || 1} 件</strong>
                 </div>
               ))}
@@ -282,6 +293,8 @@ const styles = {
   itemRow: {
     display: "flex",
     justifyContent: "space-between",
+    alignItems: "baseline",
+    flexWrap: "wrap",
     gap: 8,
     fontSize: 13,
     color: "#334155",

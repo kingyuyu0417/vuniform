@@ -19,7 +19,7 @@ const GuestQueueStatusPage = lazy(() => import("./pages/GuestQueueStatusPage"));
 const StaffOrderTracking = lazy(() => import("./pages/StaffOrderTracking"));
 const QueueDisplayPage = lazy(() => import("./pages/QueueDisplayPage"));
 const DirectoryPage = lazy(() => import("./pages/DirectoryPage"));
-import { getHongKongDate, QUEUE_SERVICE, queueOrderService } from "./services/queueOrderService";
+import { getHongKongDate, QUEUE_MANAGEMENT_SERVICE_KEY, QUEUE_SERVICE, queueOrderService } from "./services/queueOrderService";
 import { findConflictingProductIds } from "./data/productConflictDetection";
 import { getProductGender, productGenderBackground, PRODUCT_GENDER_OPTIONS } from "./data/productGender";
 import { productUnit } from "./data/productUnits";
@@ -3501,6 +3501,11 @@ export default function UniformPOS() {
   const handleFittingComplete = () => {
     setSelectedGuest(null);
     setTab("queue");
+    try {
+      window.sessionStorage.setItem(QUEUE_MANAGEMENT_SERVICE_KEY, QUEUE_SERVICE.FITTING);
+    } catch (error) {
+      console.warn("queue management service preference could not be saved", error);
+    }
     const school = selectedSchool || publicRouteSchool;
     const schoolQuery = school ? `?school_id=${encodeURIComponent(school)}` : "";
     navigate(`/queue${schoolQuery}`, { replace: true });
@@ -4121,6 +4126,9 @@ export default function UniformPOS() {
           justify-content: center;
           padding: 10px;
           touch-action: manipulation;
+          position: relative;
+          z-index: 3;
+          pointer-events: auto;
         }
         .pos-page-content { padding: 20px 20px calc(96px + env(safe-area-inset-bottom, 0px)); }
         .pos-page-content > * { max-width: 100%; }
@@ -4177,6 +4185,7 @@ export default function UniformPOS() {
             padding: max(8px, env(safe-area-inset-top)) 10px calc(80px + env(safe-area-inset-bottom, 0px)) !important;
             -webkit-overflow-scrolling: touch;
             overscroll-behavior-y: contain;
+            touch-action: pan-y;
           }
           .receipt-modal-panel {
             max-height: none !important;
@@ -4184,6 +4193,8 @@ export default function UniformPOS() {
             overflow: visible !important;
             flex: 0 0 auto;
             margin: 0 auto;
+            position: relative;
+            isolation: isolate;
           }
           .receipt-modal-header {
             top: -16px;
@@ -8046,6 +8057,35 @@ function ReceiptModal({ order, orders = [], language = "zh", actionError = "", o
   const canExchangeItems = canRedoSale && order.items.some((item) => getRemainingReturnQuantity(item, orders) > 0);
   const school = english ? receiptEnglishSchool(order.school) : order.school || "-";
   const displayField = (value) => english ? receiptEnglishName(value) : value;
+
+  useEffect(() => {
+    const body = document.body;
+    const root = document.documentElement;
+    const scrollY = window.scrollY;
+    const previousBodyStyles = {
+      position: body.style.position,
+      top: body.style.top,
+      width: body.style.width,
+      overflow: body.style.overflow,
+    };
+    const previousRootOverscroll = root.style.overscrollBehaviorY;
+
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.width = "100%";
+    body.style.overflow = "hidden";
+    root.style.overscrollBehaviorY = "none";
+
+    return () => {
+      body.style.position = previousBodyStyles.position;
+      body.style.top = previousBodyStyles.top;
+      body.style.width = previousBodyStyles.width;
+      body.style.overflow = previousBodyStyles.overflow;
+      root.style.overscrollBehaviorY = previousRootOverscroll;
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
+
   const openCustomerReceipt = () => {
     const receiptUrl = buildReceiptUrl(order, language);
     const anchor = document.createElement("a");
@@ -8058,7 +8098,7 @@ function ReceiptModal({ order, orders = [], language = "zh", actionError = "", o
   };
 
   return createPortal(
-    <div className="receipt-modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 }}>
+    <div className="receipt-modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20, overscrollBehavior: "contain" }}>
       <div className="receipt-modal-panel" role="dialog" aria-modal="true" aria-labelledby="receipt-modal-title" style={{ background: "#fff", borderRadius: 14, maxWidth: 340, width: "100%", padding: 20, maxHeight: "85vh", overflowY: "auto" }}>
         <div className="receipt-modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div id="receipt-modal-title" style={{ fontSize: 16, fontWeight: 600 }}>{english ? "Transaction completed" : "交易完成"}</div>

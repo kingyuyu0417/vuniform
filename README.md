@@ -50,6 +50,8 @@ Auth 登入開關是 `VITE_USE_SUPABASE_AUTH`。只有在 Supabase 已建立 `st
 
 Auth 模式的銷售交易會用 `create_order_idempotently` 一次寫入 `orders` 和 `order_items`。商品資料會由管理員首次登入時自動遷移到 `products`。
 
+更新客人登記及排隊查詢前，先在 Supabase SQL Editor 執行 `supabase/fix-customer-queue-identity.sql`，再部署前端。此 SQL 以資料庫鎖原子配置每日籌號，並新增按唯一訂單 ID 查詢狀態的安全 RPC；若跳過 SQL，客人登記會明確提示資料庫尚未更新，不會退回可能產生重複籌號的直接寫入方式。
+
 收據編號由 Supabase 每日流水號自動產生，格式為 `VU-YYYYMMDD-0001`。啟用新版結帳及退貨數量防護前，先執行 `supabase/secure-migration.sql`，再執行 `supabase/idempotent-sales-checkout.sql`。此 migration 同時記錄退貨所屬原單商品、退換原因及付款／退款渠道，並在資料庫阻止超退、缺少原因或無效支付方式的退換；舊版無法追蹤退貨商品的換貨記錄會先被視為未核實，需管理員檢查。新版 App 只會呼叫具冪等保護的 RPC；若 migration 尚未執行，結帳會保留購物車並提示管理員，不會退回非原子寫入方式。
 
 `supabase/idempotent-sales-checkout.sql` 亦會建立商品及訂單項目的英文收據名稱欄位。若結帳顯示 `42703: column order_items.receipt_name_en does not exist`，請在 Supabase SQL Editor 重新執行這份 SQL，再於原銷售分頁保持原商品及金額重試；同一交易識別碼會用來完成已建立但尚未確認的收據。

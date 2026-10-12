@@ -11,29 +11,47 @@ const statusLabel = {
 };
 
 export default function GuestQueueStatusPage({ queueNo: queueNoProp, schoolName = "", schools = [] }) {
-  const [queueNo, setQueueNo] = useState(queueNoProp || new URLSearchParams(window.location.search).get("id") || new URLSearchParams(window.location.search).get("queue") || "");
+  const initialParams = new URLSearchParams(window.location.search);
+  const initialId = initialParams.get("id") || "";
+  const [orderId, setOrderId] = useState(initialId.startsWith("co-") ? initialId : "");
+  const [queueNo, setQueueNo] = useState(initialId.startsWith("co-") ? "" : queueNoProp || initialId || initialParams.get("queue") || "");
   const [activeSchool, setActiveSchool] = useState(schoolName || new URLSearchParams(window.location.search).get("school_id") || "");
   const [lookupQueueNo, setLookupQueueNo] = useState(queueNo || "");
   const [lookupPhoneLast4, setLookupPhoneLast4] = useState("");
   const [lookupSchool, setLookupSchool] = useState(activeSchool);
   const [lookupSchoolText, setLookupSchoolText] = useState(activeSchool);
   const [lookupError, setLookupError] = useState("");
+  const [statusError, setStatusError] = useState("");
   const isSchoolLocked = Boolean(activeSchool);
   const [guest, setGuest] = useState(null);
 
   const refreshStatus = async () => {
     const schoolId = activeSchool || new URLSearchParams(window.location.search).get("school") || "";
-    const result = await queueOrderService.getPublicQueueStatus({ schoolId, queueNumber: queueNo });
+    const result = await queueOrderService.getPublicQueueStatus({
+      schoolId,
+      orderId,
+      queueNumber: orderId || lookupPhoneLast4 ? "" : queueNo,
+      phoneLast4: lookupPhoneLast4,
+    });
     setGuest(result);
+    if (result?.queue_number) setQueueNo(result.queue_number);
+    setStatusError("");
   };
 
   useEffect(() => {
-    if (!queueNo) return;
-    refreshStatus();
-    const schoolId = activeSchool || new URLSearchParams(window.location.search).get("school") || "";
-    const timer = window.setInterval(() => refreshStatus().catch(() => {}), 5000);
+    if (!queueNo && !orderId) return undefined;
+    refreshStatus().catch((error) => {
+      console.error("queue status lookup failed", error);
+      setStatusError("目前無法查詢排隊狀態，請稍後重試。");
+    });
+    const timer = window.setInterval(() => {
+      refreshStatus().catch((error) => {
+        console.error("queue status refresh failed", error);
+        setStatusError("狀態更新失敗，請檢查網絡後重試。");
+      });
+    }, 5000);
     return () => window.clearInterval(timer);
-  }, [queueNo, activeSchool]);
+  }, [queueNo, orderId, activeSchool, lookupPhoneLast4]);
 
   const queuePosition = useMemo(() => guest?.queue_position ?? null, [guest]);
 
@@ -61,7 +79,13 @@ export default function GuestQueueStatusPage({ queueNo: queueNoProp, schoolName 
               setLookupError("找不到相符的今日排隊資料，請檢查輸入內容。");
               return;
             }
+            if (matched.ambiguous) {
+              setLookupError("此籌號有多張登記，請改用電話最後 4 位數字查詢。");
+              return;
+            }
             setLookupError("");
+            setOrderId("");
+            setLookupPhoneLast4(phoneValue);
             setActiveSchool(schoolValue);
             setQueueNo(matched.queue_number);
           }}
@@ -89,7 +113,9 @@ export default function GuestQueueStatusPage({ queueNo: queueNoProp, schoolName 
     );
   }
 
-  const statusText = guest?.status ? statusLabel[guest.status] || guest.status : "排隊中";
+  const statusText = guest?.ambiguous
+    ? "籌號重複，請以電話最後 4 位重新查詢"
+    : guest?.status ? statusLabel[guest.status] || guest.status : "排隊中";
 
   return (
     <div style={{ maxWidth: 720, margin: "32px auto", padding: 20, display: "grid", gap: 18 }}>
@@ -106,8 +132,26 @@ export default function GuestQueueStatusPage({ queueNo: queueNoProp, schoolName 
 
         <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 8, color: "#374151" }}>
           <Clock3 size={18} />
-          <span>最新狀態：{statusText}</span>
+          <span>{statusError || `最新狀態：${statusText}`}</span>
         </div>
+        {guest?.ambiguous && (
+          <button
+            type="button"
+            onClick={() => {
+              setLookupQueueNo(queueNo);
+              setLookupPhoneLast4("");
+              setLookupSchool(activeSchool);
+              setLookupSchoolText(activeSchool);
+              setOrderId("");
+              setQueueNo("");
+              setGuest(null);
+              setLookupError("");
+            }}
+            style={{ marginTop: 10, padding: "9px 12px", border: "1px solid #CBD5E1", borderRadius: 8, background: "#fff", color: "#1F3A5F", fontWeight: 700 }}
+          >
+            改用電話最後 4 位重新查詢
+          </button>
+        )}
 
         <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8, color: "#374151" }}>
           <Users size={18} />
@@ -121,4 +165,3 @@ export default function GuestQueueStatusPage({ queueNo: queueNoProp, schoolName 
     </div>
   );
 }
-

@@ -1,7 +1,8 @@
 import React, { useMemo, useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Zap, Bell, RotateCcw, Check, SkipForward } from "lucide-react";
-import { ORDER_STATUS, QUEUE_SERVICE, queueOrderService, isQueueOrderToday } from "../services/queueOrderService";
+import { ORDER_STATUS, QUEUE_MANAGEMENT_SERVICE_KEY, QUEUE_SERVICE, queueOrderService, isQueueOrderToday } from "../services/queueOrderService";
+import { clearQueueCallMarker } from "../data/queueOrderLookup.js";
 
 const statusLabel = {
   waiting: "待處理",
@@ -312,9 +313,13 @@ function QueuePanel({ visits = [], currentSchoolId = "", outletName = "", called
     const targetStatus = serviceType === QUEUE_SERVICE.PICKUP ? ORDER_STATUS.READY : ORDER_STATUS.PENDING;
     playCallChimeOnClick();
     try {
-      await queueOrderService.updateStatus(visit.id, targetStatus, {}, currentSchoolId, ORDER_STATUS.SKIPPED);
+      const currentOrders = await queueOrderService.listOrders({ schoolId: currentSchoolId });
+      const currentOrder = currentOrders.find((order) => order.id === visit.id);
+      if (!currentOrder) throw new Error("找不到此過號訂單，請重新整理後再試");
+      const tailorInfo = clearQueueCallMarker(currentOrder.tailor_info, serviceType);
+      await queueOrderService.updateStatus(visit.id, targetStatus, { tailor_info: tailorInfo }, currentSchoolId, ORDER_STATUS.SKIPPED);
       setSyncedVisits((previous) => (previous || []).map((order) => (
-        order.id === visit.id ? { ...order, status: targetStatus } : order
+        order.id === visit.id ? { ...order, status: targetStatus, tailor_info: tailorInfo } : order
       )));
       const next = await queueOrderService.callSpecific({
         schoolId: currentSchoolId,
@@ -535,7 +540,15 @@ export default function QueuePage({
   onAssign,
   onReadyForSale,
 }) {
-  const [serviceType, setServiceType] = useState(QUEUE_SERVICE.FITTING);
+  const [serviceType, setServiceType] = useState(() => {
+    try {
+      const saved = window.sessionStorage.getItem(QUEUE_MANAGEMENT_SERVICE_KEY);
+      return Object.values(QUEUE_SERVICE).includes(saved) ? saved : QUEUE_SERVICE.FITTING;
+    } catch (error) {
+      console.warn("queue management service preference could not be read", error);
+      return QUEUE_SERVICE.FITTING;
+    }
+  });
   const services = [
     { type: QUEUE_SERVICE.FITTING, label: "度身排隊管理" },
     { type: QUEUE_SERVICE.PICKUP, label: "取貨排隊管理" },
@@ -568,7 +581,14 @@ export default function QueuePage({
               type="button"
               className="pos-btn"
               aria-pressed={selected}
-              onClick={() => setServiceType(service.type)}
+              onClick={() => {
+                setServiceType(service.type);
+                try {
+                  window.sessionStorage.setItem(QUEUE_MANAGEMENT_SERVICE_KEY, service.type);
+                } catch (error) {
+                  console.warn("queue management service preference could not be saved", error);
+                }
+              }}
               style={{
                 minHeight: 48,
                 padding: "10px 8px",
