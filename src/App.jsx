@@ -8,6 +8,7 @@ import { isSupabaseConfigured, isSupabaseAuthEnabled, supabase, createPasswordVe
 import { logStartupCheck, getStartupErrorUI, validateAllEnvVars } from "./config/envValidation";
 import { getUserFriendlyError } from "./config/errorHandler";
 import { Alert } from "./components/common";
+import { availableFeatureIds, getDisabledQueueRedirect, QUEUE_FEATURES_ENABLED } from "./config/queueFeatureAvailability.js";
 import { dimensionLabels, lengthDimensionLabel, sizeDimensionLabel } from "./data/productDimensions.js";
 const CustomerCheckinPage = lazy(() => import("./pages/CustomerCheckinPage"));
 const QueuePage = lazy(() => import("./pages/QueuePage"));
@@ -1625,7 +1626,7 @@ const STAFF_ROUTE_TABS = {
 
 function StaffRolePermissionsTable() {
   const rows = [
-    { label: "可使用分頁", value: (permissions) => permissions.tabs.map((tab) => STAFF_PERMISSION_TAB_LABELS[tab]) },
+    { label: "可使用分頁", value: (permissions) => availableFeatureIds(permissions.tabs).map((tab) => STAFF_PERMISSION_TAB_LABELS[tab]) },
     { label: "編輯商品價格及尺碼", value: (permissions) => permissions.canEditProducts ? "可以" : "—" },
     { label: "管理學校及款式", value: (permissions) => permissions.canManageSchools ? "可以" : "—" },
     { label: "商品 CSV 匯入／匯出", value: (permissions) => permissions.canImportExport ? "可以" : "—" },
@@ -2360,7 +2361,7 @@ export default function UniformPOS() {
 
   // 只有公開客人登記頁才使用遊客身份；員工頁面可帶 school_id 而不跳過登入。
   useEffect(() => {
-    if (window.location.pathname !== "/checkin") return;
+    if (!QUEUE_FEATURES_ENABLED || window.location.pathname !== "/checkin") return;
     const params = new URLSearchParams(window.location.search);
     const schoolIdFromUrl = params.get("school_id");
     const schoolFromUrl = schoolIdFromUrl || params.get("school");
@@ -4006,7 +4007,7 @@ export default function UniformPOS() {
   const canSwitchSchool = isDirectoryPage;
 
   useEffect(() => {
-    if (location.pathname === "/" && publicRouteSchool) {
+    if (QUEUE_FEATURES_ENABLED && location.pathname === "/" && publicRouteSchool) {
       navigate(`/checkin?school_id=${encodeURIComponent(publicRouteSchool)}`);
     }
   }, [location.pathname, publicRouteSchool, navigate]);
@@ -4039,13 +4040,18 @@ export default function UniformPOS() {
     }
   };
 
-  const directoryIds = perms?.tabs || [];
+  const directoryIds = availableFeatureIds(perms?.tabs || []);
   const mobileNavigationItems = [
     { id: "directory", label: "目錄", path: "/menu", icon: House },
     { id: "sale", label: "銷售", path: "/sale", permission: "sale", icon: ShoppingCart },
     { id: "queue", label: "叫號", path: "/queue", permission: "queue", icon: Radio },
     { id: "records", label: "記錄", path: "/records", permission: "records", icon: ClipboardList },
   ].filter((item) => !item.permission || directoryIds.includes(item.permission));
+
+  const disabledQueueRedirect = getDisabledQueueRedirect(location.pathname, Boolean(publicQueueParam));
+  if (disabledQueueRedirect) {
+    return <Navigate to={disabledQueueRedirect} replace />;
+  }
 
   if (location.pathname === "/checkin") {
     return <Suspense fallback={<PageLoading />}><CustomerCheckinPage school={publicRouteSchool} schools={customerSchools} schoolMeta={schoolMeta} onSubmit={handleGuestSubmit} /></Suspense>;
