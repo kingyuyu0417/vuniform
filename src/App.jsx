@@ -4296,21 +4296,6 @@ export default function UniformPOS() {
                 {syncing ? "同步緊…" : lastSync ? `已同步 ${lastSync.toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "多裝置同步中"}
               </button>
             )}
-            {session.role !== ROLES.GUEST && selectedSchool && (
-              <button
-                className="pos-btn"
-                onClick={() => {
-                  const outlet = outletNameForSchool(selectedSchool, schoolMeta);
-                  const url = `/queue-display?school_id=${encodeURIComponent(selectedSchool)}&outlet=${encodeURIComponent(outlet)}`;
-                  window.open(url, "_blank", "noopener,noreferrer");
-                }}
-                style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, opacity: 0.9, background: "rgba(255,255,255,0.12)", color: "#fff", padding: "4px 8px", borderRadius: 8 }}
-                title="開啟目前學校的公開叫號頁"
-              >
-                <QrCode size={12} />
-                公開叫號頁
-              </button>
-            )}
             <button
               className="pos-btn"
               onClick={logout}
