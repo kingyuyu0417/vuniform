@@ -14,7 +14,7 @@ const styles = {
   label: { display: "block", marginBottom: 5, fontSize: 14, fontWeight: 700 },
   input: { width: "100%", minHeight: 64, boxSizing: "border-box", padding: "14px 12px", border: "2px solid #CBD5E1", borderRadius: 10, fontSize: 28, textAlign: "center" },
   callButtons: { display: "grid", gap: 7, marginTop: 9 },
-  callButton: { width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "10px 14px", border: 0, borderRadius: 10, background: "#1F3A5F", color: "#fff", fontSize: 16, fontWeight: 800, cursor: "pointer" },
+  callButton: { width: "100%", minHeight: 64, boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px 12px", border: 0, borderRadius: 10, color: "#fff", fontSize: 20, fontWeight: 800, cursor: "pointer" },
   message: { minHeight: 18, margin: "8px 0 0", color: "#475569", fontSize: 13, textAlign: "center" },
   error: { color: "#B42318" },
 };
@@ -279,17 +279,17 @@ export default function ManualPickupCallPage() {
           />
           <div style={styles.callButtons}>
             {[
-              { value: "yue", label: "廣東話叫號" },
-              { value: "en", label: "英文叫號" },
-              { value: "zh", label: "普通話叫號" },
-            ].map(({ value, label }) => (
+              { value: "yue", label: "廣東話叫號", color: "#15803D" },
+              { value: "en", label: "英文叫號", color: "#2563EB" },
+              { value: "zh", label: "普通話叫號", color: "#7C3AED" },
+            ].map(({ value, label, color }) => (
               <button
                 key={value}
                 type="submit"
                 value={value}
                 disabled={isCalling}
                 aria-label={label}
-                style={{ ...styles.callButton, opacity: isCalling ? 0.65 : 1 }}
+                style={{ ...styles.callButton, background: color, opacity: isCalling ? 0.65 : 1 }}
               >
                 <Volume2 size={20} aria-hidden="true" />
                 {isCalling && callingLanguage === value ? "播放中…" : label}
