@@ -12,7 +12,7 @@ const styles = {
   description: { margin: "0 0 10px", color: "#64748B", fontSize: 13, lineHeight: 1.4 },
   card: { padding: 14, border: "1px solid #E2E8F0", borderRadius: 14, background: "#fff", boxShadow: "0 8px 24px rgba(31,58,95,.08)" },
   label: { display: "block", marginBottom: 5, fontSize: 14, fontWeight: 700 },
-  input: { width: "100%", boxSizing: "border-box", padding: "9px 12px", border: "2px solid #CBD5E1", borderRadius: 10, fontSize: 21, textAlign: "center" },
+  input: { width: "100%", minHeight: 64, boxSizing: "border-box", padding: "14px 12px", border: "2px solid #CBD5E1", borderRadius: 10, fontSize: 28, textAlign: "center" },
   callButtons: { display: "grid", gap: 7, marginTop: 9 },
   callButton: { width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "10px 14px", border: 0, borderRadius: 10, background: "#1F3A5F", color: "#fff", fontSize: 16, fontWeight: 800, cursor: "pointer" },
   message: { minHeight: 18, margin: "8px 0 0", color: "#475569", fontSize: 13, textAlign: "center" },
