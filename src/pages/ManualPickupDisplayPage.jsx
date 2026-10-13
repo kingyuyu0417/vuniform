@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Volume2 } from "lucide-react";
+import { MapPin, Radio, Volume2, Wifi, WifiOff } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "../supabaseClient.js";
 import { createManualPickupDisplayConnection } from "../services/manualPickupDisplayService.js";
 import { formatManualPickupAnnouncement } from "../data/manualPickupCall.js";
@@ -162,46 +162,75 @@ export default function ManualPickupDisplayPage({ schoolName = "" }) {
       : ["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(connectionStatus)
         ? "連線中斷，請重新整理"
         : "正在連線";
+  const isConnected = connectionStatus === "SUBSCRIBED";
 
   return (
-    <main style={styles.page}>
-      <div style={styles.eyebrow}>取貨叫號 · 客人顯示</div>
-      <h1 style={styles.school}>{schoolName || "未指定學校"}</h1>
-      <div style={styles.panel} aria-live="polite" aria-atomic="true">
-        <div style={styles.label}>{currentCall ? "最新叫號" : connectionLabel}</div>
-        <div style={styles.number}>{currentCall?.queueNumber || "—"}</div>
-        {currentCall && <div style={styles.detail}>請留意叫號，並前往取貨櫃位</div>}
+    <main className="pickup-display-page" style={styles.page}>
+      <style>{`html, body { width: 100%; height: 100%; min-height: 0; margin: 0; overflow: hidden; } #root { width: 100%; height: 100%; min-height: 0; zoom: 1; } @media (max-height: 650px) { .pickup-display-page { padding: 8px 18px !important; gap: 6px !important; } .pickup-display-content { gap: 6px !important; } .pickup-display-brand-icon { width: 36px !important; height: 36px !important; } .pickup-display-number { font-size: clamp(64px, 17vh, 110px) !important; } .pickup-display-empty-number { margin: 8px 0 !important; font-size: 18px !important; } .pickup-display-panel { padding: 10px 16px !important; border-radius: 18px !important; } .pickup-display-label { margin-top: 3px !important; font-size: 18px !important; } .pickup-display-destination { font-size: 16px !important; } .pickup-display-footer { font-size: 11px !important; } } @media (max-width: 520px) { .pickup-display-header { align-items: flex-start !important; } .pickup-display-connection { padding: 7px 9px !important; font-size: 11px !important; } }`}</style>
+      <header className="pickup-display-header" style={styles.header}>
+        <div style={styles.brand}>
+          <div className="pickup-display-brand-icon" style={styles.brandIcon}><Radio size={23} strokeWidth={2.5} aria-hidden="true" /></div>
+          <div>
+            <div style={styles.eyebrow}>UNIFORM SERVICE</div>
+            <div style={styles.headerTitle}>取貨叫號</div>
+          </div>
+        </div>
+        <div className="pickup-display-connection" style={{ ...styles.connection, ...(isConnected ? styles.connectionOnline : {}) }} role="status">
+          {isConnected ? <Wifi size={16} aria-hidden="true" /> : <WifiOff size={16} aria-hidden="true" />}
+          <span>{connectionLabel}</span>
+        </div>
+      </header>
+
+      <section className="pickup-display-content" style={styles.content}>
+        <h1 style={styles.school}>{schoolName || "未指定學校"}</h1>
+        <div className="pickup-display-panel" style={styles.panel} aria-live="polite" aria-atomic="true">
+          <div style={styles.callEyebrow}>{currentCall ? "NOW SERVING" : "PICKUP QUEUE"}</div>
+          <div className="pickup-display-label" style={styles.label}>{currentCall ? "請以下籌號客人前往取貨" : "等候職員叫號"}</div>
+          <div className={currentCall ? "pickup-display-number" : "pickup-display-empty-number"} style={currentCall ? styles.number : styles.emptyNumber}>
+            {currentCall?.queueNumber || "稍後會於此顯示"}
+          </div>
+          <div className="pickup-display-destination" style={styles.destination}><MapPin size={20} aria-hidden="true" /> 請前往取貨櫃位</div>
+        </div>
         {audioStatus === "BLOCKED" && currentCall && (
           <button type="button" onClick={playLatestCall} style={styles.audioButton}>
-            <Volume2 size={22} aria-hidden="true" /> 按此播放最新叫號
+            <Volume2 size={20} aria-hidden="true" /> 按此播放最新叫號
           </button>
         )}
-        {audioStatus === "ENABLED" && <div style={styles.audioEnabled}><Volume2 size={20} aria-hidden="true" /> 聲音提示已啟用</div>}
-        {audioStatus === "AUTO" && <div style={styles.audioHint}>收到叫號時會嘗試自動播報；若瀏覽器阻擋，請按一下播放</div>}
+        {audioStatus === "ENABLED" && <div style={styles.audioState}><Volume2 size={17} aria-hidden="true" /> 聲音播報中</div>}
+        {audioStatus === "AUTO" && <div style={styles.audioHint}>收到叫號時將自動播放聲音提示</div>}
         {audioError && <div role="alert" style={styles.error}>{audioError}</div>}
-      </div>
-      <div style={styles.footer}>
+      </section>
+      <footer className="pickup-display-footer" style={styles.footer}>
         {currentCall
-          ? `${languageNames[currentCall.language] || "語音"}播報${audioStatus === "ENABLED" ? " · 聲音已啟用" : audioStatus === "BLOCKED" ? " · 瀏覽器已阻擋自動播放" : " · 正嘗試自動播放"}`
+          ? `${languageNames[currentCall.language] || "語音"}播報${audioStatus === "BLOCKED" ? " · 瀏覽器已阻擋自動播放" : ""}`
           : connectionStatus === "MISSING_SCHOOL"
             ? "連結未指定學校，請由職員叫號頁重新開啟。"
-            : "本頁會即時顯示並播報職員最新叫出的取貨籌號"}
-      </div>
+            : "請留意螢幕及語音提示 · 籌號會即時更新"}
+      </footer>
     </main>
   );
 }
 
 const styles = {
-  page: { minHeight: "100vh", boxSizing: "border-box", padding: "5vh 5vw", display: "grid", gridTemplateRows: "auto auto 1fr auto", justifyItems: "center", gap: 14, background: "#071426", color: "#fff", fontFamily: "system-ui, sans-serif", textAlign: "center" },
-  eyebrow: { color: "#7dd3fc", fontSize: "clamp(15px, 2vw, 24px)", letterSpacing: 2, fontWeight: 800 },
-  school: { margin: 0, color: "#e2e8f0", fontSize: "clamp(22px, 3vw, 38px)", overflowWrap: "anywhere" },
-  panel: { width: "100%", maxWidth: 1100, boxSizing: "border-box", alignSelf: "center", padding: "4vh 5vw", border: "2px solid #1e5a85", borderRadius: 24, background: "#0b2038", boxShadow: "0 0 55px rgba(14,165,233,.18)" },
-  label: { color: "#bae6fd", fontSize: "clamp(22px, 4vw, 44px)", fontWeight: 800 },
-  number: { color: "#fef08a", fontSize: "clamp(100px, 32vw, 340px)", lineHeight: 1, fontWeight: 950, letterSpacing: "0.04em", overflowWrap: "anywhere" },
-  detail: { color: "#e2e8f0", fontSize: "clamp(20px, 3vw, 36px)", fontWeight: 700 },
-  audioButton: { marginTop: 24, padding: "14px 24px", display: "inline-flex", alignItems: "center", gap: 10, border: 0, borderRadius: 12, background: "#15803d", color: "#fff", fontSize: 20, fontWeight: 800, cursor: "pointer" },
-  audioEnabled: { marginTop: 24, display: "inline-flex", alignItems: "center", gap: 8, color: "#86efac", fontSize: 18, fontWeight: 700 },
-  audioHint: { marginTop: 24, color: "#cbd5e1", fontSize: 15 },
-  error: { marginTop: 12, color: "#fecaca", fontWeight: 700 },
-  footer: { color: "#a8b8cc", fontSize: "clamp(14px, 2vw, 22px)" },
+  page: { width: "100%", height: "100vh", height: "100dvh", minHeight: 0, boxSizing: "border-box", overflow: "hidden", padding: "clamp(18px, 3.2vh, 36px) clamp(18px, 5vw, 72px) clamp(16px, 2.5vh, 28px)", display: "grid", gridTemplateRows: "auto 1fr auto", gap: "clamp(12px, 2.4vh, 26px)", background: "radial-gradient(ellipse at 50% 38%, #ffffff 0%, #f7faff 53%, #edf3fa 100%)", color: "#18314f", fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", textAlign: "center" },
+  header: { width: "100%", maxWidth: 1180, justifySelf: "center", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 },
+  brand: { display: "flex", alignItems: "center", gap: 12, textAlign: "left" },
+  brandIcon: { width: 46, height: 46, display: "grid", placeItems: "center", borderRadius: 15, background: "#e7f1ff", color: "#1763b6" },
+  eyebrow: { color: "#66809d", fontSize: 11, letterSpacing: 1.8, fontWeight: 850 },
+  headerTitle: { marginTop: 2, color: "#18314f", fontSize: 18, fontWeight: 850 },
+  connection: { display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 12px", border: "1px solid #dbe4ef", borderRadius: 999, background: "#fff", color: "#697b90", fontSize: 13, fontWeight: 750, whiteSpace: "nowrap" },
+  connectionOnline: { borderColor: "#b9e6d0", background: "#effaf4", color: "#218052" },
+  content: { width: "100%", maxWidth: 920, justifySelf: "center", alignSelf: "center", display: "grid", justifyItems: "center", alignContent: "center", gap: "clamp(12px, 2.4vh, 24px)" },
+  school: { maxWidth: "100%", margin: 0, color: "#526b86", fontSize: "clamp(20px, 3.3vw, 32px)", lineHeight: 1.25, fontWeight: 750, overflowWrap: "anywhere" },
+  panel: { width: "100%", boxSizing: "border-box", padding: "clamp(22px, 4vh, 42px) clamp(16px, 4vw, 48px)", border: "1px solid #e2eaf3", borderRadius: "clamp(20px, 3vw, 32px)", background: "linear-gradient(145deg, #ffffff 0%, #f9fbff 100%)", boxShadow: "0 18px 55px rgba(35, 69, 108, .11), 0 2px 8px rgba(35, 69, 108, .04)" },
+  callEyebrow: { color: "#2876c7", fontSize: 12, letterSpacing: 2.6, fontWeight: 900 },
+  label: { marginTop: 8, color: "#37516e", fontSize: "clamp(20px, 3.1vw, 30px)", fontWeight: 750 },
+  number: { margin: "clamp(4px, 1.5vh, 16px) 0", color: "#173c68", fontSize: "clamp(104px, 27vh, 280px)", lineHeight: .96, fontWeight: 900, letterSpacing: ".025em", fontVariantNumeric: "tabular-nums", overflowWrap: "anywhere" },
+  emptyNumber: { margin: "clamp(22px, 5vh, 56px) 0", color: "#98a9bb", fontSize: "clamp(19px, 3vw, 28px)", lineHeight: 1.4, fontWeight: 650 },
+  destination: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, color: "#526b86", fontSize: "clamp(17px, 2.6vw, 24px)", fontWeight: 700 },
+  audioButton: { minHeight: 50, padding: "12px 20px", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 9, border: 0, borderRadius: 13, background: "#176bc1", color: "#fff", fontSize: 16, fontWeight: 800, boxShadow: "0 5px 14px rgba(23, 107, 193, .22)", cursor: "pointer" },
+  audioState: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, color: "#218052", fontSize: 14, fontWeight: 750 },
+  audioHint: { color: "#72859b", fontSize: 13 },
+  error: { marginTop: 4, color: "#b42318", fontSize: 14, fontWeight: 700 },
+  footer: { justifySelf: "center", color: "#8092a7", fontSize: "clamp(12px, 1.5vw, 15px)", fontWeight: 600 },
 };
