@@ -5,7 +5,6 @@ const QUEUE_FEATURE_PATHS = new Set([
   "/checkin",
   "/queue-status",
   "/queue-display",
-  "/queue",
   "/track",
   "/fitting",
   "/pickup",

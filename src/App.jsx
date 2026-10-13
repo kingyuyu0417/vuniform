@@ -11,7 +11,7 @@ import { Alert } from "./components/common";
 import { availableFeatureIds, getDisabledQueueRedirect, QUEUE_FEATURES_ENABLED } from "./config/queueFeatureAvailability.js";
 import { dimensionLabels, lengthDimensionLabel, sizeDimensionLabel } from "./data/productDimensions.js";
 const CustomerCheckinPage = lazy(() => import("./pages/CustomerCheckinPage"));
-const QueuePage = lazy(() => import("./pages/QueuePage"));
+const ManualPickupCallPage = lazy(() => import("./pages/ManualPickupCallPage"));
 const FittingPage = lazy(() => import("./pages/FittingPage"));
 const PickupPage = lazy(() => import("./pages/PickupPage"));
 const CashierVerifyPage = lazy(() => import("./pages/CashierVerifyPage"));
@@ -4044,7 +4044,7 @@ export default function UniformPOS() {
   const mobileNavigationItems = [
     { id: "directory", label: "目錄", path: "/menu", icon: House },
     { id: "sale", label: "銷售", path: "/sale", permission: "sale", icon: ShoppingCart },
-    { id: "queue", label: "叫號", path: "/queue", permission: "queue", icon: Radio },
+    ...(perms?.tabs.includes("queue") ? [{ id: "queue", label: "叫號", path: "/queue", icon: Radio }] : []),
     { id: "records", label: "記錄", path: "/records", permission: "records", icon: ClipboardList },
   ].filter((item) => !item.permission || directoryIds.includes(item.permission));
 
@@ -4384,7 +4384,7 @@ export default function UniformPOS() {
           />
           <Route
             path="/queue"
-            element={<QueuePage visits={queueVisits} currentSchoolId={selectedSchool || publicRouteSchool} outletName={outletNameForSchool(selectedSchool || publicRouteSchool, schoolMeta)} calledBy={isSupabaseAuthEnabled ? session?.id || "" : ""} onViewGuest={(guest) => setSelectedGuest(guest)} onAssign={handleAssignGuest} onReadyForSale={handleReadyForSale} />}
+            element={<ManualPickupCallPage />}
           />
           <Route
             path="/pickup"

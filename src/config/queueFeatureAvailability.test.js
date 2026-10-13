@@ -21,9 +21,13 @@ test("public queue routes redirect to the public home page", () => {
 });
 
 test("staff queue routes redirect to the directory", () => {
-  for (const pathname of ["/queue", "/track", "/fitting", "/pickup", "/cashier"]) {
+  for (const pathname of ["/track", "/fitting", "/pickup", "/cashier"]) {
     assert.equal(getDisabledQueueRedirect(pathname), "/menu");
   }
+});
+
+test("the simplified manual pickup caller remains available at the queue route", () => {
+  assert.equal(getDisabledQueueRedirect("/queue"), null);
 });
 
 test("sales and unrelated routes remain available", () => {
