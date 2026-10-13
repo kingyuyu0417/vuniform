@@ -1,6 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Volume2 } from "lucide-react";
-import { formatManualPickupAnnouncement, normalizeManualPickupNumber } from "../data/manualPickupCall.js";
+import {
+  formatManualPickupAnnouncement,
+  getPickupSpeechStartDelayMs,
+  normalizeManualPickupNumber,
+} from "../data/manualPickupCall.js";
 
 const styles = {
   page: { maxWidth: 480, margin: "0 auto", padding: "8px 12px 12px", color: "#1F2937" },
@@ -17,7 +21,7 @@ const styles = {
 
 function speakPickupNumber(number, language) {
   if (!window.speechSynthesis || typeof window.SpeechSynthesisUtterance === "undefined") {
-    throw new Error("此瀏覽器不支援語音播報。");
+    return Promise.reject(new Error("此瀏覽器不支援語音播報。"));
   }
 
   window.speechSynthesis.cancel();
@@ -138,20 +142,35 @@ export default function ManualPickupCallPage() {
     };
   }, []);
 
-  const playChime = async () => {
+  const playChime = async (onChimeEnding) => {
     const context = audioContextRef.current;
     if (context) {
       if (context.state === "suspended") await context.resume();
       const buffer = chimeBufferRef.current || await chimeBufferReadyRef.current;
       if (buffer) {
         return new Promise((resolve, reject) => {
+          let speechStarted = false;
+          const startSpeech = () => {
+            if (speechStarted) return;
+            speechStarted = true;
+            onChimeEnding();
+          };
           const source = context.createBufferSource();
           source.buffer = buffer;
           source.connect(context.destination);
-          source.onended = resolve;
+          const speechTimer = window.setTimeout(
+            startSpeech,
+            getPickupSpeechStartDelayMs(buffer.duration),
+          );
+          source.onended = () => {
+            window.clearTimeout(speechTimer);
+            startSpeech();
+            resolve();
+          };
           try {
             source.start();
           } catch (playError) {
+            window.clearTimeout(speechTimer);
             reject(playError);
           }
         });
@@ -165,13 +184,25 @@ export default function ManualPickupCallPage() {
         return;
       }
 
+      let speechStarted = false;
+      const speechDelayMs = Number.isFinite(audio.duration)
+        ? getPickupSpeechStartDelayMs(audio.duration - 0.9)
+        : 0;
+      const speechTimer = window.setTimeout(() => {
+        speechStarted = true;
+        onChimeEnding();
+      }, speechDelayMs);
       const finish = (errorToReport) => {
+        window.clearTimeout(speechTimer);
         audio.removeEventListener("ended", onEnded);
         audio.removeEventListener("error", onError);
         if (errorToReport) reject(errorToReport);
         else resolve();
       };
-      const onEnded = () => finish();
+      const onEnded = () => {
+        if (!speechStarted) onChimeEnding();
+        finish();
+      };
       const onError = () => finish(new Error("提示音播放失敗，請檢查裝置音量後重試。"));
 
       audio.pause();
@@ -190,8 +221,15 @@ export default function ManualPickupCallPage() {
     setMessage("");
 
     try {
-      await playChime();
-      await speakPickupNumber(number, language);
+      let speechResultPromise;
+      await playChime(() => {
+        speechResultPromise = speakPickupNumber(number, language).then(
+          () => ({ error: null }),
+          (speechError) => ({ error: speechError }),
+        );
+      });
+      const speechResult = await speechResultPromise;
+      if (speechResult.error) throw speechResult.error;
       setMessage(language === "en"
         ? `Number ${number} has been called for pickup.`
         : language === "zh"

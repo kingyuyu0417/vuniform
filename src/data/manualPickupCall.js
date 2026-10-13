@@ -15,3 +15,7 @@ export const formatManualPickupAnnouncement = (value, language = "yue") => {
   if (language === "yue") return `${number}號請取貨`;
   return "";
 };
+
+export const getPickupSpeechStartDelayMs = (chimeDurationSeconds, leadMs = 300) => (
+  Math.max(0, Math.round(chimeDurationSeconds * 1000 - leadMs))
+);

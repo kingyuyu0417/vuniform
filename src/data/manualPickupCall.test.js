@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   formatManualPickupAnnouncement,
+  getPickupSpeechStartDelayMs,
   normalizeManualPickupNumber,
 } from "./manualPickupCall.js";
 
@@ -24,4 +25,9 @@ test("pickup announcements use the selected spoken language", () => {
   assert.equal(formatManualPickupAnnouncement("1", "zh"), "1号请取货");
   assert.equal(formatManualPickupAnnouncement("1", "unsupported"), "");
   assert.equal(formatManualPickupAnnouncement("0", "yue"), "");
+});
+
+test("pickup speech is scheduled shortly before the chime ends to offset speech startup delay", () => {
+  assert.equal(getPickupSpeechStartDelayMs(1.45), 1150);
+  assert.equal(getPickupSpeechStartDelayMs(0.2), 0);
 });
