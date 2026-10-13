@@ -17,8 +17,11 @@ test("manual pickup numbers reject empty, zero, non-numeric, and out-of-range in
   }
 });
 
-test("pickup announcement contains only the entered number and pickup message", () => {
-  assert.equal(formatManualPickupAnnouncement("1"), "1號請取貨");
-  assert.equal(formatManualPickupAnnouncement("001"), "1號請取貨");
-  assert.equal(formatManualPickupAnnouncement("0"), "");
+test("pickup announcements use the selected spoken language", () => {
+  assert.equal(formatManualPickupAnnouncement("1", "yue"), "1號請取貨");
+  assert.equal(formatManualPickupAnnouncement("001", "yue"), "1號請取貨");
+  assert.equal(formatManualPickupAnnouncement("1", "en"), "Number 1, please collect your order.");
+  assert.equal(formatManualPickupAnnouncement("1", "zh"), "1号请取货");
+  assert.equal(formatManualPickupAnnouncement("1", "unsupported"), "");
+  assert.equal(formatManualPickupAnnouncement("0", "yue"), "");
 });

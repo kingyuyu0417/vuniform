@@ -6,7 +6,12 @@ export const normalizeManualPickupNumber = (value) => {
   return number >= 1 && number <= 999 ? String(number) : "";
 };
 
-export const formatManualPickupAnnouncement = (value) => {
+export const formatManualPickupAnnouncement = (value, language = "yue") => {
   const number = normalizeManualPickupNumber(value);
-  return number ? `${number}號請取貨` : "";
+  if (!number) return "";
+
+  if (language === "en") return `Number ${number}, please collect your order.`;
+  if (language === "zh") return `${number}号请取货`;
+  if (language === "yue") return `${number}號請取貨`;
+  return "";
 };
