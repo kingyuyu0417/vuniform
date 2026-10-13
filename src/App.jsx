@@ -4792,6 +4792,11 @@ function SaleTab({
   const [genderFilter, setGenderFilter] = useState("全部");
   const [selectedLength, setSelectedLength] = useState("");
   const [quantityPrompt, setQuantityPrompt] = useState(null);
+  const closeProductPicker = () => {
+    setQuantityPrompt(null);
+    setSelectedLength("");
+    setSelectedProduct(null);
+  };
   const [exchangePickerOpen, setExchangePickerOpen] = useState(false);
   const [exchangeOrder, setExchangeOrder] = useState(null);
   const [exchangeItems, setExchangeItems] = useState([]);
@@ -4906,6 +4911,20 @@ function SaleTab({
 
   useEffect(() => {
     setSelectedLength("");
+  }, [selectedProduct]);
+
+  useEffect(() => {
+    if (!selectedProduct) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") closeProductPicker();
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
   }, [selectedProduct]);
 
   useEffect(() => {
@@ -5368,22 +5387,20 @@ function SaleTab({
         </div>
       )}
 
-      {!selectedProduct && (
-        <div style={{ display: "flex", gap: 8, marginBottom: 12, padding: 4, background: "#F7F7F5", borderRadius: 10 }}>
-          {["全部", "男裝", "女裝"].map((gender) => (
-            <button
-              key={gender}
-              className="pos-btn"
-              onClick={() => setGenderFilter(gender)}
-              style={{ flex: 1, padding: "9px 4px", borderRadius: 8, background: genderFilter === gender ? "#1F3A5F" : "transparent", color: genderFilter === gender ? "#fff" : "#555", fontSize: 13, fontWeight: 600 }}
-            >
-              {gender}
-            </button>
-          ))}
-        </div>
-      )}
+      <div style={{ display: "flex", gap: 8, marginBottom: 12, padding: 4, background: "#F7F7F5", borderRadius: 10 }}>
+        {["全部", "男裝", "女裝"].map((gender) => (
+          <button
+            key={gender}
+            className="pos-btn"
+            onClick={() => setGenderFilter(gender)}
+            style={{ flex: 1, padding: "9px 4px", borderRadius: 8, background: genderFilter === gender ? "#1F3A5F" : "transparent", color: genderFilter === gender ? "#fff" : "#555", fontSize: 13, fontWeight: 600 }}
+          >
+            {gender}
+          </button>
+        ))}
+      </div>
 
-      {!selectedProduct && filteredProducts.length === 0 && (
+      {filteredProducts.length === 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
           <div style={{ gridColumn: "1 / -1", fontSize: 13, color: "#999", padding: "8px 2px" }}>
             此分類未有商品，請選擇其他分類或到「商品」分頁新增／匯入。
@@ -5391,7 +5408,7 @@ function SaleTab({
         </div>
       )}
 
-      {!selectedProduct && <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: "#2F6F68", padding: "8px 2px", borderBottom: "1px solid #DDE8E5", marginBottom: 8 }}>
           商品列表
         </div>
@@ -5402,8 +5419,9 @@ function SaleTab({
               className="pos-btn sale-product-button"
               aria-pressed={selectedProduct === p.id}
               onClick={() => {
-                setSelectedProduct(p.id === selectedProduct ? null : p.id);
+                setSelectedProduct(p.id);
                 setSelectedLength("");
+                setQuantityPrompt(null);
               }}
               style={{
                 padding: "12px 10px",
@@ -5422,29 +5440,37 @@ function SaleTab({
             </button>
           ))}
         </div>
-      </div>}
+      </div>
 
-      {selectedProduct && (
-        <div key={selectedProduct} style={{ marginBottom: 16 }}>
-          <button
-            className="pos-btn"
-            onClick={() => {
-              setSelectedProduct(null);
-              setSelectedLength("");
-            }}
-            style={{ marginBottom: 10, padding: "7px 10px", borderRadius: 8, background: "#F0F0EC", border: "1px solid #ddd", color: "#1F3A5F", fontSize: 12, fontWeight: 700 }}
+      {selectedProduct && selectedProductData && createPortal(
+        <div
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeProductPicker();
+          }}
+          style={{ position: "fixed", inset: 0, zIndex: 1100, display: "grid", placeItems: "center", padding: 12, background: "rgba(15,23,42,0.58)" }}
+        >
+          <div
+            key={selectedProduct}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sale-product-picker-title"
+            style={{ width: "min(100%, 520px)", maxHeight: "min(88vh, 760px)", overflowY: "auto", boxSizing: "border-box", padding: 18, borderRadius: 16, background: "#fff", boxShadow: "0 20px 60px rgba(15,23,42,0.3)" }}
           >
-            ← 返回選款式
-          </button>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
           {(() => {
             const product = selectedProductData;
             return product ? (
-              <div style={{ background: "#1F3A5F", color: "#fff", borderRadius: 10, padding: "12px 14px", marginBottom: 12, boxShadow: "0 2px 6px rgba(31,58,95,0.18)" }}>
-                <div style={{ fontSize: 11, opacity: 0.8, marginBottom: 3 }}>目前選擇款式</div>
-                <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.35, overflowWrap: "anywhere" }}>{displayProductName(product.name)}</div>
+              <div>
+                <div style={{ fontSize: 11, color: "#64748B", marginBottom: 3 }}>選擇商品規格</div>
+                <div id="sale-product-picker-title" style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.35, color: "#1F3A5F", overflowWrap: "anywhere" }}>{displayProductName(product.name)}</div>
               </div>
             ) : null;
           })()}
+            <button type="button" className="pos-btn" onClick={closeProductPicker} aria-label="關閉商品選擇" style={{ width: 40, height: 40, flexShrink: 0, display: "grid", placeItems: "center", borderRadius: 10, background: "#F1F5F9", border: "1px solid #E2E8F0", color: "#334155" }}>
+              <X size={20} />
+            </button>
+          </div>
           {(() => {
             const product = selectedProductData;
             const categoryLabel = hasLengthOptions(product) ? `先揀${lengthDimensionLabel(product)}，再揀${sizeDimensionLabel(product)}：` : "揀尺碼：";
@@ -5512,9 +5538,8 @@ function SaleTab({
               </>
             );
           })()}
-          {(() => {
+          {!quantityPrompt && (() => {
             const product = selectedProductData;
-            if (!product) return null;
             if (!product) return null;
             const hasLengths = hasLengthOptions(product);
             if (!hasLengths) return (
@@ -5568,7 +5593,9 @@ function SaleTab({
               </div>
             );
           })()}
-        </div>
+          </div>
+        </div>,
+        document.body,
       )}
 
       <div style={{ background: "#F7F7F5", borderRadius: 12, padding: 14 }}>
