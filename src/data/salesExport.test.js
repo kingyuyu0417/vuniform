@@ -56,6 +56,14 @@ test("exports order amounts once per order and keeps item rows separate", () => 
   assert.equal(items[0].includes("單據金額"), false);
   assert.equal(items[1][11], 200);
   assert.equal(items[3][2], "已作廢");
+
+  const summary = findSheet(sheets, "摘要").rows;
+  assert.deepEqual(summary[3], ["當日總收入（已扣單據退款）", 280]);
+  assert.deepEqual(summary[9], ["款式", "尺碼", "長度", "售出件數", "退回件數", "淨售件數"]);
+  assert.deepEqual(summary.slice(10), [
+    ["恤衫", "M", "", 2, 0, 2],
+    ["襪", "3對裝", "", 1, 0, 1],
+  ]);
 });
 
 test("groups by school, outlet, cashier, and item without counting voided sales", () => {
@@ -86,6 +94,7 @@ test("groups by school, outlet, cashier, and item without counting voided sales"
   assert.deepEqual(findSheet(sheets, "按門店").rows[1], ["分店甲", 1, 2, 200, 0, 200]);
   assert.deepEqual(findSheet(sheets, "按員工").rows[1], ["店員甲", 1, 2, 200, 0, 200]);
   assert.deepEqual(findSheet(sheets, "商品分析").rows[1], ["恤衫", "M", "", 2, 1, 200, 100, 100]);
+  assert.deepEqual(findSheet(sheets, "摘要").rows[10], ["恤衫", "M", "", 2, 1, 1]);
 });
 
 test("keeps replacement revenue at the new full total while exporting only the refund difference", () => {
@@ -134,6 +143,47 @@ test("exports receiptless exchanges as adjustments without inventing a source re
   assert.equal(findSheet(sheets, "收市對數").rows[3][1], 30);
 });
 
+test("calculates daily operating ratios and gender mix from item-level catalog categories", () => {
+  const sheets = buildSalesExportSheets([
+    {
+      date: "2026-09-24",
+      total: 250,
+      cashReceived: 250,
+      itemCount: 6,
+      items: [
+        { name: "男生恤衫", gender: "boys", size: "M", price: 50, qty: 2 },
+        { name: "女生校裙", gender: "girls", size: "S", price: 100, qty: 1 },
+        { name: "男女生襪", gender: "unisex", size: "3對裝", price: 10, qty: 2 },
+        { name: "未分類領帶", size: "M", price: 30, qty: 1 },
+      ],
+    },
+    {
+      date: "2026-09-24",
+      total: 0,
+      itemCount: 1,
+      untrackedExchange: true,
+      adjustmentReason: "商品退回",
+      items: [{ name: "女生校裙", gender: "girls", size: "S", price: 100, qty: 1, exchangeReturn: true }],
+    },
+  ], { genderForItem: (_order, item) => item.gender });
+
+  const analysis = findSheet(sheets, "比例分析").rows;
+  assert.equal(analysis[3][1], 250);
+  assert.equal(analysis[5][1], 125);
+  assert.equal(analysis[6][1], 6);
+  assert.equal(analysis[7][1], 1);
+  assert.equal(analysis[8][1], 3);
+  assert.equal(analysis[9][1], 1 / 7);
+  assert.deepEqual(analysis.slice(12, 16), [
+    ["男生", 2, 2 / 6, 2 / 3, 100, 100 / 250, 0],
+    ["女生", 1, 1 / 6, 1 / 3, 100, 100 / 250, 1],
+    ["男女生", 2, 2 / 6, null, 20, 20 / 250, 0],
+    ["未分類", 1, 1 / 6, null, 30, 30 / 250, 0],
+  ]);
+  assert.deepEqual(analysis[21], ["總計", 250, 1, 0, null]);
+  assert.equal(analysis.some((row) => row[0] === "男／女商品件數比例" && row[1].includes("女生 1 件")), true);
+});
+
 test("creates a readable multi-sheet Excel workbook with filters", () => {
   const workbook = createSalesExportWorkbook(XLSX, [{
     id: "receipt-1",
@@ -146,8 +196,14 @@ test("creates a readable multi-sheet Excel workbook with filters", () => {
   const output = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
   const reopened = XLSX.read(output, { type: "array" });
 
-  assert.deepEqual(reopened.SheetNames, ["閱讀指引", "總覽", "收市對數", "訂單", "商品明細", "按學校", "按門店", "按員工", "商品分析"]);
+  assert.deepEqual(reopened.SheetNames, ["摘要", "比例分析", "閱讀指引", "總覽", "收市對數", "訂單", "商品明細", "按學校", "按門店", "按員工", "商品分析"]);
   assert.equal(reopened.Sheets["訂單"]["!autofilter"].ref, "A1:R2");
   assert.equal(reopened.Sheets["商品明細"]["!autofilter"].ref, "A1:M2");
   assert.equal(reopened.Sheets["總覽"].B8.v, 100);
+  assert.equal(reopened.Sheets["摘要"]["!autofilter"].ref, "A10:F11");
+  assert.equal(reopened.Sheets["摘要"].B4.v, 100);
+  assert.deepEqual([reopened.Sheets["摘要"].A11.v, reopened.Sheets["摘要"].B11.v, reopened.Sheets["摘要"].D11.v], ["恤衫", "M", 1]);
+  assert.equal(workbook.Sheets["比例分析"].B4.z, "$#,##0.00");
+  assert.equal(workbook.Sheets["比例分析"].B10.z, "0.0%");
+  assert.equal(reopened.Sheets["比例分析"].B4.v, 100);
 });

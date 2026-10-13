@@ -294,6 +294,19 @@ const genderOf = (product) => {
   if (gender === "girls") return "女裝";
   return "男女通用";
 };
+const productGenderForSaleItem = (catalog, school, branchId, itemName) => {
+  const candidates = catalog.filter((product) => schoolOf(product) === school && product.name === itemName);
+  const normalizedBranchId = String(branchId || "").trim();
+  const branchCandidates = normalizedBranchId
+    ? candidates.filter((product) => String(product.branch_id || product.branchId || "").trim() === normalizedBranchId)
+    : candidates;
+  const unassignedCandidates = normalizedBranchId
+    ? candidates.filter((product) => !String(product.branch_id || product.branchId || "").trim())
+    : [];
+  const matches = branchCandidates.length ? branchCandidates : unassignedCandidates;
+  const genders = [...new Set(matches.map((product) => getProductGender(product)))];
+  return genders.length === 1 ? genders[0] : "";
+};
 const seasonOf = (product) => {
   const name = product.name.replace(/\s+/g, "");
   if (/四季|全年/.test(name)) return "四季";
@@ -3660,14 +3673,17 @@ export default function UniformPOS() {
     }
 
     const school = paidOrder.school_id || paidOrder.school || selectedSchool || "";
-    const saleItems = paidOrder.items.map((item) => ({
-      name: item.productName || item.product_name || item.name || "未知產品",
-      size: item.size || "",
-      length: item.length || "",
-      isTailored: Boolean(item.isTailored || item.is_tailored),
-      price: Number(item.price || 0),
-      qty: Number(item.quantity || item.qty || 1),
-    }));
+    const saleItems = paidOrder.items.map((item) => {
+      const name = item.productName || item.product_name || item.name || "未知產品";
+      return {
+        name,
+        size: item.size || "",
+        length: item.length || "",
+        isTailored: Boolean(item.isTailored || item.is_tailored),
+        price: Number(item.price || 0),
+        qty: Number(item.quantity || item.qty || 1),
+      };
+    });
     const total = Number(payment.totalPrice ?? paidOrder.totalPrice ?? 0);
     const order = {
       id: "",
@@ -4431,6 +4447,7 @@ export default function UniformPOS() {
                 canViewAllDates={perms.canViewAllDates}
                 canExportSales={perms.canExportSales}
                 schoolMeta={schoolMeta}
+                products={products}
               />
             }
           />
@@ -4594,6 +4611,7 @@ export default function UniformPOS() {
                     canViewAllDates={perms.canViewAllDates}
                     canExportSales={perms.canExportSales}
                     schoolMeta={schoolMeta}
+                    products={products}
                   />
                 )}
                 {tab === "staff" && (isSupabaseAuthEnabled ? <AuthStaffTab manageStaff={manageStaff} currentId={session.id} /> : <StaffTab accounts={accounts} saveAccounts={saveAccounts} currentId={session.id} />)}
@@ -7579,7 +7597,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
   );
 }
 
-function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selectedSchool = "", onReprint, canVoidSales = false, onVoidSale, canViewAllDates, canExportSales, schoolMeta = {} }) {
+function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selectedSchool = "", onReprint, canVoidSales = false, onVoidSale, canViewAllDates, canExportSales, schoolMeta = {}, products = [] }) {
   const [date, setDate] = useState(todayStr());
   const [outletFilter, setOutletFilter] = useState("");
   const [schoolFilter, setSchoolFilter] = useState("");
@@ -7672,6 +7690,12 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
       const scope = [`日期：${dateLabel}`, ...filters].join("；");
       const workbook = createSalesExportWorkbook(xlsx, dayOrders, {
         outletForOrder: outletForOrder,
+        genderForItem: (order, item) => item.gender || productGenderForSaleItem(
+          products,
+          order.school || "",
+          order.branchId || order.branch_id || "",
+          item.name || "",
+        ),
         scope,
       });
       const file = xlsx.write(workbook, { bookType: "xlsx", type: "array" });
