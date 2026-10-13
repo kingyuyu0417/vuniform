@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Volume2 } from "lucide-react";
+import { ExternalLink, Volume2 } from "lucide-react";
+import { isSupabaseConfigured, supabase } from "../supabaseClient.js";
+import { createManualPickupDisplayConnection } from "../services/manualPickupDisplayService.js";
 import {
   formatManualPickupAnnouncement,
   getPickupSpeechStartDelayMs,
@@ -17,6 +19,8 @@ const styles = {
   callButton: { width: "100%", minHeight: 64, boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px 12px", border: 0, borderRadius: 10, color: "#fff", fontSize: 20, fontWeight: 800, cursor: "pointer" },
   message: { minHeight: 18, margin: "8px 0 0", color: "#475569", fontSize: 13, textAlign: "center" },
   error: { color: "#B42318" },
+  displayLink: { width: "100%", minHeight: 44, boxSizing: "border-box", marginTop: 10, padding: "10px 12px", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, border: "1px solid #93C5FD", borderRadius: 9, background: "#EFF6FF", color: "#1D4ED8", fontSize: 14, fontWeight: 800, textDecoration: "none" },
+  syncStatus: { margin: "8px 0 0", color: "#64748B", fontSize: 12, textAlign: "center" },
 };
 
 function speakPickupNumber(number, language) {
@@ -52,15 +56,49 @@ function speakPickupNumber(number, language) {
 }
 
 export default function ManualPickupCallPage() {
+  const schoolId = new URLSearchParams(window.location.search).get("school_id")
+    || new URLSearchParams(window.location.search).get("school")
+    || "";
+  const displayUrl = schoolId
+    ? `${window.location.origin}/queue-live-display?school_id=${encodeURIComponent(schoolId)}`
+    : "";
   const [numberInput, setNumberInput] = useState("");
   const [isCalling, setIsCalling] = useState(false);
   const [callingLanguage, setCallingLanguage] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [displayConnectionStatus, setDisplayConnectionStatus] = useState(schoolId ? "CONNECTING" : "MISSING_SCHOOL");
+  const displayConnectionRef = useRef(null);
   const audioRef = useRef(null);
   const audioContextRef = useRef(null);
   const chimeBufferRef = useRef(null);
   const chimeBufferReadyRef = useRef(Promise.resolve(null));
+
+  useEffect(() => {
+    if (!schoolId) return undefined;
+    let active = true;
+    try {
+      const connection = createManualPickupDisplayConnection({
+        schoolId,
+        canPublishSnapshot: true,
+        client: supabase,
+        enabled: isSupabaseConfigured,
+        onStatus: (status) => {
+          if (active) setDisplayConnectionStatus(status);
+        },
+      });
+      displayConnectionRef.current = connection;
+      return () => {
+        active = false;
+        displayConnectionRef.current = null;
+        connection.unsubscribe();
+      };
+    } catch (connectionError) {
+      setDisplayConnectionStatus("CHANNEL_ERROR");
+      console.error("客人叫號畫面連線失敗", connectionError);
+      return undefined;
+    }
+  }, [schoolId]);
 
   useEffect(() => {
     const audio = new Audio("/audio/queue-chime.mpeg");
@@ -222,6 +260,14 @@ export default function ManualPickupCallPage() {
 
     try {
       let speechResultPromise;
+      const displayPublishPromise = displayConnectionRef.current
+        ? displayConnectionRef.current.publish(number, language)
+          .then(() => true)
+          .catch((syncError) => {
+            console.warn("叫號未能同步至客人畫面", syncError);
+            return false;
+          })
+        : Promise.resolve(false);
       await playChime(() => {
         speechResultPromise = speakPickupNumber(number, language).then(
           () => ({ error: null }),
@@ -230,11 +276,13 @@ export default function ManualPickupCallPage() {
       });
       const speechResult = await speechResultPromise;
       if (speechResult.error) throw speechResult.error;
-      setMessage(language === "en"
+      const calledMessage = language === "en"
         ? `Number ${number} has been called for pickup.`
         : language === "zh"
           ? `已叫 ${number} 號取貨。`
-          : `已叫 ${number} 號取貨。`);
+          : `已叫 ${number} 號取貨。`;
+      const displaySynced = await displayPublishPromise;
+      setMessage(`${calledMessage}${schoolId ? (displaySynced ? " 客人畫面已同步。" : " 注意：客人畫面未同步，請檢查連線。") : ""}`);
     } catch (callError) {
       setError(callError instanceof Error ? callError.message : "叫號失敗，請再試一次。");
     } finally {
@@ -298,6 +346,12 @@ export default function ManualPickupCallPage() {
           </div>
         </form>
 
+        {displayUrl
+          ? <a href={displayUrl} target="_blank" rel="noopener noreferrer" style={styles.displayLink}><ExternalLink size={17} aria-hidden="true" /> 開啟客人叫號畫面</a>
+          : <p style={{ ...styles.syncStatus, color: "#B42318" }}>此連結未指定學校，無法同步客人畫面。</p>}
+        {schoolId && <p role="status" style={styles.syncStatus}>
+          {displayConnectionStatus === "SUBSCRIBED" ? "客人畫面已連線" : ["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(displayConnectionStatus) ? "客人畫面連線中斷，叫號仍可播出但不會同步" : "正在連接客人畫面…"}
+        </p>}
         <p id="pickup-call-message" role={error ? "alert" : "status"} aria-live={error ? "assertive" : "polite"} style={{ ...styles.message, ...(error ? styles.error : {}) }}>
           {error || message}
         </p>

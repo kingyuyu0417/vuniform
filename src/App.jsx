@@ -18,6 +18,7 @@ const PickupPage = lazy(() => import("./pages/PickupPage"));
 const CashierVerifyPage = lazy(() => import("./pages/CashierVerifyPage"));
 const GuestPortalPage = lazy(() => import("./pages/GuestPortalPage"));
 const GuestQueueStatusPage = lazy(() => import("./pages/GuestQueueStatusPage"));
+const ManualPickupDisplayPage = lazy(() => import("./pages/ManualPickupDisplayPage"));
 const StaffOrderTracking = lazy(() => import("./pages/StaffOrderTracking"));
 const QueueDisplayPage = lazy(() => import("./pages/QueueDisplayPage"));
 const DirectoryPage = lazy(() => import("./pages/DirectoryPage"));
@@ -4074,6 +4075,10 @@ export default function UniformPOS() {
 
   if (location.pathname === "/queue-display") {
     return <Suspense fallback={<PageLoading />}><QueueDisplayPage schoolName={publicRouteSchool} outletName={publicRouteOutlet} serviceType={publicQueueService} /></Suspense>;
+  }
+
+  if (location.pathname === "/queue-live-display") {
+    return <Suspense fallback={<PageLoading />}><ManualPickupDisplayPage schoolName={publicRouteSchool} /></Suspense>;
   }
 
   if (!loaded) {

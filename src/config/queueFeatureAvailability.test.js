@@ -20,6 +20,10 @@ test("public queue routes redirect to the public home page", () => {
   }
 });
 
+test("the standalone live manual pickup display remains public while queue features are paused", () => {
+  assert.equal(getDisabledQueueRedirect("/queue-live-display"), null);
+});
+
 test("staff queue routes redirect to the directory", () => {
   for (const pathname of ["/track", "/fitting", "/pickup", "/cashier"]) {
     assert.equal(getDisabledQueueRedirect(pathname), "/menu");
