@@ -51,9 +51,13 @@ export const summarizeDailyCloseout = (orders, reportDate = "") => {
   const replacementSources = new Set(allOrders
     .filter((order) => !order.voidedAt && order.replacementSourceReceiptId)
     .map((order) => order.replacementSourceReceiptId));
-  const reportOrders = reportDate
+  const reportOrders = typeof reportDate === "string" && reportDate
     ? allOrders.filter((order) => order.date === reportDate)
-    : allOrders;
+    : reportDate && typeof reportDate === "object"
+      ? allOrders.filter((order) =>
+        (!reportDate.startDate || order.date >= reportDate.startDate)
+        && (!reportDate.endDate || order.date <= reportDate.endDate))
+      : allOrders;
   const channels = Object.fromEntries(PAYMENT_METHODS.map((method) => [method, { received: 0, refunded: 0 }]));
   let salesAmount = 0;
   let exchangeDifference = 0;

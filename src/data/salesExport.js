@@ -218,7 +218,12 @@ const buildRatioAnalysis = (orders, { genderForItem, activeOrders, netRevenue, c
   };
 };
 
-export const buildSalesExportSheets = (orders, { outletForOrder, genderForItem, scope = "" } = {}) => {
+export const buildSalesExportSheets = (orders, {
+  outletForOrder,
+  genderForItem,
+  scope = "",
+  reportDateRange = "",
+} = {}) => {
   const rows = Array.isArray(orders) ? orders : [];
   const activeOrders = rows.filter((order) => !isVoided(order));
   const dates = [...new Set(rows.map((order) => order.date).filter(Boolean))].sort();
@@ -227,7 +232,7 @@ export const buildSalesExportSheets = (orders, { outletForOrder, genderForItem, 
   const totalQuantity = activeOrders.reduce((sum, order) => sum + amountOf(order.itemCount), 0);
   const netRevenue = activeOrders.reduce((sum, order) => sum + netAmount(order), 0);
   const closeout = summarizeDailyCloseout(rows);
-  const dateRange = dates.length === 0 ? "無交易" : dates.length === 1 ? dates[0] : `${dates[0]} 至 ${dates.at(-1)}`;
+  const dateRange = reportDateRange || (dates.length === 0 ? "無交易" : dates.length === 1 ? dates[0] : `${dates[0]} 至 ${dates.at(-1)}`);
   const ratioAnalysis = buildRatioAnalysis(rows, { genderForItem, activeOrders, netRevenue, closeout });
 
   return [

@@ -192,7 +192,7 @@ test("creates a readable multi-sheet Excel workbook with filters", () => {
     total: 100,
     itemCount: 1,
     items: [{ name: "恤衫", size: "M", price: 100, qty: 1 }],
-  }]);
+  }], { reportDateRange: "2026-09-20 至 2026-09-30" });
   const output = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
   const reopened = XLSX.read(output, { type: "array" });
 
@@ -201,6 +201,8 @@ test("creates a readable multi-sheet Excel workbook with filters", () => {
   assert.equal(reopened.Sheets["商品明細"]["!autofilter"].ref, "A1:M2");
   assert.equal(reopened.Sheets["總覽"].B8.v, 100);
   assert.equal(reopened.Sheets["摘要"]["!autofilter"].ref, "A10:F11");
+  assert.equal(reopened.Sheets["摘要"].B2.v, "2026-09-20 至 2026-09-30");
+  assert.equal(reopened.Sheets["總覽"].B2.v, "2026-09-20 至 2026-09-30");
   assert.equal(reopened.Sheets["摘要"].B4.v, 100);
   assert.deepEqual([reopened.Sheets["摘要"].A11.v, reopened.Sheets["摘要"].B11.v, reopened.Sheets["摘要"].D11.v], ["恤衫", "M", 1]);
   assert.equal(workbook.Sheets["比例分析"].B4.z, "$#,##0.00");

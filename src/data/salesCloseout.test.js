@@ -102,6 +102,25 @@ test("falls back to cash for historical payment data and flags refunds without r
   assert.equal(summary.netRevenue, 70);
 });
 
+test("summarizes closeout across an inclusive date range", () => {
+  const summary = summarizeDailyCloseout([
+    { id: "before", date: "2026-10-06", total: 500 },
+    { id: "first-day", date: "2026-10-07", total: 100, cashReceived: 100 },
+    { id: "middle-day", date: "2026-10-08", total: 200, paymentMethod: "card" },
+    { id: "last-day", date: "2026-10-09", total: 300, paymentMethod: "transfer" },
+    { id: "after", date: "2026-10-10", total: 700 },
+  ], { startDate: "2026-10-07", endDate: "2026-10-09" });
+
+  assert.equal(summary.salesAmount, 600);
+  assert.equal(summary.netRevenue, 600);
+  assert.equal(summary.totalReceived, 600);
+  assert.deepEqual(summary.channels, {
+    cash: { received: 100, refunded: 0 },
+    card: { received: 200, refunded: 0 },
+    transfer: { received: 300, refunded: 0 },
+  });
+});
+
 test("accounts for receiptless exchanges as adjustments using current catalog credit", () => {
   const summary = summarizeDailyCloseout([
     { id: "original-sale", total: 100, paymentMethod: "cash" },

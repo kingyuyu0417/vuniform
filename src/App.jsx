@@ -7598,7 +7598,8 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
 }
 
 function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selectedSchool = "", onReprint, canVoidSales = false, onVoidSale, canViewAllDates, canExportSales, schoolMeta = {}, products = [] }) {
-  const [date, setDate] = useState(todayStr());
+  const [startDate, setStartDate] = useState(todayStr());
+  const [endDate, setEndDate] = useState(todayStr());
   const [outletFilter, setOutletFilter] = useState("");
   const [schoolFilter, setSchoolFilter] = useState("");
   const [phoneSearch, setPhoneSearch] = useState("");
@@ -7610,18 +7611,31 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
   const [voidSubmitting, setVoidSubmitting] = useState(false);
   const [exportingSales, setExportingSales] = useState(false);
   const [salesExportError, setSalesExportError] = useState("");
-  const effectiveDate = canViewAllDates ? date : todayStr();
+  const today = todayStr();
+  const effectiveStartDate = canViewAllDates ? startDate : today;
+  const effectiveEndDate = canViewAllDates ? endDate : today;
+  const validDateRange = Boolean(effectiveStartDate && effectiveEndDate && effectiveStartDate <= effectiveEndDate);
+  const dateRangeError = !effectiveStartDate || !effectiveEndDate
+    ? "請選擇開始及結束日期。"
+    : effectiveStartDate > effectiveEndDate
+      ? "開始日期不能遲於結束日期。"
+      : "";
+  const dateRangeLabel = effectiveStartDate === effectiveEndDate
+    ? effectiveStartDate
+    : `${effectiveStartDate} 至 ${effectiveEndDate}`;
   const normalizedPhoneSearch = phoneSearch.replace(/\D/g, "").slice(-4);
   const normalizedReceiptSearch = receiptSearch.trim().toLowerCase().replace(/^#/, "");
   const branchOrders = restrictToBranch
     ? salesLog.filter((order) => branchId && order.branchId === branchId)
     : salesLog;
-  const visibleOrders = canViewAllDates ? branchOrders : branchOrders.filter((order) => order.date === effectiveDate);
+  const visibleOrders = validDateRange
+    ? branchOrders.filter((order) => order.date >= effectiveStartDate && order.date <= effectiveEndDate)
+    : [];
   const dateOrders = normalizedReceiptSearch
     ? visibleOrders.filter((o) => String(o.id || "").toLowerCase().includes(normalizedReceiptSearch))
     : normalizedPhoneSearch.length === 4
       ? visibleOrders.filter((o) => customerPhoneLast4(o.customerPhone || o.phone) === normalizedPhoneSearch)
-      : visibleOrders.filter((o) => o.date === effectiveDate);
+      : visibleOrders;
   const outletForOrder = (order) => {
     const configuredOutlet = outletNameForSchool(order.school, schoolMeta);
     if (configuredOutlet !== "未指定門店") return configuredOutlet;
@@ -7645,7 +7659,10 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
     && (!schoolFilter || order.school === schoolFilter)
   );
   const activeDayOrders = dayOrders.filter((order) => !order.voidedAt);
-  const closeout = summarizeDailyCloseout(closeoutScopeOrders, effectiveDate);
+  const closeout = summarizeDailyCloseout(closeoutScopeOrders, {
+    startDate: effectiveStartDate,
+    endDate: effectiveEndDate,
+  });
   const dayTotal = activeDayOrders.reduce((s, o) => s + netOrderTotal(o), 0);
   const dayItems = activeDayOrders.reduce((s, o) => s + o.itemCount, 0);
   const knownCustomerPhones = new Set(activeDayOrders.map((o) => customerPhoneLast4(o.customerPhone || o.phone)).filter(Boolean));
@@ -7674,20 +7691,19 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
   });
 
   const handleExportSales = async () => {
-    if (exportingSales) return;
+    if (exportingSales || !validDateRange) return;
     setExportingSales(true);
     setSalesExportError("");
     try {
       const xlsx = await import("xlsx");
-      const exportDates = [...new Set(dayOrders.map((order) => order.date).filter(Boolean))].sort();
-      const dateLabel = exportDates.length === 1 ? exportDates[0] : exportDates.length > 1 ? "多日期" : effectiveDate;
+      const dateLabel = dateRangeLabel;
       const filters = [
         outletFilter ? `門店：${outletFilter}` : "",
         schoolFilter ? `學校：${schoolFilter}` : "",
         normalizedPhoneSearch.length === 4 ? `電話尾4位：${normalizedPhoneSearch}` : "",
         normalizedReceiptSearch ? `單號搜尋：${receiptSearch.trim()}` : "",
       ].filter(Boolean);
-      const scope = [`日期：${dateLabel}`, ...filters].join("；");
+      const scope = [`日期範圍：${dateLabel}`, ...filters].join("；");
       const workbook = createSalesExportWorkbook(xlsx, dayOrders, {
         outletForOrder: outletForOrder,
         genderForItem: (order, item) => item.gender || productGenderForSaleItem(
@@ -7697,13 +7713,14 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
           item.name || "",
         ),
         scope,
+        reportDateRange: dateRangeLabel,
       });
       const file = xlsx.write(workbook, { bookType: "xlsx", type: "array" });
       const blob = new Blob([file], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `銷售分析_${dateLabel}.xlsx`;
+      anchor.download = `銷售分析_${dateLabel.replace(/\s*至\s*/g, "_")}.xlsx`;
       document.body.appendChild(anchor);
       anchor.click();
       document.body.removeChild(anchor);
@@ -7757,7 +7774,7 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
           onChange={(e) => setPhoneSearch(e.target.value.replace(/\D/g, "").slice(-4))}
           inputMode="numeric"
           maxLength={4}
-          placeholder={canViewAllDates ? "電話尾4位搜尋全部記錄" : "電話尾4位搜尋今日記錄"}
+          placeholder={canViewAllDates ? "電話尾4位搜尋日期範圍" : "電話尾4位搜尋今日記錄"}
           aria-label="電話最後4位搜尋"
           style={{ padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 14, width: 170 }}
         />
@@ -7769,15 +7786,33 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
           style={{ padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 14, width: 170 }}
         />
         {canViewAllDates ? (
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            style={{ padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 14 }}
-          />
+          <>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#475569" }}>
+              由
+              <input
+                type="date"
+                value={startDate}
+                max={endDate || undefined}
+                onChange={(e) => setStartDate(e.target.value)}
+                aria-label="開始日期"
+                style={{ padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 14 }}
+              />
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#475569" }}>
+              至
+              <input
+                type="date"
+                value={endDate}
+                min={startDate || undefined}
+                onChange={(e) => setEndDate(e.target.value)}
+                aria-label="結束日期"
+                style={{ padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 14 }}
+              />
+            </label>
+          </>
         ) : (
           <div style={{ fontSize: 13, background: "#EEF1F5", padding: "8px 12px", borderRadius: 8, color: "#1F3A5F", fontWeight: 500 }}>
-            {normalizedReceiptSearch || normalizedPhoneSearch.length === 4 ? `搜尋今日記錄（${todayStr()}）` : `即時銷售紀錄（${todayStr()}）`}
+            {normalizedReceiptSearch || normalizedPhoneSearch.length === 4 ? `搜尋今日記錄（${today}）` : `即時銷售紀錄（${today}）`}
           </div>
         )}
         {restrictToBranch ? (
@@ -7795,11 +7830,14 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
           {availableSchools.map((school) => <option key={school} value={school}>{school}</option>)}
         </select>
         {canExportSales && (
-          <button className="pos-btn" onClick={handleExportSales} disabled={exportingSales} style={{ marginLeft: "auto", fontSize: 12, padding: "8px 12px", borderRadius: 8, background: "#fff", border: "1px solid #1F3A5F", color: "#1F3A5F", display: "flex", alignItems: "center", gap: 6, opacity: exportingSales ? 0.6 : 1 }}>
+          <button className="pos-btn" onClick={handleExportSales} disabled={exportingSales || !validDateRange} style={{ marginLeft: "auto", fontSize: 12, padding: "8px 12px", borderRadius: 8, background: "#fff", border: "1px solid #1F3A5F", color: "#1F3A5F", display: "flex", alignItems: "center", gap: 6, opacity: exportingSales || !validDateRange ? 0.6 : 1 }}>
             <Download size={13} /> {exportingSales ? "整理報表中…" : "匯出分析報表"}
           </button>
         )}
       </div>
+      {!validDateRange && canViewAllDates && (
+        <div role="alert" style={{ marginBottom: 10, color: "#B42318", fontSize: 13 }}>{dateRangeError}</div>
+      )}
       {salesExportError && <div role="alert" style={{ marginBottom: 10, color: "#B42318", fontSize: 13 }}>{salesExportError}</div>}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 14 }}>
         <div style={{ background: "#EEF1F5", borderRadius: 10, padding: "12px 14px" }}>
@@ -7816,10 +7854,10 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
           {missingCustomerPhoneCount > 0 && <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>另有 {missingCustomerPhoneCount} 張單無電話資料</div>}
         </div>
       </div>
-      <section aria-label="每日收市支付渠道對數" style={{ marginBottom: 14, padding: 14, border: "1px solid #CBD5E1", borderRadius: 12, background: "#F8FAFC" }}>
-        <div style={{ fontSize: 17, fontWeight: 800, color: "#1F3A5F" }}>每日收市對數 · {effectiveDate}</div>
+      <section aria-label={effectiveStartDate === effectiveEndDate ? "每日收市支付渠道對數" : "日期範圍收市支付渠道對數"} style={{ marginBottom: 14, padding: 14, border: "1px solid #CBD5E1", borderRadius: 12, background: "#F8FAFC" }}>
+        <div style={{ fontSize: 17, fontWeight: 800, color: "#1F3A5F" }}>{effectiveStartDate === effectiveEndDate ? "每日收市對數" : "日期範圍收市對數"} · {dateRangeLabel}</div>
         <div style={{ marginTop: 4, marginBottom: 12, color: "#64748B", fontSize: 12 }}>
-          按目前門店／學校篩選；不受電話或單號搜尋影響。實收及退款按單據支付方式統計。
+          按目前日期範圍及門店／學校篩選；不受電話或單號搜尋影響。實收及退款按單據支付方式統計。
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8, marginBottom: 12 }}>
           {[
@@ -7884,7 +7922,7 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
         </div>
       )}
       <div style={{ fontSize: 13, color: "#666", marginBottom: 8 }}>{dayOrders.length} 張單（有效 {activeDayOrders.length} 張）</div>
-      {dayOrders.length === 0 && <div style={{ fontSize: 13, color: "#999" }}>呢日未有交易記錄</div>}
+      {dayOrders.length === 0 && <div style={{ fontSize: 13, color: "#999" }}>此日期範圍未有交易記錄</div>}
       {dayOrders.map((o) => (
         <div
           key={o.id}
