@@ -4550,7 +4550,7 @@ export default function UniformPOS() {
                   <CustomerCheckinPage school={publicRouteSchool} onSubmit={handleGuestSubmit} />
                 )}
                 {tab === "queue" && (
-                  <QueuePage visits={queueVisits} currentSchoolId={selectedSchool || publicRouteSchool} outletName={outletNameForSchool(selectedSchool || publicRouteSchool, schoolMeta)} calledBy={isSupabaseAuthEnabled ? session?.id || "" : ""} onViewGuest={(guest) => setSelectedGuest(guest)} onAssign={handleAssignGuest} onReadyForSale={handleReadyForSale} />
+                  <ManualPickupCallPage />
                 )}
                 {tab === "fitting" && (
                   <FittingPage
