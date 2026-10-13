@@ -20,8 +20,8 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
     "@zxing/browser": "^0.2.1",
+    "jszip": "^3.10.2",
     "lucide-react": "^0.468.0",
-    "mammoth": "^1.12.3",
     "papaparse": "^5.4.1",
     "pdfjs-dist": "^6.3.289",
     "qrcode-generator": "^1.4.4",
@@ -29,10 +29,11 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.18.3",
     "tesseract.js": "^7.0.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.0",
+    "@xmldom/xmldom": "^0.9.12",
     "supabase": "^2.115.0",
     "terser": "^5.51.2",
     "vite": "^8.2.2"

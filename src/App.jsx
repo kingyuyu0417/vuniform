@@ -10,6 +10,7 @@ import { getUserFriendlyError } from "./config/errorHandler";
 import { Alert } from "./components/common";
 import { availableFeatureIds, getDisabledQueueRedirect, QUEUE_FEATURES_ENABLED } from "./config/queueFeatureAvailability.js";
 import { dimensionLabels, lengthDimensionLabel, sizeDimensionLabel } from "./data/productDimensions.js";
+import { noticeTextFromDocx } from "./data/docxText.js";
 const CustomerCheckinPage = lazy(() => import("./pages/CustomerCheckinPage"));
 const ManualPickupCallPage = lazy(() => import("./pages/ManualPickupCallPage"));
 const FittingPage = lazy(() => import("./pages/FittingPage"));
@@ -1454,12 +1455,6 @@ const noticeTextFromPdf = async (file) => {
     pages.push(content.items.map((item) => item.str || "").join(" "));
   }
   return pages.join("\n");
-};
-
-const noticeTextFromDocx = async (file) => {
-  const mammoth = await import("mammoth");
-  const result = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
-  return result.value;
 };
 
 const noticeTextFromImage = async (file) => {
