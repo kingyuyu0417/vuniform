@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { MapPin, Radio, Volume2, Wifi, WifiOff } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "../supabaseClient.js";
 import { createManualPickupAnnouncementQueue, createManualPickupDisplayConnection } from "../services/manualPickupDisplayService.js";
-import { formatManualPickupAnnouncement } from "../data/manualPickupCall.js";
+import { formatManualPickupAnnouncement, getPickupSpeechErrorMessage, retryInterruptedPickupSpeech } from "../data/manualPickupCall.js";
 
 const languageNames = { yue: "廣東話", en: "英文", zh: "普通話" };
 
@@ -41,22 +41,35 @@ const speakCall = async (call, audio) => {
     throw new Error("此裝置不支援語音播報，請確認瀏覽器語音功能已啟用。");
   }
 
-  const utterance = new window.SpeechSynthesisUtterance(formatManualPickupAnnouncement(call.queueNumber, call.language));
-  utterance.lang = call.language === "en" ? "en-GB" : call.language === "zh" ? "zh-CN" : "yue-HK";
-  if (call.language === "yue") {
-    const voice = getCantoneseVoice();
-    if (voice) {
-      utterance.voice = voice;
-      utterance.lang = voice.lang;
+  const speech = window.speechSynthesis;
+  const speakUtterance = () => {
+    const utterance = new window.SpeechSynthesisUtterance(formatManualPickupAnnouncement(call.queueNumber, call.language));
+    utterance.lang = call.language === "en" ? "en-GB" : call.language === "zh" ? "zh-CN" : "yue-HK";
+    if (call.language === "yue") {
+      const voice = getCantoneseVoice();
+      if (voice) {
+        utterance.voice = voice;
+        utterance.lang = voice.lang;
+      }
     }
-  }
-  utterance.rate = 0.9;
-  utterance.pitch = 1;
+    utterance.rate = 0.9;
+    utterance.pitch = 1;
 
-  await new Promise((resolve, reject) => {
-    utterance.onend = resolve;
-    utterance.onerror = (event) => reject(new Error(`語音播報失敗：${event.error || "請檢查裝置語音設定"}`));
-    window.speechSynthesis.speak(utterance);
+    return new Promise((resolve, reject) => {
+      utterance.onend = resolve;
+      utterance.onerror = (event) => {
+        const error = new Error(getPickupSpeechErrorMessage(event.error));
+        error.name = event.error || "SpeechSynthesisError";
+        reject(error);
+      };
+      speech.speak(utterance);
+    });
+  };
+  await retryInterruptedPickupSpeech(speakUtterance, {
+    resume: () => {
+      if (speech.paused) speech.resume();
+    },
+    wait: (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds)),
   });
 };
 
@@ -184,7 +197,7 @@ export default function ManualPickupDisplayPage({ schoolName = "" }) {
       </section>
       <footer className="pickup-display-footer" style={styles.footer}>
         {currentCall
-          ? `${languageNames[currentCall.language] || "語音"}播報${audioStatus === "BLOCKED" ? " · 瀏覽器已阻擋自動播放" : ""}`
+          ? `${languageNames[currentCall.language] || "語音"}播報${audioStatus === "BLOCKED" ? " · 播報中斷，請按下方按鈕重試" : ""}`
           : connectionStatus === "MISSING_SCHOOL"
             ? "連結未指定學校，請由職員叫號頁重新開啟。"
             : "請留意螢幕及語音提示 · 籌號會即時更新"}

@@ -16,6 +16,33 @@ export const formatManualPickupAnnouncement = (value, language = "yue") => {
   return "";
 };
 
+export const getPickupSpeechErrorMessage = (errorCode) => {
+  if (errorCode === "interrupted") {
+    return "語音播報被裝置中斷，系統已重試；如仍未播出，請按「繼續叫號播報」。";
+  }
+  if (errorCode === "canceled") {
+    return "語音播報已取消，請按「繼續叫號播報」重試。";
+  }
+  if (errorCode === "not-allowed") {
+    return "瀏覽器未允許語音播報，請按「繼續叫號播報」。";
+  }
+  return "語音播報失敗，請檢查裝置語音設定後按「繼續叫號播報」。";
+};
+
+export const retryInterruptedPickupSpeech = async (
+  speak,
+  { resume = () => {}, wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)), delayMs = 300 } = {},
+) => {
+  try {
+    return await speak();
+  } catch (error) {
+    if (error?.name !== "interrupted") throw error;
+    resume();
+    await wait(delayMs);
+    return speak();
+  }
+};
+
 export const getPickupSpeechStartDelayMs = (chimeDurationSeconds, leadMs = 300) => (
   Math.max(0, Math.round(chimeDurationSeconds * 1000 - leadMs))
 );
