@@ -5922,6 +5922,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
       })
       .slice(0, 8)
     : [];
+  const newSchoolCatalogEntry = schoolCatalog[newSchoolName.trim()];
 
   useEffect(() => {
     productsRef.current = products;
@@ -6118,8 +6119,12 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
   };
 
   const applyCatalogToNewSchool = (value) => {
-    const match = schoolCatalog[value.trim()];
-    if (!match) return;
+    const name = value.trim();
+    const match = schoolCatalog[name];
+    if (!match) {
+      setNewSchoolCategory("");
+      return;
+    }
     setNewSchoolCategory(match.category || "");
     setNewSchoolLevel(match.level || SCHOOL_LEVELS[0]);
     if (match.region && HK_REGIONS.includes(match.region)) {
@@ -6138,11 +6143,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
   const confirmAddSchool = () => {
     const name = newSchoolName.trim();
     if (!name) {
-      setNewSchoolError("請輸入正確的學校名稱");
-      return;
-    }
-    if (!Object.prototype.hasOwnProperty.call(schoolCatalog, name)) {
-      setNewSchoolError("請輸入正確的學校名稱");
+      setNewSchoolError("請輸入學校名稱");
       return;
     }
     // 防止重複學校名（唔理大小寫同前後空格）
@@ -6160,7 +6161,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     const catalogEntry = schoolCatalog[name];
     const schoolMetaEntry = catalogEntry
       ? { category: catalogEntry.category || "", level: catalogEntry.level || newSchoolLevel, region: catalogEntry.region || newSchoolRegion, district: catalogEntry.district || newSchoolDistrict }
-      : { category: newSchoolCategory, level: newSchoolLevel, region: newSchoolRegion, district: newSchoolDistrict };
+      : { category: "", level: newSchoolLevel, region: newSchoolRegion, district: newSchoolDistrict };
     schoolMetaEntry.outletName = newSchoolOutlet;
     if (!productsRef.current.some((product) => schoolOf(product) === name)) {
       addProduct(name, { ...schoolMeta, [name]: schoolMetaEntry });
@@ -7486,8 +7487,10 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
             ref={newSchoolInputRef}
             value={newSchoolName}
             onChange={(e) => {
-              setNewSchoolName(e.target.value);
+              const value = e.target.value;
+              setNewSchoolName(value);
               setNewSchoolError("");
+              if (!schoolCatalog[value.trim()]) setNewSchoolCategory("");
             }}
             onBlur={(e) => {
               window.setTimeout(() => applyCatalogToNewSchool(e.target.value), 0);
@@ -7496,7 +7499,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
               if (e.key === "Enter") confirmAddSchool();
               if (e.key === "Escape") setAddingSchool(false);
             }}
-            placeholder="輸入新學校 / 幼稚園 / 中學名稱"
+            placeholder="輸入學校名稱（名單外亦可新增）"
             style={{ width: "100%", padding: 8, marginBottom: 10, borderRadius: 8, border: "1px solid #ccc", fontSize: 14, boxSizing: "border-box" }}
           />
           {schoolSuggestions.length > 0 && (
@@ -7518,7 +7521,11 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
           {newSchoolError && <div style={{ color: "#B42318", fontSize: 12, marginTop: -4, marginBottom: 8 }}>{newSchoolError}</div>}
 
           <div style={{ fontSize: 11, color: "#28784B", minHeight: 16, marginBottom: 6 }}>
-            {newSchoolCategory ? `已匹配官方資料：${newSchoolCategory}` : "輸入完整學校名稱後會自動匹配官方資料"}
+            {newSchoolCatalogEntry
+              ? `已匹配官方資料${newSchoolCategory ? `：${newSchoolCategory}` : ""}`
+              : newSchoolName.trim()
+                ? "未匹配官方名單；仍可新增，請確認教育階段、地區、所屬門市及18區"
+                : "輸入校名會自動匹配官方資料；名單外學校可自行輸入"}
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
