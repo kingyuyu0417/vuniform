@@ -4872,6 +4872,7 @@ function SaleTab({
   const [pendingDuplicateIsExchange, setPendingDuplicateIsExchange] = useState(false);
   const [paymentWarning, setPaymentWarning] = useState("");
   const [directExchangeOpen, setDirectExchangeOpen] = useState(false);
+  const [directExchangePickerOpen, setDirectExchangePickerOpen] = useState(false);
   const [directExchangeProductId, setDirectExchangeProductId] = useState("");
   const [directExchangeLength, setDirectExchangeLength] = useState("");
   const [directExchangeQuantityPrompt, setDirectExchangeQuantityPrompt] = useState(null);
@@ -5067,6 +5068,13 @@ function SaleTab({
     setDirectExchangeLength("");
   };
 
+  const closeDirectExchangePicker = () => {
+    setDirectExchangePickerOpen(false);
+    setDirectExchangeQuantityPrompt(null);
+    setDirectExchangeProductId("");
+    setDirectExchangeLength("");
+  };
+
   const selectDirectExchangeProduct = (productId) => {
     setDirectExchangeQuantityPrompt(null);
     setDirectExchangeLength("");
@@ -5082,6 +5090,7 @@ function SaleTab({
       customerPhone: "",
     }, directExchangeItems);
     setDirectExchangeQuantityPrompt(null);
+    setDirectExchangePickerOpen(false);
     setDirectExchangeOpen(false);
     setDirectExchangeProductId("");
     setDirectExchangeLength("");
@@ -5130,6 +5139,7 @@ function SaleTab({
           setDirectExchangeProductId("");
           setDirectExchangeLength("");
           setDirectExchangeOpen(true);
+          setDirectExchangePickerOpen(true);
         }}
         title="退回抵扣按目前學校目錄售價計算；新單不連結來源收據"
         style={{ width: "100%", padding: "12px", borderRadius: 10, background: "#ECFDF3", color: "#166534", border: "1px solid #86EFAC", fontSize: 14, fontWeight: 700, marginBottom: 12 }}
@@ -5153,86 +5163,44 @@ function SaleTab({
               </button>
             </div>
           )}
-          {!directExchangeProductId ? (
-            <div className="sale-product-grid" style={{ maxHeight: 260, overflowY: "auto" }}>
-              {visibleProducts.map((product) => (
-                <button key={product.id} className="pos-btn sale-product-button" onClick={() => selectDirectExchangeProduct(product.id)} style={{ padding: "10px 8px", borderRadius: 10, background: productGenderBackground(product), border: "1px solid #86EFAC", color: "#166534", fontSize: 16, fontWeight: 700, textAlign: "left" }}>
-                  {displayProductName(product.name)}
-                </button>
-              ))}
-            </div>
-          ) : (() => {
-            const product = visibleProducts.find((item) => item.id === directExchangeProductId);
-            if (!product) return null;
-            const hasLengths = hasLengthOptions(product);
-            const pricedSizes = product.sizes.filter(isPricedSize);
-            const lengths = hasLengths ? [...new Set(pricedSizes.map((size) => size.length))].sort(naturalSizeSort) : [];
-            const sizes = hasLengths && directExchangeLength ? pricedSizes.filter((size) => size.length === directExchangeLength) : pricedSizes;
-            return (
-              <div>
-                <button className="pos-btn" onClick={() => { setDirectExchangeProductId(""); setDirectExchangeLength(""); setDirectExchangeQuantityPrompt(null); }} style={{ padding: "6px 8px", marginBottom: 8, background: "transparent", color: "#166534" }}>← 返回選款式</button>
-                <div style={{ fontSize: 12, color: "#166534", marginBottom: 6 }}>{displayProductName(product.name)}：揀{hasLengths ? `${lengthDimensionLabel(product)}及${sizeDimensionLabel(product)}` : "尺碼"}</div>
-                {directExchangeQuantityPrompt && (
-                  <div style={{ background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 10, padding: 10, marginBottom: 10 }}>
-                    <div style={{ color: "#166534", fontSize: 13, fontWeight: 800 }}>需要換貨數量</div>
-                    <div style={{ color: "#166534", fontSize: 12, marginTop: 3 }}>{sizeLabel(directExchangeQuantityPrompt.size)}</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginTop: 8 }}>
-                      {[1, 2, 3].map((quantity) => (
-                        <button key={quantity} className="pos-btn" onClick={() => startDirectExchange(product, directExchangeQuantityPrompt.size, quantity)} style={{ padding: "10px 6px", borderRadius: 8, background: "#166534", border: "none", color: "#fff", fontWeight: 800 }}>
-                          {quantity}{productUnit(product.name, directExchangeQuantityPrompt.size)}
-                        </button>
-                      ))}
-                    </div>
-                    <button className="pos-btn" onClick={() => setDirectExchangeQuantityPrompt((current) => ({ ...current, custom: true, quantity: "" }))} style={{ width: "100%", marginTop: 6, padding: 8, borderRadius: 8, background: directExchangeQuantityPrompt.custom ? "#DCFCE7" : "#fff", border: "1px solid #86EFAC", color: "#166534", fontWeight: 800 }}>
-                      其他（4–99{productUnit(product.name, directExchangeQuantityPrompt.size)}）
-                    </button>
-                    {directExchangeQuantityPrompt.custom && (
-                      <>
-                        <input
-                          type="number"
-                          min="4"
-                          max="99"
-                          inputMode="numeric"
-                          autoFocus
-                          placeholder={`輸入數量（4–99${productUnit(product.name, directExchangeQuantityPrompt.size)}）`}
-                          value={directExchangeQuantityPrompt.quantity}
-                          onChange={(event) => setDirectExchangeQuantityPrompt((current) => ({ ...current, quantity: event.target.value }))}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              const quantity = Number(directExchangeQuantityPrompt.quantity);
-                              if (Number.isInteger(quantity) && quantity >= 4 && quantity <= 99) startDirectExchange(product, directExchangeQuantityPrompt.size, quantity);
-                            }
-                          }}
-                          style={{ width: "100%", boxSizing: "border-box", marginTop: 8, padding: "9px 10px", border: "1px solid #86EFAC", borderRadius: 8, fontSize: 17, fontWeight: 700 }}
-                        />
-                        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                          <button className="pos-btn" onClick={() => setDirectExchangeQuantityPrompt(null)} style={{ flex: 1, padding: 8, borderRadius: 8, background: "#fff", border: "1px solid #86EFAC", color: "#166534", fontWeight: 700 }}>取消</button>
-                          <button className="pos-btn" onClick={() => startDirectExchange(product, directExchangeQuantityPrompt.size, Number(directExchangeQuantityPrompt.quantity))} disabled={!Number.isInteger(Number(directExchangeQuantityPrompt.quantity)) || Number(directExchangeQuantityPrompt.quantity) < 4 || Number(directExchangeQuantityPrompt.quantity) > 99} style={{ flex: 1, padding: 8, borderRadius: 8, background: "#166534", border: "none", color: "#fff", fontWeight: 700 }}>確定換貨</button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-                {hasLengths && !directExchangeLength ? (
-                  <div className="sale-size-grid">
-                    {lengths.map((length) => <button key={length} className="pos-btn sale-size-button" onClick={() => setDirectExchangeLength(length)} style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #86EFAC", color: "#166534", fontSize: 16, fontWeight: 700 }}>{lengthDimensionLabel(product)} {length}</button>)}
-                  </div>
-                ) : <div className="sale-size-grid">
-                  {sizes.map((size) => (
-                    <button key={`${size.size}-${size.length || ""}-${size.isTailored ? "tailored" : "regular"}`} className="pos-btn sale-size-button" onClick={() => setDirectExchangeQuantityPrompt({ size, custom: false, quantity: "" })} style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #86EFAC", color: "#166534", fontSize: 16 }}>
-                      {sizeLabel(size)} · {fmt(size.price)}
-                    </button>
-                  ))}
-                </div>}
-              </div>
-            );
-          })()}
-          <button className="pos-btn" onClick={() => { setDirectExchangeOpen(false); setDirectExchangeQuantityPrompt(null); setDirectExchangeItems([]); }} style={{ width: "100%", marginTop: 8, padding: 7, background: "transparent", color: "#166534" }}>取消</button>
+          <button
+            type="button"
+            className="pos-btn"
+            onClick={() => {
+              setDirectExchangeProductId("");
+              setDirectExchangeLength("");
+              setDirectExchangeQuantityPrompt(null);
+              setDirectExchangePickerOpen(true);
+            }}
+            style={{ width: "100%", padding: 10, borderRadius: 8, background: "#fff", border: "1px solid #86EFAC", color: "#166534", fontWeight: 800 }}
+          >
+            + 選擇退回款式及尺碼
+          </button>
+          <button className="pos-btn" onClick={() => { setDirectExchangeOpen(false); setDirectExchangePickerOpen(false); setDirectExchangeQuantityPrompt(null); setDirectExchangeItems([]); }} style={{ width: "100%", marginTop: 8, padding: 7, background: "transparent", color: "#166534" }}>取消</button>
         </div>
       )}
-      {exchangePickerOpen && exchangeOrder === null && (
-        <div style={{ background: "#FFF7ED", border: "1px solid #FDBA74", borderRadius: 10, padding: 12, marginBottom: 12 }}>
-          <div style={{ color: "#9A3412", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>選擇原單據</div>
+      {directExchangeOpen && directExchangePickerOpen && createPortal(
+        <DirectExchangeProductPicker
+          products={filteredProducts}
+          productId={directExchangeProductId}
+          selectedLength={directExchangeLength}
+          quantityPrompt={directExchangeQuantityPrompt}
+          onSelectProduct={selectDirectExchangeProduct}
+          onSelectLength={setDirectExchangeLength}
+          onSelectSize={(product, size) => setDirectExchangeQuantityPrompt({ size, custom: false, quantity: "" })}
+          onSetQuantityPrompt={setDirectExchangeQuantityPrompt}
+          onAddQuantity={startDirectExchange}
+          onBackToProducts={() => {
+            setDirectExchangeProductId("");
+            setDirectExchangeLength("");
+            setDirectExchangeQuantityPrompt(null);
+          }}
+          onClose={closeDirectExchangePicker}
+        />,
+        document.body,
+      )}
+      {exchangePickerOpen && exchangeOrder === null && createPortal(
+        <SaleSelectionModal title="選擇原單據" onClose={() => setExchangePickerOpen(false)}>
           {exchangeOrders.length > 0 ? (
             <>
             <input
@@ -5254,12 +5222,17 @@ function SaleTab({
             </div>
             </>
           ) : <div style={{ color: "#9A3412", fontSize: 12 }}>{selectedSchool ? `「${selectedSchool}」今天沒有可供退換的原單。退貨必須連結原單，不能以無單方式登記。` : "請先在左上角選擇學校。"}</div>}
-          <button className="pos-btn" onClick={() => setExchangePickerOpen(false)} style={{ width: "100%", marginTop: 8, padding: 7, background: "transparent", color: "#9A3412" }}>取消</button>
-        </div>
+        </SaleSelectionModal>,
+        document.body,
       )}
-      {exchangePickerOpen && exchangeOrder && (
-        <div style={{ background: "#FFF7ED", border: "1px solid #FDBA74", borderRadius: 10, padding: 12, marginBottom: 12 }}>
-          <div style={{ color: "#9A3412", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>揀選換貨貨品（可多選）</div>
+      {exchangePickerOpen && exchangeOrder && createPortal(
+        <SaleSelectionModal
+          title="揀選換貨貨品（可多選）"
+          onClose={() => {
+            setExchangePickerOpen(false);
+            setExchangeOrder(null);
+          }}
+        >
           {hasUntrackedExchangeHistory(exchangeOrder, salesLog) && (
             <div role="alert" style={{ marginBottom: 8, padding: 8, borderRadius: 8, background: "#FEF2F2", color: "#991B1B", fontSize: 12 }}>
               此原單有舊版退換記錄，系統未能核實已退數量；請先由管理員核對，暫不能再退回。
@@ -5315,7 +5288,8 @@ function SaleTab({
           })}
           <button className="pos-btn" disabled={exchangeItems.length === 0} onClick={confirmExchangeItems} style={{ width: "100%", padding: 10, borderRadius: 8, background: "#166534", color: "#fff", fontWeight: 700 }}>確定換選貨品（{exchangeItems.length}款）</button>
           <button className="pos-btn" onClick={() => setExchangeOrder(null)} style={{ width: "100%", marginTop: 6, padding: 7, background: "transparent", color: "#9A3412" }}>返回單據選擇</button>
-        </div>
+        </SaleSelectionModal>,
+        document.body,
       )}
       {exchangePreviewOpen && (exchangeMode || fullReplacementMode) && createPortal(
         <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(15,23,42,0.55)" }}>
@@ -5869,6 +5843,235 @@ function SaleTab({
           <span>{storageError}</span>
         </div>
       )}
+    </div>
+  );
+}
+
+function SaleSelectionModal({ title, onClose, children }) {
+  const closeRef = useRef(onClose);
+  useEffect(() => {
+    closeRef.current = onClose;
+  }, [onClose]);
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") closeRef.current?.();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  return (
+    <div
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+      style={{ position: "fixed", inset: 0, zIndex: 1200, display: "grid", placeItems: "center", padding: 12, background: "rgba(15,23,42,0.58)" }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sale-selection-modal-title"
+        style={{ width: "min(100%, 520px)", maxHeight: "min(88vh, 760px)", overflowY: "auto", boxSizing: "border-box", padding: 18, borderRadius: 16, background: "#fff", boxShadow: "0 20px 60px rgba(15,23,42,0.3)" }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+          <div id="sale-selection-modal-title" style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.35, color: "#1F3A5F" }}>{title}</div>
+          <button type="button" className="pos-btn" onClick={onClose} aria-label="關閉選擇視窗" style={{ width: 40, height: 40, flexShrink: 0, display: "grid", placeItems: "center", borderRadius: 10, background: "#F1F5F9", border: "1px solid #E2E8F0", color: "#334155" }}>
+            <X size={20} />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function DirectExchangeProductPicker({
+  products,
+  productId,
+  selectedLength,
+  quantityPrompt,
+  onSelectProduct,
+  onSelectLength,
+  onSelectSize,
+  onSetQuantityPrompt,
+  onAddQuantity,
+  onBackToProducts,
+  onClose,
+}) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const product = products.find((item) => item.id === productId);
+  const hasLengths = product ? hasLengthOptions(product) : false;
+  const pricedSizes = product?.sizes.filter(isPricedSize) || [];
+  const lengths = hasLengths
+    ? [...new Set(pricedSizes.map((size) => size.length))].sort(naturalSizeSort)
+    : [];
+  const sizes = hasLengths && selectedLength
+    ? pricedSizes.filter((size) => size.length === selectedLength)
+    : pricedSizes;
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") onCloseRef.current();
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  const addQuantity = (quantity = quantityPrompt?.quantity) => {
+    const parsed = Number(quantity);
+    if (!product || !quantityPrompt || !Number.isInteger(parsed) || parsed < 1 || parsed > 99) return;
+    onAddQuantity(product, quantityPrompt.size, parsed);
+  };
+
+  return (
+    <div
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+      style={{ position: "fixed", inset: 0, zIndex: 1200, display: "grid", placeItems: "center", padding: 12, background: "rgba(15,23,42,0.58)" }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="direct-exchange-picker-title"
+        style={{ width: "min(100%, 520px)", maxHeight: "min(88vh, 760px)", overflowY: "auto", boxSizing: "border-box", padding: 18, borderRadius: 16, background: "#fff", boxShadow: "0 20px 60px rgba(15,23,42,0.3)" }}
+      >
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 11, color: "#64748B", marginBottom: 3 }}>
+              {product ? "選擇退回規格" : "選擇退回款式"}
+            </div>
+            <div id="direct-exchange-picker-title" style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.35, color: "#1F3A5F", overflowWrap: "anywhere" }}>
+              {product ? displayProductName(product.name) : "無原單退換"}
+            </div>
+          </div>
+          <button type="button" className="pos-btn" onClick={onClose} aria-label="關閉退回貨品選擇" style={{ width: 40, height: 40, flexShrink: 0, display: "grid", placeItems: "center", borderRadius: 10, background: "#F1F5F9", border: "1px solid #E2E8F0", color: "#334155" }}>
+            <X size={20} />
+          </button>
+        </div>
+        <div style={{ marginBottom: 12, padding: "9px 10px", borderRadius: 9, background: "#ECFDF3", color: "#166534", fontSize: 12 }}>
+          退回抵扣按目前目錄單價計算，不套用兩件優惠。
+        </div>
+        {!product ? (
+          products.length > 0 ? (
+            <div className="sale-product-grid" style={{ maxHeight: "55vh", overflowY: "auto" }}>
+              {products.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="pos-btn sale-product-button"
+                  onClick={() => onSelectProduct(item.id)}
+                  style={{ padding: "12px 10px", borderRadius: 10, background: productGenderBackground(item), color: "#222", border: "1px solid #ddd", fontSize: 16, fontWeight: 700, textAlign: "left" }}
+                >
+                  {displayProductName(item.name)}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div style={{ padding: "16px 4px", color: "#64748B", fontSize: 14 }}>
+              此分類未有可選商品，請返回銷售頁切換分類。
+            </div>
+          )
+        ) : (
+          <>
+            <button type="button" className="pos-btn" onClick={onBackToProducts} style={{ padding: "6px 8px", marginBottom: 8, background: "transparent", color: "#1F3A5F" }}>
+              ← 返回選款式
+            </button>
+            <div style={{ fontSize: 13, color: "#666", marginBottom: 8 }}>
+              {hasLengths ? `先揀${lengthDimensionLabel(product)}，再揀${sizeDimensionLabel(product)}：` : "揀尺碼："}
+            </div>
+            {quantityPrompt ? (
+              <div style={{ background: "#EAF4FF", border: "1px solid #B7D4F2", borderRadius: 12, padding: 14 }}>
+                <div style={{ color: "#1F3A5F", fontSize: 14, fontWeight: 800 }}>需要退回數量</div>
+                <div style={{ color: "#64748B", fontSize: 12, marginTop: 4 }}>
+                  {sizeLabel(quantityPrompt.size)} · 目錄單價 {fmt(quantityPrompt.size.price)}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 12 }}>
+                  {[1, 2, 3].map((quantity) => (
+                    <button key={quantity} type="button" className="pos-btn" onClick={() => addQuantity(quantity)} style={{ padding: "12px 8px", borderRadius: 8, background: "#1F3A5F", border: "none", color: "#fff", fontSize: 16, fontWeight: 800 }}>
+                      {quantity}{productUnit(product.name, quantityPrompt.size)}
+                    </button>
+                  ))}
+                </div>
+                <button type="button" className="pos-btn" onClick={() => onSetQuantityPrompt((current) => ({ ...current, custom: true, quantity: "" }))} style={{ width: "100%", marginTop: 8, padding: 10, borderRadius: 8, background: quantityPrompt.custom ? "#DCEEFF" : "#fff", border: "1px solid #9BC3EC", color: "#1F3A5F", fontWeight: 800 }}>
+                  其他（4–99{productUnit(product.name, quantityPrompt.size)}）
+                </button>
+                {quantityPrompt.custom && (
+                  <>
+                    <input
+                      type="number"
+                      min="4"
+                      max="99"
+                      inputMode="numeric"
+                      autoFocus
+                      placeholder={`輸入數量（4–99${productUnit(product.name, quantityPrompt.size)}）`}
+                      value={quantityPrompt.quantity}
+                      onChange={(event) => onSetQuantityPrompt((current) => ({ ...current, quantity: event.target.value }))}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") addQuantity();
+                      }}
+                      style={{ width: "100%", boxSizing: "border-box", marginTop: 10, padding: "10px 12px", border: "1px solid #9BC3EC", borderRadius: 8, fontSize: 18, fontWeight: 700 }}
+                    />
+                    <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                      <button type="button" className="pos-btn" onClick={() => onSetQuantityPrompt(null)} style={{ flex: 1, padding: 9, borderRadius: 8, background: "#fff", border: "1px solid #CBD5E1", color: "#475569", fontWeight: 700 }}>返回尺碼</button>
+                      <button type="button" className="pos-btn" onClick={() => addQuantity()} disabled={!Number.isInteger(Number(quantityPrompt.quantity)) || Number(quantityPrompt.quantity) < 4 || Number(quantityPrompt.quantity) > 99} style={{ flex: 1, padding: 9, borderRadius: 8, background: "#1F3A5F", border: "none", color: "#fff", fontWeight: 700 }}>確定加入</button>
+                    </div>
+                  </>
+                )}
+                {!quantityPrompt.custom && (
+                  <button type="button" className="pos-btn" onClick={() => onSetQuantityPrompt(null)} style={{ width: "100%", marginTop: 8, padding: 9, borderRadius: 8, background: "#fff", border: "1px solid #CBD5E1", color: "#475569", fontWeight: 700 }}>
+                    返回尺碼
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                {hasLengths && !selectedLength ? (
+                  <div className="sale-size-grid">
+                    {lengths.map((length) => (
+                      <button key={length} type="button" className="pos-btn sale-size-button" onClick={() => onSelectLength(length)} style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #1F3A5F", color: "#1F3A5F", fontSize: 16, fontWeight: 700 }}>
+                        {lengthDimensionLabel(product)} {length}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <>
+                    {hasLengths && (
+                      <button type="button" className="pos-btn" onClick={() => onSelectLength("")} style={{ padding: "6px 8px", marginBottom: 8, background: "transparent", color: "#1F3A5F" }}>
+                        ← 返回{lengthDimensionLabel(product)}
+                      </button>
+                    )}
+                    <div className="sale-size-grid">
+                      {[...sizes].sort(sizeEntrySort).map((size) => (
+                        <button key={`${size.size}-${size.length || ""}-${size.isTailored ? "tailored" : "regular"}`} type="button" className="pos-btn sale-size-button" onClick={() => onSelectSize(product, size)} style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #ccc", fontSize: 16 }}>
+                          <div style={{ fontSize: 22, fontWeight: 600 }}>{sizeLabel(size)}</div>
+                          <div style={{ fontSize: 12, color: "#888" }}>{fmt(size.price)}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </>
+        )}
+        <button type="button" className="pos-btn" onClick={onClose} style={{ width: "100%", marginTop: 12, padding: 10, borderRadius: 8, background: "#F1F5F9", color: "#334155", fontWeight: 700 }}>
+          返回已選退回貨品
+        </button>
+      </div>
     </div>
   );
 }
