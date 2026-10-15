@@ -31,6 +31,7 @@ import { createPriceListWorkbook } from "./data/priceListExport";
 import { buildReceiptNameCandidates } from "./data/receiptProductNames";
 import { clearCheckoutAttempt, getOrCreateCheckoutAttempt } from "./data/checkoutAttempt";
 import { getRemainingReturnQuantity, hasUntrackedExchangeHistory } from "./data/returnLimits";
+import { calculateCartLineTotals, calculateReturnDiscounts, validTwoPiecePrice } from "./data/quantityPromotions";
 import { naturalSizeSort } from "./data/sizeSort";
 import { canReplaceOrder, getReplacementBranchId, getReplacementSettlement } from "./data/orderReplacement";
 import { calculateCashSettlement, findPossibleDuplicateSale, isExchangeAdjustmentOrder, PAYMENT_METHOD_LABELS, PAYMENT_METHOD_LABELS_EN, summarizeDailyCloseout } from "./data/salesCloseout";
@@ -1691,6 +1692,8 @@ const receiptFieldLabels = (language) => language === "en" ? {
   cashier: "Staff",
   items: "Items",
   quantity: "Qty",
+  promotion: "Two-piece offer",
+  promotionAdjustment: "Offer adjustment",
   itemCount: "Item count",
   total: "Total due",
   replacementTotal: "New sale total",
@@ -1730,6 +1733,8 @@ const receiptFieldLabels = (language) => language === "en" ? {
   cashier: "服務員",
   items: "商品明細",
   quantity: "數量",
+  promotion: "兩件優惠",
+  promotionAdjustment: "優惠差額調整",
   itemCount: "商品件數",
   total: "應付總額",
   replacementTotal: "新單總額",
@@ -1796,6 +1801,9 @@ const buildReceiptLines = (order, shopName, language = "zh") => {
     lines.push(`${it.exchangeReturn ? labels.exchangeOut : ""}${english ? receiptEnglishName(it.name, it.receiptNameEn) : it.name}`);
     lines.push(`  ${formatSizeForReceipt(it.name, it.size, it.length, english)}`);
     lines.push(`  ${labels.quantity} ${it.qty} ${receiptProductUnit(it.name, language, it.size, it.qty)} x ${fmt(Math.abs(it.price))} = ${fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}`);
+    if (Number(it.discountAmount) > 0) {
+      lines.push(`  ${it.exchangeReturn ? labels.promotionAdjustment : labels.promotion}: −${fmt(it.discountAmount)}`);
+    }
   });
   lines.push("--------------------------------");
   lines.push(`${labels.itemCount}: ${order.itemCount || 0}`);
@@ -2068,6 +2076,7 @@ export default function UniformPOS() {
   const tabRef = useRef(tab);
   const productReceiptNameColumnAvailableRef = useRef(true);
   const orderReceiptNameColumnAvailableRef = useRef(true);
+  const orderItemPromotionColumnsAvailableRef = useRef(null);
   useEffect(() => { tabRef.current = tab; }, [tab]);
 
   const [selectedSchool, setSelectedSchool] = useState(() => {
@@ -2637,28 +2646,40 @@ export default function UniformPOS() {
     try {
       const branchScoped = Boolean(session && session.role !== ROLES.ADMIN);
       const branchId = branchScoped ? session.branchId || "__unassigned__" : "";
-      const selectOrders = (includeReceiptName, includeUntrackedExchange) => supabase
+      const selectOrders = (includeReceiptName, includePromotion, includeUntrackedExchange) => supabase
         .from("orders")
-        .select(`id, school, branch_id, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, ${includeUntrackedExchange ? "untracked_exchange, " : ""}replacement_source_receipt_id, replacement_reason, settlement_delta, replacement_cash_received, replacement_change_due, adjustment_reason, payment_method, refund_method, refund_due, duplicate_confirmed, duplicate_source_receipt_id, voided_at, voided_by, void_reason, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, ${includeReceiptName ? "receipt_name_en, " : ""}price, qty, is_return, source_order_item_id)`)
+        .select(`id, school, branch_id, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, ${includeUntrackedExchange ? "untracked_exchange, " : ""}replacement_source_receipt_id, replacement_reason, settlement_delta, replacement_cash_received, replacement_change_due, adjustment_reason, payment_method, refund_method, refund_due, duplicate_confirmed, duplicate_source_receipt_id, voided_at, voided_by, void_reason, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, ${includeReceiptName ? "receipt_name_en, " : ""}price, qty, is_return, source_order_item_id${includePromotion ? ", two_piece_price, discount_amount" : ""})`)
         .order("created_at", { ascending: false });
       let includeReceiptName = orderReceiptNameColumnAvailableRef.current;
+      let includePromotion = true;
       let includeUntrackedExchange = true;
-      let query = selectOrders(includeReceiptName, includeUntrackedExchange);
+      let query = selectOrders(includeReceiptName, includePromotion, includeUntrackedExchange);
       if (branchScoped) query = query.eq("branch_id", branchId);
       let { data, error } = await query;
+
+      if (error?.code === "42703" && /two_piece_price|discount_amount/i.test(String(error.message || ""))) {
+        console.warn("資料庫尚未安裝數量優惠商品明細欄位，改用相容查詢載入銷售記錄。", error);
+        orderItemPromotionColumnsAvailableRef.current = false;
+        includePromotion = false;
+        let legacyQuery = selectOrders(includeReceiptName, includePromotion, includeUntrackedExchange);
+        if (branchScoped) legacyQuery = legacyQuery.eq("branch_id", branchId);
+        ({ data, error } = await legacyQuery);
+      } else if (!error) {
+        orderItemPromotionColumnsAvailableRef.current = true;
+      }
       
       if (isMissingReceiptNameColumnError(error)) {
         console.warn("資料庫尚未安裝英文收據名稱欄位，改用相容查詢載入銷售記錄。", error);
         orderReceiptNameColumnAvailableRef.current = false;
         includeReceiptName = false;
-        let legacyQuery = selectOrders(includeReceiptName, includeUntrackedExchange);
+        let legacyQuery = selectOrders(includeReceiptName, includePromotion, includeUntrackedExchange);
         if (branchScoped) legacyQuery = legacyQuery.eq("branch_id", branchId);
         ({ data, error } = await legacyQuery);
       }
       if (error?.code === "42703" && String(error.message || "").includes("untracked_exchange")) {
         console.warn("資料庫尚未安裝無原單退換欄位，改用相容查詢載入銷售記錄。", error);
         includeUntrackedExchange = false;
-        let legacyQuery = selectOrders(includeReceiptName, includeUntrackedExchange);
+        let legacyQuery = selectOrders(includeReceiptName, includePromotion, includeUntrackedExchange);
         if (branchScoped) legacyQuery = legacyQuery.eq("branch_id", branchId);
         ({ data, error } = await legacyQuery);
       }
@@ -2685,6 +2706,8 @@ export default function UniformPOS() {
               id: item.id == null ? "" : String(item.id),
               receiptNameEn: item.receipt_name_en || "",
               length: item.length || "",
+              twoPiecePrice: item.two_piece_price ?? null,
+              discountAmount: Number(item.discount_amount || 0),
               exchangeReturn: Boolean(item.is_return),
               sourceOrderItemId: item.source_order_item_id || "",
             })),
@@ -3078,6 +3101,10 @@ export default function UniformPOS() {
       let savedOrder;
       let replacementAudit = null;
       if (isSupabaseAuthEnabled && supabase) {
+        const hasQuantityDiscount = order.items.some((item) => Number(item.discountAmount) > 0);
+        if (hasQuantityDiscount && orderItemPromotionColumnsAvailableRef.current === false) {
+          throw new Error("資料庫尚未安裝數量優惠欄位；請管理員先在 Supabase 執行更新後的 supabase/idempotent-sales-checkout.sql 及 supabase/replace-sales-order.sql，再重新載入系統。");
+        }
         const persistedOrder = { ...order, total: Math.max(0, Number(order.total || 0)) };
         const orderData = {
           ...persistedOrder,
@@ -3109,6 +3136,8 @@ export default function UniformPOS() {
             receipt_name_en: item.receiptNameEn || "",
             is_return: Boolean(item.exchangeReturn),
             source_order_item_id: item.sourceOrderItemId || null,
+            two_piece_price: item.twoPiecePrice ?? null,
+            discount_amount: Math.max(0, Number(item.discountAmount || 0)),
           })),
         };
         let receiptId;
@@ -3133,7 +3162,7 @@ export default function UniformPOS() {
         if (!receiptId) throw new Error("交易服務沒有回傳收據編號");
         const { data: savedItems, error: itemLoadError } = await supabase
           .from("order_items")
-          .select("id, name, size, length, receipt_name_en, price, qty, is_return, source_order_item_id")
+          .select(`id, name, size, length, receipt_name_en, price, qty, is_return, source_order_item_id${orderItemPromotionColumnsAvailableRef.current === false ? "" : ", two_piece_price, discount_amount"}`)
           .eq("order_id", receiptId);
         if (itemLoadError) throw itemLoadError;
         if (!Array.isArray(savedItems) || savedItems.length !== order.items.length) {
@@ -3144,6 +3173,25 @@ export default function UniformPOS() {
         if (JSON.stringify(savedReceiptNames) !== JSON.stringify(expectedReceiptNames)) {
           throw new Error("交易已建立，但未能核對英文收據名稱；請保持購物車並重試確認。");
         }
+        if (orderItemPromotionColumnsAvailableRef.current !== false) {
+          const promotionSignature = (item) => [
+            item.name || "",
+            item.size || "",
+            Number(item.price || 0),
+            Number(item.qty || 0),
+            item.twoPiecePrice == null ? "" : Number(item.twoPiecePrice),
+            Number(item.discountAmount || 0),
+          ].join("\u0000");
+          const expectedPromotions = order.items.map(promotionSignature).sort();
+          const savedPromotions = savedItems.map((item) => promotionSignature({
+            ...item,
+            twoPiecePrice: item.two_piece_price,
+            discountAmount: item.discount_amount,
+          })).sort();
+          if (JSON.stringify(savedPromotions) !== JSON.stringify(expectedPromotions)) {
+            throw new Error("交易已建立，但未能核對優惠明細；請保持購物車並聯絡管理員確認資料庫更新。");
+          }
+        }
         savedOrder = {
           ...order,
           id: receiptId,
@@ -3152,6 +3200,8 @@ export default function UniformPOS() {
             id: String(item.id),
             receiptNameEn: item.receipt_name_en || "",
             length: item.length || "",
+            twoPiecePrice: item.two_piece_price ?? null,
+            discountAmount: Number(item.discount_amount || 0),
             exchangeReturn: Boolean(item.is_return),
             sourceOrderItemId: item.source_order_item_id || "",
           })),
@@ -3188,7 +3238,10 @@ export default function UniformPOS() {
           ? "請管理員先在 Supabase 執行 supabase/replace-sales-order.sql。"
           : "請管理員先在 Supabase 執行 supabase/idempotent-sales-checkout.sql。"
         : "";
-      setStorageError(`交易結果未能確認${detail}。請勿另開新單；保持相同商品及金額後重試，系統會沿用同一交易識別碼。${migrationNote}`);
+      const promotionMigrationNote = /two_piece_price|discount_amount/i.test(errorReason)
+        ? "請管理員執行更新後的 supabase/idempotent-sales-checkout.sql 及 supabase/replace-sales-order.sql，再重新載入系統。"
+        : "";
+      setStorageError(`交易結果未能確認${detail}。請勿另開新單；保持相同商品及金額後重試，系統會沿用同一交易識別碼。${promotionMigrationNote || migrationNote}`);
       return null;
     }
   };
@@ -3204,7 +3257,19 @@ export default function UniformPOS() {
         next[idx] = { ...next[idx], qty: next[idx].qty + qty };
         return next;
       }
-      return [...prev, { key: uid(), productId: product.id, name: product.name, receiptNameEn: product.receiptNameEn || "", size: sizeObj.size, length: sizeObj.length || "", isTailored: Boolean(sizeObj.isTailored), price: sizeObj.price, qty }];
+      return [...prev, {
+        key: uid(),
+        productId: product.id,
+        name: product.name,
+        receiptNameEn: product.receiptNameEn || "",
+        size: sizeObj.size,
+        length: sizeObj.length || "",
+        isTailored: Boolean(sizeObj.isTailored),
+        price: sizeObj.price,
+        twoPiecePrice: validTwoPiecePrice(sizeObj.price, sizeObj.twoPiecePrice),
+        qty,
+        applyPromotion: true,
+      }];
     });
   };
 
@@ -3250,6 +3315,13 @@ export default function UniformPOS() {
         isTailored: isTailoredSize(item) || Boolean(matchingSize?.isTailored),
         price: Math.abs(Number(item.price || 0)),
         qty: Math.max(1, Number(item.qty || 1)),
+        twoPiecePrice: matchingSize
+          ? (Number(matchingSize.price) === Number(item.price)
+            ? validTwoPiecePrice(matchingSize.price, matchingSize.twoPiecePrice)
+            : null)
+          : item.twoPiecePrice ?? null,
+        discountAmount: 0,
+        applyPromotion: true,
         replacementSourceOrderItemId: item.id ? String(item.id) : "",
         sourceGuestName: order.customerName || "",
         sourceGuestPhone: order.customerPhone || "",
@@ -3309,9 +3381,17 @@ export default function UniformPOS() {
       setStorageError("無原單退回貨品必須符合目前目錄價格；請重新選取尺碼，或請管理員先核對價格。");
       return false;
     }
+    const previousReturns = hasSourceReceipt
+      ? salesLog
+        .filter((entry) => entry.exchangeSourceReceiptId === order.id && !entry.voidedAt)
+        .flatMap((entry) => (entry.items || []).filter((item) => item.exchangeReturn))
+      : [];
+    const returnDiscounts = hasSourceReceipt
+      ? calculateReturnDiscounts(order.items || [], items, previousReturns)
+      : items.map(() => 0);
     setPaymentMethod(order.paymentMethod || "cash");
     setRefundMethod(order.paymentMethod || "cash");
-    setCart(exchangeItems.map(({ item, product, originalSize }) => ({
+    setCart(exchangeItems.map(({ item, product, originalSize }, index) => ({
       key: uid(),
       productId: product.id,
       name: item.name,
@@ -3321,6 +3401,9 @@ export default function UniformPOS() {
       isTailored: Boolean(item.isTailored || originalSize.isTailored),
       price: Math.abs(Number(hasSourceReceipt ? item.price ?? originalSize.price ?? 0 : originalSize.price)),
       qty: Math.max(1, Number(item.qty || 1)),
+      twoPiecePrice: item.twoPiecePrice ?? null,
+      discountAmount: returnDiscounts[index],
+      applyPromotion: false,
       exchangeReturn: true,
       untrackedExchange: !hasSourceReceipt,
       exchangeSourceReceiptId: hasSourceReceipt ? order.id : "",
@@ -3601,6 +3684,7 @@ export default function UniformPOS() {
         isTailored,
         price,
         qty,
+        applyPromotion: false,
         sourceOrderId: order.id || "",
         sourceQueueNo: order.queue_number || order.queueNo || "",
         sourceGuestName: order.customer_info?.guestName || order.guestName || order.customerName || "",
@@ -3727,7 +3811,8 @@ export default function UniformPOS() {
     }
   };
 
-  const cartTotal = cart.reduce((sum, c) => sum + (c.exchangeReturn ? -1 : 1) * c.price * c.qty, 0);
+  const pricedCart = calculateCartLineTotals(cart);
+  const cartTotal = pricedCart.reduce((sum, item) => sum + item.lineTotal, 0);
   const cartCount = cart.reduce((sum, c) => sum + c.qty, 0);
   const exchangeMode = cart.some((item) => item.exchangeReturn);
   const replacementSettlement = fullSaleReplacement
@@ -3770,9 +3855,12 @@ export default function UniformPOS() {
       if (!product) return [`${item.name}（${sizeLabel(item)}）已不在商品資料內`];
       if (conflictingProductIds.has(product.id)) return [`${product.name}（${sizeLabel(item)}）有相同尺碼價格衝突`];
       const matchingSizes = product.sizes.filter((size) => sizeIdentityKey(size) === sizeIdentityKey(item));
-      if (matchingSizes.length !== 1 || Number(matchingSizes[0]?.price) !== Number(item.price)) {
+      if (matchingSizes.length !== 1
+        || Number(matchingSizes[0]?.price) !== Number(item.price)
+        || validTwoPiecePrice(matchingSizes[0]?.price, matchingSizes[0]?.twoPiecePrice)
+          !== validTwoPiecePrice(item.price, item.twoPiecePrice)) {
         const currentPrice = matchingSizes.length === 1 ? `現價 $${matchingSizes[0].price}` : "找不到唯一尺碼價格";
-        return [`${product.name}（${sizeLabel(item)}）購物車價格與商品資料不符（${currentPrice}）`];
+        return [`${product.name}（${sizeLabel(item)}）購物車價格／優惠與商品資料不符（${currentPrice}）`];
       }
       return [];
     });
@@ -3789,7 +3877,7 @@ export default function UniformPOS() {
       id: "",
       date: todayStr(),
       time: now.toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit" }),
-      items: cart.map((item) => ({
+      items: pricedCart.map((item) => ({
         name: item.name,
         receiptNameEn: item.receiptNameEn || products.find((product) => product.id === item.productId)?.receiptNameEn || "",
         size: item.size,
@@ -3797,6 +3885,8 @@ export default function UniformPOS() {
         isTailored: item.isTailored,
         price: item.price,
         qty: item.qty,
+        twoPiecePrice: item.twoPiecePrice ?? null,
+        discountAmount: Math.max(0, Number(item.discountAmount || 0)),
         exchangeReturn: item.exchangeReturn,
         exchangeSourceReceiptId: item.exchangeSourceReceiptId,
         sourceOrderItemId: item.sourceOrderItemId,
@@ -4690,6 +4780,9 @@ export default function UniformPOS() {
                 })()}
                 <div>  {formatSizeForReceipt(it.name, it.size, it.length, english)}</div>
                 <div>  {labels.quantity} {it.qty} {receiptProductUnit(it.name, receiptLanguage, it.size, it.qty)} x {fmt(it.price)} = {fmt((it.exchangeReturn ? -1 : 1) * it.price * it.qty)}</div>
+                {Number(it.discountAmount) > 0 && (
+                  <div>  {it.exchangeReturn ? labels.promotionAdjustment : labels.promotion}: −{fmt(it.discountAmount)}</div>
+                )}
               </div>
             ))}
             <div>--------------------------------</div>
@@ -4820,8 +4913,8 @@ function SaleTab({
     setExchangeReasonNote("");
     setExchangePreviewOpen(false);
   }, [exchangeSourceReceiptId, fullSaleReplacement?.id]);
-  const returnedCartItems = cart.filter((item) => item.exchangeReturn);
-  const replacementCartItems = cart.filter((item) => !item.exchangeReturn);
+  const returnedCartItems = pricedCart.filter((item) => item.exchangeReturn);
+  const replacementCartItems = pricedCart.filter((item) => !item.exchangeReturn);
   const untrackedExchangeMode = returnedCartItems.some((item) => item.untrackedExchange);
   const settlementMethod = (exchangeMode || fullReplacementMode) && refundDue > 0 ? refundMethod : paymentMethod;
   const settlementDue = fullReplacementMode
@@ -5260,14 +5353,14 @@ function SaleTab({
             {returnedCartItems.map((item, index) => (
               <div key={`return-${item.key || index}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 6, fontSize: 14 }}>
                 <span>{item.name}（{sizeLabel(item)}）× {item.qty}</span>
-                <span>−{fmt(Math.abs(item.price) * item.qty)}</span>
+                <span>−{fmt(Math.abs(item.lineTotal))}</span>
               </div>
             ))}
             <div style={{ marginTop: 14, fontWeight: 700, color: "#166534" }}>換入貨品</div>
             {replacementCartItems.length > 0 ? replacementCartItems.map((item, index) => (
               <div key={`replacement-${item.key || index}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 6, fontSize: 14 }}>
                 <span>{item.name}（{sizeLabel(item)}）× {item.qty}</span>
-                <span>{fmt(Math.abs(item.price) * item.qty)}</span>
+                <span>{fmt(Math.abs(item.lineTotal))}</span>
               </div>
             )) : <div style={{ marginTop: 6, color: "#64748B", fontSize: 13 }}>沒有換入貨品</div>}
             <div style={{ marginTop: 14, padding: 12, borderRadius: 10, background: "#F8FAFC", display: "grid", gap: 7 }}>
@@ -5522,6 +5615,9 @@ function SaleTab({
                   >
                     <div style={{ fontSize: 22, fontWeight: 600 }}>{sizeLabel(s)}</div>
                     <div style={{ fontSize: 12, color: "#888" }}>{fmt(s.price)}</div>
+                    {validTwoPiecePrice(s.price, s.twoPiecePrice) !== null && (
+                      <div style={{ fontSize: 11, color: "#28784B", marginTop: 2 }}>兩件 {fmt(s.twoPiecePrice)}</div>
+                    )}
                   </button>
                 ))}
               </div>
@@ -5556,6 +5652,9 @@ function SaleTab({
                         {s.isTailored ? "裁碼" : sizeDimensionLabel(product)} <span style={{ fontSize: 22 }}>{s.size}</span> 吋
                       </div>
                       <div style={{ color: "#888", marginTop: 2 }}>{fmt(s.price)}</div>
+                      {validTwoPiecePrice(s.price, s.twoPiecePrice) !== null && (
+                        <div style={{ fontSize: 11, color: "#28784B", marginTop: 2 }}>兩件 {fmt(s.twoPiecePrice)}</div>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -5570,11 +5669,17 @@ function SaleTab({
       <div style={{ background: "#F7F7F5", borderRadius: 12, padding: 14 }}>
         <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 10 }}>購物車</div>
         {cart.length === 0 && <div style={{ fontSize: 16, color: "#999" }}>未揀任何貨品</div>}
-        {cart.map((c) => (
+        {pricedCart.map((c) => (
           <div key={c.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #E5E5E0" }}>
             <div style={{ flex: 1, minWidth: 0, lineHeight: 1.4 }}>
               <div style={{ fontSize: 18, fontWeight: 500 }}>{c.exchangeReturn ? "換出：" : ""}{c.name}（{sizeLabel(c)}）</div>
               <div style={{ fontSize: 16, color: c.exchangeReturn ? "#9A3412" : "#888" }}>{c.exchangeReturn ? "-" : ""}{fmt(c.price)} x {c.qty}{productUnit(c.name, c.size)} = {fmt((c.exchangeReturn ? -1 : 1) * c.price * c.qty)}</div>
+              {c.discountAmount > 0 && (
+                <div style={{ fontSize: 14, color: "#28784B" }}>{c.exchangeReturn ? "優惠差額調整" : "兩件優惠"} −{fmt(c.discountAmount)}</div>
+              )}
+              {c.discountAmount > 0 && (
+                <div style={{ fontSize: 16, fontWeight: 600 }}>{c.exchangeReturn ? "退款金額" : "優惠後"}：{fmt(Math.abs(c.lineTotal))}</div>
+              )}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: 8, flexShrink: 0 }}>
               {!c.exchangeReturn && (
@@ -7375,6 +7480,22 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                     placeholder="價錢（待補）"
                     style={{ flex: 1, padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 13 }}
                   />
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={s.twoPiecePrice ?? ""}
+                    onChange={(e) => {
+                      updateProduct(p.id, (current) => ({
+                        sizes: current.sizes.map((size, index) => index === i
+                          ? { ...size, twoPiecePrice: e.target.value === "" ? null : Number(e.target.value) }
+                          : size),
+                      }));
+                    }}
+                    placeholder="兩件優惠總價"
+                    title="輸入買兩件的總價；同款、同單價和同優惠價的尺碼可混搭"
+                    style={{ width: 92, minWidth: 0, padding: 8, borderRadius: 8, border: "1px solid #A7D5B4", fontSize: 12 }}
+                  />
                   <button
                     type="button"
                     className="pos-btn"
@@ -7389,6 +7510,14 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                   </button>
                 </div>
               ))}
+              {p.sizes.some((size) => size.twoPiecePrice !== null
+                && size.twoPiecePrice !== undefined
+                && size.twoPiecePrice !== ""
+                && validTwoPiecePrice(size.price, size.twoPiecePrice) === null) && (
+                <div style={{ marginBottom: 8, padding: 8, borderRadius: 7, background: "#FFF1F2", color: "#B42318", fontSize: 12 }}>
+                  兩件優惠總價必須是整數，並低於該尺碼兩件原價；優惠只會配對同款、同單價及同優惠價商品。
+                </div>
+              )}
               <button
                 className="pos-btn"
                 onClick={() => updateProduct(p.id, (current) => ({
@@ -8190,6 +8319,9 @@ function ReceiptModal({ order, orders = [], language = "zh", actionError = "", o
               <div>{it.exchangeReturn ? labels.exchangeOut : ""}{english ? receiptEnglishName(it.name, it.receiptNameEn) : it.name}</div>
               <div>  {formatSizeForReceipt(it.name, it.size, it.length, english)}</div>
               <div>  {labels.quantity} {it.qty} {receiptProductUnit(it.name, language, it.size, it.qty)} x {fmt(Math.abs(it.price))} = {fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}</div>
+              {Number(it.discountAmount) > 0 && (
+                <div>  {it.exchangeReturn ? labels.promotionAdjustment : labels.promotion}: −{fmt(it.discountAmount)}</div>
+              )}
             </div>
           ))}
           <div>--------------------------------</div>

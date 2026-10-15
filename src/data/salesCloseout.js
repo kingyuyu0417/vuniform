@@ -83,7 +83,10 @@ export const summarizeDailyCloseout = (orders, reportDate = "") => {
       const returnItems = (Array.isArray(order.items) ? order.items : []).filter((item) => item.exchangeReturn);
       if (refundDue > 0 && returnItems.length === 0) untrackedReturnOrders += 1;
       returnedGoodsAmount += returnItems.reduce(
-        (sum, item) => sum + Math.abs(amountOf(item.price)) * Math.max(0, amountOf(item.qty)),
+        (sum, item) => sum + Math.max(
+          0,
+          Math.abs(amountOf(item.price)) * Math.max(0, amountOf(item.qty)) - Math.max(0, amountOf(item.discountAmount)),
+        ),
         0,
       );
     } else {

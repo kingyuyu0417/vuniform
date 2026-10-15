@@ -54,7 +54,7 @@ test("exports order amounts once per order and keeps item rows separate", () => 
   const items = findSheet(sheets, "商品明細").rows;
   assert.equal(items.length, 4);
   assert.equal(items[0].includes("單據金額"), false);
-  assert.equal(items[1][11], 200);
+  assert.equal(items[1][13], 200);
   assert.equal(items[3][2], "已作廢");
 
   const summary = findSheet(sheets, "摘要").rows;
@@ -64,6 +64,32 @@ test("exports order amounts once per order and keeps item rows separate", () => 
     ["恤衫", "M", "", 2, 0, 2],
     ["襪", "3對裝", "", 1, 0, 1],
   ]);
+});
+
+test("exports bundle price, discount, and net item amount for promotion auditing", () => {
+  const itemRows = findSheet(buildSalesExportSheets([{
+    date: "2026-09-24",
+    total: 73,
+    itemCount: 2,
+    items: [{
+      name: "長袖底衫",
+      size: "20-24",
+      price: 40,
+      qty: 2,
+      twoPiecePrice: 73,
+      discountAmount: 7,
+    }],
+  }]), "商品明細").rows;
+
+  assert.deepEqual(itemRows[0].slice(9), [
+    "數量",
+    "單價",
+    "兩件優惠總價",
+    "優惠減免",
+    "商品小計",
+    "退回標記",
+  ]);
+  assert.deepEqual(itemRows[1].slice(9), [2, 40, 73, 7, 73, "無退回標記"]);
 });
 
 test("groups by school, outlet, cashier, and item without counting voided sales", () => {
@@ -198,7 +224,7 @@ test("creates a readable multi-sheet Excel workbook with filters", () => {
 
   assert.deepEqual(reopened.SheetNames, ["摘要", "比例分析", "閱讀指引", "總覽", "收市對數", "訂單", "商品明細", "按學校", "按門店", "按員工", "商品分析"]);
   assert.equal(reopened.Sheets["訂單"]["!autofilter"].ref, "A1:R2");
-  assert.equal(reopened.Sheets["商品明細"]["!autofilter"].ref, "A1:M2");
+  assert.equal(reopened.Sheets["商品明細"]["!autofilter"].ref, "A1:O2");
   assert.equal(reopened.Sheets["總覽"].B8.v, 100);
   assert.equal(reopened.Sheets["摘要"]["!autofilter"].ref, "A10:F11");
   assert.equal(reopened.Sheets["摘要"].B2.v, "2026-09-20 至 2026-09-30");

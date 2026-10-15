@@ -8,7 +8,10 @@ const netAmount = (order) => isVoided(order)
   ? 0
   : orderAmount(order) - (order.replacementSourceReceiptId ? 0 : refundAmount(order));
 const quantityOf = (item) => Math.max(0, item.qty === undefined || item.qty === null || item.qty === "" ? 1 : amountOf(item.qty));
-const itemAmount = (item) => Math.abs(amountOf(item.price)) * quantityOf(item);
+const itemAmount = (item) => Math.max(
+  0,
+  Math.abs(amountOf(item.price)) * quantityOf(item) - Math.max(0, amountOf(item.discountAmount)),
+);
 
 const groupOrders = (orders, keyOf) => {
   const groups = new Map();
@@ -347,7 +350,7 @@ export const buildSalesExportSheets = (orders, {
     {
       name: "商品明細",
       rows: [
-        ["日期", "單號", "訂單狀態", "學校", "門店", "開單員工", "款式", "尺碼", "長度", "數量", "單價", "商品小計", "退回標記"],
+        ["日期", "單號", "訂單狀態", "學校", "門店", "開單員工", "款式", "尺碼", "長度", "數量", "單價", "兩件優惠總價", "優惠減免", "商品小計", "退回標記"],
         ...rows.flatMap((order) => (Array.isArray(order.items) ? order.items : []).map((item) => [
           order.date || "",
           order.id || "",
@@ -360,11 +363,13 @@ export const buildSalesExportSheets = (orders, {
           item.length || "",
           quantityOf(item),
           amountOf(item.price),
+          item.twoPiecePrice ?? "",
+          Math.max(0, amountOf(item.discountAmount)),
           itemAmount(item),
           item.exchangeReturn ? "退回" : "無退回標記",
         ])),
       ],
-      widths: [13, 24, 15, 32, 16, 16, 32, 14, 12, 10, 12, 14, 12],
+      widths: [13, 24, 15, 32, 16, 16, 32, 14, 12, 10, 12, 16, 12, 14, 12],
     },
     ...[
       { name: "按學校", keyOf: (order) => order.school },

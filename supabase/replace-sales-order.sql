@@ -8,6 +8,10 @@ alter table public.orders
   add column if not exists replacement_cash_received integer not null default 0,
   add column if not exists replacement_change_due integer not null default 0;
 
+alter table public.order_items
+  add column if not exists two_piece_price integer,
+  add column if not exists discount_amount integer not null default 0;
+
 create index if not exists orders_replacement_source_receipt_id_idx
   on public.orders (replacement_source_receipt_id)
   where replacement_source_receipt_id is not null;
@@ -70,18 +74,22 @@ begin
     raise exception 'A full-sale replacement must contain only the new sale items';
   end if;
 
-  select coalesce(sum(item.price * item.qty), 0)::integer,
+  select coalesce(sum(item.price * item.qty - coalesce(item.discount_amount, 0)), 0)::integer,
          coalesce(sum(item.qty), 0)::integer,
          count(*) filter (
            where item.price is null
               or item.qty is null
               or item.price < 0
               or item.qty <= 0
+              or coalesce(item.discount_amount, 0) < 0
+              or coalesce(item.discount_amount, 0) > item.price * item.qty
+              or (coalesce(item.discount_amount, 0) > 0
+                and (item.two_piece_price is null or item.two_piece_price < 0 or item.two_piece_price >= item.price * 2))
               or coalesce(item.is_return, false)
          )::integer
     into requested_item_total, requested_item_count, invalid_item_count
   from jsonb_to_recordset(coalesce(order_data -> 'items', '[]'::jsonb))
-    as item(price integer, qty integer, is_return boolean);
+    as item(price integer, qty integer, is_return boolean, two_piece_price integer, discount_amount integer);
 
   if invalid_item_count > 0
      or requested_item_total <> new_total

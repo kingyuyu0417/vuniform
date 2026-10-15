@@ -60,6 +60,8 @@ Auth 模式的銷售交易會用 `create_order_idempotently` 一次寫入 `order
 
 銷售結帳可記錄現金、信用卡或轉帳；退換退款可獨立記錄退款渠道。銷售記錄頁的每日收市對數會分渠道列出實收及退款，並分開顯示銷售、退回貨品參考額、換貨淨差額及淨收入。相同收銀員兩分鐘內開出完全相同商品、數量及金額時，系統只會顯示非阻擋式警示，店員確認後仍可完成真實交易。
 
+每個尺碼可在商品管理輸入「兩件優惠總價」。結帳時，同款、同單價及同優惠總價的尺碼可混搭；每兩件套用一次優惠，奇數剩餘件按原價計算。退回優惠商品時會按原單及先前退貨重新計算退款。正式啟用前，請在 Supabase SQL Editor 先執行更新後的 `supabase/idempotent-sales-checkout.sql`，再執行 `supabase/replace-sales-order.sql`，然後部署前端；若缺少資料庫欄位，系統會阻止優惠結帳。部署後仍須在商品管理為適用商品尺碼設定優惠價，系統不會自行修改現有商品價格。
+
 ## Auth 員工管理功能
 
 員工管理功能使用 Supabase Edge Function，service key 只放在 Supabase server-side secrets，不可放入 `.env.local`：
@@ -109,6 +111,8 @@ Cloudflare Pages 會在每次 `git push` 後自動部署。專案的 Cloudflare 
 請透過 GitHub 推送部署，不要直接上傳本機 `dist`。正式建置會檢查 `VITE_SUPABASE_URL` 和 `VITE_SUPABASE_ANON_KEY`；若缺少或仍是佔位值，建置會失敗，避免發布後登入頁才顯示「Supabase 未設定」。本機手動建置時也須先設定這兩個環境變數。
 
 部署商品英文收據名稱功能前，請先在 Supabase SQL Editor 執行 [product-receipt-name-en.sql](./supabase/product-receipt-name-en.sql)，再執行更新後的 [idempotent-sales-checkout.sql](./supabase/idempotent-sales-checkout.sql) 以更新交易 RPC，最後才部署前端。這會為商品及銷售項目新增英文收據名稱欄位，舊資料預設為空白。
+
+數量優惠功能亦須先執行更新後的 [idempotent-sales-checkout.sql](./supabase/idempotent-sales-checkout.sql) 及 [replace-sales-order.sql](./supabase/replace-sales-order.sql)，再部署前端；其後在商品管理逐尺碼設定兩件優惠總價。
 
 目前 schema 的匿名政策只適合測試。正式公開前，必須改用 Supabase Auth 和更嚴格的 Row Level Security，避免任何人讀寫全部 POS 資料。
 

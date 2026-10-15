@@ -29,7 +29,9 @@ alter table public.order_items
   add column if not exists length text,
   add column if not exists is_return boolean not null default false,
   add column if not exists source_order_item_id text,
-  add column if not exists receipt_name_en text not null default '';
+  add column if not exists receipt_name_en text not null default '',
+  add column if not exists two_piece_price integer,
+  add column if not exists discount_amount integer not null default 0;
 
 alter table public.products
   add column if not exists receipt_name_en text not null default '';
@@ -72,6 +74,13 @@ declare
   original_school text;
   original_voided_at timestamptz;
   already_returned integer;
+  requested_item_net_total integer;
+  requested_item_count integer;
+  invalid_item_count integer;
+  invalid_promotion_group boolean;
+  invalid_return_promotion_group boolean;
+  expected_total integer;
+  expected_refund integer;
   is_untracked_exchange boolean := coalesce((order_data ->> 'untracked_exchange')::boolean, false);
 begin
   if actor_id is null or nullif(order_data ->> 'cashier_id', '')::uuid is distinct from actor_id then
@@ -148,7 +157,9 @@ begin
       raise exception 'checkout_key was already used for a different order';
     end if;
     update public.order_items as saved_item
-       set receipt_name_en = coalesce(item.receipt_name_en, '')
+       set receipt_name_en = coalesce(item.receipt_name_en, ''),
+           two_piece_price = item.two_piece_price,
+           discount_amount = coalesce(item.discount_amount, 0)
     from jsonb_to_recordset(order_data -> 'items') as item(
       name text,
       size text,
@@ -157,7 +168,9 @@ begin
       qty integer,
       is_return boolean,
       source_order_item_id text,
-      receipt_name_en text
+      receipt_name_en text,
+      two_piece_price integer,
+      discount_amount integer
     )
     where saved_item.order_id = receipt_id
       and saved_item.name is not distinct from item.name
@@ -168,6 +181,90 @@ begin
       and saved_item.is_return = coalesce(item.is_return, false)
       and saved_item.source_order_item_id is not distinct from nullif(item.source_order_item_id, '');
     return receipt_id;
+  end if;
+
+  select coalesce(sum(
+           (case when coalesce(item.is_return, false) then -1 else 1 end)
+           * (item.price * item.qty - coalesce(item.discount_amount, 0))
+         ), 0)::integer,
+         coalesce(sum(item.qty), 0)::integer,
+         count(*) filter (
+           where item.price is null
+              or item.qty is null
+              or item.price < 0
+              or item.qty <= 0
+              or coalesce(item.discount_amount, 0) < 0
+              or coalesce(item.discount_amount, 0) > item.price * item.qty
+              or (coalesce(item.discount_amount, 0) > 0
+                and (item.two_piece_price is null or item.two_piece_price < 0 or item.two_piece_price >= item.price * 2))
+         )::integer
+    into requested_item_net_total, requested_item_count, invalid_item_count
+  from jsonb_to_recordset(order_data -> 'items') as item(
+    price integer,
+    qty integer,
+    is_return boolean,
+    two_piece_price integer,
+    discount_amount integer
+  );
+
+  select exists (
+    select 1
+    from (
+      select item.name, item.price, item.two_piece_price,
+             sum(item.qty)::integer as quantity,
+             sum(coalesce(item.discount_amount, 0))::integer as discount
+      from jsonb_to_recordset(order_data -> 'items') as item(
+        name text,
+        price integer,
+        qty integer,
+        is_return boolean,
+        two_piece_price integer,
+        discount_amount integer
+      )
+      where not coalesce(item.is_return, false)
+        and item.two_piece_price is not null
+      group by item.name, item.price, item.two_piece_price
+    ) as promotion_group
+    where promotion_group.two_piece_price < 0
+       or promotion_group.two_piece_price >= promotion_group.price * 2
+       or promotion_group.discount <> (promotion_group.quantity / 2)
+         * (promotion_group.price * 2 - promotion_group.two_piece_price)
+  ) into invalid_promotion_group;
+
+  if exists (
+    select 1
+    from jsonb_to_recordset(order_data -> 'items') as requested(
+      name text,
+      size text,
+      length text,
+      price integer,
+      is_return boolean,
+      source_order_item_id text,
+      two_piece_price integer
+    )
+    join public.order_items as source_item
+      on source_item.id::text = requested.source_order_item_id
+    where coalesce(requested.is_return, false)
+      and (
+        requested.name is distinct from source_item.name
+        or requested.size is distinct from source_item.size
+        or nullif(requested.length, '') is distinct from source_item.length
+        or requested.price is distinct from source_item.price
+        or requested.two_piece_price is distinct from source_item.two_piece_price
+      )
+  ) then
+    raise exception 'Returned item details must match the original sale item';
+  end if;
+
+  expected_total := greatest(requested_item_net_total, 0);
+  expected_refund := greatest(-requested_item_net_total, 0);
+  if invalid_item_count > 0
+     or invalid_promotion_group
+     or requested_item_count <> coalesce((order_data ->> 'item_count')::integer, -1)
+     or expected_total <> greatest(coalesce((order_data ->> 'total')::integer, 0), 0)
+     or (nullif(order_data ->> 'replacement_source_receipt_id', '') is null
+       and expected_refund <> greatest(coalesce((order_data ->> 'refund_due')::integer, 0), 0)) then
+    raise exception 'Order totals, item discounts, and quantities must match their item rows';
   end if;
 
   for requested_return in
@@ -256,6 +353,87 @@ begin
     end if;
   end loop;
 
+  with current_return_groups as (
+    select source_item.order_id as source_order_id,
+           source_item.name,
+           source_item.price,
+           source_item.two_piece_price,
+           sum(requested.qty)::integer as current_qty,
+           sum(requested.price * requested.qty)::integer as current_base,
+           sum(coalesce(requested.discount_amount, 0))::integer as current_discount
+    from jsonb_to_recordset(order_data -> 'items') as requested(
+      qty integer,
+      price integer,
+      is_return boolean,
+      source_order_item_id text,
+      discount_amount integer
+    )
+    join public.order_items as source_item
+      on source_item.id::text = requested.source_order_item_id
+    where coalesce(requested.is_return, false)
+      and source_item.two_piece_price is not null
+    group by source_item.order_id, source_item.name, source_item.price, source_item.two_piece_price
+  ),
+  return_pricing as (
+    select current_group.*,
+           original.original_qty,
+           original.original_total,
+           coalesce(previous.returned_qty, 0) as previous_returned_qty,
+           coalesce(previous.refunded_total, 0) as previous_refunded_total
+    from current_return_groups as current_group
+    cross join lateral (
+      select coalesce(sum(source_item.qty), 0)::integer as original_qty,
+             coalesce(sum(
+               source_item.price * source_item.qty - coalesce(source_item.discount_amount, 0)
+             ), 0)::integer as original_total
+      from public.order_items as source_item
+      where source_item.order_id = current_group.source_order_id
+        and not source_item.is_return
+        and source_item.name is not distinct from current_group.name
+        and source_item.price = current_group.price
+        and source_item.two_piece_price = current_group.two_piece_price
+    ) as original
+    left join lateral (
+      select coalesce(sum(return_item.qty), 0)::integer as returned_qty,
+             coalesce(sum(
+               return_item.price * return_item.qty - coalesce(return_item.discount_amount, 0)
+             ), 0)::integer as refunded_total
+      from public.order_items as return_item
+      join public.orders as adjustment on adjustment.id = return_item.order_id
+      join public.order_items as source_item
+        on source_item.id::text = return_item.source_order_item_id
+      where return_item.is_return
+        and adjustment.voided_at is null
+        and source_item.order_id = current_group.source_order_id
+        and not source_item.is_return
+        and source_item.name is not distinct from current_group.name
+        and source_item.price = current_group.price
+        and source_item.two_piece_price = current_group.two_piece_price
+    ) as previous on true
+  )
+  select exists (
+    select 1
+    from return_pricing
+    where current_discount <> greatest(
+      0,
+      current_base - greatest(
+        0,
+        original_total
+          - previous_refunded_total
+          - (
+            greatest(original_qty - previous_returned_qty - current_qty, 0) / 2
+              * two_piece_price
+            + mod(greatest(original_qty - previous_returned_qty - current_qty, 0), 2)
+              * price
+          )
+      )
+    )
+  ) into invalid_return_promotion_group;
+
+  if invalid_return_promotion_group then
+    raise exception 'Return discount does not match the remaining bundle price';
+  end if;
+
   insert into public.daily_receipt_sequences (receipt_date, last_number)
   values (current_receipt_date, 1)
   on conflict (receipt_date) do update
@@ -303,7 +481,7 @@ begin
     payload_hash
   );
 
-  insert into public.order_items (order_id, name, size, length, price, qty, is_return, source_order_item_id, receipt_name_en)
+  insert into public.order_items (order_id, name, size, length, price, qty, is_return, source_order_item_id, receipt_name_en, two_piece_price, discount_amount)
   select
     receipt_id,
     item.name,
@@ -313,7 +491,9 @@ begin
     item.qty,
     coalesce(item.is_return, false),
     nullif(item.source_order_item_id, ''),
-    coalesce(item.receipt_name_en, '')
+    coalesce(item.receipt_name_en, ''),
+    item.two_piece_price,
+    coalesce(item.discount_amount, 0)
   from jsonb_to_recordset(order_data -> 'items')
     as item(
       name text,
@@ -323,7 +503,9 @@ begin
       qty integer,
       is_return boolean,
       source_order_item_id text,
-      receipt_name_en text
+      receipt_name_en text,
+      two_piece_price integer,
+      discount_amount integer
     );
 
   return receipt_id;

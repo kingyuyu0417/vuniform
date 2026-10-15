@@ -102,6 +102,24 @@ test("falls back to cash for historical payment data and flags refunds without r
   assert.equal(summary.netRevenue, 70);
 });
 
+test("counts the net amount of a returned promotional item", () => {
+  const summary = summarizeDailyCloseout([{
+    id: "promotion-return",
+    total: 0,
+    refundDue: 33,
+    exchangeSourceReceiptId: "promotion-sale",
+    items: [{
+      name: "長袖底衫",
+      price: 40,
+      qty: 1,
+      exchangeReturn: true,
+      discountAmount: 7,
+    }],
+  }]);
+
+  assert.equal(summary.returnedGoodsAmount, 33);
+});
+
 test("summarizes closeout across an inclusive date range", () => {
   const summary = summarizeDailyCloseout([
     { id: "before", date: "2026-10-06", total: 500 },
