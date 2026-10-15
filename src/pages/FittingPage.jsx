@@ -16,6 +16,7 @@ import { lengthDimensionLabel, sizeDimensionLabel } from "../data/productDimensi
 import { findQueueOrders, normalizeQueueLookup } from "../data/queueOrderLookup.js";
 import { getFittingDraft, removeFittingDraft, setFittingDraft } from "../data/fittingDrafts.js";
 import { getActiveFittingOrder } from "../data/fittingOrderState.js";
+import { naturalSizeSort } from "../data/sizeSort.js";
 
 const STORAGE_DRAFT_KEY = "uniform-pos-fitting-drafts";
 
@@ -61,32 +62,6 @@ const displayProductName = (name = "") => name
 
 const hasLengthOptions = (product) => (product?.sizes || []).some((size) => typeof size === "object" && size.length);
 const formatPrice = (price) => `$${Math.round(Number(price)).toLocaleString("en-HK")}`;
-const naturalSizeSort = (first, second) => {
-  const firstText = String(first ?? "").trim();
-  const secondText = String(second ?? "").trim();
-  const firstTailored = /^裁碼(?:\s|$)/.test(firstText);
-  const secondTailored = /^裁碼(?:\s|$)/.test(secondText);
-  if (firstTailored || secondTailored) {
-    if (firstTailored === secondTailored) return 0;
-    return firstTailored ? 1 : -1;
-  }
-  const firstEnglish = /^[A-Za-z]/.test(firstText);
-  const secondEnglish = /^[A-Za-z]/.test(secondText);
-  if (firstEnglish || secondEnglish) {
-    if (!firstEnglish) return 1;
-    if (!secondEnglish) return -1;
-    return firstText.localeCompare(secondText, "en", { numeric: true });
-  }
-  const firstNumber = Number.parseFloat(firstText);
-  const secondNumber = Number.parseFloat(secondText);
-  if (Number.isFinite(firstNumber) || Number.isFinite(secondNumber)) {
-    if (!Number.isFinite(firstNumber)) return 1;
-    if (!Number.isFinite(secondNumber)) return -1;
-    if (firstNumber !== secondNumber) return firstNumber - secondNumber;
-  }
-  return firstText.localeCompare(secondText, "zh-Hant", { numeric: true });
-};
-
 export default function FittingPage({ currentSchoolId = "", products = defaultProducts, selectedOrderId = "", onStatusChange, onComplete }) {
   const safeProducts = Array.isArray(products) ? products.filter(Boolean) : [];
   const [orders, setOrders] = useState([]);

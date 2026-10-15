@@ -31,6 +31,7 @@ import { createPriceListWorkbook } from "./data/priceListExport";
 import { buildReceiptNameCandidates } from "./data/receiptProductNames";
 import { clearCheckoutAttempt, getOrCreateCheckoutAttempt } from "./data/checkoutAttempt";
 import { getRemainingReturnQuantity, hasUntrackedExchangeHistory } from "./data/returnLimits";
+import { naturalSizeSort } from "./data/sizeSort";
 import { canReplaceOrder, getReplacementBranchId, getReplacementSettlement } from "./data/orderReplacement";
 import { calculateCashSettlement, findPossibleDuplicateSale, isExchangeAdjustmentOrder, PAYMENT_METHOD_LABELS, PAYMENT_METHOD_LABELS_EN, summarizeDailyCloseout } from "./data/salesCloseout";
 import {
@@ -188,38 +189,6 @@ const receiptEnglishName = (value, configuredName = "") => (
   String(configuredName || "").trim() || receiptTranslationText(translateReceiptProductName(value))
 );
 const receiptEnglishSchool = (value) => receiptTranslationText(translateReceiptSchool(value));
-const naturalSizeSort = (first, second) => {
-  const firstText = String(first ?? "").trim();
-  const secondText = String(second ?? "").trim();
-  const isTailored = (value) => /^裁碼(?:\s|$)/.test(value);
-  if (isTailored(firstText) || isTailored(secondText)) {
-    if (firstText === secondText) return 0;
-    return isTailored(firstText) ? 1 : -1;
-  }
-  const firstHasLetters = /^[A-Za-z]/.test(firstText);
-  const secondHasLetters = /^[A-Za-z]/.test(secondText);
-  const firstNumber = Number.parseFloat(first);
-  const secondNumber = Number.parseFloat(second);
-  if (firstHasLetters || secondHasLetters) {
-    if (!firstHasLetters) return 1;
-    if (!secondHasLetters) return -1;
-    return firstText.localeCompare(secondText, "en", { numeric: true });
-  }
-  if (Number.isFinite(firstNumber) || Number.isFinite(secondNumber)) {
-    if (!Number.isFinite(firstNumber)) return 1;
-    if (!Number.isFinite(secondNumber)) return -1;
-    if (firstNumber !== secondNumber) return firstNumber - secondNumber;
-  }
-  const alphaOrder = ["XS", "S", "M", "L", "XL", "XXL"];
-  const firstAlpha = alphaOrder.indexOf(firstText.toUpperCase());
-  const secondAlpha = alphaOrder.indexOf(secondText.toUpperCase());
-  if (firstAlpha >= 0 || secondAlpha >= 0) {
-    if (firstAlpha < 0) return 1;
-    if (secondAlpha < 0) return -1;
-    if (firstAlpha !== secondAlpha) return firstAlpha - secondAlpha;
-  }
-  return firstText.localeCompare(secondText, "zh-Hant", { numeric: true });
-};
 const sizeEntrySort = (first, second) => {
   const firstTailored = Boolean(first.isTailored) || /^裁碼(?:\s|$)/.test(String(first.size || "").trim()) || /^裁碼(?:\s|$)/.test(String(first.length || "").trim());
   const secondTailored = Boolean(second.isTailored) || /^裁碼(?:\s|$)/.test(String(second.size || "").trim()) || /^裁碼(?:\s|$)/.test(String(second.length || "").trim());
