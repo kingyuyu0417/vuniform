@@ -1,6 +1,28 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validateProductionBuildConfig } from "./productionBuildConfig.js";
+import {
+  readWranglerProductionVariables,
+  validateProductionBuildConfig,
+} from "./productionBuildConfig.js";
+
+test("loads only production Vite variables from the Wrangler configuration", () => {
+  const variables = readWranglerProductionVariables(`
+VITE_SUPABASE_URL = "https://ignored.supabase.co"
+
+[env.production.vars]
+VITE_SUPABASE_URL = "https://uniformpos-prod.supabase.co"
+VITE_SUPABASE_ANON_KEY = "sb_publishable_publickey123"
+SECRET_VALUE = "never exposed"
+
+[env.preview.vars]
+VITE_SUPABASE_URL = "https://preview.supabase.co"
+`);
+
+  assert.deepEqual(variables, {
+    VITE_SUPABASE_URL: "https://uniformpos-prod.supabase.co",
+    VITE_SUPABASE_ANON_KEY: "sb_publishable_publickey123",
+  });
+});
 
 test("accepts configured Supabase production settings", () => {
   assert.deepEqual(validateProductionBuildConfig({

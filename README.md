@@ -106,7 +106,7 @@ npm run build
 - `VITE_USE_SUPABASE_AUTH`
 - `VITE_PUBLIC_APP_URL`
 
-Cloudflare Pages 會在每次 `git push` 後自動部署。專案的 Cloudflare Pages 設定保存在 `wrangler.toml`；請不要再使用 Netlify 或 Vercel 設定。
+Cloudflare Pages 會在每次 `git push` 後自動部署。專案的 Cloudflare Pages 設定保存在 `wrangler.toml`；請不要再使用 Netlify 或 Vercel 設定。Vite 正式建置會優先使用 Cloudflare 建置環境變數，若 Pages 未把 Wrangler 變數注入建置環境，則讀取 `wrangler.toml` 的 production vars 作公開 Supabase 設定。
 
 請透過 GitHub 推送部署，不要直接上傳本機 `dist`。正式建置會檢查 `VITE_SUPABASE_URL` 和 `VITE_SUPABASE_ANON_KEY`；若缺少或仍是佔位值，建置會失敗，避免發布後登入頁才顯示「Supabase 未設定」。本機手動建置時也須先設定這兩個環境變數。
 

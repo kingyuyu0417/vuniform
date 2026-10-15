@@ -1,10 +1,16 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
-import { validateProductionBuildConfig } from './scripts/productionBuildConfig.js';
+import { readFileSync } from 'node:fs';
+import { readWranglerProductionVariables, validateProductionBuildConfig } from './scripts/productionBuildConfig.js';
 
 export default defineConfig(({ mode }) => {
   if (mode === 'production') {
-    const environment = { ...loadEnv(mode, process.cwd(), ''), ...process.env };
+    const wranglerConfig = readFileSync(new URL('./wrangler.toml', import.meta.url), 'utf8');
+    const environment = {
+      ...readWranglerProductionVariables(wranglerConfig),
+      ...loadEnv(mode, process.cwd(), ''),
+      ...process.env,
+    };
     const errors = validateProductionBuildConfig(environment);
     if (errors.length > 0) {
       throw new Error(`Production build blocked: ${errors.join(' ')}`);
