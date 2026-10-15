@@ -4876,6 +4876,7 @@ function SaleTab({
   const [directExchangeLength, setDirectExchangeLength] = useState("");
   const [directExchangeQuantityPrompt, setDirectExchangeQuantityPrompt] = useState(null);
   const [directExchangeItems, setDirectExchangeItems] = useState([]);
+  const pricedCart = calculateCartLineTotals(cart);
   const schools = useMemo(() => listSchools(products), [products]);
   const productsById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
   const conflictingProductIds = useMemo(() => findUnresolvedPriceConflictProductIds(products), [products]);
