@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MapPin, Radio, Volume2, Wifi, WifiOff } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "../supabaseClient.js";
-import { createManualPickupDisplayConnection } from "../services/manualPickupDisplayService.js";
+import { createManualPickupAnnouncementQueue, createManualPickupDisplayConnection } from "../services/manualPickupDisplayService.js";
 import { formatManualPickupAnnouncement } from "../data/manualPickupCall.js";
 
 const languageNames = { yue: "廣東話", en: "英文", zh: "普通話" };
@@ -67,10 +67,25 @@ export default function ManualPickupDisplayPage({ schoolName = "" }) {
   const [audioError, setAudioError] = useState("");
   const audioStatusRef = useRef("AUTO");
   const audioRef = useRef(null);
-  const pendingCallRef = useRef(null);
-  const speakingRef = useRef(false);
-  const queuedCallRef = useRef(null);
-  const lastSpokenCallRef = useRef("");
+  const announcementQueueRef = useRef(null);
+
+  if (!announcementQueueRef.current) {
+    announcementQueueRef.current = createManualPickupAnnouncementQueue({
+      announce: async (call) => {
+        setAudioError("");
+        setCurrentCall(call);
+        if (!audioRef.current) throw new Error("提示音未準備好，請重新載入頁面。");
+        await speakCall(call, audioRef.current);
+        audioStatusRef.current = "ENABLED";
+        setAudioStatus("ENABLED");
+      },
+      onError: (error) => {
+        setAudioError(error instanceof Error ? error.message : "聲音播放失敗，請檢查裝置音量。");
+        audioStatusRef.current = "BLOCKED";
+        setAudioStatus("BLOCKED");
+      },
+    });
+  }
 
   useEffect(() => {
     if (!schoolName.trim()) {
@@ -86,9 +101,7 @@ export default function ManualPickupDisplayPage({ schoolName = "" }) {
         enabled: isSupabaseConfigured,
         onCall: (call) => {
           if (!active) return;
-          setCurrentCall(call);
-          pendingCallRef.current = call;
-          if (audioStatusRef.current !== "BLOCKED") void announce(call);
+          void announcementQueueRef.current.enqueue(call);
         },
         onStatus: (status) => {
           if (active) setConnectionStatus(status);
@@ -96,6 +109,7 @@ export default function ManualPickupDisplayPage({ schoolName = "" }) {
       });
       return () => {
         active = false;
+        announcementQueueRef.current?.clear();
         connection.unsubscribe();
       };
     } catch (error) {
@@ -116,43 +130,11 @@ export default function ManualPickupDisplayPage({ schoolName = "" }) {
     };
   }, []);
 
-  const announce = async (call) => {
-    const callKey = `${call.queueNumber}::${call.language}::${call.calledAt}`;
-    if (speakingRef.current) {
-      queuedCallRef.current = call;
-      return;
-    }
-    if (lastSpokenCallRef.current === callKey) return;
-    lastSpokenCallRef.current = callKey;
-    speakingRef.current = true;
-    setAudioError("");
-    try {
-      if (!audioRef.current) throw new Error("提示音未準備好，請重新載入頁面。");
-      await speakCall(call, audioRef.current);
-      audioStatusRef.current = "ENABLED";
-      setAudioStatus("ENABLED");
-    } catch (error) {
-      setAudioError(error instanceof Error ? error.message : "聲音播放失敗，請檢查裝置音量。");
-      audioStatusRef.current = "BLOCKED";
-      setAudioStatus("BLOCKED");
-      lastSpokenCallRef.current = "";
-    } finally {
-      speakingRef.current = false;
-      const nextCall = queuedCallRef.current;
-      queuedCallRef.current = null;
-      if (nextCall) {
-        pendingCallRef.current = nextCall;
-        if (audioStatusRef.current !== "BLOCKED") void announce(nextCall);
-      }
-    }
-  };
-
   const playLatestCall = () => {
     setAudioError("");
     audioStatusRef.current = "AUTO";
     setAudioStatus("AUTO");
-    lastSpokenCallRef.current = "";
-    if (pendingCallRef.current) void announce(pendingCallRef.current);
+    void announcementQueueRef.current?.resume();
   };
 
   const connectionLabel = connectionStatus === "SUBSCRIBED"
@@ -193,7 +175,7 @@ export default function ManualPickupDisplayPage({ schoolName = "" }) {
         </div>
         {audioStatus === "BLOCKED" && currentCall && (
           <button type="button" onClick={playLatestCall} style={styles.audioButton}>
-            <Volume2 size={20} aria-hidden="true" /> 按此播放最新叫號
+            <Volume2 size={20} aria-hidden="true" /> 按此繼續叫號播報
           </button>
         )}
         {audioStatus === "ENABLED" && <div style={styles.audioState}><Volume2 size={17} aria-hidden="true" /> 聲音播報中</div>}

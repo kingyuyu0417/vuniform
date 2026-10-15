@@ -13,7 +13,56 @@ export const normalizeManualPickupDisplayCall = (payload = {}) => {
   return {
     queueNumber,
     language: payload.language,
+    callId: typeof payload.callId === "string" ? payload.callId : "",
     calledAt: typeof payload.calledAt === "string" ? payload.calledAt : "",
+  };
+};
+
+export const createManualPickupAnnouncementQueue = ({ announce, onError } = {}) => {
+  if (typeof announce !== "function") {
+    throw new Error("叫號播報佇列需要有效的播報函式。");
+  }
+
+  const calls = [];
+  const seenCallKeys = new Set();
+  let isAnnouncing = false;
+  let isPaused = false;
+
+  const drain = async () => {
+    if (isAnnouncing || isPaused) return;
+    isAnnouncing = true;
+    try {
+      while (calls.length && !isPaused) {
+        const { call } = calls[0];
+        try {
+          await announce(call);
+          calls.shift();
+        } catch (error) {
+          isPaused = true;
+          onError?.(error, call);
+        }
+      }
+    } finally {
+      isAnnouncing = false;
+    }
+  };
+
+  return {
+    enqueue(call) {
+      const key = call.callId || `${call.queueNumber}::${call.language}::${call.calledAt}`;
+      if (seenCallKeys.has(key)) return Promise.resolve();
+      seenCallKeys.add(key);
+      calls.push({ call, key });
+      return drain();
+    },
+    resume() {
+      isPaused = false;
+      return drain();
+    },
+    clear() {
+      calls.length = 0;
+      seenCallKeys.clear();
+    },
   };
 };
 
@@ -69,6 +118,7 @@ export const createManualPickupDisplayConnection = ({
       const call = normalizeManualPickupDisplayCall({
         queueNumber,
         language,
+        callId: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
         calledAt: new Date().toISOString(),
       });
       if (!call) throw new Error("籌號或播報語言無效，未能同步客人畫面。");

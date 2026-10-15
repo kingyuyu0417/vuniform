@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  createManualPickupAnnouncementQueue,
   createManualPickupDisplayConnection,
   getManualPickupDisplayTopic,
   normalizeManualPickupDisplayCall,
@@ -57,10 +58,104 @@ test("scopes public display topics to a single school", () => {
 test("normalizes only supported queue numbers and announcement languages", () => {
   assert.deepEqual(
     normalizeManualPickupDisplayCall({ queueNumber: "28", language: "yue", calledAt: "now" }),
-    { queueNumber: "28", language: "yue", calledAt: "now" },
+    { queueNumber: "28", language: "yue", callId: "", calledAt: "now" },
   );
   assert.equal(normalizeManualPickupDisplayCall({ queueNumber: "1000", language: "yue" }), null);
   assert.equal(normalizeManualPickupDisplayCall({ queueNumber: "12", language: "fr" }), null);
+});
+
+test("announces simultaneous calls in received order without overlapping", async () => {
+  const firstCall = { queueNumber: "21", language: "yue", calledAt: "first" };
+  const secondCall = { queueNumber: "22", language: "en", calledAt: "second" };
+  const started = [];
+  const completed = [];
+  let finishFirst;
+  const queue = createManualPickupAnnouncementQueue({
+    announce: async (call) => {
+      started.push(call);
+      if (call === firstCall) await new Promise((resolve) => { finishFirst = resolve; });
+      completed.push(call);
+    },
+  });
+
+  const firstDrain = queue.enqueue(firstCall);
+  await Promise.resolve();
+  const secondDrain = queue.enqueue(secondCall);
+
+  assert.deepEqual(started, [firstCall]);
+  finishFirst();
+  await Promise.all([firstDrain, secondDrain]);
+
+  assert.deepEqual(started, [firstCall, secondCall]);
+  assert.deepEqual(completed, [firstCall, secondCall]);
+});
+
+test("does not replay duplicate realtime snapshots", async () => {
+  const call = { queueNumber: "28", language: "yue", callId: "same-call", calledAt: "now" };
+  const announced = [];
+  const queue = createManualPickupAnnouncementQueue({
+    announce: async (receivedCall) => announced.push(receivedCall),
+  });
+
+  await queue.enqueue(call);
+  await queue.enqueue(call);
+
+  assert.deepEqual(announced, [call]);
+});
+
+test("keeps simultaneous calls with matching numbers and timestamps distinct", async () => {
+  const firstCall = { queueNumber: "28", language: "yue", callId: "device-one", calledAt: "same-time" };
+  const secondCall = { queueNumber: "28", language: "yue", callId: "device-two", calledAt: "same-time" };
+  const announced = [];
+  const queue = createManualPickupAnnouncementQueue({
+    announce: async (call) => announced.push(call),
+  });
+
+  await queue.enqueue(firstCall);
+  await queue.enqueue(secondCall);
+
+  assert.deepEqual(announced, [firstCall, secondCall]);
+});
+
+test("retains failed calls and resumes the queue in order", async () => {
+  const firstCall = { queueNumber: "21", language: "yue", calledAt: "first" };
+  const secondCall = { queueNumber: "22", language: "en", calledAt: "second" };
+  const attempted = [];
+  const failures = [];
+  let shouldFail = true;
+  const queue = createManualPickupAnnouncementQueue({
+    announce: async (call) => {
+      attempted.push(call);
+      if (call === firstCall && shouldFail) {
+        shouldFail = false;
+        throw new Error("audio blocked");
+      }
+    },
+    onError: (error, call) => failures.push({ error: error.message, call }),
+  });
+
+  await queue.enqueue(firstCall);
+  await queue.enqueue(secondCall);
+  assert.deepEqual(attempted, [firstCall]);
+  assert.deepEqual(failures, [{ error: "audio blocked", call: firstCall }]);
+
+  await queue.resume();
+
+  assert.deepEqual(attempted, [firstCall, firstCall, secondCall]);
+});
+
+test("resets duplicate tracking when a display connection is replaced", async () => {
+  const call = { queueNumber: "28", language: "yue", callId: "reconnected-call", calledAt: "now" };
+  const announced = [];
+  const queue = createManualPickupAnnouncementQueue({
+    announce: async (receivedCall) => announced.push(receivedCall),
+  });
+
+  await queue.enqueue(call);
+  queue.clear();
+  await queue.enqueue(call);
+
+  assert.deepEqual(announced, [call, call]);
 });
 
 test("publishes calls and forwards only valid received calls", async () => {
@@ -88,11 +183,12 @@ test("publishes calls and forwards only valid received calls", async () => {
   assert.deepEqual(calls[0].payload, {
     queueNumber: "28",
     language: "yue",
+    callId: calls[0].payload.callId,
     calledAt: calls[0].payload.calledAt,
   });
   assert.equal(calls[1].event, "pickup-called");
   assert.deepEqual(calls[1].payload, received[0]);
-  assert.deepEqual(received, [{ queueNumber: "28", language: "en", calledAt: "now" }]);
+  assert.deepEqual(received, [{ queueNumber: "28", language: "en", callId: "", calledAt: "now" }]);
   assert.deepEqual(statuses, ["SUBSCRIBED", "CLOSED"]);
 });
 
