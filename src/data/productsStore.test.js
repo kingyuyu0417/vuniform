@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isMissingReceiptNameColumnError, loadProducts, normalizeProducts, saveProducts } from "./productsStore.js";
+import { isMissingReceiptNameColumnError, loadProducts, normalizeProducts, saveProducts, updateProduct } from "./productsStore.js";
 
 test("detects only missing English receipt name schema errors", () => {
   assert.equal(isMissingReceiptNameColumnError({
@@ -104,4 +104,76 @@ test("persists and verifies English receipt names with authoritative Supabase pr
   });
 
   assert.equal(upsertedRows[0].receipt_name_en, "Sports Jacket");
+});
+
+
+test("keeps a manually updated cloud price when reloading despite an older bundled fallback", async () => {
+  const databaseProducts = [{
+    id: "shirt-1",
+    school: "測試學校",
+    name: "白恤衫",
+    gender: "unisex",
+    priceMode: "simple",
+    sizes: [{ size: "M", length: "", price: 120 }],
+  }];
+  const supabase = {
+    from(table) {
+      assert.equal(table, "products");
+      return {
+        update(payload) {
+          return {
+            eq(column, id) {
+              assert.equal(column, "id");
+              return {
+                select() {
+                  return {
+                    async single() {
+                      const product = databaseProducts.find((entry) => entry.id === id);
+                      Object.assign(product, payload);
+                      return { data: { id }, error: null };
+                    },
+                  };
+                },
+              };
+            },
+          };
+        },
+        select() {
+          return {
+            order() {
+              return {
+                async order() {
+                  return { data: databaseProducts, error: null };
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  await updateProduct({
+    products: databaseProducts.map((product) => ({
+      ...product,
+      sizes: product.sizes.map((size) => ({ ...size, price: 125 })),
+    })),
+    productId: "shirt-1",
+    supabase,
+    isSupabaseAuthEnabled: true,
+  });
+
+  const loaded = await loadProducts({
+    supabase,
+    isSupabaseAuthEnabled: true,
+    fallbackProducts: [{
+      id: "shirt-1",
+      school: "測試學校",
+      name: "白恤衫",
+      sizes: [{ size: "M", length: "", price: 100 }],
+    }],
+  });
+
+  assert.equal(databaseProducts[0].sizes[0].price, 125);
+  assert.equal(loaded[0].sizes[0].price, 125);
 });

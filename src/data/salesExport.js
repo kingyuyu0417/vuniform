@@ -13,6 +13,65 @@ const itemAmount = (item) => Math.max(
   Math.abs(amountOf(item.price)) * quantityOf(item) - Math.max(0, amountOf(item.discountAmount)),
 );
 
+export const summarizeSalesMetrics = (orders) => {
+  const activeOrders = (Array.isArray(orders) ? orders : []).filter((order) => !isVoided(order));
+  return {
+    orderCount: activeOrders.length,
+    netRevenue: activeOrders.reduce((sum, order) => sum + netAmount(order), 0),
+    itemCount: activeOrders.reduce((sum, order) => sum + amountOf(order.itemCount), 0),
+  };
+};
+
+const dateOrdinal = (date) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "")) return null;
+  const timestamp = Date.parse(`${date}T00:00:00.000Z`);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === date
+    ? timestamp / 86400000
+    : null;
+};
+
+export const findPreviousSalesPeriod = (orders, asOfDate, gapDays = 7) => {
+  const cutoff = dateOrdinal(asOfDate);
+  if (cutoff === null || !Number.isInteger(gapDays) || gapDays < 1) return null;
+
+  const datedOrders = (Array.isArray(orders) ? orders : [])
+    .filter((order) => !isVoided(order))
+    .map((order) => ({ order, ordinal: dateOrdinal(order.date) }))
+    .filter(({ ordinal }) => ordinal !== null && ordinal <= cutoff)
+    .sort((first, second) => first.ordinal - second.ordinal);
+  const periods = [];
+
+  datedOrders.forEach(({ order, ordinal }) => {
+    let period = periods.at(-1);
+    if (!period || ordinal - period.lastOrdinal > gapDays) {
+      period = { startOrdinal: ordinal, lastOrdinal: ordinal, orders: [] };
+      periods.push(period);
+    }
+    period.lastOrdinal = ordinal;
+    period.orders.push(order);
+  });
+
+  if (periods.length < 2) return null;
+
+  const toDate = (ordinal) => new Date(ordinal * 86400000).toISOString().slice(0, 10);
+  const current = periods.at(-1);
+  const previous = periods.at(-2);
+  return {
+    current: {
+      startDate: toDate(current.startOrdinal),
+      endDate: toDate(current.lastOrdinal),
+      orders: current.orders,
+      metrics: summarizeSalesMetrics(current.orders),
+    },
+    previous: {
+      startDate: toDate(previous.startOrdinal),
+      endDate: toDate(previous.lastOrdinal),
+      orders: previous.orders,
+      metrics: summarizeSalesMetrics(previous.orders),
+    },
+  };
+};
+
 const groupOrders = (orders, keyOf) => {
   const groups = new Map();
   orders.filter((order) => !isVoided(order)).forEach((order) => {
@@ -221,11 +280,60 @@ const buildRatioAnalysis = (orders, { genderForItem, activeOrders, netRevenue, c
   };
 };
 
+const productSizes = (orders) => [...new Set(
+  orders.filter((order) => !isVoided(order))
+    .flatMap((order) => (Array.isArray(order.items) ? order.items : [])
+      .map((item) => item.size || "未提供尺碼"))
+)].sort((first, second) => first.localeCompare(second, "zh-Hant", { numeric: true }));
+
+const buildSizeMatrixRows = (orders) => {
+  const products = new Map();
+
+  orders.filter((order) => !isVoided(order)).forEach((order) => {
+    (Array.isArray(order.items) ? order.items : []).forEach((item) => {
+      const name = item.name || "未命名款式";
+      const length = item.length || "";
+      const size = item.size || "未提供尺碼";
+      const productKey = [name, length].join("\u0000");
+      const product = products.get(productKey) || { name, length, quantities: new Map() };
+      const quantity = product.quantities.get(size) || { sold: 0, returned: 0 };
+
+      if (item.exchangeReturn) {
+        quantity.returned += quantityOf(item);
+      } else {
+        quantity.sold += quantityOf(item);
+      }
+
+      product.quantities.set(size, quantity);
+      products.set(productKey, product);
+    });
+  });
+
+  const orderedSizes = productSizes(orders);
+  const sortedProducts = [...products.values()].sort((first, second) =>
+    first.name.localeCompare(second.name, "zh-Hant")
+    || first.length.localeCompare(second.length, "zh-Hant", { numeric: true })
+  );
+
+  return sortedProducts.flatMap((product) => {
+    const sold = orderedSizes.map((size) => product.quantities.get(size)?.sold || 0);
+    const returned = orderedSizes.map((size) => product.quantities.get(size)?.returned || 0);
+    return [
+      [product.name, product.length, "\u552e\u51fa\u4ef6\u6578", ...sold],
+      [product.name, product.length, "\u9000\u56de\u4ef6\u6578", ...returned],
+      [product.name, product.length, "\u6de8\u552e\u4ef6\u6578", ...sold.map((quantity, index) => quantity - returned[index])],
+    ];
+  });
+};
+
 export const buildSalesExportSheets = (orders, {
   outletForOrder,
   genderForItem,
   scope = "",
   reportDateRange = "",
+  comparisonOrders,
+  comparisonCurrentOrders,
+  comparisonLabel = "",
 } = {}) => {
   const rows = Array.isArray(orders) ? orders : [];
   const activeOrders = rows.filter((order) => !isVoided(order));
@@ -237,7 +345,27 @@ export const buildSalesExportSheets = (orders, {
   const closeout = summarizeDailyCloseout(rows);
   const dateRange = reportDateRange || (dates.length === 0 ? "無交易" : dates.length === 1 ? dates[0] : `${dates[0]} 至 ${dates.at(-1)}`);
   const ratioAnalysis = buildRatioAnalysis(rows, { genderForItem, activeOrders, netRevenue, closeout });
-
+  const sizes = productSizes(rows);
+  const comparison = Array.isArray(comparisonOrders)
+    ? {
+      current: summarizeSalesMetrics(Array.isArray(comparisonCurrentOrders) ? comparisonCurrentOrders : rows),
+      previous: summarizeSalesMetrics(comparisonOrders),
+    }
+    : null;
+  const comparisonRows = comparison ? [
+    [],
+    ["交易期比較", "本期", "上期", "變化", "變化率"],
+    [dateRange, comparison.current.netRevenue, comparison.previous.netRevenue,
+      comparison.current.netRevenue - comparison.previous.netRevenue,
+      comparison.previous.netRevenue === 0 ? "不適用" : `${(((comparison.current.netRevenue - comparison.previous.netRevenue) / Math.abs(comparison.previous.netRevenue)) * 100).toFixed(1)}%`],
+    ["有效單數", comparison.current.orderCount, comparison.previous.orderCount,
+      comparison.current.orderCount - comparison.previous.orderCount,
+      comparison.previous.orderCount === 0 ? "不適用" : `${(((comparison.current.orderCount - comparison.previous.orderCount) / comparison.previous.orderCount) * 100).toFixed(1)}%`],
+    ["售出件數", comparison.current.itemCount, comparison.previous.itemCount,
+      comparison.current.itemCount - comparison.previous.itemCount,
+      comparison.previous.itemCount === 0 ? "不適用" : `${(((comparison.current.itemCount - comparison.previous.itemCount) / comparison.previous.itemCount) * 100).toFixed(1)}%`],
+    [comparisonLabel ? `比較時段：${comparisonLabel}` : "比較口徑：連續交易期；相隔至少 7 日無交易即分為新一期"],
+  ] : [];
   return [
     {
       name: "摘要",
@@ -276,9 +404,12 @@ export const buildSalesExportSheets = (orders, {
         ["商品分類資料", "訂單明細未保存成交時的商品分類；報表按匯出時的商品目錄配對，目錄分類修改可能影響舊單結果，未能配對會列為未分類。"],
         ["訂單工作表", "每張單只佔一行；單據金額、退款及淨收入不會因商品行數重複。"],
         ["商品明細工作表", "每件商品佔一行；不包含單據總額欄，避免加總時重複計算。"],
-        ["淨收入", "一般有效單據金額扣除退款；整單替換以新單全額計入，補退款差額不再重複扣減；已作廢單淨收入為 0。"],
+        ["淨商品收入", "一般有效單據金額扣除退款；整單替換以新單全額計入，補退款差額不再重複扣減；已作廢單淨收入為 0。"],
+        ["實際淨收付", "實收款減退款實付，代表所選交易範圍內實際收付差額；不等同淨商品收入。整單替換可能出現新單商品金額與實際退款／補款不同。"],
         ["單據件數", "按訂單保存的件數欄位彙總；退換單可能同時計入退回及換入件數，分析商品數量請查看商品分析。"],
         ["商品分析", "按商品明細計算銷售及退回數量；舊單若沒有保存退回商品標記，退貨款式無法由單據退款反推。"],
+        ["款式尺碼矩陣", "按款式及長度橫向比較各尺碼售出、退回及淨售件數；只統計有效單據及明確標記的退回商品。"],
+        ["交易期比較", "按交易日期分期；相隔至少 7 日無交易即分為新一期。比較本期及上一交易期的淨商品收入、有效單數及售出件數；上期為 0 時不計算百分比。"],
         ["作廢記錄", "訂單工作表保留作廢單供稽核；總覽及分析表不把作廢單計入收入。"],
         ["個人資料", "報表不匯出客人姓名或電話。"],
       ],
@@ -294,21 +425,26 @@ export const buildSalesExportSheets = (orders, {
         ["已作廢單數", rows.length - activeOrders.length],
         ["有效單據金額", totalAmount],
         ["單據退款金額", totalRefunds],
-        ["淨收入", netRevenue],
+        ["淨商品收入（整單替換按新單全額計）", netRevenue],
+        ["實收款", closeout.totalReceived],
+        ["退款實付", closeout.totalRefunded],
+        ["實際淨收付（實收款－退款實付）", closeout.totalReceived - closeout.totalRefunded],
         ["有效單據件數", totalQuantity],
+        ...comparisonRows,
       ],
-      widths: [30, 24],
+      widths: [34, 20, 20, 18, 16],
     },
     {
       name: "收市對數",
       rows: [
         ["項目", "金額"],
-        ["銷售額", closeout.salesAmount],
-        ["退回貨品額（參考，不重複扣減）", closeout.returnedGoodsAmount],
-        ["換貨補／退款差額", closeout.exchangeDifference],
-        ["淨收入", closeout.netRevenue],
+        ["商品銷售額（包括整單替換新單全額）", closeout.salesAmount],
+        ["退回貨品額（參考，不等同退款實付）", closeout.returnedGoodsAmount],
+        ["退換貨商品淨額調整", closeout.exchangeDifference],
+        ["淨商品收入（商品銷售額＋退換貨商品淨額調整）", closeout.netRevenue],
         ["實收款", closeout.totalReceived],
         ["退款實付", closeout.totalRefunded],
+        ["實際淨收付（實收款－退款實付）", closeout.totalReceived - closeout.totalRefunded],
         [],
         ["支付方式", "實收", "退款實付", "淨額"],
         ...Object.entries(PAYMENT_METHOD_LABELS).map(([method, label]) => [
@@ -323,12 +459,12 @@ export const buildSalesExportSheets = (orders, {
     {
       name: "訂單",
       rows: [
-        ["日期", "時間", "單號", "狀態", "學校", "門店", "開單員工", "單據件數", "單據金額", "單據退款", "淨收入", "來源單號", "作廢原因", "付款方式", "退款方式", "退換原因", "疑似重複已確認", "重複參照單號"],
+        ["日期", "時間", "單號", "狀態", "學校", "門店", "開單員工", "單據件數", "單據金額", "單據退款", "淨商品收入", "實際補／退款差額", "來源單號", "作廢原因", "付款方式", "退款方式", "退換原因", "疑似重複已確認", "重複參照單號"],
         ...rows.map((order) => [
           order.date || "",
           order.time || "",
           order.id || "",
-          isVoided(order) ? "已作廢" : order.untrackedExchange ? "無原單退換" : isExchangeAdjustmentOrder(order) ? "退換／更正單" : "有效",
+          isVoided(order) ? "\u5df2\u4f5c\u5ee2" : order.replacementSourceReceiptId ? "\u6574\u55ae\u66ff\u63db\u65b0\u55ae" : order.untrackedExchange ? "\u7121\u539f\u55ae\u9000\u63db" : isExchangeAdjustmentOrder(order) ? "\u9000\u63db\uff0f\u66f4\u6b63\u55ae" : "\u6709\u6548",
           order.school || "",
           outletForOrder?.(order) || order.outletName || order.outlet_name || "",
           order.cashierName || "",
@@ -336,7 +472,10 @@ export const buildSalesExportSheets = (orders, {
           orderAmount(order),
           refundAmount(order),
           netAmount(order),
-          order.exchangeSourceReceiptId || "",
+          order.replacementSourceReceiptId && order.settlementDelta !== undefined && order.settlementDelta !== null
+            ? amountOf(order.settlementDelta)
+            : "",
+          order.replacementSourceReceiptId || order.exchangeSourceReceiptId || "",
           order.voidReason || "",
           PAYMENT_METHOD_LABELS[order.paymentMethod] || PAYMENT_METHOD_LABELS.cash,
           PAYMENT_METHOD_LABELS[order.refundMethod] || "",
@@ -345,7 +484,7 @@ export const buildSalesExportSheets = (orders, {
           order.duplicateSourceReceiptId || "",
         ]),
       ],
-      widths: [13, 12, 24, 15, 32, 16, 16, 12, 14, 14, 14, 24, 28, 14, 14, 32, 18, 24],
+      widths: [13, 12, 24, 17, 32, 16, 16, 12, 14, 14, 14, 18, 24, 28, 14, 14, 32, 18, 24],
     },
     {
       name: "商品明細",
@@ -390,6 +529,14 @@ export const buildSalesExportSheets = (orders, {
         ...buildProductRows(rows),
       ],
       widths: [32, 14, 12, 12, 12, 18, 18, 16],
+    },
+    {
+      name: "款式尺碼矩陣",
+      rows: [
+        ["款式", "長度", "數量類型", ...sizes],
+        ...buildSizeMatrixRows(rows),
+      ],
+      widths: [32, 14, 14, ...sizes.map(() => 12)],
     },
   ];
 };

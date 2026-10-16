@@ -1,7 +1,6 @@
 import { receiptSchoolTranslations } from "./receipt-school-translations.js";
 
 export { receiptSchoolTranslations };
-
 export const receiptProductTranslationTerms = {
   "環保袋": "Reusable Bag",
   "膠袋": "Plastic Bag",
@@ -46,14 +45,12 @@ const exactProductTranslations = {
 };
 
 const productTerms = {
-  "深炭灰色": "Dark Charcoal Grey", "寶藍色": "Royal Blue", "炭灰色": "Charcoal Grey",
+  "深炭灰色": "Dark Charcoal Grey", "深藍色": "Deep Blue", "寶藍色": "Royal Blue", "炭灰色": "Charcoal Grey",
   "粉紅色": "Pink", "咖啡色": "Brown", "紫色": "Purple", "藍色": "Blue",
   "灰色": "Grey", "黑色": "Black", "白色": "White", "啡色": "Brown",
   "杏色": "Beige", "綠色": "Green", "黃色": "Yellow", "紅色": "Red",
   "男女生": "Unisex", "男生": "Boys'", "女生": "Girls'", "男裝": "Men's", "女裝": "Women's",
-  "新款": "New", "春夏": "Spring / Summer", "秋冬": "Autumn / Winter", "冬季": "Winter",
-  "厚": "Thick", "薄": "Lightweight", "防水": "Waterproof", "連帽": "Hooded",
-  "拉鏈": "Zip-up", "拉鍊": "Zip-up", "百褶裙": "Pleated Skirt", "背帶裙": "Pinafore Dress",
+  "新款": "New", "春夏": "Spring / Summer", "秋冬": "Autumn / Winter", "冬季": "Winter", "厚": "Thick", "薄": "Lightweight", "防水": "Waterproof", "連帽": "Hooded", "有帽": "Hooded",  "拉鏈": "Zip-up", "拉鍊": "Zip-up", "百褶裙": "Pleated Skirt", "背帶裙": "Pinafore Dress",
   "牛仔褲": "Jeans", "襯衣": "Shirt", "印花": "Printed",
   "半截校裙": "Half-length School Skirt", "連身校裙": "One-piece School Dress",
   "西裝褸配厚抓毛背心": "Blazer with Fleece Waistcoat", "西裝褸配背心": "Blazer with Waistcoat",
@@ -71,11 +68,14 @@ const productTerms = {
   "混合毛": "Wool-blend", "羊毛": "Wool", "棉": "Cotton", "長褸": "Long Coat",
   "短褸": "Short Jacket", "褸": "Coat", "POLO": "Polo", "領帶": "Tie",
   "皮帶": "Belt", "腰帶": "Belt", "校徽": "School Badge", "繡章": "Embroidered Badge",
-  "連繡章": "with Embroidered Badge", "底衫": "Undershirt", "底裙": "Underskirt",
-  "襪": "Socks", "鞋": "Shoes", "手套": "Gloves", "書包": "School Bag",
+  "連繡章": "with Embroidered Badge", "底衫": "Undershirt", "底裙": "Underskirt", "絨": "Fleece",
+  "冬季": "Winter", "尖領": "Pointed-collar", "斜紋絨": "Twill Flannel", "恤": "Shirt",  "襪": "Socks", "鞋": "Shoes", "手套": "Gloves", "書包": "School Bag",
   "背囊": "Backpack", "筆袋": "Pencil Case", "格仔": "Checked", "水手領": "Sailor Collar",
   "V領": "V-neck", "圓領": "Crew-neck", "長冷": "Long-sleeve Jumper", "冷": "Jumper",
   "校呔": "School Tie", "呔": "Tie", "開胸": "Open-front", "半橡筋": "Half-elastic Waist",
+  "加大碼": "Plus Size", "特大碼": "Extra Large", "大碼": "Large", "中碼": "Medium",
+  "細碼": "Small", "加細碼": "Extra Small", "幼碼": "Extra Small",
+  "成人碼": "Adult Size", "童裝碼": "Child Size",
   "領圍": "Collar", "上圍": "Chest", "褲長": "Trouser Length", "裙長": "Skirt Length",
   "袖長": "Sleeve Length", "長度": "Length", "短": "Short", "長": "Long", "裁碼": "Tailored",
   "尺碼不合": "Wrong size", "款式不合": "Style not suitable", "品質問題": "Quality issue",
@@ -153,18 +153,18 @@ export const translateReceiptProductName = (value) => {
   };
 };
 
-export const translateReceiptSchool = (value) => {
-  const name = String(value || "").trim();
-  if (name === "港青基信書院") return { text: "YMCA of Hong Kong Christian College", translated: true };
-  if (name === "培僑小學") return { text: "Pui Kiu Primary School", translated: true };
-  if (name === "蘇浙幼兒幼稚園") return { text: "Kiangsu-Chekiang Kindergarten", translated: true };
-  if (receiptSchoolTranslations[name]) return { text: receiptSchoolTranslations[name], translated: true };
-  return { text: name, translated: !/[\u3400-\u9fff]/.test(name), original: name };
-};
-
 export const receiptTranslationText = (translation) => (
   translation.translated ? translation.text : translation.original || translation.text
 );
+
+export const translateReceiptSchool = (value) => {
+  const name = String(value || "").trim();
+  if (receiptSchoolTranslations[name]) return { text: receiptSchoolTranslations[name], translated: true };
+  if (name === "港青基信書院") return { text: "YMCA of Hong Kong Christian College", translated: true };
+  if (name === "培僑小學") return { text: "Pui Kiu Primary School", translated: true };
+  if (name === "\u8607\u6d59\u5e7c\u5152\u5e7c\u7a1a\u5712") return { text: "Kiangsu-Chekiang Kindergarten", translated: true };
+  return { text: name, translated: !/[\u3400-\u9fff]/.test(name), original: name };
+};
 
 export const receiptDimensionLabels = (productName = "") => {
   const name = String(productName || "").replace(/\s+/g, "");

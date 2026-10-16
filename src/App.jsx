@@ -26,7 +26,7 @@ import { getHongKongDate, QUEUE_MANAGEMENT_SERVICE_KEY, QUEUE_SERVICE, queueOrde
 import { findConflictingProductIds } from "./data/productConflictDetection";
 import { getProductGender, productGenderBackground, PRODUCT_GENDER_OPTIONS } from "./data/productGender";
 import { productUnit } from "./data/productUnits";
-import { createSalesExportWorkbook } from "./data/salesExport";
+import { createSalesExportWorkbook, findPreviousSalesPeriod } from "./data/salesExport";
 import { createPriceListWorkbook } from "./data/priceListExport";
 import { buildReceiptNameCandidates } from "./data/receiptProductNames";
 import { clearCheckoutAttempt, getOrCreateCheckoutAttempt } from "./data/checkoutAttempt";
@@ -190,8 +190,7 @@ const formatSizeForReceipt = (itemName, size, length, english = false) => format
 const receiptEnglishName = (value, configuredName = "") => (
   String(configuredName || "").trim() || receiptTranslationText(translateReceiptProductName(value))
 );
-const receiptEnglishSchool = (value) => receiptTranslationText(translateReceiptSchool(value));
-const sizeEntrySort = (first, second) => {
+const receiptEnglishSchool = (value) => receiptTranslationText(translateReceiptSchool(value));const sizeEntrySort = (first, second) => {
   const firstTailored = Boolean(first.isTailored) || /^裁碼(?:\s|$)/.test(String(first.size || "").trim()) || /^裁碼(?:\s|$)/.test(String(first.length || "").trim());
   const secondTailored = Boolean(second.isTailored) || /^裁碼(?:\s|$)/.test(String(second.size || "").trim()) || /^裁碼(?:\s|$)/.test(String(second.length || "").trim());
   if (firstTailored || secondTailored) {
@@ -1781,8 +1780,7 @@ const buildReceiptLines = (order, shopName, language = "zh") => {
   if (order.voidReason) lines.push(`${labels.voidReason}: ${english ? receiptEnglishName(order.voidReason) : order.voidReason}`);
   lines.push(`${labels.date}: ${order.date || "-"} ${order.time || ""}`);
   const school = english ? receiptEnglishSchool(order.school) : order.school || shopName || "-";
-  lines.push(`${labels.school}: ${school || "-"}`);
-  if (order.customerName || order.customerPhone) {
+  lines.push(`${labels.school}: ${school || "-"}`);  if (order.customerName || order.customerPhone) {
     lines.push(`${labels.customer}: ${customerSurname(order.customerName) || "-"}`);
     lines.push(`${labels.phone}: ${customerPhoneLast4(order.customerPhone) || "-"}`);
   }
@@ -1799,8 +1797,7 @@ const buildReceiptLines = (order, shopName, language = "zh") => {
   lines.push("--------------------------------");
   lines.push(labels.items);
   order.items.forEach((it) => {
-    lines.push(`${it.exchangeReturn ? labels.exchangeOut : ""}${english ? receiptEnglishName(it.name, it.receiptNameEn) : it.name}`);
-    lines.push(`  ${formatSizeForReceipt(it.name, it.size, it.length, english)}`);
+    lines.push(`${it.exchangeReturn ? labels.exchangeOut : ""}${english ? receiptEnglishName(it.name, it.receiptNameEn) : it.name}`);    lines.push(`  ${formatSizeForReceipt(it.name, it.size, it.length, english)}`);
     lines.push(`  ${labels.quantity} ${it.qty} ${receiptProductUnit(it.name, language, it.size, it.qty)} x ${fmt(Math.abs(it.price))} = ${fmt((it.exchangeReturn ? -1 : 1) * Math.abs(it.price) * it.qty)}`);
     if (Number(it.discountAmount) > 0) {
       lines.push(`  ${it.exchangeReturn ? labels.promotionAdjustment : labels.promotion}: −${fmt(it.discountAmount)}`);
@@ -3860,8 +3857,13 @@ export default function UniformPOS() {
         || Number(matchingSizes[0]?.price) !== Number(item.price)
         || validTwoPiecePrice(matchingSizes[0]?.price, matchingSizes[0]?.twoPiecePrice)
           !== validTwoPiecePrice(item.price, item.twoPiecePrice)) {
-        const currentPrice = matchingSizes.length === 1 ? `現價 $${matchingSizes[0].price}` : "找不到唯一尺碼價格";
-        return [`${product.name}（${sizeLabel(item)}）購物車價格／優惠與商品資料不符（${currentPrice}）`];
+        const priceDetails = matchingSizes.length === 1
+          ? `\u8cfc\u7269\u8eca $${item.price}\uff0c\u5546\u54c1\u8cc7\u6599\u73fe\u50f9 $${matchingSizes[0].price}`
+          : "\u627e\u4e0d\u5230\u552f\u4e00\u5c3a\u78bc\u50f9\u683c";
+        const promotionMismatch = matchingSizes.length === 1
+          && validTwoPiecePrice(matchingSizes[0].price, matchingSizes[0].twoPiecePrice)
+            !== validTwoPiecePrice(item.price, item.twoPiecePrice);
+        return [`${product.name}\uff08${sizeLabel(item)}\uff09\u50f9\u683c\uff0f\u512a\u60e0\u6838\u5c0d\u4e0d\u7b26\uff08${priceDetails}${promotionMismatch ? "\uff1b\u5169\u4ef6\u512a\u60e0\u689d\u4ef6\u4ea6\u4e0d\u7b26" : ""}\uff09`];
       }
       return [];
     });
@@ -4751,8 +4753,7 @@ export default function UniformPOS() {
               const labels = receiptFieldLabels(receiptLanguage);
               const english = receiptLanguage === "en";
               const school = english ? receiptEnglishSchool(receipt.school) : receipt.school || "-";
-              const displayField = (value) => english ? receiptEnglishName(value) : value;
-              return <>
+              const displayField = (value) => english ? receiptEnglishName(value) : value;              return <>
             <div style={{ textAlign: "center", fontWeight: 700 }}>{english ? "Victoria Uniform" : "Victoria Uniform 校服銷售"}</div>
             <div style={{ textAlign: "center" }}>{english ? "ELECTRONIC RECEIPT" : "電子銷售單 ELECTRONIC RECEIPT"}</div>
             <div>{labels.receiptNo}: #{(receipt.id || "").toUpperCase()}</div>
@@ -4768,16 +4769,14 @@ export default function UniformPOS() {
             {receipt.outletName && <div>{labels.outlet}: {displayField(receipt.outletName)}</div>}
             {receipt.outletAddress && <div>{labels.address}: {displayField(receipt.outletAddress)}</div>}
             {receipt.outletPhone && <div>{labels.telephone}: {receipt.outletPhone}</div>}
-            {receipt.cashierName && <div>{labels.cashier}: {displayField(receipt.cashierName)}</div>}
-            <div>--------------------------------</div>
+            {receipt.cashierName && <div>{labels.cashier}: {displayField(receipt.cashierName)}</div>}            <div>--------------------------------</div>
             <div>{labels.items}</div>
             {receipt.items.map((it, i) => (
               <div key={i}>
                 {(() => {
                   const itemName = english ? receiptEnglishName(it.name, it.receiptNameEn) : it.name;
                   return <>
-                    <div>{it.exchangeReturn ? labels.exchangeOut : ""}{itemName}</div>
-                  </>;
+                    <div>{it.exchangeReturn ? labels.exchangeOut : ""}{itemName}</div>                  </>;
                 })()}
                 <div>  {formatSizeForReceipt(it.name, it.size, it.length, english)}</div>
                 <div>  {labels.quantity} {it.qty} {receiptProductUnit(it.name, receiptLanguage, it.size, it.qty)} x {fmt(it.price)} = {fmt((it.exchangeReturn ? -1 : 1) * it.price * it.qty)}</div>
@@ -8009,6 +8008,14 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
         || (selectedOutlet.address && order.outletAddress === selectedOutlet.address))
     );
   };
+  const comparisonSearchActive = normalizedReceiptSearch || normalizedPhoneSearch.length === 4;
+  const comparisonPeriod = canViewAllDates && !comparisonSearchActive
+    ? findPreviousSalesPeriod(
+      branchOrders.filter((order) => outletMatches(order) && (!schoolFilter || order.school === schoolFilter)),
+      effectiveDate,
+      7,
+    )
+    : null;
   const availableSchools = Array.from(new Set(dateOrders.filter(outletMatches).map((o) => o.school).filter(Boolean)))
     .sort((a, b) => a.localeCompare(b, "zh-Hant"));
   const dayOrders = dateOrders.filter((o) => outletMatches(o) && (!schoolFilter || o.school === schoolFilter));
@@ -8072,6 +8079,11 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
         ),
         scope,
         reportDateRange: dateRangeLabel,
+        ...(comparisonPeriod && !comparisonSearchActive ? {
+          comparisonOrders: comparisonPeriod.previous.orders,
+          comparisonCurrentOrders: comparisonPeriod.current.orders,
+          comparisonLabel: `\u672c\u671f ${comparisonPeriod.current.startDate} \u81f3 ${comparisonPeriod.current.endDate}\uff1b\u4e0a\u4e00\u4ea4\u6613\u671f ${comparisonPeriod.previous.startDate} \u81f3 ${comparisonPeriod.previous.endDate}`,
+        } : {}),
       });
       const file = xlsx.write(workbook, { bookType: "xlsx", type: "array" });
       const blob = new Blob([file], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -8199,8 +8211,9 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
       {salesExportError && <div role="alert" style={{ marginBottom: 10, color: "#B42318", fontSize: 13 }}>{salesExportError}</div>}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 14 }}>
         <div style={{ background: "#EEF1F5", borderRadius: 10, padding: "12px 14px" }}>
-          <div style={{ fontSize: 12, color: "#666" }}>總收入</div>
+          <div style={{ fontSize: 12, color: "#666" }}>淨商品收入</div>
           <div style={{ fontSize: 20, fontWeight: 600 }}>{fmt(dayTotal)}</div>
+          <div style={{ fontSize: 10, color: "#777", marginTop: 2 }}>不等同實際收付款</div>
         </div>
         <div style={{ background: "#EEF1F5", borderRadius: 10, padding: "12px 14px" }}>
           <div style={{ fontSize: 12, color: "#666" }}>賣出件數</div>
@@ -8212,17 +8225,54 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
           {missingCustomerPhoneCount > 0 && <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>另有 {missingCustomerPhoneCount} 張單無電話資料</div>}
         </div>
       </div>
+      {canViewAllDates && comparisonSearchActive && (
+        <div style={{ marginBottom: 10, fontSize: 12, color: "#9A3412" }}>
+          電話或單號搜尋期間暫不顯示交易期比較；清除搜尋即可查看完整交易期數據。
+        </div>
+      )}
+      {canViewAllDates && !comparisonSearchActive && !comparisonPeriod && (
+        <div style={{ marginBottom: 10, fontSize: 12, color: "#64748B" }}>
+          目前篩選條件下未找到上一段交易期（相隔至少 7 日無交易才會分期）。
+        </div>
+      )}
+      {comparisonPeriod && (
+        <section aria-label="交易期比較" style={{ marginBottom: 14, padding: 12, border: "1px solid #D9E2EC", borderRadius: 10, background: "#F8FAFC" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#1F3A5F" }}>本期對上一交易期</div>
+          <div style={{ fontSize: 11, color: "#64748B", margin: "4px 0 10px" }}>
+            本期交易日 {comparisonPeriod.current.startDate} 至 {comparisonPeriod.current.endDate}（截至所選日期）；上一期交易日 {comparisonPeriod.previous.startDate} 至 {comparisonPeriod.previous.endDate}。相隔至少 7 日無交易即視為新一期；同一門店／學校範圍，不計作廢單。
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+            {[
+              ["淨商品收入", comparisonPeriod.current.metrics.netRevenue, comparisonPeriod.previous.metrics.netRevenue, fmt],
+              ["有效單數", comparisonPeriod.current.metrics.orderCount, comparisonPeriod.previous.metrics.orderCount, (value) => value.toLocaleString("en-HK")],
+              ["售出件數", comparisonPeriod.current.metrics.itemCount, comparisonPeriod.previous.metrics.itemCount, (value) => value.toLocaleString("en-HK")],
+            ].map(([label, current, previous, formatValue]) => {
+              const change = current - previous;
+              const changeLabel = `${change > 0 ? "+" : ""}${formatValue(change)}`;
+              const rateLabel = previous === 0
+                ? "上期為 0，未能計算變化率"
+                : `${change > 0 ? "+" : ""}${((change / Math.abs(previous)) * 100).toFixed(1)}%`;
+              return (
+                <div key={label} style={{ padding: 9, borderRadius: 8, background: "#fff", border: "1px solid #E2E8F0" }}>
+                  <div style={{ fontSize: 11, color: "#64748B" }}>{label} · 本期 {formatValue(current)}</div>
+                  <strong style={{ display: "block", marginTop: 3, fontSize: 15 }}>{changeLabel}（{rateLabel}）</strong>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
       <section aria-label={effectiveStartDate === effectiveEndDate ? "每日收市支付渠道對數" : "日期範圍收市支付渠道對數"} style={{ marginBottom: 14, padding: 14, border: "1px solid #CBD5E1", borderRadius: 12, background: "#F8FAFC" }}>
         <div style={{ fontSize: 17, fontWeight: 800, color: "#1F3A5F" }}>{effectiveStartDate === effectiveEndDate ? "每日收市對數" : "日期範圍收市對數"} · {dateRangeLabel}</div>
         <div style={{ marginTop: 4, marginBottom: 12, color: "#64748B", fontSize: 12 }}>
-          按目前日期範圍及門店／學校篩選；不受電話或單號搜尋影響。實收及退款按單據支付方式統計。
-        </div>
+          按目前日期範圍及門店／學校篩選；不受電話或單號搜尋影響。實收及退款按單據支付方式統計。        </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8, marginBottom: 12 }}>
           {[
-            ["銷售額", closeout.salesAmount],
+            ["商品銷售額（含替換新單全額）", closeout.salesAmount],
             ["退回貨品額（參考）", closeout.returnedGoodsAmount],
-            ["換貨補／退款差額", closeout.exchangeDifference],
-            ["淨收入", closeout.netRevenue],
+            ["退換貨商品淨額調整", closeout.exchangeDifference],
+            ["淨商品收入", closeout.netRevenue],
+            ["實際淨收付（實收－退款）", closeout.totalReceived - closeout.totalRefunded],
           ].map(([label, value]) => (
             <div key={label} style={{ padding: 10, borderRadius: 8, background: "#fff", border: "1px solid #E2E8F0" }}>
               <div style={{ color: "#64748B", fontSize: 12 }}>{label}</div>
@@ -8244,13 +8294,14 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
             );
           })}
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginTop: 10, paddingTop: 8, borderTop: "1px solid #CBD5E1", fontWeight: 700, fontSize: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginTop: 10, paddingTop: 8, borderTop: "1px solid #CBD5E1", fontWeight: 700, fontSize: 14 }}>
           <span>總實收 {fmt(closeout.totalReceived)}</span>
           <span>退款實付 {fmt(closeout.totalRefunded)}</span>
+          <span>淨收付 {fmt(closeout.totalReceived - closeout.totalRefunded)}</span>
         </div>
         {closeout.untrackedReturnOrders > 0 && (
           <div role="alert" style={{ marginTop: 8, color: "#9A3412", fontSize: 12 }}>
-            有 {closeout.untrackedReturnOrders} 張舊退換單未記錄退回貨品明細，退回貨品額可能不完整；淨收入及退款仍按單據金額計算。
+            有 {closeout.untrackedReturnOrders} 張舊退換單未記錄退回貨品明細，退回貨品額可能不完整；淨商品收入及退款實付仍按單據金額計算。
           </div>
         )}
       </section>
@@ -8496,7 +8547,6 @@ function ReceiptModal({ order, orders = [], language = "zh", actionError = "", o
       window.scrollTo(0, scrollY);
     };
   }, []);
-
   const openCustomerReceipt = () => {
     const receiptUrl = buildReceiptUrl(order, language);
     const anchor = document.createElement("a");
@@ -8537,8 +8587,7 @@ function ReceiptModal({ order, orders = [], language = "zh", actionError = "", o
           {order.outletName && <div>{labels.outlet}: {displayField(order.outletName)}</div>}
           {order.outletAddress && <div>{labels.address}: {displayField(order.outletAddress)}</div>}
           {order.outletPhone && <div>{labels.telephone}: {order.outletPhone}</div>}
-          {order.cashierName && <div>{labels.cashier}: {displayField(order.cashierName)}</div>}
-          <div>--------------------------------</div>
+          {order.cashierName && <div>{labels.cashier}: {displayField(order.cashierName)}</div>}          <div>--------------------------------</div>
           <div>{labels.items}</div>
           {order.items.map((it, i) => (
             <div key={i}>

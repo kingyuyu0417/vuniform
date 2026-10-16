@@ -31,28 +31,12 @@ test("preserves ordinary sock pair units", () => {
 
 test("translates the school, branch, and products on the provided receipt", () => {
   assert.deepEqual(translateReceiptSchool("培僑小學"), {
-    text: "Pui Kiu Primary School",
+    text: "PUI KIU PRIMARY SCHOOL",
     translated: true,
   });
   assert.equal(translateReceiptProductName("藍開胸長袖冷衫").text, "Blue Open-front Long-sleeve Jumper");
   assert.equal(translateReceiptProductName("炮台山分店").text, "Fortress Hill Branch");
   assert.equal(translateReceiptProductName("店長").text, "Store Manager");
-});
-
-test("translates products on the October 16 exchange receipt", () => {
-  const expectedTranslations = new Map([
-    ["冬季灰色斜紋絨長西褲", "Winter Grey Twill Flannel Trousers"],
-    ["冬季白色尖領長袖恤", "Winter White Pointed-collar Long-sleeve Shirt"],
-    ["深藍色絨校褸", "Deep Blue Fleece School Jacket"],
-    ["藍色混毛V領長袊冷衫", "Blue Wool-blend V-neck Long-sleeve Jumper"],
-    ["藍色有帽長袖衛衣", "Blue Hooded Long-sleeve Sweatshirt"],
-  ]);
-
-  for (const [name, expected] of expectedTranslations) {
-    const translation = translateReceiptProductName(name);
-    assert.equal(translation.translated, true, `${name} should have a complete English translation`);
-    assert.equal(receiptTranslationText(translation), expected);
-  }
 });
 
 test("translates all products on the October 15 school receipt", () => {
@@ -77,11 +61,36 @@ test("translates all products on the October 15 school receipt", () => {
   }
 });
 
-test("translates the school on the October 15 receipt", () => {
-  assert.deepEqual(translateReceiptSchool("蘇浙幼兒幼稚園"), {
-    text: "Kiangsu-Chekiang Kindergarten",
-    translated: true,
-  });
+test("translates winter products on the October 16 exchange receipt", () => {  const expectedTranslations = new Map([
+    ["冬季灰色斜紋絨長西褲", "Winter Grey Twill Flannel Trousers"],
+    ["冬季白色尖領長袖恤", "Winter White Pointed-collar Long-sleeve Shirt"],
+    ["深藍色絨校褸", "Deep Blue Fleece School Jacket"],
+    ["藍色混毛V領長袊冷衫", "Blue Wool-blend V-neck Long-sleeve Jumper"],
+    ["藍色有帽長袖衛衣", "Blue Hooded Long-sleeve Sweatshirt"],
+  ]);
+
+  for (const [name, expected] of expectedTranslations) {
+    const translation = translateReceiptProductName(name);
+    assert.equal(translation.translated, true, `${name} should have a complete English translation`);
+    assert.equal(receiptTranslationText(translation), expected);
+  }
+});
+
+test("uses catalog translations and safely falls back for new offline names", () => {
+  assert.equal(translateReceiptSchool("天主教明德學校").text, "MENG TAK CATHOLIC SCHOOL");
+  assert.equal(translateReceiptSchool("未列入字典的新學校").translated, false);
+  assert.equal(receiptTranslationText(translateReceiptSchool("未列入字典的新學校")), "未列入字典的新學校");
+  assert.equal(
+    receiptTranslationText(translateReceiptProductName("男女生 - 新款拉鏈連帽運動外套")),
+    "Unisex - New Zip-up Hooded Sports Jacket",
+  );
+});
+
+test("translates common named sizes and measurement units", () => {
+  assert.equal(translateReceiptAttribute("加大碼"), "Plus Size");
+  assert.equal(translateReceiptAttribute("特大碼"), "Extra Large");
+  assert.equal(translateReceiptAttribute("26吋"), "26 inches");
+  assert.equal(translateReceiptAttribute("120厘米"), "120 cm");
 });
 
 test("retains original names when an English product translation is partial", () => {

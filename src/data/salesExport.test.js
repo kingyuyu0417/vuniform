@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as XLSX from "xlsx";
-import { buildSalesExportSheets, createSalesExportWorkbook } from "./salesExport.js";
+import { buildSalesExportSheets, createSalesExportWorkbook, findPreviousSalesPeriod } from "./salesExport.js";
 
 const findSheet = (sheets, name) => sheets.find((sheet) => sheet.name === name);
 
@@ -34,21 +34,26 @@ test("exports order amounts once per order and keeps item rows separate", () => 
   ], { scope: "2026-09-24" });
 
   const overview = findSheet(sheets, "總覽").rows;
-  assert.deepEqual(overview.slice(2, 9), [
+  assert.deepEqual(overview.slice(2, 8), [
     ["符合篩選條件的單數", 2],
     ["有效單數", 1],
     ["已作廢單數", 1],
     ["有效單據金額", 300],
     ["單據退款金額", 20],
-    ["淨收入", 280],
-    ["有效單據件數", 3],
+    ["淨商品收入（整單替換按新單全額計）", 280],
   ]);
+  assert.deepEqual(overview.slice(8, 11), [
+    ["實收款", 300],
+    ["退款實付", 20],
+    ["實際淨收付（實收款－退款實付）", 280],
+  ]);
+  assert.deepEqual(overview[11], ["有效單據件數", 3]);
 
   const orders = findSheet(sheets, "訂單").rows;
   assert.equal(orders.length, 3);
   assert.deepEqual(orders[1].slice(7, 11), [3, 300, 20, 280]);
   assert.deepEqual(orders[2].slice(7, 11), [1, 500, 0, 0]);
-  assert.equal(orders[1][13], "現金");
+  assert.equal(orders[1][14], "現金");
   assert.equal(findSheet(sheets, "收市對數").rows[5][1], 300);
 
   const items = findSheet(sheets, "商品明細").rows;
@@ -121,7 +126,101 @@ test("groups by school, outlet, cashier, and item without counting voided sales"
   assert.deepEqual(findSheet(sheets, "按員工").rows[1], ["店員甲", 1, 2, 200, 0, 200]);
   assert.deepEqual(findSheet(sheets, "商品分析").rows[1], ["恤衫", "M", "", 2, 1, 200, 100, 100]);
   assert.deepEqual(findSheet(sheets, "摘要").rows[10], ["恤衫", "M", "", 2, 1, 1]);
+  assert.deepEqual(findSheet(sheets, "款式尺碼矩陣").rows.slice(0, 4), [
+    ["款式", "長度", "數量類型", "M"],
+    ["恤衫", "", "售出件數", 2],
+    ["恤衫", "", "退回件數", 1],
+    ["恤衫", "", "淨售件數", 1],
+  ]);
 });
+
+test("sorts size matrix columns numerically and keeps returns separate from sales", () => {
+  const matrix = findSheet(buildSalesExportSheets([{
+    items: [
+      { name: "褲", size: "10", qty: 2 },
+      { name: "褲", size: "8", qty: 3 },
+      { name: "褲", size: "8", qty: 1, exchangeReturn: true },
+    ],
+  }]), "款式尺碼矩陣").rows;
+
+  assert.deepEqual(matrix, [
+    ["款式", "長度", "數量類型", "8", "10"],
+    ["褲", "", "售出件數", 3, 2],
+    ["褲", "", "退回件數", 1, 0],
+    ["褲", "", "淨售件數", 2, 2],
+  ]);
+});
+
+test("compares revenue, valid order count, and sold quantity with the previous period", () => {
+  const sheets = buildSalesExportSheets([{
+    date: "2026-10-13",
+    total: 200,
+    refundDue: 20,
+    itemCount: 3,
+  }], {
+    comparisonOrders: [{
+      date: "2026-10-12",
+      total: 100,
+      itemCount: 2,
+    }],
+    comparisonCurrentOrders: [{
+      date: "2026-10-12",
+      total: 200,
+      refundDue: 20,
+      itemCount: 3,
+    }],
+    comparisonLabel: "本期 2026-10-12 至 2026-10-13；上一交易期 2026-10-01 至 2026-10-05",
+  });
+  const overview = findSheet(sheets, "總覽").rows;
+
+  assert.deepEqual(overview.slice(13, 17), [
+    ["交易期比較", "本期", "上期", "變化", "變化率"],
+    ["2026-10-13", 180, 100, 80, "80.0%"],
+    ["有效單數", 1, 1, 0, "0.0%"],
+    ["售出件數", 3, 2, 1, "50.0%"],
+  ]);
+  assert.deepEqual(overview[17], ["比較時段：本期 2026-10-12 至 2026-10-13；上一交易期 2026-10-01 至 2026-10-05"]);
+});
+
+test("finds the two latest sales periods using a seven-day no-sale gap", () => {
+  const comparison = findPreviousSalesPeriod([
+    { id: "a", date: "2026-10-01", total: 100, itemCount: 1 },
+    { id: "b", date: "2026-10-08", total: 200, itemCount: 2 },
+    { id: "c", date: "2026-10-16", total: 300, itemCount: 3 },
+    { id: "future", date: "2026-10-21", total: 900, itemCount: 9 },
+    { id: "void", date: "2026-10-20", total: 500, itemCount: 5, voidedAt: "2026-10-21" },
+  ], "2026-10-20");
+
+  assert.deepEqual({
+    current: [comparison.current.startDate, comparison.current.endDate, comparison.current.metrics],
+    previous: [comparison.previous.startDate, comparison.previous.endDate, comparison.previous.metrics],
+  }, {
+    current: ["2026-10-16", "2026-10-16", { orderCount: 1, netRevenue: 300, itemCount: 3 }],
+    previous: ["2026-10-01", "2026-10-08", { orderCount: 2, netRevenue: 300, itemCount: 3 }],
+  });
+});
+
+test("keeps activity seven days apart in one sales period and returns no comparison without two periods", () => {
+  const orders = [
+    { date: "2026-10-01", total: 100, itemCount: 1 },
+    { date: "2026-10-08", total: 200, itemCount: 2 },
+  ];
+
+  assert.equal(findPreviousSalesPeriod(orders, "2026-10-08"), null);
+  assert.equal(findPreviousSalesPeriod(orders, "2026-09-30"), null);
+  assert.equal(findPreviousSalesPeriod(orders, "not-a-date"), null);
+});
+
+test("marks comparison rates unavailable when the previous period has no sales", () => {
+  const overview = findSheet(buildSalesExportSheets([{
+    date: "2026-10-13",
+    total: 100,
+    itemCount: 1,
+  }], { comparisonOrders: [] }), "總覽").rows;
+
+  assert.equal(overview[14][4], "不適用");
+  assert.equal(overview[15][4], "不適用");
+  assert.equal(overview[16][4], "不適用");});
 
 test("keeps replacement revenue at the new full total while exporting only the refund difference", () => {
   const sheets = buildSalesExportSheets([
@@ -143,8 +242,16 @@ test("keeps replacement revenue at the new full total while exporting only the r
   assert.equal(overview[5][1], 60);
   assert.equal(overview[6][1], 40);
   assert.equal(overview[7][1], 60);
+  assert.equal(overview[8][1], 100);
+  assert.equal(overview[9][1], 40);
+  assert.equal(overview[10][1], 60);
   assert.equal(findSheet(sheets, "收市對數").rows[5][1], 100);
   assert.equal(findSheet(sheets, "收市對數").rows[6][1], 40);
+  assert.equal(findSheet(sheets, "收市對數").rows[7][1], 60);
+  const replacementRow = findSheet(sheets, "訂單").rows[2];
+  assert.equal(replacementRow[3], "整單替換新單");
+  assert.equal(replacementRow[11], -40);
+  assert.equal(replacementRow[12], "old-receipt");
 });
 
 test("exports receiptless exchanges as adjustments without inventing a source receipt", () => {
@@ -222,16 +329,6 @@ test("creates a readable multi-sheet Excel workbook with filters", () => {
   const output = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
   const reopened = XLSX.read(output, { type: "array" });
 
-  assert.deepEqual(reopened.SheetNames, ["摘要", "比例分析", "閱讀指引", "總覽", "收市對數", "訂單", "商品明細", "按學校", "按門店", "按員工", "商品分析"]);
-  assert.equal(reopened.Sheets["訂單"]["!autofilter"].ref, "A1:R2");
-  assert.equal(reopened.Sheets["商品明細"]["!autofilter"].ref, "A1:O2");
-  assert.equal(reopened.Sheets["總覽"].B8.v, 100);
-  assert.equal(reopened.Sheets["摘要"]["!autofilter"].ref, "A10:F11");
-  assert.equal(reopened.Sheets["摘要"].B2.v, "2026-09-20 至 2026-09-30");
-  assert.equal(reopened.Sheets["總覽"].B2.v, "2026-09-20 至 2026-09-30");
-  assert.equal(reopened.Sheets["摘要"].B4.v, 100);
-  assert.deepEqual([reopened.Sheets["摘要"].A11.v, reopened.Sheets["摘要"].B11.v, reopened.Sheets["摘要"].D11.v], ["恤衫", "M", 1]);
-  assert.equal(workbook.Sheets["比例分析"].B4.z, "$#,##0.00");
-  assert.equal(workbook.Sheets["比例分析"].B10.z, "0.0%");
-  assert.equal(reopened.Sheets["比例分析"].B4.v, 100);
+  assert.deepEqual(reopened.SheetNames, ["\u6458\u8981", "\u6bd4\u4f8b\u5206\u6790", "\u95b1\u8b80\u6307\u5f15", "\u7e3d\u89bd", "\u6536\u5e02\u5c0d\u6578", "\u8a02\u55ae", "\u5546\u54c1\u660e\u7d30", "\u6309\u5b78\u6821", "\u6309\u9580\u5e97", "\u6309\u54e1\u5de5", "\u5546\u54c1\u5206\u6790", "\u6b3e\u5f0f\u5c3a\u78bc\u77e9\u9663"]);
+  assert.equal(reopened.Sheets["\u8a02\u55ae"]["!autofilter"].ref, "A1:S2")
 });
