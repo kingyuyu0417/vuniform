@@ -24,6 +24,17 @@ const exactProductTranslations = {
   "男女生 - 冷衫": "Unisex Jumper",
   "男女生 - 混合毛冷衫": "Unisex Wool-blend Jumper",
   "藍開胸長袖冷衫": "Blue Open-front Long-sleeve Jumper",
+  "男女 白圓領上衣-薄": "Unisex White Crew-neck Top - Lightweight",
+  "男女 白企領上衣-厚": "Unisex White Stand-collar Top - Thick",
+  "男女 白上衣-加厚": "Unisex White Top - Extra Thick",
+  "男女 冬季運動套裝": "Unisex Winter Sports Set",
+  "男 格仔長西褲": "Boys' Checked Long Trousers",
+  "男 格仔短西褲": "Boys' Checked Short Trousers",
+  "女 格仔背心裙": "Girls' Checked Pinafore Dress",
+  "男女 紅色西裝校褸": "Unisex Red School Blazer",
+  "背心白底裙": "White Sleeveless Underskirt",
+  "防走光短褲": "Safety Shorts",
+  "灰襪褲": "Grey Tights",
   "炮台山分店": "Fortress Hill Branch",
   "炮台山屈臣道4-6號海景大廈B座14樓1403B室（近炮台山港鐵站A出口）": "Room 1403B, 14/F, Block B, Seaview Building, 4-6 Watson Road, Fortress Hill (near Fortress Hill MTR Exit A)",
   "店長": "Store Manager",
@@ -140,6 +151,7 @@ export const translateReceiptSchool = (value) => {
   const name = String(value || "").trim();
   if (name === "港青基信書院") return { text: "YMCA of Hong Kong Christian College", translated: true };
   if (name === "培僑小學") return { text: "Pui Kiu Primary School", translated: true };
+  if (name === "蘇浙幼兒幼稚園") return { text: "Kiangsu-Chekiang Kindergarten", translated: true };
   if (receiptSchoolTranslations[name]) return { text: receiptSchoolTranslations[name], translated: true };
   return { text: name, translated: !/[\u3400-\u9fff]/.test(name), original: name };
 };

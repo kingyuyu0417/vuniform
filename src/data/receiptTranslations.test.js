@@ -39,6 +39,35 @@ test("translates the school, branch, and products on the provided receipt", () =
   assert.equal(translateReceiptProductName("店長").text, "Store Manager");
 });
 
+test("translates all products on the October 15 school receipt", () => {
+  const expectedTranslations = new Map([
+    ["男女 白圓領上衣-薄", "Unisex White Crew-neck Top - Lightweight"],
+    ["男女 白企領上衣-厚", "Unisex White Stand-collar Top - Thick"],
+    ["男女 白上衣-加厚", "Unisex White Top - Extra Thick"],
+    ["男女 冬季運動套裝", "Unisex Winter Sports Set"],
+    ["男 格仔長西褲", "Boys' Checked Long Trousers"],
+    ["男 格仔短西褲", "Boys' Checked Short Trousers"],
+    ["女 格仔背心裙", "Girls' Checked Pinafore Dress"],
+    ["男女 紅色西裝校褸", "Unisex Red School Blazer"],
+    ["背心白底裙", "White Sleeveless Underskirt"],
+    ["防走光短褲", "Safety Shorts"],
+    ["灰襪褲", "Grey Tights"],
+  ]);
+
+  for (const [name, expected] of expectedTranslations) {
+    const translation = translateReceiptProductName(name);
+    assert.equal(translation.translated, true, `${name} should have a complete English translation`);
+    assert.equal(receiptTranslationText(translation), expected);
+  }
+});
+
+test("translates the school on the October 15 receipt", () => {
+  assert.deepEqual(translateReceiptSchool("蘇浙幼兒幼稚園"), {
+    text: "Kiangsu-Chekiang Kindergarten",
+    translated: true,
+  });
+});
+
 test("retains original names when an English product translation is partial", () => {
   assert.deepEqual(translateReceiptProductName("測試短襪"), {
     text: "Short Socks",
