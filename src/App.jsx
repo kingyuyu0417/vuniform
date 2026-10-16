@@ -7622,13 +7622,13 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                     <input
                       value={matrixDrafts[p.id]?.basePrices || ""}
                       onChange={(e) => updateMatrixDraft(p.id, "basePrices", e.target.value)}
-                      placeholder="按尺碼基本價，例如：21=93,22=93,30=128,裁碼=139"
+                      placeholder="褲長／裙長價錢，例如：21=93,22=93,30=128,裁碼=139"
                       style={{ width: "100%", padding: 7, marginBottom: 6, borderRadius: 7, border: "1px solid #B8C7D8", fontSize: 12, boxSizing: "border-box" }}
                     />
                     <input
                       value={matrixDrafts[p.id]?.surcharges || ""}
                       onChange={(e) => updateMatrixDraft(p.id, "surcharges", e.target.value)}
-                      placeholder={`長度／袖長加價，例如：40=10,41.5=20,43+=30`}
+                      placeholder="腰圍／袖長／上圍價錢，例如：40=10,41.5=20,43+=30"
                       style={{ width: "100%", padding: 7, marginBottom: 6, borderRadius: 7, border: "1px solid #B8C7D8", fontSize: 12, boxSizing: "border-box" }}
                     />
                     <button className="pos-btn" onClick={() => applyMatrixPricing(p)} style={{ padding: "7px 10px", borderRadius: 7, background: "#28784B", color: "#fff", fontSize: 12 }}>重新套用價格（會更新每格價格）</button>
