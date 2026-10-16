@@ -6058,7 +6058,16 @@ function DirectExchangeProductPicker({
                     <div className="sale-size-grid">
                       {[...sizes].sort(sizeEntrySort).map((size) => (
                         <button key={`${size.size}-${size.length || ""}-${size.isTailored ? "tailored" : "regular"}`} type="button" className="pos-btn sale-size-button" onClick={() => onSelectSize(product, size)} style={{ padding: "10px 8px", borderRadius: 10, background: "#fff", border: "1px solid #ccc", fontSize: 16 }}>
-                          <div style={{ fontSize: 22, fontWeight: 600 }}>{sizeLabel(size)}</div>
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>
+                            {hasLengths ? (
+                              <>
+                                {size.isTailored ? "裁碼" : sizeDimensionLabel(product)}{" "}
+                                <span style={{ fontSize: 22 }}>{size.size}</span> 吋
+                              </>
+                            ) : (
+                              <span style={{ fontSize: 22 }}>{sizeLabel(size)}</span>
+                            )}
+                          </div>
                           <div style={{ fontSize: 12, color: "#888" }}>{fmt(size.price)}</div>
                         </button>
                       ))}
