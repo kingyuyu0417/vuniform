@@ -413,18 +413,18 @@ begin
   )
   select exists (
     select 1
-    from return_pricing
-    where current_discount <> greatest(
+    from return_pricing as pricing
+    where pricing.current_discount <> greatest(
       0,
-      current_base - greatest(
+      pricing.current_base - greatest(
         0,
-        original_total
-          - previous_refunded_total
+        pricing.original_total
+          - pricing.previous_refunded_total
           - (
-            greatest(original_qty - previous_returned_qty - current_qty, 0) / 2
-              * two_piece_price
-            + mod(greatest(original_qty - previous_returned_qty - current_qty, 0), 2)
-              * price
+            greatest(pricing.original_qty - pricing.previous_returned_qty - pricing.current_qty, 0) / 2
+              * pricing.two_piece_price
+            + mod(greatest(pricing.original_qty - pricing.previous_returned_qty - pricing.current_qty, 0), 2)
+              * pricing.price
           )
       )
     )
