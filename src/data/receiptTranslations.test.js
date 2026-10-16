@@ -39,6 +39,19 @@ test("translates the school, branch, and products on the provided receipt", () =
   assert.equal(translateReceiptProductName("店長").text, "Store Manager");
 });
 
+test("translates winter trousers and short-form pointed-collar shirt names on the receipt", () => {
+  const expectedTranslations = new Map([
+    ["冬季灰色斜紋絨長西褲", "Winter Grey Twill Flannel Trousers"],
+    ["冬季白色尖領長袖恤", "Winter White Pointed-collar Long-sleeve Shirt"],
+  ]);
+
+  for (const [name, expected] of expectedTranslations) {
+    const translation = translateReceiptProductName(name);
+    assert.equal(translation.translated, true, `${name} should have a complete English translation`);
+    assert.equal(receiptTranslationText(translation), expected);
+  }
+});
+
 test("translates all products on the October 15 school receipt", () => {
   const expectedTranslations = new Map([
     ["男女 白圓領上衣-薄", "Unisex White Crew-neck Top - Lightweight"],

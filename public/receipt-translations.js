@@ -8,6 +8,8 @@ export const receiptProductTranslationTerms = {
 };
 
 const exactProductTranslations = {
+  "冬季灰色斜紋絨長西褲": "Winter Grey Twill Flannel Trousers",
+  "冬季白色尖領長袖恤": "Winter White Pointed-collar Long-sleeve Shirt",
   "男生白色長袖恤衫": "Boys' White Long-sleeve Shirt",
   "男生白色短袖恤衫": "Boys' White Short-sleeve Shirt",
   "女生白色長袖恤衫": "Girls' White Long-sleeve Shirt",
@@ -46,7 +48,7 @@ const productTerms = {
   "灰色": "Grey", "黑色": "Black", "白色": "White", "啡色": "Brown",
   "杏色": "Beige", "綠色": "Green", "黃色": "Yellow", "紅色": "Red",
   "男女生": "Unisex", "男生": "Boys'", "女生": "Girls'", "男裝": "Men's", "女裝": "Women's",
-  "新款": "New", "春夏": "Spring / Summer", "秋冬": "Autumn / Winter",
+  "新款": "New", "春夏": "Spring / Summer", "秋冬": "Autumn / Winter", "冬季": "Winter",
   "厚": "Thick", "薄": "Lightweight", "防水": "Waterproof", "連帽": "Hooded",
   "拉鏈": "Zip-up", "拉鍊": "Zip-up", "百褶裙": "Pleated Skirt", "背帶裙": "Pinafore Dress",
   "牛仔褲": "Jeans", "襯衣": "Shirt", "印花": "Printed",
@@ -59,7 +61,8 @@ const productTerms = {
   "運動風褸": "Sports Windbreaker", "風褸": "Windbreaker", "校褸": "School Jacket",
   "西裝褸": "Blazer", "抓毛背心": "Fleece Waistcoat", "背心": "Waistcoat",
   "長袖": "Long-sleeve", "短袖": "Short-sleeve", "連身": "One-piece",
-  "恤衫": "Shirt", "襯衫": "Shirt", "半截": "Half-length", "校裙": "School Skirt",
+  "尖領": "Pointed-collar", "斜紋絨": "Twill Flannel",
+  "恤衫": "Shirt", "恤": "Shirt", "襯衫": "Shirt", "半截": "Half-length", "校裙": "School Skirt",
   "裙褲": "Skort", "裙": "Skirt", "毛冷衫": "Wool Jumper", "冷衫": "Jumper",
   "衛衣": "Sweatshirt", "外套": "Jacket", "校服": "School Uniform",
   "混合毛": "Wool-blend", "羊毛": "Wool", "棉": "Cotton", "長褸": "Long Coat",
