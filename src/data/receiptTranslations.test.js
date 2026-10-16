@@ -39,10 +39,13 @@ test("translates the school, branch, and products on the provided receipt", () =
   assert.equal(translateReceiptProductName("店長").text, "Store Manager");
 });
 
-test("translates winter trousers and short-form pointed-collar shirt names on the receipt", () => {
+test("translates products on the October 16 exchange receipt", () => {
   const expectedTranslations = new Map([
     ["冬季灰色斜紋絨長西褲", "Winter Grey Twill Flannel Trousers"],
     ["冬季白色尖領長袖恤", "Winter White Pointed-collar Long-sleeve Shirt"],
+    ["深藍色絨校褸", "Deep Blue Fleece School Jacket"],
+    ["藍色混毛V領長袊冷衫", "Blue Wool-blend V-neck Long-sleeve Jumper"],
+    ["藍色有帽長袖衛衣", "Blue Hooded Long-sleeve Sweatshirt"],
   ]);
 
   for (const [name, expected] of expectedTranslations) {
