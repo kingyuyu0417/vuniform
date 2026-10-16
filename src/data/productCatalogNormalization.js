@@ -180,17 +180,35 @@ export const findProductCatalogReviewGroups = (products = []) => {
       sourceName: product.name,
     })));
     const pricesBySize = new Map();
+    const entriesBySize = new Map();
     entries.forEach((entry) => {
       const key = sizeIdentity(entry.size);
       const price = Number(entry.size.price);
       if (!pricesBySize.has(key)) pricesBySize.set(key, new Set());
       if (Number.isFinite(price)) pricesBySize.get(key).add(price);
+      if (!entriesBySize.has(key)) entriesBySize.set(key, []);
+      entriesBySize.get(key).push(entry);
     });
-    if (![...pricesBySize.values()].some((prices) => prices.size > 1)) return [];
+    const conflicts = [...pricesBySize].flatMap(([key, prices]) => {
+      if (prices.size < 2) return [];
+      const matchingEntries = entriesBySize.get(key);
+      return [{
+        size: matchingEntries[0].size,
+        variants: matchingEntries
+          .filter((entry) => Number.isFinite(Number(entry.size.price)))
+          .map((entry) => ({
+            productId: entry.productId,
+            productName: entry.sourceName,
+            price: Number(entry.size.price),
+          })),
+      }];
+    });
+    if (!conflicts.length) return [];
 
     return [{
       ...family,
       entries,
+      conflicts,
     }];
   });
 };

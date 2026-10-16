@@ -6940,6 +6940,38 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
             </div>
             <span style={{ color: "#7C4A03", fontSize: 12, fontWeight: 700 }}>{productsPendingReviewCount} 款待處理</span>
           </div>
+          <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+            {productCatalogReviewGroups.map((group) => {
+              const productNames = [...new Set(group.products.map((product) => product.name).filter(Boolean))];
+              return (
+                <div key={group.id} style={{ padding: 9, borderRadius: 8, background: "#fff", border: "1px solid #F0D39A" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#60420A" }}>{group.school || "未指定學校"}</div>
+                  <div style={{ marginTop: 4, fontSize: 12, color: "#60420A" }}>
+                    {productNames.map((name, index) => (
+                      <div key={`${name}-${index}`}>{name}</div>
+                    ))}
+                  </div>
+                  {group.conflicts.map((conflict, index) => {
+                    const labels = dimensionLabels(conflict.variants[0]?.productName);
+                    const sizeLabel = [
+                      conflict.size.length && `${labels.length || "長度"} ${conflict.size.length}`,
+                      `${labels.size} ${conflict.size.size || "未列明"}`,
+                    ].filter(Boolean).join(" × ");
+                    return (
+                      <div key={`${group.id}-conflict-${index}`} style={{ marginTop: 6, fontSize: 11, color: "#8A5A00" }}>
+                        <div>價格衝突（{sizeLabel}）：</div>
+                        {conflict.variants.map((variant, variantIndex) => (
+                          <div key={`${variant.productId}-${variantIndex}`} style={{ paddingLeft: 8 }}>
+                            {variant.productName}：${variant.price}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
           <button type="button" className="pos-btn" onClick={clearProductsPendingReview} disabled={importing} style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, border: "1px solid #B42318", background: "#FFF1F0", color: "#B42318", fontWeight: 700, fontSize: 12 }}>
             {importing ? "清除中…" : "清除全部待處理商品"}
           </button>
