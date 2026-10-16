@@ -33,6 +33,7 @@ import { clearCheckoutAttempt, getOrCreateCheckoutAttempt } from "./data/checkou
 import { getRemainingReturnQuantity, hasUntrackedExchangeHistory } from "./data/returnLimits";
 import { calculateCartLineTotals, calculateReturnDiscounts, validTwoPiecePrice } from "./data/quantityPromotions";
 import { naturalSizeSort } from "./data/sizeSort";
+import { calculateMatrixPrices } from "./data/matrixPricing";
 import { canReplaceOrder, getReplacementBranchId, getReplacementSettlement } from "./data/orderReplacement";
 import { calculateCashSettlement, findPossibleDuplicateSale, isExchangeAdjustmentOrder, PAYMENT_METHOD_LABELS, PAYMENT_METHOD_LABELS_EN, summarizeDailyCloseout } from "./data/salesCloseout";
 import {
@@ -6271,30 +6272,6 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     setMatrixDrafts((current) => ({ ...current, [productId]: { ...(current[productId] || {}), [field]: value } }));
   };
 
-  const calculateMatrixPrices = (sizes, draft, { preserveExistingPrices = false } = {}) => {
-    const baseBySize = {};
-    String(draft.basePrices || "").split(/[,\n，、]+/).map((entry) => entry.trim()).filter(Boolean).forEach((entry) => {
-      const match = entry.match(/^(.+?)\s*[=:]\s*(\d+(?:\.\d+)?)$/);
-      if (match) baseBySize[match[1].trim()] = Number(match[2]);
-    });
-    const surchargeRules = String(draft.surcharges || "").split(/[,\n，、]+/).map((entry) => entry.trim()).filter(Boolean).map((entry) => {
-      const match = entry.match(/^(\d+(?:\.\d+)?)\s*(\+)?\s*[=:]\s*\+?(\d+(?:\.\d+)?)$/);
-      return match ? { threshold: Number(match[1]), amount: Number(match[3]), minimum: Boolean(match[2]) } : null;
-    }).filter(Boolean).sort((first, second) => second.threshold - first.threshold);
-    if (!Object.keys(baseBySize).length || !surchargeRules.length) return null;
-    return {
-      sizes: sizes.map((item) => {
-        const base = baseBySize[item.size] ?? baseBySize[item.isTailored ? "裁碼" : ""];
-        const lengthNumber = Number(String(item.length).replace(/[^\d.]/g, ""));
-        const rule = surchargeRules.find((candidate) => candidate.minimum ? lengthNumber >= candidate.threshold : lengthNumber === candidate.threshold);
-        const calculatedPrice = Number.isFinite(Number(base)) && rule ? Number(base) + rule.amount : null;
-        if (preserveExistingPrices && isPricedSize(item)) return item;
-        return calculatedPrice === null ? item : { ...item, price: calculatedPrice };
-      }),
-      pricing: { baseBySize, surchargeRules },
-    };
-  };
-
   const applyMatrixDraft = (product) => {
     const draft = matrixDrafts[product.id] || {};
     const lengths = String(draft.lengths || "").split(/[,\s，、]+/).map((value) => value.trim()).filter(Boolean);
@@ -6343,7 +6320,11 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     const draft = matrixDrafts[product.id] || {};
     const calculated = calculateMatrixPrices(product.sizes, draft);
     if (!calculated) {
-      window.alert("請輸入按尺碼的基本價及按長度的加價規則，例如：21=93,22=93,30=128；30+=0,40=10,41.5=20,43+=30。");
+      window.alert(`請輸入按${lengthDimensionLabel(product)}的基本價及按${sizeDimensionLabel(product)}的加價規則，例如：30=93,31=93；40=10,41.5=20,43+=30。`);
+      return;
+    }
+    if (calculated.matchedCount === 0) {
+      window.alert(`目前輸入的基本價及加價規則，沒有匹配任何商品組合。請確認基本價對應第一欄（${lengthDimensionLabel(product)}），加價規則對應第二欄（${sizeDimensionLabel(product)}）。`);
       return;
     }
     updateProduct(product.id, { ...product, priceMode: "matrix", sizes: calculated.sizes, pricing: calculated.pricing });
@@ -7618,7 +7599,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                   />
                   <button className="pos-btn" onClick={() => applyMatrixDraft(p)} style={{ padding: "7px 10px", borderRadius: 7, background: "#1F3A5F", color: "#fff", fontSize: 12 }}>建立組合（保留已有價格）</button>
                   <div style={{ borderTop: "1px solid #D9E2EC", marginTop: 9, paddingTop: 9 }}>
-                    <div style={{ fontSize: 11, color: "#52657A", marginBottom: 5 }}>可選：自動套用基本價及長度加價；建立組合時只會填待補價，不會覆蓋已有價格</div>
+                    <div style={{ fontSize: 11, color: "#52657A", marginBottom: 5 }}>可選：第一欄按{lengthDimensionLabel(p)}套基本價，第二欄按{sizeDimensionLabel(p)}套加價；建立組合時只會填待補價，不會覆蓋已有價格</div>
                     <input
                       value={matrixDrafts[p.id]?.basePrices || ""}
                       onChange={(e) => updateMatrixDraft(p.id, "basePrices", e.target.value)}
