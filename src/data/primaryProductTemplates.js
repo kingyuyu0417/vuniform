@@ -109,7 +109,7 @@ const SUZHOU_SIZE_PRESETS = [
   { season: "winter", gender: "unisex", category: "sports-top", options: { sleeve: "long" }, source: "冬 2026 長袖運動衣", sizes: tailoredSizes(numericSizes(24, 36)) },
   { season: "winter", gender: "unisex", category: "sports-trousers", options: { length: "long" }, source: "冬 2026 長運褲", sizes: tailoredSizes(numericSizes(24, 36)) },
   { season: "winter", gender: "unisex", category: "school-jacket", source: "冬 2026 藍色西裝校褸", sizes: tailoredSizes(numericSizes(16, 22)) },
-  { season: "winter", gender: "unisex", category: "undershirt", options: { style: "long-sleeve" }, source: "冬 2026 長袖底衫", sizes: ["20-24", "26-30", "32-36"] },
+  { season: "winter", gender: "unisex", category: "undershirt", options: { style: "long-sleeve" }, source: "冬 2026 長袖底衫", sizes: numericSizes(20, 36) },
   { season: "winter", gender: "boys", category: "tie", options: { style: "bow-tie" }, source: "冬 2026 男煲呔", sizes: ["均碼"] },
   { season: "winter", gender: "girls", category: "tie", options: { style: "butterfly-tie" }, source: "冬 2026 女蝴蝶呔", sizes: ["均碼"] },
   { season: "winter", gender: "unisex", category: "socks", options: { style: "tights" }, source: "冬 2026 灰襪褲", sizes: ["均碼"] },

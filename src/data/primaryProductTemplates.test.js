@@ -92,6 +92,13 @@ test("uses the corresponding workbook size sets for dresses, sweaters, undershir
       sizes: ["2-6", "8-12", "14-18", "S-XL"],
     },
     {
+      season: "winter",
+      gender: "unisex",
+      category: "undershirt",
+      options: { style: "long-sleeve" },
+      sizes: ["20", "22", "24", "26", "28", "30", "32", "34", "36"],
+    },
+    {
       season: "summer",
       gender: "unisex",
       category: "socks",
