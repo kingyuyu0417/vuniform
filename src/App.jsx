@@ -9,7 +9,7 @@ import { logStartupCheck, getStartupErrorUI, validateAllEnvVars } from "./config
 import { getUserFriendlyError } from "./config/errorHandler";
 import { Alert } from "./components/common";
 import { availableFeatureIds, getDisabledQueueRedirect, QUEUE_FEATURES_ENABLED } from "./config/queueFeatureAvailability.js";
-import { dimensionLabels, lengthDimensionLabel, sizeDimensionLabel } from "./data/productDimensions.js";
+import { dimensionLabels, hasMatrixSizeOptions, lengthDimensionLabel, sizeDimensionLabel } from "./data/productDimensions.js";
 import { noticeTextFromDocx } from "./data/docxText.js";
 import { cleanProductName } from "./data/productNames.js";
 import { productDisplayName } from "./data/productDisplayName.js";
@@ -160,7 +160,9 @@ const PRICE_MODE_LABELS = {
   matrix: "長度／袖長 × 腰圍／上圍",
   fixed: "所有尺寸同價",
 };
-const productPriceMode = (product) => PRICE_MODE_LABELS[product?.priceMode] ? product.priceMode : (hasLengthOptions(product || {}) ? "matrix" : "simple");
+const productPriceMode = (product) => hasMatrixSizeOptions(product || {})
+  ? "matrix"
+  : (PRICE_MODE_LABELS[product?.priceMode] ? product.priceMode : "simple");
 const isPricedSize = (size) => size && size.price !== null && size.price !== undefined && Number.isFinite(Number(size.price)) && Number(size.price) >= 0;
 const isTailoredSize = (size = {}) => Boolean(
   size.isTailored
@@ -6244,7 +6246,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     const patch = typeof next === "function" ? next(current) : next;
     const merged = { ...current, ...patch };
     if (!PRICE_MODE_LABELS[merged.priceMode]) {
-      merged.priceMode = merged.sizes?.some((size) => size?.length) ? "matrix" : "simple";
+      merged.priceMode = hasMatrixSizeOptions(merged) ? "matrix" : "simple";
     }
     const nextProducts = currentProducts.map((product) => (product.id === id ? merged : product));
     productsRef.current = nextProducts;
@@ -7858,7 +7860,11 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                           : size),
                       }));
                     }}
-                    placeholder={hasLengthOptions(p) ? sizeDimensionLabel(p) : "尺碼"}
+                    placeholder={hasLengthOptions(p)
+                      ? sizeDimensionLabel(p)
+                      : productPriceMode(p) === "matrix"
+                        ? `${lengthDimensionLabel(p)} × ${sizeDimensionLabel(p)}`
+                        : "尺碼"}
                     style={{ width: 70, padding: 8, borderRadius: 8, border: "1px solid #ccc", fontSize: 13 }}
                   />
                   <input

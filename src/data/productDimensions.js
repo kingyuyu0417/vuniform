@@ -6,5 +6,18 @@ export const dimensionLabels = (name = "") => {
   return { length: "", size: "尺碼" };
 };
 
+export const hasMatrixSizeOptions = (product = {}) => {
+  const sizes = Array.isArray(product.sizes) ? product.sizes : [];
+  if (sizes.some((size) => String(size?.length || "").trim())) return true;
+
+  const normalizedName = String(product.name || "").replace(/\s+/g, "");
+  const supportsCombinedMatrixSizes = /裙/.test(normalizedName)
+    || /長袖.*(?:恤衫|襯衫)|(?:恤衫|襯衫).*長袖|長恤/.test(normalizedName)
+    || (/(?:長西褲|長褲|西褲)/.test(normalizedName) && !/短褲/.test(normalizedName));
+  if (!supportsCombinedMatrixSizes) return false;
+
+  return sizes.some((size) => /^\s*\d+(?:\.\d+)?\s*[×xX＊*]\s*\d+(?:\.\d+)?\s*\*?\s*$/.test(String(size?.size || "")));
+};
+
 export const sizeDimensionLabel = (product) => dimensionLabels(product?.name).size;
 export const lengthDimensionLabel = (product) => dimensionLabels(product?.name).length;

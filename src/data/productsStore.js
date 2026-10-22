@@ -1,4 +1,5 @@
 import { getProductGender } from "./productGender.js";
+import { hasMatrixSizeOptions } from "./productDimensions.js";
 
 const normalizeSize = (size = {}) => {
   const normalized = { ...size };
@@ -55,7 +56,7 @@ export const normalizeProducts = (products = []) => {
         isTailored: Boolean(size.isTailored || legacyTailored),
       });
     }) : [];
-    const hasLengthOptions = sizes.some((size) => size.length);
+    const hasLengthOptions = hasMatrixSizeOptions({ name: product.name, sizes });
     const normalized = {
       ...product,
       id: String(product.id || `product-${Math.random().toString(36).slice(2, 10)}`),
