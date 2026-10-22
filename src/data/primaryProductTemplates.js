@@ -16,7 +16,16 @@ export const PRIMARY_PRODUCT_CATEGORIES = [
     label: "恤衫",
     selectors: [
       { key: "sleeve", label: "袖長", options: [{ value: "short", label: "短袖" }, { value: "long", label: "長袖" }] },
-      { key: "collar", label: "領型", options: [{ value: "round", label: "圓領" }, { value: "point", label: "尖領" }] },
+      { key: "collar", label: "領型", options: [
+        { value: "round", label: "圓領" },
+        { value: "point", label: "尖領" },
+        { value: "up-down", label: "上下級領" },
+        { value: "hawaiian", label: "夏威夷領" },
+        { value: "swallow", label: "燕子領" },
+        { value: "eight-character", label: "八字領" },
+        { value: "other", label: "其他" },
+        { value: "unspecified", label: "" },
+      ] },
     ],
   },
   {
@@ -119,14 +128,46 @@ const SUZHOU_SIZE_PRESETS = [
 ];
 
 const SUZHOU_PRIMARY_SCHOOL = "蘇浙小學";
+const PRIMARY_SHIRT_COLLAR_SIZES = ["11", "11.5", "12", "12.5", "13", "13.5", "14", "14.5", "15", "15.5", "16", "16.5", "17", "17.5", "18", "18.5", "19", "19.5", "20", "21", "22"];
+const PRIMARY_SHORT_SHIRT_SIZES = ["18", "20", "22", "24", "26", "28", "30", "32", "34", "36"];
+const PRIMARY_GIRLS_LONG_ROUND_SHIRT_SIZES = ["14", "16", "18", "20", "22", "24", "26", "28", "30", "32", "34"];
+const SECONDARY_GIRLS_LONG_ROUND_SHIRT_SIZES = ["34", "36", "38", "40", "43", "46"];
+const UNISEX_LONG_POINT_SHIRT_SIZES = [
+  "11.5×22", "12×23", "12×24", "12×25", "12.5×24*", "12.5×26", "12.5×27",
+  "13×25*", "13×28", "13.5×26*", "13.5×29", "14×27*", "14×30",
+  "14.5×28*", "14.5×31", "15×29*", "15×32", "15.5×32", "15.5×34",
+  "16×32", "16×33", "16×34", "16.5×33", "16.5×34", "17×33",
+  "17.5×34", "17.5×35", "18×33", "18.5×34", "19.5×35",
+  "20.5×36**", "21.5×36**",
+];
+const PRIMARY_SHORT_TROUSER_SIZES = ["12", "13", "14", "15", "16", "17", "18", "19", "20", "22"];
+const PRIMARY_LONG_TROUSER_SIZES = ["26", "28", "30", "32", "34", "36", "38", "40", "42"];
+const SECONDARY_TROUSER_LENGTHS = ["33", "34", "35", "36", "37", "38", "38.5", "40", "41.5", "42", "43", "44", "44.5", "46", "48", "50"];
+const SECONDARY_TROUSER_WAISTS = ["24", "25", "26", "27", "28", "29", "30", "32", "34", "36", "38", "40", "42", "44", "46", "48", "50", "52"];
+export const SECONDARY_TROUSER_SURCHARGE_RULES = "32+=0,40=10,41.5+=20,43+=30";
 
 export const getProductCategory = (categoryValue) => PRIMARY_PRODUCT_CATEGORIES
   .find((category) => category.value === categoryValue) || null;
 
-export const getProductSelectorOptions = (categoryValue, selectorKey, gender) => {
+export const getProductSelectorOptions = (categoryValue, selectorKey, gender, context = {}) => {
   const selector = getProductCategory(categoryValue)?.selectors
     .find((candidate) => candidate.key === selectorKey);
   if (!selector) return [];
+  if (categoryValue === "shirt" && selectorKey === "collar") {
+    const optionalCollars = selector.options.filter((option) => ["other", "unspecified"].includes(option.value));
+    if (context.sleeve === "short" && context.schoolLevel === "小學") {
+      return [
+        ...selector.options.filter((option) => ["up-down", "hawaiian", "swallow", "eight-character"].includes(option.value)),
+        ...optionalCollars,
+      ];
+    }
+    if (context.sleeve === "long") {
+      return [
+        ...selector.options.filter((option) => ["round", "point"].includes(option.value)),
+        ...optionalCollars,
+      ];
+    }
+  }
   if (categoryValue === "tie" && selectorKey === "style") {
     return selector.options.filter((option) => (
       (option.value === "bow-tie" && gender === "boys")
@@ -141,29 +182,41 @@ export const getProductStyleLabel = (categoryValue, options = {}) => {
   const category = getProductCategory(categoryValue);
   if (!category) return "";
   return category.selectors
-    .map((selector) => selector.options.find((option) => option.value === options[selector.key])?.label)
+    .map((selector) => {
+      const selected = selector.options.find((option) => option.value === options[selector.key]);
+      if (categoryValue === "shirt" && selector.key === "collar" && options.collar === "other" && options.collarCustom?.trim()) {
+        return options.collarCustom.trim();
+      }
+      return selected?.label;
+    })
     .filter(Boolean)
     .join("／");
 };
 
-export const getDefaultProductOptions = (categoryValue, gender = "unisex") => {
+export const getDefaultProductOptions = (categoryValue, gender = "unisex", context = {}) => {
   const category = getProductCategory(categoryValue);
   return Object.fromEntries((category?.selectors || []).map((selector) => [
     selector.key,
-    getProductSelectorOptions(categoryValue, selector.key, gender)[0]?.value || "",
+    getProductSelectorOptions(categoryValue, selector.key, gender, { ...context, sleeve: context.sleeve || (selector.key === "collar" ? "short" : "") })[0]?.value || "",
   ]));
 };
 
-export const normalizeProductOptions = (categoryValue, gender, options = {}) => {
+export const normalizeProductOptions = (categoryValue, gender, options = {}, context = {}) => {
   const category = getProductCategory(categoryValue);
-  return Object.fromEntries((category?.selectors || []).map((selector) => {
-    const allowedOptions = getProductSelectorOptions(categoryValue, selector.key, gender);
-    const requestedValue = options[selector.key];
-    const selectedValue = allowedOptions.some((option) => option.value === requestedValue)
-      ? requestedValue
-      : (allowedOptions[0]?.value || "");
-    return [selector.key, selectedValue];
-  }));
+  return {
+    ...Object.fromEntries((category?.selectors || []).map((selector) => {
+      const allowedOptions = getProductSelectorOptions(categoryValue, selector.key, gender, {
+        ...context,
+        sleeve: options.sleeve || context.sleeve,
+      });
+      const requestedValue = options[selector.key];
+      const selectedValue = allowedOptions.some((option) => option.value === requestedValue)
+        ? requestedValue
+        : (allowedOptions[0]?.value || "");
+      return [selector.key, selectedValue];
+    })),
+    ...(options.collarCustom ? { collarCustom: options.collarCustom } : {}),
+  };
 };
 
 export const buildDefaultProductName = ({ season, gender, category, options }) => {
@@ -175,8 +228,39 @@ export const buildDefaultProductName = ({ season, gender, category, options }) =
     + (styleLabel ? `（${styleLabel}）` : "");
 };
 
-export const getPrimaryProductSizePreset = ({ school, season, gender, category, options = {} }) => {
-  if (school !== SUZHOU_PRIMARY_SCHOOL || !["summer", "winter"].includes(season)) return null;
+export const getPrimaryProductSizePreset = ({ school, schoolLevel, season, gender, category, options = {} }) => {
+  if (!["summer", "winter"].includes(season)) return null;
+  if (category === "shirt") {
+    if (options.sleeve === "long" && options.collar === "point") {
+      return { source: "男女尖領長袖恤衫尺碼總表", sizes: [...UNISEX_LONG_POINT_SHIRT_SIZES] };
+    }
+    if (options.sleeve === "long" && options.collar === "round" && gender === "girls") {
+      if (schoolLevel === "小學") return { source: "小學女生圓領長袖恤衫（衫長）", sizes: [...PRIMARY_GIRLS_LONG_ROUND_SHIRT_SIZES] };
+      if (schoolLevel === "中學") return { source: "中學女生圓領長袖恤衫（胸寬）", sizes: [...SECONDARY_GIRLS_LONG_ROUND_SHIRT_SIZES] };
+    }
+    if (schoolLevel === "小學" && options.sleeve === "short") {
+      const sizes = options.collar === "up-down" ? PRIMARY_SHIRT_COLLAR_SIZES : PRIMARY_SHORT_SHIRT_SIZES;
+      if (["up-down", "hawaiian", "swallow", "eight-character"].includes(options.collar)) {
+        return { source: `小學男女短恤（${getProductStyleLabel(category, options)}）`, sizes: [...sizes] };
+      }
+    }
+  }
+  if (category === "trousers") {
+    if (schoolLevel === "小學" && options.length === "short") {
+      return { source: "小學短西褲", sizes: [...PRIMARY_SHORT_TROUSER_SIZES] };
+    }
+    if (schoolLevel === "小學" && options.length === "long") {
+      return { source: "小學長西褲", sizes: [...PRIMARY_LONG_TROUSER_SIZES] };
+    }
+    if (schoolLevel === "中學" && options.length === "long") {
+      return {
+        source: "中學長西褲（褲長 × 腰圍）",
+        matrix: { lengths: [...SECONDARY_TROUSER_LENGTHS], sizes: [...SECONDARY_TROUSER_WAISTS] },
+        surchargeRules: SECONDARY_TROUSER_SURCHARGE_RULES,
+      };
+    }
+  }
+  if (school !== SUZHOU_PRIMARY_SCHOOL) return null;
   const candidates = SUZHOU_SIZE_PRESETS
     .filter((preset) => preset.season === season
       && preset.category === category

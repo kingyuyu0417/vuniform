@@ -42,8 +42,8 @@ test("provides school-specific, season- and style-matched sizes without prices",
     category: "shirt",
     options: { sleeve: "long", collar: "point" },
   });
-  assert.equal(winterShirt.source, "冬 2026 男白長袖恤連章");
-  assert.deepEqual(winterShirt.sizes, ["10", "10.5", "11", "11.5", "12", "12.5", "13", "裁碼"]);
+  assert.equal(winterShirt.source, "男女尖領長袖恤衫尺碼總表");
+  assert.equal(winterShirt.sizes.length, 32);
 
   const summerSportPants = getPrimaryProductSizePreset({
     school: "蘇浙小學",
@@ -58,7 +58,7 @@ test("provides school-specific, season- and style-matched sizes without prices",
     season: "winter",
     gender: "boys",
     category: "shirt",
-    options: { sleeve: "long", collar: "point" },
+    options: { sleeve: "long", collar: "round" },
   }), null);
   assert.equal(getPrimaryProductSizePreset({
     school: "蘇浙小學",
@@ -103,6 +103,85 @@ test("uses the corresponding workbook size sets for dresses, sweaters, undershir
     const preset = getPrimaryProductSizePreset({ school: "蘇浙小學", ...selection });
     assert.deepEqual(preset?.sizes, sizes, `${selection.season} ${selection.category}`);
   });
+});
+
+test("matches shirt size tables by school level, sleeve length, gender, and collar", () => {
+  const longPoint = getPrimaryProductSizePreset({
+    schoolLevel: "中學",
+    season: "winter",
+    gender: "girls",
+    category: "shirt",
+    options: { sleeve: "long", collar: "point" },
+  });
+  assert.equal(longPoint.sizes.length, 32);
+  assert.equal(longPoint.sizes[4], "12.5×24*");
+  assert.equal(longPoint.sizes.at(-1), "21.5×36**");
+
+  assert.deepEqual(getPrimaryProductSizePreset({
+    schoolLevel: "小學",
+    season: "summer",
+    gender: "girls",
+    category: "shirt",
+    options: { sleeve: "long", collar: "round" },
+  }).sizes, ["14", "16", "18", "20", "22", "24", "26", "28", "30", "32", "34"]);
+  assert.deepEqual(getPrimaryProductSizePreset({
+    schoolLevel: "中學",
+    season: "summer",
+    gender: "girls",
+    category: "shirt",
+    options: { sleeve: "long", collar: "round" },
+  }).sizes, ["34", "36", "38", "40", "43", "46"]);
+  assert.deepEqual(getPrimaryProductSizePreset({
+    schoolLevel: "小學",
+    season: "summer",
+    gender: "boys",
+    category: "shirt",
+    options: { sleeve: "short", collar: "up-down" },
+  }).sizes, ["11", "11.5", "12", "12.5", "13", "13.5", "14", "14.5", "15", "15.5", "16", "16.5", "17", "17.5", "18", "18.5", "19", "19.5", "20", "21", "22"]);
+  assert.deepEqual(getPrimaryProductSizePreset({
+    schoolLevel: "小學",
+    season: "summer",
+    gender: "girls",
+    category: "shirt",
+    options: { sleeve: "short", collar: "hawaiian" },
+  }).sizes, ["18", "20", "22", "24", "26", "28", "30", "32", "34", "36"]);
+});
+
+test("provides the agreed primary and secondary trousers size sets", () => {
+  assert.deepEqual(getPrimaryProductSizePreset({
+    schoolLevel: "小學",
+    season: "summer",
+    gender: "boys",
+    category: "trousers",
+    options: { length: "short" },
+  }).sizes, ["12", "13", "14", "15", "16", "17", "18", "19", "20", "22"]);
+  assert.deepEqual(getPrimaryProductSizePreset({
+    schoolLevel: "小學",
+    season: "winter",
+    gender: "girls",
+    category: "trousers",
+    options: { length: "long" },
+  }).sizes, ["26", "28", "30", "32", "34", "36", "38", "40", "42"]);
+
+  const secondaryTrousers = getPrimaryProductSizePreset({
+    schoolLevel: "中學",
+    season: "winter",
+    gender: "boys",
+    category: "trousers",
+    options: { length: "long" },
+  });
+  assert.equal(secondaryTrousers.matrix.lengths.length, 16);
+  assert.equal(secondaryTrousers.matrix.sizes.length, 18);
+  assert.equal(secondaryTrousers.matrix.lengths.length * secondaryTrousers.matrix.sizes.length, 288);
+  assert.equal(secondaryTrousers.surchargeRules, "32+=0,40=10,41.5+=20,43+=30");
+});
+
+test("supports custom and blank shirt collar labels", () => {
+  assert.equal(getProductStyleLabel("shirt", { sleeve: "long", collar: "other", collarCustom: "企領" }), "長袖／企領");
+  assert.equal(getProductStyleLabel("shirt", { sleeve: "long", collar: "unspecified" }), "長袖");
+  assert.deepEqual(getProductSelectorOptions("shirt", "collar", "boys", { schoolLevel: "小學", sleeve: "short" }).map(({ value }) => value), [
+    "up-down", "hawaiian", "swallow", "eight-character", "other", "unspecified",
+  ]);
 });
 
 test("parses editable comma-separated, newline-separated, and duplicate size labels", () => {
