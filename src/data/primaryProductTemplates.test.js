@@ -8,6 +8,7 @@ import {
   getProductSelectorOptions,
   normalizeProductOptions,
   parseProductDimensionPairs,
+  parseProductSizeMatrix,
   parseProductSizeLabels,
   PRIMARY_PRODUCT_CATEGORIES,
   PRODUCT_SEASON_OPTIONS,
@@ -184,10 +185,26 @@ test("provides the agreed primary and secondary trousers size sets", () => {
     category: "trousers",
     options: { length: "long" },
   });
-  assert.equal(secondaryTrousers.matrix.lengths.length, 16);
-  assert.equal(secondaryTrousers.matrix.sizes.length, 18);
-  assert.equal(secondaryTrousers.matrix.lengths.length * secondaryTrousers.matrix.sizes.length, 288);
+  assert.deepEqual(secondaryTrousers.matrix.lengths, ["33", "34", "35", "36", "37", "38", "38.5", "40", "41.5", "42", "43", "44", "44.5", "46"]);
+  assert.deepEqual(secondaryTrousers.matrix.sizes, ["24", "25", "26", "27", "28", "29", "30", "32", "34", "36", "38", "40", "42", "44", "46", "48", "50", "52"]);
+  assert.deepEqual(secondaryTrousers.sizes, secondaryTrousers.matrix.sizes);
+  assert.equal(secondaryTrousers.matrix.lengths.length * secondaryTrousers.matrix.sizes.length, 252);
   assert.equal(secondaryTrousers.surchargeRules, "32+=0,40=10,41.5+=20,43+=30");
+});
+
+test("provides the agreed skirt length by chest-width matrix", () => {
+  const skirt = getPrimaryProductSizePreset({
+    schoolLevel: "中學",
+    season: "winter",
+    gender: "girls",
+    category: "skirt",
+    options: { style: "long" },
+  });
+  assert.deepEqual(skirt.matrix, {
+    lengths: ["36", "38", "40", "42", "44"],
+    sizes: ["36", "38", "40", "42", "44", "46"],
+  });
+  assert.equal(parseProductSizeMatrix(skirt.matrix.lengths.join(","), skirt.matrix.sizes.join(",")).combinations.length, 30);
 });
 
 test("supports custom and blank shirt collar labels", () => {
@@ -217,4 +234,17 @@ test("pairs separately entered dimensions in order and rejects mismatched counts
     { length: "12.5", size: "24*", price: null },
   ]);
   assert.equal(parseProductDimensionPairs("11.5, 12", "22"), null);
+});
+
+test("builds a Cartesian size matrix and removes duplicate dimension labels", () => {
+  const matrix = parseProductSizeMatrix("36, 38, 38", "36, 40");
+  assert.deepEqual(matrix.lengths, ["36", "38"]);
+  assert.deepEqual(matrix.sizes, ["36", "40"]);
+  assert.deepEqual(matrix.combinations, [
+    { length: "36", size: "36", price: null },
+    { length: "36", size: "40", price: null },
+    { length: "38", size: "36", price: null },
+    { length: "38", size: "40", price: null },
+  ]);
+  assert.equal(parseProductSizeMatrix("", "36"), null);
 });

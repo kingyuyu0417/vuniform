@@ -142,7 +142,9 @@ const UNISEX_LONG_POINT_SHIRT_SIZES = [
 ];
 const PRIMARY_SHORT_TROUSER_SIZES = ["12", "13", "14", "15", "16", "17", "18", "19", "20", "22"];
 const PRIMARY_LONG_TROUSER_SIZES = ["26", "28", "30", "32", "34", "36", "38", "40", "42"];
-const SECONDARY_TROUSER_LENGTHS = ["33", "34", "35", "36", "37", "38", "38.5", "40", "41.5", "42", "43", "44", "44.5", "46", "48", "50"];
+const SKIRT_MATRIX_LENGTHS = ["36", "38", "40", "42", "44"];
+const SKIRT_MATRIX_CHEST_WIDTHS = ["36", "38", "40", "42", "44", "46"];
+const SECONDARY_TROUSER_LENGTHS = ["33", "34", "35", "36", "37", "38", "38.5", "40", "41.5", "42", "43", "44", "44.5", "46"];
 const SECONDARY_TROUSER_WAISTS = ["24", "25", "26", "27", "28", "29", "30", "32", "34", "36", "38", "40", "42", "44", "46", "48", "50", "52"];
 export const SECONDARY_TROUSER_SURCHARGE_RULES = "32+=0,40=10,41.5+=20,43+=30";
 
@@ -229,6 +231,29 @@ export const buildDefaultProductName = ({ season, gender, category, options }) =
 };
 
 export const getPrimaryProductSizePreset = ({ school, schoolLevel, season, gender, category, options = {} }) => {
+  if (category === "skirt") {
+    const simplePreset = school === SUZHOU_PRIMARY_SCHOOL && ["summer", "winter"].includes(season)
+      ? SUZHOU_SIZE_PRESETS
+        .filter((preset) => preset.season === season
+          && preset.category === category
+          && (preset.gender === gender || preset.gender === "unisex")
+          && Object.entries(preset.options || {}).every(([key, value]) => options[key] === value))
+        .sort((first, second) => Object.keys(second.options || {}).length - Object.keys(first.options || {}).length)[0]
+      : null;
+    return {
+      source: simplePreset?.source || "",
+      sizes: [...(simplePreset?.sizes || [])],
+      matrix: { lengths: [...SKIRT_MATRIX_LENGTHS], sizes: [...SKIRT_MATRIX_CHEST_WIDTHS] },
+    };
+  }
+  if (category === "trousers" && schoolLevel === "中學" && options.length === "long") {
+    return {
+      source: "中學長西褲腰圍尺碼",
+      sizes: [...SECONDARY_TROUSER_WAISTS],
+      matrix: { lengths: [...SECONDARY_TROUSER_LENGTHS], sizes: [...SECONDARY_TROUSER_WAISTS] },
+      surchargeRules: SECONDARY_TROUSER_SURCHARGE_RULES,
+    };
+  }
   if (!["summer", "winter"].includes(season)) return null;
   if (category === "shirt") {
     if (options.sleeve === "long" && options.collar === "point") {
@@ -251,13 +276,6 @@ export const getPrimaryProductSizePreset = ({ school, schoolLevel, season, gende
     }
     if (schoolLevel === "小學" && options.length === "long") {
       return { source: "小學長西褲", sizes: [...PRIMARY_LONG_TROUSER_SIZES] };
-    }
-    if (schoolLevel === "中學" && options.length === "long") {
-      return {
-        source: "中學長西褲（褲長 × 腰圍）",
-        matrix: { lengths: [...SECONDARY_TROUSER_LENGTHS], sizes: [...SECONDARY_TROUSER_WAISTS] },
-        surchargeRules: SECONDARY_TROUSER_SURCHARGE_RULES,
-      };
     }
   }
   if (school !== SUZHOU_PRIMARY_SCHOOL) return null;
@@ -295,4 +313,15 @@ export const parseProductDimensionPairs = (lengthInput, sizeInput) => {
   const sizes = String(sizeInput || "").split(/[,\n，、]+/).map((value) => value.trim()).filter(Boolean);
   if (!lengths.length || lengths.length !== sizes.length) return null;
   return lengths.map((length, index) => ({ length, size: sizes[index], price: null }));
+};
+
+export const parseProductSizeMatrix = (lengthInput, sizeInput) => {
+  const lengths = parseProductSizeLabels(lengthInput);
+  const sizes = parseProductSizeLabels(sizeInput);
+  if (!lengths.length || !sizes.length) return null;
+  return {
+    lengths,
+    sizes,
+    combinations: lengths.flatMap((length) => sizes.map((size) => ({ length, size, price: null }))),
+  };
 };

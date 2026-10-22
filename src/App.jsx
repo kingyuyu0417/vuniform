@@ -36,6 +36,7 @@ import {
   getProductStyleLabel,
   normalizeProductOptions,
   parseProductDimensionPairs,
+  parseProductSizeMatrix,
   parseProductSizeLabels,
   PRIMARY_PRODUCT_CATEGORIES,
   PRODUCT_GENDER_OPTIONS as PRODUCT_CREATION_GENDER_OPTIONS,
@@ -159,7 +160,7 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 const uid = () => Math.random().toString(36).slice(2, 10);
 const PRICE_MODE_LABELS = {
   simple: "一般尺碼",
-  matrix: "長度／袖長 × 腰圍／上圍",
+  matrix: "長度／袖長 × 腰圍／胸寬",
   fixed: "所有尺寸同價",
 };
 const productPriceMode = (product) => hasMatrixSizeOptions(product || {})
@@ -6325,6 +6326,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
       name: "",
       nameCustomized: false,
       sizeInput: "",
+      sizeMode: "simple",
       usesPairedDimensions: false,
       dimensionLengthInput: "",
       dimensionSizeInput: "",
@@ -6353,10 +6355,11 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
         options: next.options,
       });
       const pairedDimensions = !preset?.matrix ? splitProductSizePairs(preset?.sizes || []) : null;
-      next.sizeInput = preset?.matrix ? "" : (preset?.sizes.join(", ") || "");
+      next.sizeInput = preset?.sizes.join(", ") || "";
+      next.sizeMode = preset?.matrix ? "matrix" : "simple";
       next.usesPairedDimensions = Boolean(pairedDimensions);
-      next.dimensionLengthInput = pairedDimensions?.lengths.join(", ") || "";
-      next.dimensionSizeInput = pairedDimensions?.sizes.join(", ") || "";
+      next.dimensionLengthInput = preset?.matrix?.lengths.join(", ") || pairedDimensions?.lengths.join(", ") || "";
+      next.dimensionSizeInput = preset?.matrix?.sizes.join(", ") || pairedDimensions?.sizes.join(", ") || "";
       next.matrixPreset = preset?.matrix || null;
       next.matrixSurchargeRules = preset?.surchargeRules || "";
       next.sizePresetSource = preset?.source || "";
@@ -6370,27 +6373,48 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     : newProductWizard?.step === 2
       ? !newProductWizard.category
       : false;
+  const canToggleNewProductSizeMode = newProductWizard?.category === "skirt"
+    || (newProductWizard?.category === "trousers"
+      && newProductSchoolLevel === "中學"
+      && newProductWizard.options.length === "long");
+  const usesNewProductMatrixMode = Boolean(
+    newProductWizard?.matrixPreset && newProductWizard.sizeMode === "matrix",
+  );
+  const newProductSizeMatrix = usesNewProductMatrixMode
+    ? parseProductSizeMatrix(newProductWizard.dimensionLengthInput, newProductWizard.dimensionSizeInput)
+    : null;
+  const newProductMatrixDimensions = newProductWizard?.category === "skirt"
+    ? { length: "裙長", size: "胸寬" }
+    : { length: "褲長", size: "腰圍" };
   const newProductDimensionPairs = newProductWizard?.usesPairedDimensions
     ? parseProductDimensionPairs(newProductWizard.dimensionLengthInput, newProductWizard.dimensionSizeInput)
     : null;
-  const isNewProductSizeIncomplete = !newProductWizard?.matrixPreset
-    && (newProductWizard?.usesPairedDimensions
+  const isNewProductSizeIncomplete = usesNewProductMatrixMode
+    ? !newProductSizeMatrix
+    : newProductWizard?.usesPairedDimensions
       ? !newProductDimensionPairs
-      : !parseProductSizeLabels(newProductWizard?.sizeInput).length);
+      : !parseProductSizeLabels(newProductWizard?.sizeInput).length;
 
   const addProductFromWizard = () => {
     if (!newProductWizard) return;
     const name = newProductWizard.name.trim();
     const sizeLabels = parseProductSizeLabels(newProductWizard.sizeInput);
+    const sizeMatrix = newProductWizard.sizeMode === "matrix"
+      ? parseProductSizeMatrix(newProductWizard.dimensionLengthInput, newProductWizard.dimensionSizeInput)
+      : null;
     const dimensionPairs = newProductWizard.usesPairedDimensions
       ? parseProductDimensionPairs(newProductWizard.dimensionLengthInput, newProductWizard.dimensionSizeInput)
       : null;
-    if (!name || (!newProductWizard.matrixPreset && (newProductWizard.usesPairedDimensions ? !dimensionPairs : sizeLabels.length === 0))) {
+    if (!name || (newProductWizard.sizeMode === "matrix"
+      ? !sizeMatrix
+      : newProductWizard.usesPairedDimensions ? !dimensionPairs : sizeLabels.length === 0)) {
       setNewProductWizard((current) => ({
         ...current,
-        error: current.usesPairedDimensions
-          ? "請輸入數量相同的領圍及袖長，並按次序逐項配對。"
-          : "請填寫商品名稱及至少一個尺碼。",
+        error: current.sizeMode === "matrix"
+          ? `請輸入至少一個${newProductMatrixDimensions.length}及一個${newProductMatrixDimensions.size}。`
+          : current.usesPairedDimensions
+            ? "請輸入數量相同的領圍及袖長，並按次序逐項配對。"
+            : "請填寫商品名稱及至少一個尺碼。",
       }));
       return;
     }
@@ -6410,13 +6434,9 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
       season: newProductWizard.season,
       category: newProductWizard.category,
       style: getProductStyleLabel(newProductWizard.category, newProductWizard.options),
-      priceMode: newProductWizard.matrixPreset || newProductWizard.usesPairedDimensions ? "matrix" : "simple",
-      sizes: newProductWizard.matrixPreset
-        ? newProductWizard.matrixPreset.lengths.flatMap((length) => newProductWizard.matrixPreset.sizes.map((size) => ({
-          length,
-          size,
-          price: null,
-        })))
+      priceMode: sizeMatrix || newProductWizard.usesPairedDimensions ? "matrix" : "simple",
+      sizes: sizeMatrix
+        ? sizeMatrix.combinations
         : newProductWizard.usesPairedDimensions
           ? dimensionPairs
           : sizeLabels.map((size) => ({ size, length: "", price: null, isTailored: size === "裁碼" })),
@@ -6424,7 +6444,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     };
     const nextProducts = [...productsRef.current, np];
     productsRef.current = nextProducts;
-    if (newProductWizard.matrixSurchargeRules) {
+    if (newProductWizard.matrixSurchargeRules && sizeMatrix) {
       setMatrixDrafts((current) => ({
         ...current,
         [np.id]: { ...(current[np.id] || {}), surcharges: newProductWizard.matrixSurchargeRules },
@@ -6446,7 +6466,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     const uniqueLengths = [...new Set(lengths)];
     const uniqueSizes = [...new Set(sizes)];
     if (!uniqueLengths.length || !uniqueSizes.length) {
-      window.alert("請先輸入至少一個長度／袖長及一個腰圍／上圍。");
+      window.alert("請先輸入至少一個長度／袖長及一個腰圍／胸寬。");
       return;
     }
 
@@ -8259,17 +8279,44 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                   <input value={newProductWizard.name} onChange={(event) => setNewProductWizard((current) => ({ ...current, name: event.target.value, nameCustomized: true, error: "" }))} style={{ display: "block", width: "100%", boxSizing: "border-box", marginTop: 5, padding: 9, borderRadius: 8, border: "1px solid #D0D5DD", fontSize: 14 }} />
                 </label>
                 <div style={{ marginTop: 12, fontSize: 12, color: "#475467", fontWeight: 600 }}>
-                  {newProductWizard.usesPairedDimensions ? "領圍及袖長（可修改，按次序逐項配對）" : "尺碼（可修改，以逗號分隔）"}
-                  {newProductWizard.matrixPreset
-                    ? <div style={{ marginTop: 5, padding: 9, border: "1px solid #D0D5DD", borderRadius: 8, color: "#344054", fontSize: 12 }}>
-                      褲長：{newProductWizard.matrixPreset.lengths.join("、")}
-                      <br />
-                      腰圍：{newProductWizard.matrixPreset.sizes.join("、")}
-                      <br />
-                      共 {newProductWizard.matrixPreset.lengths.length * newProductWizard.matrixPreset.sizes.length} 組；建立後輸入各腰圍基本價，系統按褲長自動加價。
+                  {canToggleNewProductSizeMode && (
+                    <div style={{ marginBottom: 8 }}>
+                      <div style={{ marginBottom: 5 }}>尺碼模式</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
+                        {[
+                          { value: "matrix", label: "矩陣尺碼" },
+                          { value: "simple", label: "一般尺碼" },
+                        ].map((mode) => (
+                          <button key={mode.value} type="button" aria-pressed={newProductWizard.sizeMode === mode.value} className="pos-btn" onClick={() => setNewProductWizard((current) => ({ ...current, sizeMode: mode.value, error: "" }))} style={{ padding: "8px 6px", borderRadius: 8, border: `1px solid ${newProductWizard.sizeMode === mode.value ? "#1F3A5F" : "#D0D5DD"}`, background: newProductWizard.sizeMode === mode.value ? "#EAF2FB" : "#fff", color: "#1F2937", fontSize: 12, fontWeight: 600 }}>
+                            {mode.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
+                  )}
+                  {usesNewProductMatrixMode
+                    ? <>
+                      {newProductMatrixDimensions.length} × {newProductMatrixDimensions.size}
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, marginTop: 5 }}>
+                        <label style={{ fontSize: 12, color: "#475467" }}>
+                          {newProductMatrixDimensions.length}
+                          <textarea value={newProductWizard.dimensionLengthInput} onChange={(event) => setNewProductWizard((current) => ({ ...current, dimensionLengthInput: event.target.value, error: "" }))} placeholder="以逗號分隔，例如：36, 38, 40" rows={5} style={{ display: "block", width: "100%", boxSizing: "border-box", marginTop: 4, padding: 8, borderRadius: 8, border: "1px solid #D0D5DD", fontSize: 13, resize: "vertical" }} />
+                        </label>
+                        <label style={{ fontSize: 12, color: "#475467" }}>
+                          {newProductMatrixDimensions.size}
+                          <textarea value={newProductWizard.dimensionSizeInput} onChange={(event) => setNewProductWizard((current) => ({ ...current, dimensionSizeInput: event.target.value, error: "" }))} placeholder="以逗號分隔，例如：36, 38, 40" rows={5} style={{ display: "block", width: "100%", boxSizing: "border-box", marginTop: 4, padding: 8, borderRadius: 8, border: "1px solid #D0D5DD", fontSize: 13, resize: "vertical" }} />
+                        </label>
+                      </div>
+                      <div style={{ marginTop: 5, color: "#667085", fontSize: 11 }}>
+                        {newProductSizeMatrix
+                          ? `會建立 ${newProductSizeMatrix.lengths.length} × ${newProductSizeMatrix.sizes.length}，共 ${newProductSizeMatrix.combinations.length} 組；建立後可設定各組價格。`
+                          : `請在兩欄各輸入至少一項${newProductMatrixDimensions.length}和${newProductMatrixDimensions.size}。`}
+                        {newProductWizard.category === "trousers" ? " 價格可按腰圍設基本價，再按褲長加價。" : ""}
+                      </div>
+                    </>
                     : newProductWizard.usesPairedDimensions
                       ? <>
+                        領圍及袖長（可修改，按次序逐項配對）
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, marginTop: 5 }}>
                           <label style={{ fontSize: 12, color: "#475467" }}>
                             領圍
@@ -8282,9 +8329,12 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                         </div>
                         <div style={{ marginTop: 5, color: "#667085", fontSize: 11 }}>第一個領圍配第一個袖長，只建立已配對的組合；兩欄項目數量須相同。</div>
                       </>
-                      : <textarea value={newProductWizard.sizeInput} onChange={(event) => setNewProductWizard((current) => ({ ...current, sizeInput: event.target.value, error: "" }))} placeholder="例如：24, 26, 28, 裁碼" rows={4} style={{ display: "block", width: "100%", boxSizing: "border-box", marginTop: 5, padding: 9, borderRadius: 8, border: "1px solid #D0D5DD", fontSize: 13, resize: "vertical" }} />}
+                      : <>
+                        尺碼（可修改，以逗號分隔）
+                        <textarea value={newProductWizard.sizeInput} onChange={(event) => setNewProductWizard((current) => ({ ...current, sizeInput: event.target.value, error: "" }))} placeholder="例如：24, 26, 28, 裁碼" rows={4} style={{ display: "block", width: "100%", boxSizing: "border-box", marginTop: 5, padding: 9, borderRadius: 8, border: "1px solid #D0D5DD", fontSize: 13, resize: "vertical" }} />
+                      </>}
                 </div>
-                {newProductWizard.sizePresetSource && <div style={{ marginTop: 6, color: "#667085", fontSize: 11 }}>尺碼參考：{newProductWizard.sizePresetSource}（只套用尺碼，不會帶入舊價格）</div>}
+                {newProductWizard.sizePresetSource && !usesNewProductMatrixMode && <div style={{ marginTop: 6, color: "#667085", fontSize: 11 }}>尺碼參考：{newProductWizard.sizePresetSource}（只套用尺碼，不會帶入舊價格）</div>}
                 {newProductNameConflict && <div role="alert" style={{ marginTop: 8, color: "#B42318", fontSize: 12 }}>同一學校已有相同款式，請調整名稱或檢查現有商品。</div>}
                 {newProductWizard.error && <div role="alert" style={{ marginTop: 8, color: "#B42318", fontSize: 12 }}>{newProductWizard.error}</div>}
               </div>
