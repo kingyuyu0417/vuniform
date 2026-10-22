@@ -11,6 +11,7 @@ import { Alert } from "./components/common";
 import { availableFeatureIds, getDisabledQueueRedirect, QUEUE_FEATURES_ENABLED } from "./config/queueFeatureAvailability.js";
 import { dimensionLabels, lengthDimensionLabel, sizeDimensionLabel } from "./data/productDimensions.js";
 import { noticeTextFromDocx } from "./data/docxText.js";
+import { cleanProductName } from "./data/productNames.js";
 const CustomerCheckinPage = lazy(() => import("./pages/CustomerCheckinPage"));
 const ManualPickupCallPage = lazy(() => import("./pages/ManualPickupCallPage"));
 const FittingPage = lazy(() => import("./pages/FittingPage"));
@@ -235,15 +236,6 @@ const netOrderTotal = (order) => Number(order.total || 0) - (
 const UNASSIGNED = "（未分類）";
 let deletedSchoolsRuntime = new Set();
 const schoolOf = (p) => (p.school && p.school.trim()) || UNASSIGNED;
-const cleanProductName = (name) => {
-  if (name === "男生黑色短襪（3對）") return name;
-  const cleaned = name.replace(/（(?!冬季|夏季)[^）]*）|\((?!冬季|夏季)[^)]*\)/g, "").replace(/\s+/g, " ").trim();
-  if (cleaned.length > 50) {
-    const matches = [...cleaned.matchAll(/(?:男生|女生|男女生|Boy[`'’]s|Girl[`'’]s)/g)];
-    if (matches.length > 1) return cleaned.slice(matches[matches.length - 1].index).trim();
-  }
-  return cleaned;
-};
 const normalizeProductSizes = (sizes = []) => sizes.map((size) => ({
   ...size,
   isTailored: isTailoredSize(size),
