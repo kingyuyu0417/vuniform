@@ -25,6 +25,19 @@ const DirectoryPage = lazy(() => import("./pages/DirectoryPage"));
 import { getHongKongDate, QUEUE_MANAGEMENT_SERVICE_KEY, QUEUE_SERVICE, queueOrderService } from "./services/queueOrderService";
 import { findConflictingProductIds } from "./data/productConflictDetection";
 import { getProductGender, productGenderBackground, PRODUCT_GENDER_OPTIONS } from "./data/productGender";
+import {
+  buildDefaultProductName,
+  getDefaultProductOptions,
+  getPrimaryProductSizePreset,
+  getProductCategory,
+  getProductSelectorOptions,
+  getProductStyleLabel,
+  normalizeProductOptions,
+  parseProductSizeLabels,
+  PRIMARY_PRODUCT_CATEGORIES,
+  PRODUCT_GENDER_OPTIONS as PRODUCT_CREATION_GENDER_OPTIONS,
+  PRODUCT_SEASON_OPTIONS,
+} from "./data/primaryProductTemplates";
 import { productUnit } from "./data/productUnits";
 import { createSalesExportWorkbook, findPreviousSalesPeriod } from "./data/salesExport";
 import { createPriceListWorkbook } from "./data/priceListExport";
@@ -166,6 +179,9 @@ const productCatalogsEqual = (first, second) => {
       || product.school !== candidate.school
       || product.name !== candidate.name
       || product.branch_id !== candidate.branch_id
+      || product.season !== candidate.season
+      || product.category !== candidate.category
+      || product.style !== candidate.style
       || product.sizes.length !== candidate.sizes.length
     ) return false;
     return product.sizes.every((size, sizeIndex) => {
@@ -231,7 +247,7 @@ const normalizeProductSizes = (sizes = []) => sizes.map((size) => ({
   ...size,
   isTailored: isTailoredSize(size),
 }));
-const productIdentityParts = (school, name, branchId = "", explicitGender = "") => {
+const productIdentityParts = (school, name, branchId = "", explicitGender = "", explicitSeason = "") => {
   const cleaned = cleanProductName(name);
   const genderMatch = cleaned.match(/^(男生|女生|男女生)\s*[-–—:：]?\s*/);
   const gender = {
@@ -244,13 +260,21 @@ const productIdentityParts = (school, name, branchId = "", explicitGender = "") 
     .replace(/[（(][^）)]*[）)]/g, "")
     .replace(/[／/、，,\s]/g, "")
     .trim();
-  return { school, name: cleanedName, gender, branchId: branchId || "" };
+  const season = explicitSeason
+    || (/^(?:夏季|夏裝)/.test(cleaned) ? "summer" : "")
+    || (/^(?:冬季|冬裝)/.test(cleaned) ? "winter" : "")
+    || (/^(?:全年|四季|兩季通用)/.test(cleaned) ? "all" : "");
+  return { school, name: cleanedName, gender, branchId: branchId || "", season };
 };
 const productIdentityKey = (school, name, branchId = "") => {
   const { school: schoolName, name: productName, branchId: productBranchId } = productIdentityParts(school, name, branchId);
   return `${productBranchId}\u0000${schoolName}\u0000${productName}`;
 };
 const compatibleProductGenders = (first, second) => !first || !second || first === second || first === "男女生" || second === "男女生";
+const compatibleProductIdentities = (first, second) => (
+  compatibleProductGenders(first?.gender, second?.gender)
+  && (!first?.season || !second?.season || first.season === second.season)
+);
 const SCHOOL_NAME_ALIASES = {
   "保良局董玉梯紀念中學": "保良局董玉娣中學",
 };
@@ -366,11 +390,11 @@ const normalizeProductState = (products) => {
   });
 
   return normalizedProducts.reduce((result, product) => {
-    const productParts = productIdentityParts(schoolOf(product), product.name, product.branch_id, product.gender);
+    const productParts = productIdentityParts(schoolOf(product), product.name, product.branch_id, product.gender, product.season);
     const duplicates = result.filter((item) => {
-      const itemParts = productIdentityParts(schoolOf(item), item.name, item.branch_id, item.gender);
+      const itemParts = productIdentityParts(schoolOf(item), item.name, item.branch_id, item.gender, item.season);
       return productIdentityKey(itemParts.school, item.name, item.branch_id) === productIdentityKey(productParts.school, product.name, productParts.branchId)
-        && compatibleProductGenders(itemParts.gender, productParts.gender);
+        && compatibleProductIdentities(itemParts, productParts);
     });
     const hasConflictingSizePrice = (first, second) => {
       const firstPrices = new Map((first.sizes || []).map((size) => [sizeIdentityKey(size), Number(size.price)]));
@@ -438,11 +462,11 @@ const productHasConflictingSizes = (first, second) => {
 const consolidateProductCatalog = (products) => (Array.isArray(products) ? products : [])
   .flatMap(splitCompositeProductRecord)
   .reduce((result, product) => {
-    const productParts = productIdentityParts(schoolOf(product), product.name, product.branch_id, product.gender);
+    const productParts = productIdentityParts(schoolOf(product), product.name, product.branch_id, product.gender, product.season);
     const duplicates = result.filter((item) => {
-      const itemParts = productIdentityParts(schoolOf(item), item.name, item.branch_id, item.gender);
+      const itemParts = productIdentityParts(schoolOf(item), item.name, item.branch_id, item.gender, item.season);
       return productIdentityKey(itemParts.school, item.name, item.branch_id) === productIdentityKey(productParts.school, product.name, productParts.branchId)
-        && compatibleProductGenders(itemParts.gender, productParts.gender);
+        && compatibleProductIdentities(itemParts, productParts);
     });
     if (duplicates.length === 0 || duplicates.some((duplicate) => productHasConflictingSizes(duplicate, product))) {
       result.push(product);
@@ -463,14 +487,15 @@ const findUnresolvedPriceConflictProductIds = (products) => {
   const normalizedProducts = (Array.isArray(products) ? products : []).flatMap(splitCompositeProductRecord);
   return findConflictingProductIds(normalizedProducts, {
     getProductIdentity: (product) => {
-      const parts = productIdentityParts(schoolOf(product), product.name, product.branch_id, product.gender);
+      const parts = productIdentityParts(schoolOf(product), product.name, product.branch_id, product.gender, product.season);
       return {
         key: productIdentityKey(parts.school, product.name, parts.branchId),
         gender: parts.gender,
+        season: parts.season,
       };
     },
     getSizeIdentity: sizeIdentityKey,
-    isIdentityCompatible: (first, second) => compatibleProductGenders(first.gender, second.gender),
+    isIdentityCompatible: compatibleProductIdentities,
   });
 };
 const countUnresolvedPriceConflictProducts = (products) => findUnresolvedPriceConflictProductIds(products).size;
@@ -740,10 +765,12 @@ const smartImportRows = (rows, existingProducts, branchSchoolIds = {}) => {
       product.name,
       product.branch_id ?? product.branchId,
       getProductGender(product),
+      product.season,
     );
     return {
       key: productIdentityKey(parts.school, parts.name, parts.branchId),
       gender: parts.gender,
+      season: parts.season,
     };
   };
   const duplicateCheck = validateAndDeduplicateImportRows({
@@ -751,7 +778,7 @@ const smartImportRows = (rows, existingProducts, branchSchoolIds = {}) => {
     existingProducts: Array.isArray(existingProducts) ? existingProducts : [],
     getProductIdentity: productIdentity,
     getSizeIdentity: sizeIdentityKey,
-    isIdentityCompatible: compatibleProductGenders,
+    isIdentityCompatible: compatibleProductIdentities,
     getNotes: (row) => row.note,
   });
   errors.push(...duplicateCheck.errors);
@@ -763,7 +790,7 @@ const smartImportRows = (rows, existingProducts, branchSchoolIds = {}) => {
     const rowIdentity = productIdentity(row);
     let product = next.find((item) => {
       const identity = productIdentity(item);
-      return identity.key === rowIdentity.key && compatibleProductGenders(identity.gender, rowIdentity.gender);
+      return identity.key === rowIdentity.key && compatibleProductIdentities(identity, rowIdentity);
     });
     if (!product) {
       product = {
@@ -2750,8 +2777,8 @@ export default function UniformPOS() {
     const queryProducts = (includeReceiptName) => supabase
       .from("products")
       .select(includeReceiptName
-        ? "id, school, name, receipt_name_en, gender, sizes, display_order, branch_id"
-        : "id, school, name, gender, sizes, display_order, branch_id")
+        ? "id, school, name, receipt_name_en, gender, season, category, style, sizes, display_order, branch_id"
+        : "id, school, name, gender, season, category, style, sizes, display_order, branch_id")
       .order("display_order", { ascending: true, nullsFirst: false })
       .order("name");
     let { data, error } = await queryProducts(productReceiptNameColumnAvailableRef.current);
@@ -6083,6 +6110,7 @@ function DirectExchangeProductPicker({
 
 function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogProducts, loadLatestProducts, importResult, setImportResult, productsSaveError = "", productsSaveState = "saved", productsCatalogWarning = "", sourceIntegrityWarning = "", canManageSchools = true, canImportExport = true, schoolMeta = {}, saveSchoolMeta = async () => {}, setDeletedSchools = () => {}, selectedSchool = null, branchSchoolIds = {}, branchId = "", availableSchools }) {
   const [expanded, setExpanded] = useState(null);
+  const [newProductWizard, setNewProductWizard] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
   const [importPreviewSearch, setImportPreviewSearch] = useState("");
@@ -6173,6 +6201,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
   const [lengthDraft, setLengthDraft] = useState("");
   const [matrixDrafts, setMatrixDrafts] = useState({});
   const activeSchool = selectedSchool;
+  const newProductCategory = getProductCategory(newProductWizard?.category);
 
   const fileInputRef = useRef(null);
   const analyzerFileInputRef = useRef(null);
@@ -6234,6 +6263,15 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     });
   };
 
+  const newProductNameConflict = newProductWizard?.name.trim()
+    ? productsRef.current.some((product) => {
+      const currentParts = productIdentityParts(schoolOf(product), product.name, product.branch_id, product.gender, product.season);
+      const draftParts = productIdentityParts(activeSchool || "", newProductWizard.name, branchSchoolIds[activeSchool] || branchId, newProductWizard.gender, newProductWizard.season);
+      return productIdentityKey(currentParts.school, product.name, currentParts.branchId) === productIdentityKey(draftParts.school, newProductWizard.name, draftParts.branchId)
+        && compatibleProductIdentities(currentParts, draftParts);
+    })
+    : false;
+
   const addProductLength = (product, suppliedLength) => {
     const rawLength = (suppliedLength ?? "").toString().trim();
     if (!rawLength) return;
@@ -6262,14 +6300,105 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     setLengthDraft("");
   };
 
-  const addProduct = (school, schoolMetadata = schoolMeta) => {
+  const addSchoolStarterProduct = (school, schoolMetadata = schoolMeta) => {
     const outletName = explicitOutletNameForSchool(school, schoolMetadata);
-    const branchId = branchSchoolIds[school]
+    const productBranchId = branchSchoolIds[school]
       || Object.entries(BRANCH_OUTLET_NAMES).find(([, name]) => name === outletName)?.[0]
       || "";
-    const np = { id: uid(), school: school || "", name: "新款式", gender: "unisex", priceMode: "simple", sizes: [{ size: "M", price: null }], branch_id: branchId };
-    saveProducts([...products, np], { insertProductId: np.id });
+    const product = {
+      id: uid(),
+      school: school || "",
+      name: "新款式",
+      gender: "unisex",
+      priceMode: "simple",
+      sizes: [{ size: "M", price: null }],
+      branch_id: productBranchId,
+    };
+    const nextProducts = [...productsRef.current, product];
+    productsRef.current = nextProducts;
+    saveProducts(nextProducts, { insertProductId: product.id });
+    setExpanded(product.id);
+  };
+
+  const openProductWizard = () => {
+    const draft = {
+      step: 1,
+      season: "",
+      gender: "",
+      category: "",
+      options: {},
+      name: "",
+      nameCustomized: false,
+      sizeInput: "",
+      sizePresetSource: "",
+      error: "",
+    };
+    setNewProductWizard({ ...draft, name: buildDefaultProductName(draft) });
+  };
+
+  const updateProductWizardClassification = (patch) => {
+    setNewProductWizard((current) => {
+      if (!current) return current;
+      const category = patch.category || current.category;
+      const gender = patch.gender || current.gender;
+      let options = current.options;
+      if (patch.category) options = getDefaultProductOptions(category, gender);
+      else if (patch.gender) options = normalizeProductOptions(category, gender, current.options);
+      else if (patch.options) options = normalizeProductOptions(category, gender, { ...current.options, ...patch.options });
+      const next = { ...current, ...patch, category, gender, options, error: "" };
+      const preset = getPrimaryProductSizePreset({
+        school: activeSchool,
+        season: next.season,
+        gender: next.gender,
+        category: next.category,
+        options: next.options,
+      });
+      next.sizeInput = preset?.sizes.join(", ") || "";
+      next.sizePresetSource = preset?.source || "";
+      if (!current.nameCustomized) next.name = buildDefaultProductName(next);
+      return next;
+    });
+  };
+
+  const isNewProductStepIncomplete = newProductWizard?.step === 1
+    ? !newProductWizard.season || !newProductWizard.gender
+    : newProductWizard?.step === 2
+      ? !newProductWizard.category
+      : false;
+
+  const addProductFromWizard = () => {
+    if (!newProductWizard) return;
+    const name = newProductWizard.name.trim();
+    const sizeLabels = parseProductSizeLabels(newProductWizard.sizeInput);
+    if (!name || sizeLabels.length === 0) {
+      setNewProductWizard((current) => ({ ...current, error: "請填寫商品名稱及至少一個尺碼。" }));
+      return;
+    }
+    if (newProductNameConflict) {
+      setNewProductWizard((current) => ({ ...current, error: "同一學校已有相同款式，請調整名稱或檢查現有商品。" }));
+      return;
+    }
+    const outletName = explicitOutletNameForSchool(activeSchool || "", schoolMeta);
+    const productBranchId = branchSchoolIds[activeSchool]
+      || Object.entries(BRANCH_OUTLET_NAMES).find(([, name]) => name === outletName)?.[0]
+      || branchId;
+    const np = {
+      id: uid(),
+      school: activeSchool || "",
+      name,
+      gender: newProductWizard.gender,
+      season: newProductWizard.season,
+      category: newProductWizard.category,
+      style: getProductStyleLabel(newProductWizard.category, newProductWizard.options),
+      priceMode: "simple",
+      sizes: sizeLabels.map((size) => ({ size, length: "", price: null, isTailored: size === "裁碼" })),
+      branch_id: productBranchId,
+    };
+    const nextProducts = [...productsRef.current, np];
+    productsRef.current = nextProducts;
+    saveProducts(nextProducts, { insertProductId: np.id });
     setExpanded(np.id);
+    setNewProductWizard(null);
   };
 
   const updateMatrixDraft = (productId, field, value) => {
@@ -6427,7 +6556,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
       : { category: "", level: newSchoolLevel, region: newSchoolRegion, district: newSchoolDistrict };
     schoolMetaEntry.outletName = newSchoolOutlet;
     if (!productsRef.current.some((product) => schoolOf(product) === name)) {
-      addProduct(name, { ...schoolMeta, [name]: schoolMetaEntry });
+      addSchoolStarterProduct(name, { ...schoolMeta, [name]: schoolMetaEntry });
     }
     saveSchoolMeta({ ...schoolMeta, [name]: schoolMetaEntry });
     setAddingSchool(false);
@@ -7587,6 +7716,13 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                 style={{ width: "100%", padding: 8, marginBottom: 10, borderRadius: 8, border: "1px solid #ccc", fontSize: 14, boxSizing: "border-box", background: canManageSchools ? "#fff" : "#F0F0EC", color: canManageSchools ? "#000" : "#888" }}
               />
               <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>{productPriceMode(p) === "matrix" ? `款式名稱（${sizeDimensionLabels(p)} → 價錢）` : productPriceMode(p) === "fixed" ? "款式名稱（所有尺寸同價）" : "款式名稱（尺碼 → 價錢）"}</div>
+              {(p.season || p.category) && (
+                <span style={{ display: "block", marginTop: 3, color: "#667085", fontSize: 10 }}>
+                  {[PRODUCT_SEASON_OPTIONS.find((option) => option.value === p.season)?.label, PRODUCT_CREATION_GENDER_OPTIONS.find((option) => option.value === p.gender)?.label, getProductCategory(p.category)?.label, p.style]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+              )}
               <input
                 value={p.name}
                 onChange={(e) => updateProduct(p.id, { ...p, name: e.target.value })}
@@ -7922,10 +8058,10 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
       <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
         <button
           className="pos-btn"
-          onClick={() => addProduct(activeSchool || "")}
+          onClick={openProductWizard}
           style={{ flex: 1, padding: "12px 0", borderRadius: 10, background: "#1F3A5F", color: "#fff", fontSize: 14, fontWeight: 500 }}
         >
-          + 新增款式
+          + 新增商品
         </button>
         {canManageSchools && (
           <button
@@ -7945,6 +8081,118 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
         >
           刪除目前學校
         </button>
+      )}
+      {newProductWizard && (
+        <div
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setNewProductWizard(null);
+          }}
+          style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(17,24,39,.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-product-wizard-title"
+            style={{ width: "min(100%, 560px)", maxHeight: "92vh", overflowY: "auto", background: "#fff", borderRadius: 14, padding: 18, boxShadow: "0 16px 50px rgba(0,0,0,.25)" }}
+          >
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+              <div>
+                <h2 id="new-product-wizard-title" style={{ margin: 0, fontSize: 18 }}>新增商品</h2>
+                <div style={{ marginTop: 4, color: "#667085", fontSize: 12 }}>{activeSchool || "未選擇學校"}</div>
+              </div>
+              <button type="button" aria-label="關閉" className="pos-btn" onClick={() => setNewProductWizard(null)} style={{ padding: 6, borderRadius: 7, background: "#F3F4F6", color: "#344054" }}>
+                <X size={18} />
+              </button>
+            </div>
+            <div style={{ display: "flex", gap: 6, margin: "16px 0" }}>
+              {["季節及性別", "類別及款式", "尺碼及名稱"].map((label, index) => (
+                <div key={label} style={{ flex: 1, padding: "7px 4px", borderRadius: 7, textAlign: "center", background: newProductWizard.step === index + 1 ? "#EAF2FB" : "#F7F7F5", color: newProductWizard.step === index + 1 ? "#1F3A5F" : "#667085", fontSize: 11, fontWeight: 700 }}>
+                  {index + 1}. {label}
+                </div>
+              ))}
+            </div>
+            {newProductWizard.step === 1 && (
+              <div style={{ display: "grid", gap: 18 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>選擇現賣季節</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 7 }}>
+                    {PRODUCT_SEASON_OPTIONS.map((option) => (
+                      <button key={option.value} type="button" aria-pressed={newProductWizard.season === option.value} className="pos-btn" onClick={() => updateProductWizardClassification({ season: option.value })} style={{ padding: 10, borderRadius: 8, border: `1px solid ${newProductWizard.season === option.value ? "#1F3A5F" : "#D0D5DD"}`, background: newProductWizard.season === option.value ? "#EAF2FB" : "#fff", color: "#1F2937", fontSize: 13, fontWeight: 600 }}>
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>適用性別</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 7 }}>
+                    {PRODUCT_CREATION_GENDER_OPTIONS.map((option) => (
+                      <button key={option.value} type="button" aria-pressed={newProductWizard.gender === option.value} className="pos-btn" onClick={() => updateProductWizardClassification({ gender: option.value })} style={{ padding: 10, borderRadius: 8, border: `1px solid ${newProductWizard.gender === option.value ? "#1F3A5F" : "#D0D5DD"}`, background: newProductWizard.gender === option.value ? "#EAF2FB" : "#fff", color: "#1F2937", fontSize: 13, fontWeight: 600 }}>
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+            {newProductWizard.step === 2 && (
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>商品類別</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 7 }}>
+                  {PRIMARY_PRODUCT_CATEGORIES.map((category) => (
+                    <button key={category.value} type="button" aria-pressed={newProductWizard.category === category.value} className="pos-btn" onClick={() => updateProductWizardClassification({ category: category.value })} style={{ padding: "9px 5px", borderRadius: 8, border: `1px solid ${newProductWizard.category === category.value ? "#1F3A5F" : "#D0D5DD"}`, background: newProductWizard.category === category.value ? "#EAF2FB" : "#fff", color: "#1F2937", fontSize: 12, fontWeight: 600 }}>
+                      {category.label}
+                    </button>
+                  ))}
+                </div>
+                {newProductCategory?.selectors.map((selector) => {
+                  const selectorOptions = getProductSelectorOptions(newProductWizard.category, selector.key, newProductWizard.gender);
+                  if (!selectorOptions.length) return null;
+                  return (
+                    <label key={selector.key} style={{ display: "block", marginTop: 14, fontSize: 12, color: "#475467" }}>
+                      {selector.label}
+                      <select value={newProductWizard.options[selector.key] || ""} onChange={(event) => updateProductWizardClassification({ options: { [selector.key]: event.target.value } })} style={{ display: "block", width: "100%", marginTop: 5, padding: 9, borderRadius: 8, border: "1px solid #D0D5DD", fontSize: 13 }}>
+                        {selectorOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      </select>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+            {newProductWizard.step === 3 && (
+              <div>
+                <div style={{ marginBottom: 10, padding: 10, borderRadius: 8, background: "#F7F7F5", fontSize: 12, color: "#475467" }}>
+                  {PRODUCT_SEASON_OPTIONS.find((option) => option.value === newProductWizard.season)?.label}
+                  {" · "}
+                  {PRODUCT_CREATION_GENDER_OPTIONS.find((option) => option.value === newProductWizard.gender)?.label}
+                  {" · "}
+                  {newProductCategory?.label}
+                  {getProductStyleLabel(newProductWizard.category, newProductWizard.options) ? ` · ${getProductStyleLabel(newProductWizard.category, newProductWizard.options)}` : ""}
+                </div>
+                <label style={{ display: "block", fontSize: 12, color: "#475467", fontWeight: 600 }}>
+                  商品名稱
+                  <input value={newProductWizard.name} onChange={(event) => setNewProductWizard((current) => ({ ...current, name: event.target.value, nameCustomized: true, error: "" }))} style={{ display: "block", width: "100%", boxSizing: "border-box", marginTop: 5, padding: 9, borderRadius: 8, border: "1px solid #D0D5DD", fontSize: 14 }} />
+                </label>
+                <label style={{ display: "block", marginTop: 12, fontSize: 12, color: "#475467", fontWeight: 600 }}>
+                  尺碼（可修改，以逗號分隔）
+                  <textarea value={newProductWizard.sizeInput} onChange={(event) => setNewProductWizard((current) => ({ ...current, sizeInput: event.target.value, error: "" }))} placeholder="例如：24, 26, 28, 裁碼" rows={4} style={{ display: "block", width: "100%", boxSizing: "border-box", marginTop: 5, padding: 9, borderRadius: 8, border: "1px solid #D0D5DD", fontSize: 13, resize: "vertical" }} />
+                </label>
+                {newProductWizard.sizePresetSource && <div style={{ marginTop: 6, color: "#667085", fontSize: 11 }}>尺碼參考：{newProductWizard.sizePresetSource}（只套用尺碼，不會帶入舊價格）</div>}
+                {newProductNameConflict && <div role="alert" style={{ marginTop: 8, color: "#B42318", fontSize: 12 }}>同一學校已有相同款式，請調整名稱或檢查現有商品。</div>}
+                {newProductWizard.error && <div role="alert" style={{ marginTop: 8, color: "#B42318", fontSize: 12 }}>{newProductWizard.error}</div>}
+              </div>
+            )}
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 18 }}>
+              <button type="button" className="pos-btn" onClick={() => newProductWizard.step === 1 ? setNewProductWizard(null) : setNewProductWizard((current) => ({ ...current, step: current.step - 1, error: "" }))} style={{ padding: "9px 14px", borderRadius: 8, border: "1px solid #D0D5DD", background: "#fff", color: "#344054", fontSize: 13 }}>
+                {newProductWizard.step === 1 ? "取消" : "上一步"}
+              </button>
+              {newProductWizard.step < 3
+                ? <button type="button" className="pos-btn" onClick={() => setNewProductWizard((current) => ({ ...current, step: current.step + 1, error: "" }))} disabled={isNewProductStepIncomplete} style={{ padding: "9px 14px", borderRadius: 8, background: isNewProductStepIncomplete ? "#98A2B3" : "#1F3A5F", color: "#fff", fontSize: 13, fontWeight: 700 }}>下一步</button>
+                : <button type="button" className="pos-btn" onClick={addProductFromWizard} disabled={!parseProductSizeLabels(newProductWizard.sizeInput).length || Boolean(newProductNameConflict)} style={{ padding: "9px 16px", borderRadius: 8, background: !parseProductSizeLabels(newProductWizard.sizeInput).length || newProductNameConflict ? "#98A2B3" : "#1F3A5F", color: "#fff", fontSize: 13, fontWeight: 700 }}>建立商品</button>}
+            </div>
+          </section>
+        </div>
       )}
     </div>
   );

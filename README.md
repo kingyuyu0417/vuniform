@@ -36,6 +36,8 @@ CSV 商品資料欄位為「學校、款式名稱、碼數、長度、價錢」�
 
 安全升級用的 `supabase/secure-migration.sql` 會建立 Auth 員工資料、商品、訂單及訂單項目表。前端完成 Auth 版本後才執行這份 migration；執行前請先備份 `app_storage`。
 
+商品新增表單使用季節、分類及款式欄位前，請先在 Supabase SQL Editor 執行 `supabase/product-classification-migration.sql`，為現有商品表加入相容的新欄位。
+
 Auth 登入開關是 `VITE_USE_SUPABASE_AUTH`。只有在 Supabase 已建立 `staff_profiles` 員工角色，而且前端交易已切換到新資料表後，才將它改成 `true`；目前保留 `false` 以維持 PIN 測試模式。
 
 安全切換步驟：

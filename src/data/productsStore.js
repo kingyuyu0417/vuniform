@@ -18,6 +18,9 @@ const productDataSignature = (product) => JSON.stringify([
   product.name,
   product.receiptNameEn || "",
   product.gender,
+  product.season || "",
+  product.category || "",
+  product.style || "",
   product.priceMode,
   product.sizes.map((size) => [size.size, size.length, size.price, size.twoPiecePrice, Boolean(size.isTailored)]),
 ]);
@@ -60,6 +63,9 @@ export const normalizeProducts = (products = []) => {
       name: String(product.name || "").trim(),
       receiptNameEn: String(product.receipt_name_en ?? product.receiptNameEn ?? "").trim(),
       gender: getProductGender(product),
+      season: String(product.season || ""),
+      category: String(product.category || ""),
+      style: String(product.style || ""),
       priceMode: hasLengthOptions
         ? "matrix"
         : (["simple", "matrix", "fixed"].includes(storedMode) ? storedMode : "simple"),
@@ -104,7 +110,7 @@ export const loadProducts = async ({ storage, supabase, isSupabaseAuthEnabled, f
     if (isSupabaseAuthEnabled && supabase) {
       const { data, error } = await supabase
         .from("products")
-        .select("id, school, name, receipt_name_en, gender, sizes, display_order, branch_id")
+        .select("id, school, name, receipt_name_en, gender, season, category, style, sizes, display_order, branch_id")
         .order("display_order", { ascending: true, nullsFirst: false })
         .order("name");
 
@@ -121,7 +127,7 @@ export const loadProducts = async ({ storage, supabase, isSupabaseAuthEnabled, f
         console.warn("[productsStore] English receipt name column is not installed; loading products without it.", error);
         const { data: legacyData, error: legacyError } = await supabase
           .from("products")
-          .select("id, school, name, gender, sizes, display_order, branch_id")
+          .select("id, school, name, gender, season, category, style, sizes, display_order, branch_id")
           .order("display_order", { ascending: true, nullsFirst: false })
           .order("name");
         if (!legacyError && Array.isArray(legacyData) && legacyData.length > 0) {
@@ -192,7 +198,9 @@ export const saveProducts = async ({ products, storage, supabase, isSupabaseAuth
       return result;
     }, []);
 
-    const { data: existing, error: existingError } = await supabase.from("products").select("id, school, name, receipt_name_en, gender, sizes");
+    const { data: existing, error: existingError } = await supabase
+      .from("products")
+      .select("id, school, name, receipt_name_en, gender, season, category, style, sizes");
     if (existingError) throw existingError;
     const existingById = new Map(normalizeProducts(existing || []).map((product) => [product.id, product]));
     const changedProducts = uniqueProducts.filter((product) => {
@@ -208,12 +216,15 @@ export const saveProducts = async ({ products, storage, supabase, isSupabaseAuth
     const savedProducts = [];
     for (let index = 0; index < uniqueProducts.length; index += batchSize) {
       const batch = uniqueProducts.slice(index, index + batchSize);
-      const { error } = await supabase.from("products").upsert(batch.map(({ id, school, name, receiptNameEn, gender, sizes, priceMode, branch_id: branchId }, batchIndex) => ({
+      const { error } = await supabase.from("products").upsert(batch.map(({ id, school, name, receiptNameEn, gender, season, category, style, sizes, priceMode, branch_id: branchId }, batchIndex) => ({
         id,
         school: school || "",
         name,
         receipt_name_en: receiptNameEn || "",
         gender,
+        season,
+        category,
+        style,
         sizes: sizes.map((size) => ({ ...size, __priceMode: priceMode })),
         display_order: index + batchIndex,
         branch_id: branchId || null,
@@ -222,7 +233,7 @@ export const saveProducts = async ({ products, storage, supabase, isSupabaseAuth
 
       const { data, error: verifyError } = await supabase
         .from("products")
-        .select("id, school, name, receipt_name_en, gender, sizes")
+        .select("id, school, name, receipt_name_en, gender, season, category, style, sizes")
         .in("id", batch.map((product) => product.id));
       if (verifyError) throw verifyError;
       savedProducts.push(...(data || []));
@@ -245,8 +256,14 @@ export const saveProducts = async ({ products, storage, supabase, isSupabaseAuth
     const savedById = new Map((savedProducts || []).map((product) => [product.id, product]));
     const hasMismatch = uniqueProducts.some((expected) => {
       const saved = savedById.get(expected.id);
-      if (!saved || saved.school !== (expected.school || "") || saved.name !== expected.name
-        || saved.receipt_name_en !== (expected.receiptNameEn || "") || saved.gender !== expected.gender) return true;
+      if (!saved
+        || saved.school !== (expected.school || "")
+        || saved.name !== expected.name
+        || saved.receipt_name_en !== (expected.receiptNameEn || "")
+        || saved.gender !== expected.gender
+        || saved.season !== (expected.season || "")
+        || saved.category !== (expected.category || "")
+        || saved.style !== (expected.style || "")) return true;
       const expectedSizes = new Map((expected.sizes || []).map((size) => [sizeIdentityKey(size), size.price]));
       const savedSizes = new Map((saved.sizes || []).map((size) => [sizeIdentityKey(size), size.price]));
       if (expectedSizes.size !== savedSizes.size) return true;
@@ -310,6 +327,9 @@ export const insertProduct = async ({ products, productId, storage, supabase, is
       name: product.name,
       receipt_name_en: product.receiptNameEn || "",
       gender: product.gender,
+      season: product.season,
+      category: product.category,
+      style: product.style,
       sizes: product.sizes.map((size) => ({ ...size, __priceMode: product.priceMode })),
       display_order: normalized.findIndex((item) => item.id === product.id),
       branch_id: product.branch_id || null,
@@ -337,6 +357,9 @@ export const updateProduct = async ({ products, productId, storage, supabase, is
       name: product.name,
       receipt_name_en: product.receiptNameEn || "",
       gender: product.gender,
+      season: product.season,
+      category: product.category,
+      style: product.style,
       sizes: product.sizes.map((size) => ({ ...size, __priceMode: product.priceMode })),
       branch_id: product.branch_id || null,
     }).eq("id", product.id).select("id").single();
