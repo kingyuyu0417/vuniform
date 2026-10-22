@@ -56,7 +56,6 @@
       receiptTranslationText,
       translateReceiptProductName as sharedTranslateReceiptProductName,
       translateReceiptSchool as sharedTranslateReceiptSchool,
-      receiptTranslationText,
     } from "./receipt-translations.js";
 
     const app = document.getElementById("app");
@@ -189,11 +188,16 @@
         <div class="actions"><button onclick="window.print()">${english ? "Print / Save as PDF" : "列印／另存為 PDF"}</button><button class="secondary" onclick="window.close()">${english ? "Close" : "關閉"}</button></div>`;
     };
     try {
-      const value = new URLSearchParams(location.search).get("data");
+      const parameters = new URLSearchParams(location.search);
+      const compressed = parameters.get("z");
+      const value = compressed || parameters.get("data");
       if (!value) throw new Error("missing receipt data");
-      const binary = atob(value);
+      const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+      const binary = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "="));
       const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-      const json = new TextDecoder("utf-8").decode(bytes);
+      const json = compressed
+        ? await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).text()
+        : new TextDecoder("utf-8").decode(bytes);
       render(JSON.parse(json));
     } catch (error) {
       app.innerHTML = '<div class="error">收據連結無效或已損壞，請向店員索取新的 QR Code。</div>';

@@ -36,6 +36,7 @@ import { naturalSizeSort } from "./data/sizeSort";
 import { calculateMatrixPrices } from "./data/matrixPricing";
 import { canReplaceOrder, getReplacementBranchId, getReplacementSettlement } from "./data/orderReplacement";
 import { calculateCashSettlement, findPossibleDuplicateSale, isExchangeAdjustmentOrder, PAYMENT_METHOD_LABELS, PAYMENT_METHOD_LABELS_EN, summarizeDailyCloseout } from "./data/salesCloseout";
+import { encodeReceiptQrPayload } from "./data/receiptQrPayload";
 import {
   createCustomerReceiptOrder,
   englishReceiptProductUnit,
@@ -1843,18 +1844,13 @@ const buildReceiptLines = (order, shopName, language = "zh") => {
   return lines;
 };
 
-const buildReceiptUrl = (order, language = "zh") => {
+const buildReceiptUrl = async (order, language = "zh") => {
   const json = JSON.stringify(createCustomerReceiptOrder(order));
-  const bytes = new TextEncoder().encode(json);
-  let binary = "";
-  bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte);
-  });
-  const encoded = btoa(binary);
+  const encoded = await encodeReceiptQrPayload(json);
   const publicUrl = (import.meta.env.PROD
     ? "https://uniform-pos-app-current.pages.dev"
     : import.meta.env.VITE_PUBLIC_APP_URL || window.location.origin).replace(/\/$/, "");
-  return `${publicUrl}/receipt.html?lang=${language}&data=${encodeURIComponent(encoded)}`;
+  return `${publicUrl}/receipt.html?lang=${language}&${encoded.parameter}=${encoded.value}`;
 };
 
 // ===================== 儲存層 =====================
@@ -8422,32 +8418,60 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
 function ReceiptQR({ order, language = "zh" }) {
   const [status, setStatus] = useState("loading");
   const [modules, setModules] = useState(null);
-  const qrText = buildReceiptUrl(order, language);
+  const qrText = JSON.stringify(createCustomerReceiptOrder(order));
 
   useEffect(() => {
+    let cancelled = false;
     setStatus("loading");
     setModules(null);
-    try {
-      const qr = qrcode(0, "L");
-      qr.addData(qrText);
-      qr.make();
-      const count = qr.getModuleCount();
-      const grid = [];
-      for (let r = 0; r < count; r++) {
-        const row = [];
-        for (let c = 0; c < count; c++) row.push(qr.isDark(r, c));
-        grid.push(row);
+    const createQr = async () => {
+      try {
+        const receiptUrl = await buildReceiptUrl(order, language);
+        let qr;
+        try {
+          qr = qrcode(0, "M");
+          qr.addData(receiptUrl);
+          qr.make();
+        } catch {
+          qr = qrcode(0, "L");
+          qr.addData(receiptUrl);
+          qr.make();
+        }
+        const count = qr.getModuleCount();
+        const grid = Array.from({ length: count }, (_, row) =>
+          Array.from({ length: count }, (_, column) => qr.isDark(row, column))
+        );
+        if (cancelled) return;
+        setModules(grid);
+        setStatus("ok");
+      } catch (error) {
+        if (cancelled) return;
+        console.error("QR產生失敗", error);
+        setStatus("error");
       }
-      setModules(grid);
-      setStatus("ok");
-    } catch (e) {
-      console.error("QR產生失敗", e);
-      setStatus("error");
-    }
-  }, [qrText]);
+    };
+    createQr();
+    return () => {
+      cancelled = true;
+    };
+  }, [qrText, language]);
 
-  const size = 176;
-  const cell = modules && modules.length ? size / modules.length : 0;
+  const size = 240;
+  const quietZone = 4;
+  const moduleCount = modules?.length || 0;
+  const qrPath = modules ? modules.flatMap((row, rowIndex) => {
+    const segments = [];
+    for (let column = 0; column < row.length;) {
+      if (!row[column]) {
+        column += 1;
+        continue;
+      }
+      const start = column;
+      while (column < row.length && row[column]) column += 1;
+      segments.push(`M${start + quietZone} ${rowIndex + quietZone}h${column - start}v1h-${column - start}z`);
+    }
+    return segments;
+  }).join("") : "";
 
   return (
     <div
@@ -8468,15 +8492,13 @@ function ReceiptQR({ order, language = "zh" }) {
 
       <div
         style={{
-          width: 176,
-          height: 176,
+          width: size,
+          height: size,
           background: "#fff",
-          borderRadius: 8,
-          border: "1px solid #E5E5E0",
+          borderRadius: 4,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          overflow: "hidden",
         }}
       >
         {status === "error" && (
@@ -8489,15 +8511,16 @@ function ReceiptQR({ order, language = "zh" }) {
         )}
         {status === "loading" && <div style={{ fontSize: 11, color: "#999" }}>{language === "en" ? "Generating…" : "產生緊…"}</div>}
         {status === "ok" && modules && (
-          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: "block" }}>
-            <rect x={0} y={0} width={size} height={size} fill="#fff" />
-            {modules.map((row, r) =>
-              row.map((dark, c) =>
-                dark ? (
-                  <rect key={`${r}-${c}`} x={c * cell} y={r * cell} width={cell + 0.3} height={cell + 0.3} fill="#000" />
-                ) : null
-              )
-            )}
+          <svg
+            width={size}
+            height={size}
+            viewBox={`0 0 ${moduleCount + quietZone * 2} ${moduleCount + quietZone * 2}`}
+            role="img"
+            aria-label={language === "en" ? "Scannable customer receipt QR code" : "客人電子收據 QR Code"}
+            shapeRendering="crispEdges"
+            style={{ display: "block", background: "#fff" }}
+          >
+            <path d={qrPath} fill="#000" />
           </svg>
         )}
       </div>
@@ -8514,6 +8537,7 @@ function ReceiptQR({ order, language = "zh" }) {
 
 function ReceiptModal({ order, orders = [], language = "zh", actionError = "", onClose, canRedoSale = false, canReplaceSale = false, onRedoSale, onExchange, onPrintBrowser, onPrintBluetooth, btStatus }) {
   const [exchangeSelection, setExchangeSelection] = useState(null);
+  const [receiptOpenError, setReceiptOpenError] = useState("");
   const english = language === "en";
   const labels = receiptFieldLabels(language);
   const canExchangeItems = canRedoSale && order.items.some((item) => getRemainingReturnQuantity(item, orders) > 0);
@@ -8547,15 +8571,25 @@ function ReceiptModal({ order, orders = [], language = "zh", actionError = "", o
       window.scrollTo(0, scrollY);
     };
   }, []);
-  const openCustomerReceipt = () => {
-    const receiptUrl = buildReceiptUrl(order, language);
-    const anchor = document.createElement("a");
-    anchor.href = receiptUrl;
-    anchor.target = "_blank";
-    anchor.rel = "noopener noreferrer";
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
+  const openCustomerReceipt = async () => {
+    const receiptWindow = window.open("about:blank", "_blank");
+    if (!receiptWindow) {
+      setReceiptOpenError(english
+        ? "Allow pop-ups to open the customer receipt."
+        : "請允許彈出視窗，才能開啟客人電子收據。");
+      return;
+    }
+    receiptWindow.opener = null;
+    setReceiptOpenError("");
+    try {
+      receiptWindow.location.replace(await buildReceiptUrl(order, language));
+    } catch (error) {
+      console.error("開啟客人電子收據失敗", error);
+      receiptWindow.close();
+      setReceiptOpenError(english
+        ? "Unable to prepare the customer receipt. Please try again."
+        : "準備客人電子收據失敗，請重試。");
+    }
   };
 
   return createPortal(
@@ -8647,6 +8681,11 @@ function ReceiptModal({ order, orders = [], language = "zh", actionError = "", o
         {actionError && (
           <div role="alert" style={{ marginBottom: 10, padding: "10px 12px", borderRadius: 8, background: "#FFF1F0", color: "#B42318", fontSize: 13, lineHeight: 1.5 }}>
             {actionError}
+          </div>
+        )}
+        {receiptOpenError && (
+          <div role="alert" style={{ marginBottom: 10, padding: "10px 12px", borderRadius: 8, background: "#FFF1F0", color: "#B42318", fontSize: 13, lineHeight: 1.5 }}>
+            {receiptOpenError}
           </div>
         )}
 
