@@ -75,9 +75,26 @@ test("applies waist base prices and trouser-length surcharges", () => {
     { length: "50", size: "30", price: null },
   ], {
     basePrices: "24=96,25=99,26=102,27=106,28=113,30=128",
-    surcharges: "32+=0,40=10,41.5+=20,43+=30",
+    surcharges: "32+=0,40=10,41.5=20,42=20,43+=30",
   }, { baseDimension: "size", surchargeDimension: "length" });
 
   assert.deepEqual(result.sizes.map((item) => item.price), [96, 109, 122, 126, 143, 158]);
+  assert.equal(result.matchedCount, 6);
+});
+
+test("applies skirt-length base prices and chest-width surcharge bands", () => {
+  const result = calculateMatrixPrices([
+    { length: "36", size: "36", price: null },
+    { length: "38", size: "38", price: null },
+    { length: "40", size: "40", price: null },
+    { length: "42", size: "42", price: null },
+    { length: "44", size: "44", price: null },
+    { length: "44", size: "46", price: null },
+  ], {
+    basePrices: "36=128,38=130,40=132,42=134,44=136",
+    surcharges: "36+=0,40=10,42=20,44+=30",
+  });
+
+  assert.deepEqual(result.sizes.map((item) => item.price), [128, 130, 142, 154, 166, 166]);
   assert.equal(result.matchedCount, 6);
 });

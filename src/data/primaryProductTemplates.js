@@ -144,9 +144,10 @@ const PRIMARY_SHORT_TROUSER_SIZES = ["12", "13", "14", "15", "16", "17", "18", "
 const PRIMARY_LONG_TROUSER_SIZES = ["26", "28", "30", "32", "34", "36", "38", "40", "42"];
 const SKIRT_MATRIX_LENGTHS = ["36", "38", "40", "42", "44"];
 const SKIRT_MATRIX_CHEST_WIDTHS = ["36", "38", "40", "42", "44", "46"];
+export const SKIRT_CHEST_SURCHARGE_RULES = "36+=0,40=10,42=20,44+=30";
 const SECONDARY_TROUSER_LENGTHS = ["33", "34", "35", "36", "37", "38", "38.5", "40", "41.5", "42", "43", "44", "44.5", "46"];
 const SECONDARY_TROUSER_WAISTS = ["24", "25", "26", "27", "28", "29", "30", "32", "34", "36", "38", "40", "42", "44", "46", "48", "50", "52"];
-export const SECONDARY_TROUSER_SURCHARGE_RULES = "32+=0,40=10,41.5+=20,43+=30";
+export const SECONDARY_TROUSER_SURCHARGE_RULES = "32+=0,40=10,41.5=20,42=20,43+=30";
 
 export const getProductCategory = (categoryValue) => PRIMARY_PRODUCT_CATEGORIES
   .find((category) => category.value === categoryValue) || null;
@@ -244,6 +245,7 @@ export const getPrimaryProductSizePreset = ({ school, schoolLevel, season, gende
       source: simplePreset?.source || "",
       sizes: [...(simplePreset?.sizes || [])],
       matrix: { lengths: [...SKIRT_MATRIX_LENGTHS], sizes: [...SKIRT_MATRIX_CHEST_WIDTHS] },
+      surchargeRules: SKIRT_CHEST_SURCHARGE_RULES,
     };
   }
   if (category === "trousers" && schoolLevel === "中學" && options.length === "long") {

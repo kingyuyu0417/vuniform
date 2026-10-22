@@ -41,6 +41,7 @@ import {
   PRIMARY_PRODUCT_CATEGORIES,
   PRODUCT_GENDER_OPTIONS as PRODUCT_CREATION_GENDER_OPTIONS,
   PRODUCT_SEASON_OPTIONS,
+  SKIRT_CHEST_SURCHARGE_RULES,
   SECONDARY_TROUSER_SURCHARGE_RULES,
   splitProductSizePairs,
 } from "./data/primaryProductTemplates";
@@ -6507,8 +6508,11 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     const isSecondaryTrousers = product.category === "trousers"
       && normalizeSchoolLevel(product.school, schoolMeta) === "中學";
     const draft = matrixDrafts[product.id] || {};
-    const pricingDraft = isSecondaryTrousers
-      ? { ...draft, surcharges: draft.surcharges || SECONDARY_TROUSER_SURCHARGE_RULES }
+    const defaultSurchargeRules = isSecondaryTrousers
+      ? SECONDARY_TROUSER_SURCHARGE_RULES
+      : product.category === "skirt" ? SKIRT_CHEST_SURCHARGE_RULES : "";
+    const pricingDraft = defaultSurchargeRules
+      ? { ...draft, surcharges: draft.surcharges || defaultSurchargeRules }
       : draft;
     const dimensions = isSecondaryTrousers
       ? { baseDimension: "size", surchargeDimension: "length" }
@@ -7829,6 +7833,9 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                 <div style={{ padding: 9, marginBottom: 10, background: "#F0F7FF", border: "1px solid #B8D8F5", borderRadius: 8 }}>
                   {(() => {
                     const isSecondaryTrousers = p.category === "trousers" && normalizeSchoolLevel(p.school, schoolMeta) === "中學";
+                    const defaultSurchargeRules = isSecondaryTrousers
+                      ? SECONDARY_TROUSER_SURCHARGE_RULES
+                      : p.category === "skirt" ? SKIRT_CHEST_SURCHARGE_RULES : "";
                     const basePriceDimension = isSecondaryTrousers ? sizeDimensionLabel(p) : lengthDimensionLabel(p);
                     const surchargeDimension = isSecondaryTrousers ? lengthDimensionLabel(p) : sizeDimensionLabel(p);
                     return (
@@ -7852,6 +7859,8 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                     <div style={{ fontSize: 11, color: "#52657A", marginBottom: 5 }}>
                       {isSecondaryTrousers
                         ? "輸入各腰圍基本價；系統按褲長自動加價（32–38.5：+$0；40：+$10；41.5–42：+$20；43 或以上：+$30）。"
+                        : p.category === "skirt"
+                          ? "輸入各裙長基本價；系統按胸寬自動加價（36–38：+$0；40：+$10；42：+$20；44 或以上：+$30）。"
                         : `可選：按${lengthDimensionLabel(p)}套基本價，再按${sizeDimensionLabel(p)}套加價。`}
                     </div>
                     <input
@@ -7861,9 +7870,9 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                       style={{ width: "100%", padding: 7, marginBottom: 6, borderRadius: 7, border: "1px solid #B8C7D8", fontSize: 12, boxSizing: "border-box" }}
                     />
                     <input
-                      value={matrixDrafts[p.id]?.surcharges ?? (isSecondaryTrousers ? SECONDARY_TROUSER_SURCHARGE_RULES : "")}
+                      value={matrixDrafts[p.id]?.surcharges ?? defaultSurchargeRules}
                       onChange={(e) => updateMatrixDraft(p.id, "surcharges", e.target.value)}
-                      placeholder={`${surchargeDimension}加價規則，例如：40=10,41.5+=20,43+=30`}
+                      placeholder={`${surchargeDimension}加價規則，例如：${isSecondaryTrousers ? "32+=0,40=10,41.5=20,42=20,43+=30" : p.category === "skirt" ? "36+=0,40=10,42=20,44+=30" : "40=10,41.5+=20,43+=30"}`}
                       style={{ width: "100%", padding: 7, marginBottom: 6, borderRadius: 7, border: "1px solid #B8C7D8", fontSize: 12, boxSizing: "border-box" }}
                     />
                     <button className="pos-btn" onClick={() => applyMatrixPricing(p)} style={{ padding: "7px 10px", borderRadius: 7, background: "#28784B", color: "#fff", fontSize: 12 }}>{isSecondaryTrousers ? "計算並套用售價" : "重新套用價格（會更新每格價格）"}</button>

@@ -12,6 +12,7 @@ import {
   parseProductSizeLabels,
   PRIMARY_PRODUCT_CATEGORIES,
   PRODUCT_SEASON_OPTIONS,
+  SKIRT_CHEST_SURCHARGE_RULES,
   splitProductSizePairs,
 } from "./primaryProductTemplates.js";
 
@@ -189,7 +190,7 @@ test("provides the agreed primary and secondary trousers size sets", () => {
   assert.deepEqual(secondaryTrousers.matrix.sizes, ["24", "25", "26", "27", "28", "29", "30", "32", "34", "36", "38", "40", "42", "44", "46", "48", "50", "52"]);
   assert.deepEqual(secondaryTrousers.sizes, secondaryTrousers.matrix.sizes);
   assert.equal(secondaryTrousers.matrix.lengths.length * secondaryTrousers.matrix.sizes.length, 252);
-  assert.equal(secondaryTrousers.surchargeRules, "32+=0,40=10,41.5+=20,43+=30");
+  assert.equal(secondaryTrousers.surchargeRules, "32+=0,40=10,41.5=20,42=20,43+=30");
 });
 
 test("provides the agreed skirt length by chest-width matrix", () => {
@@ -204,6 +205,8 @@ test("provides the agreed skirt length by chest-width matrix", () => {
     lengths: ["36", "38", "40", "42", "44"],
     sizes: ["36", "38", "40", "42", "44", "46"],
   });
+  assert.equal(skirt.surchargeRules, SKIRT_CHEST_SURCHARGE_RULES);
+  assert.equal(skirt.surchargeRules, "36+=0,40=10,42=20,44+=30");
   assert.equal(parseProductSizeMatrix(skirt.matrix.lengths.join(","), skirt.matrix.sizes.join(",")).combinations.length, 30);
 });
 
