@@ -48,7 +48,6 @@ const productIdentity = (product) => {
     || (/^(?:全年|四季|兩季通用)/.test(name) ? "all" : "");
   const nameKey = name
     .replace(/^(?:Boy[`'’]s\s*&\s*Girl[`'’]s|男生|女生|男女生)\s*[-–—:：]?\s*/i, "")
-    .replace(/[（(【][^）)】]*[）)】]/g, "")
     .replace(/[／/、，,\s]/g, "")
     .toLowerCase();
   return {

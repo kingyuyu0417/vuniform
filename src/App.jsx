@@ -250,7 +250,6 @@ const productIdentityParts = (school, name, branchId = "", explicitGender = "", 
   }[explicitGender] || (genderMatch ? genderMatch[1] : "");
   const cleanedName = cleaned
     .replace(/^(?:男生|女生|男女生)\s*[-–—:：]?\s*/, "")
-    .replace(/[（(][^）)]*[）)]/g, "")
     .replace(/[／/、，,\s]/g, "")
     .trim();
   const season = explicitSeason

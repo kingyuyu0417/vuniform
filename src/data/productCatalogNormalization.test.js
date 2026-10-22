@@ -63,15 +63,15 @@ test("shows conflicts for product names that the catalog identity treats as the 
       school: "測試小學",
       gender: "unisex",
       season: "winter",
-      name: "冬季 男女生 校裙（款式甲）",
+      name: "男女生 校裙（款式甲）",
       sizes: [{ size: "24", price: 100 }],
     },
     {
       id: "winter-unisex-variant",
       school: "測試小學",
-      gender: "unisex",
+      gender: "girls",
       season: "winter",
-      name: "冬季 男女生 校裙（款式乙）",
+      name: "女生 校裙（款式甲）",
       sizes: [{ size: "24", price: 110 }],
     },
     {
@@ -79,7 +79,7 @@ test("shows conflicts for product names that the catalog identity treats as the 
       school: "測試小學",
       gender: "unisex",
       season: "summer",
-      name: "夏季 男女生 校裙（款式丙）",
+      name: "男女生 校裙（款式丙）",
       sizes: [{ size: "24", price: 120 }],
     },
   ];
@@ -123,4 +123,28 @@ test("keeps same-name conflicts separate when gender or season is incompatible",
   ];
 
   assert.deepEqual(findProductCatalogReviewGroups(products), []);
+});
+
+test("does not flag different parenthetical product styles as price conflicts", () => {
+  const products = [
+    {
+      id: "cardigan-long",
+      school: "蘇浙小學",
+      gender: "unisex",
+      season: "all",
+      name: "兩季通用 男女通用 冷衫（開胸長袖）",
+      sizes: [{ size: "14", price: 42 }],
+    },
+    {
+      id: "vest-v-neck",
+      school: "蘇浙小學",
+      gender: "unisex",
+      season: "all",
+      name: "兩季通用 男女通用 冷衫（V領背心）",
+      sizes: [{ size: "14", price: 25 }],
+    },
+  ];
+
+  assert.deepEqual(findProductCatalogReviewGroups(products), []);
+  assert.deepEqual(removeProductCatalogReviewProducts(products, findProductCatalogReviewGroups(products)).productIds, []);
 });
