@@ -8008,7 +8008,7 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
   const comparisonPeriod = canViewAllDates && !comparisonSearchActive
     ? findPreviousSalesPeriod(
       branchOrders.filter((order) => outletMatches(order) && (!schoolFilter || order.school === schoolFilter)),
-      effectiveDate,
+    effectiveEndDate,
       7,
     )
     : null;
