@@ -7,9 +7,11 @@ import {
   getProductStyleLabel,
   getProductSelectorOptions,
   normalizeProductOptions,
+  parseProductDimensionPairs,
   parseProductSizeLabels,
   PRIMARY_PRODUCT_CATEGORIES,
   PRODUCT_SEASON_OPTIONS,
+  splitProductSizePairs,
 } from "./primaryProductTemplates.js";
 
 test("defines the agreed seasonal and primary-school product categories", () => {
@@ -123,6 +125,11 @@ test("matches shirt size tables by school level, sleeve length, gender, and coll
   assert.equal(longPoint.sizes.length, 32);
   assert.equal(longPoint.sizes[4], "12.5×24*");
   assert.equal(longPoint.sizes.at(-1), "21.5×36**");
+  const pairedLongPointSizes = splitProductSizePairs(longPoint.sizes);
+  assert.equal(pairedLongPointSizes.lengths.length, 32);
+  assert.equal(pairedLongPointSizes.lengths[4], "12.5");
+  assert.equal(pairedLongPointSizes.sizes[4], "24*");
+  assert.equal(pairedLongPointSizes.sizes.at(-1), "36**");
 
   assert.deepEqual(getPrimaryProductSizePreset({
     schoolLevel: "小學",
@@ -193,4 +200,21 @@ test("supports custom and blank shirt collar labels", () => {
 
 test("parses editable comma-separated, newline-separated, and duplicate size labels", () => {
   assert.deepEqual(parseProductSizeLabels("24，26\n28、裁碼, 26"), ["24", "26", "28", "裁碼"]);
+});
+
+test("splits combined shirt sizes into paired collar and sleeve dimensions", () => {
+  assert.deepEqual(splitProductSizePairs(["11.5×22", "12×23", "12.5×24*", "21.5×36**"]), {
+    lengths: ["11.5", "12", "12.5", "21.5"],
+    sizes: ["22", "23", "24*", "36**"],
+  });
+  assert.equal(splitProductSizePairs(["11.5×22", "invalid"]), null);
+});
+
+test("pairs separately entered dimensions in order and rejects mismatched counts", () => {
+  assert.deepEqual(parseProductDimensionPairs("11.5, 12\n12.5", "22, 23，24*"), [
+    { length: "11.5", size: "22", price: null },
+    { length: "12", size: "23", price: null },
+    { length: "12.5", size: "24*", price: null },
+  ]);
+  assert.equal(parseProductDimensionPairs("11.5, 12", "22"), null);
 });

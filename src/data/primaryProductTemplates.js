@@ -277,3 +277,22 @@ export const parseProductSizeLabels = (value) => [...new Set(
     .map((size) => size.trim())
     .filter(Boolean),
 )];
+
+export const splitProductSizePairs = (labels = []) => {
+  const pairs = labels.map((label) => {
+    const match = String(label).match(/^\s*([^×xX]+?)\s*[×xX]\s*(.+?)\s*$/);
+    return match ? { length: match[1].trim(), size: match[2].trim() } : null;
+  });
+  if (!pairs.length || pairs.some((pair) => !pair?.length || !pair?.size)) return null;
+  return {
+    lengths: pairs.map((pair) => pair.length),
+    sizes: pairs.map((pair) => pair.size),
+  };
+};
+
+export const parseProductDimensionPairs = (lengthInput, sizeInput) => {
+  const lengths = String(lengthInput || "").split(/[,\n，、]+/).map((value) => value.trim()).filter(Boolean);
+  const sizes = String(sizeInput || "").split(/[,\n，、]+/).map((value) => value.trim()).filter(Boolean);
+  if (!lengths.length || lengths.length !== sizes.length) return null;
+  return lengths.map((length, index) => ({ length, size: sizes[index], price: null }));
+};
