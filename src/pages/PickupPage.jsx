@@ -3,6 +3,7 @@ import { PackageCheck, Zap } from "lucide-react";
 import { ORDER_STATUS, QUEUE_MANAGEMENT_SERVICE_KEY, QUEUE_SERVICE, isQueueOrderToday } from "../services/queueOrderService";
 import { supabase, isSupabaseAuthEnabled, isSupabaseConfigured } from "../supabaseClient";
 import { lengthDimensionLabel, sizeDimensionLabel } from "../data/productDimensions.js";
+import { productDisplayName } from "../data/productDisplayName.js";
 
 const statusLabel = {
   [ORDER_STATUS.PENDING]: "排隊中",
@@ -188,7 +189,7 @@ export default function PickupPage({ currentSchoolId = "" }) {
             <div style={styles.itemsWrap}>
               {getOrderItems(order).map((item, index) => (
                 <div key={`${item.product_name}-${item.size}-${index}`} style={styles.itemRow}>
-                  <span>{item.product_name}</span>
+                  <span>{productDisplayName(item.product_name)}</span>
                   <span>
                     {item.length && lengthDimensionLabel({ name: item.product_name })
                       ? `${lengthDimensionLabel({ name: item.product_name })} ${item.length} × `

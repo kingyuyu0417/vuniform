@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ORDER_STATUS } from "../services/queueOrderService";
 import { isSupabaseConfigured, supabase } from "../supabaseClient";
+import { productDisplayName } from "../data/productDisplayName.js";
 
 const paymentMethods = [
   { id: "cash", label: "現金" },
@@ -261,7 +262,7 @@ export default function CashierVerifyPage({ currentSchoolId = "", products = [],
             <div style={{ fontSize: 12, fontWeight: 600, color: "#45515F", marginBottom: 8 }}>商品清單：</div>
             {selectedOrder.items.map((item, idx) => (
               <div key={idx} style={{ fontSize: 11, color: "#66717D", marginTop: 4, display: "flex", justifyContent: "space-between" }}>
-                <span>{item.productName} / {item.size} × {item.quantity}</span>
+                <span>{productDisplayName(item.productName)} / {item.size} × {item.quantity}</span>
                 <span>${item.price * item.quantity}</span>
               </div>
             ))}

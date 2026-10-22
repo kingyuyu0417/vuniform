@@ -12,6 +12,7 @@ import { availableFeatureIds, getDisabledQueueRedirect, QUEUE_FEATURES_ENABLED }
 import { dimensionLabels, lengthDimensionLabel, sizeDimensionLabel } from "./data/productDimensions.js";
 import { noticeTextFromDocx } from "./data/docxText.js";
 import { cleanProductName } from "./data/productNames.js";
+import { productDisplayName } from "./data/productDisplayName.js";
 const CustomerCheckinPage = lazy(() => import("./pages/CustomerCheckinPage"));
 const ManualPickupCallPage = lazy(() => import("./pages/ManualPickupCallPage"));
 const FittingPage = lazy(() => import("./pages/FittingPage"));
@@ -271,12 +272,6 @@ const SCHOOL_NAME_ALIASES = {
   "保良局董玉梯紀念中學": "保良局董玉娣中學",
 };
 const canonicalSchoolName = (name) => SCHOOL_NAME_ALIASES[name] || name;
-const displayProductName = (name) => name
-  .replace(/(?:【)?(?:男生|女生|男女生)(?:】)?\s*[-–—:：]?\s*/g, "")
-  .replace(/\b(?:Boy|Girl)[`'’]s\b\s*[-–—:：]?\s*/gi, "")
-  .replace(/\s+/g, " ")
-  .replace(/校\s+褸/g, "校褸")
-  .trim();
 const genderOf = (product) => {
   const gender = getProductGender(product);
   if (gender === "boys") return "男裝";
@@ -5172,7 +5167,7 @@ function SaleTab({
               <div style={{ color: "#166534", fontSize: 12, fontWeight: 800, marginBottom: 6 }}>已選退回貨品（{directExchangeItems.length}款）</div>
               {directExchangeItems.map((item) => (
                 <div key={`${item.productId}-${item.size}-${item.length}`} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, padding: "4px 0", borderBottom: "1px solid #DCFCE7" }}>
-                  <span>{displayProductName(item.name)}（{sizeLabel(item)}）× {item.qty}{productUnit(item.name, item.size)}；抵扣 {fmt(item.price * item.qty)}</span>
+                  <span>{productDisplayName(item.name)}（{sizeLabel(item)}）× {item.qty}{productUnit(item.name, item.size)}；抵扣 {fmt(item.price * item.qty)}</span>
                   <button className="pos-btn" onClick={() => setDirectExchangeItems((current) => current.filter((entry) => entry !== item))} style={{ padding: "2px 6px", background: "transparent", color: "#166534", fontSize: 11 }}>移除</button>
                 </div>
               ))}
@@ -5281,7 +5276,7 @@ function SaleTab({
                       });
                     }}
                   />
-                  <span>{item.name}（{sizeLabel(item)}）× {item.qty}{productUnit(item.name, item.size)}；尚可退 {remaining}{productUnit(item.name, item.size)}</span>
+                  <span>{productDisplayName(item.name)}（{sizeLabel(item)}）× {item.qty}{productUnit(item.name, item.size)}；尚可退 {remaining}{productUnit(item.name, item.size)}</span>
                 </label>
                 {selected && (
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, paddingLeft: 24 }}>
@@ -5345,14 +5340,14 @@ function SaleTab({
             <div style={{ marginTop: 14, fontWeight: 700, color: "#9A3412" }}>退回貨品</div>
             {returnedCartItems.map((item, index) => (
               <div key={`return-${item.key || index}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 6, fontSize: 14 }}>
-                <span>{item.name}（{sizeLabel(item)}）× {item.qty}</span>
+                <span>{productDisplayName(item.name)}（{sizeLabel(item)}）× {item.qty}</span>
                 <span>−{fmt(Math.abs(item.lineTotal))}</span>
               </div>
             ))}
             <div style={{ marginTop: 14, fontWeight: 700, color: "#166534" }}>換入貨品</div>
             {replacementCartItems.length > 0 ? replacementCartItems.map((item, index) => (
               <div key={`replacement-${item.key || index}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 6, fontSize: 14 }}>
-                <span>{item.name}（{sizeLabel(item)}）× {item.qty}</span>
+                <span>{productDisplayName(item.name)}（{sizeLabel(item)}）× {item.qty}</span>
                 <span>{fmt(Math.abs(item.lineTotal))}</span>
               </div>
             )) : <div style={{ marginTop: 6, color: "#64748B", fontSize: 13 }}>沒有換入貨品</div>}
@@ -5491,7 +5486,7 @@ function SaleTab({
                 textAlign: "left",
               }}
             >
-              {displayProductName(p.name)}
+              {productDisplayName(p.name)}
             </button>
           ))}
         </div>
@@ -5518,7 +5513,7 @@ function SaleTab({
             return product ? (
               <div>
                 <div style={{ fontSize: 11, color: "#64748B", marginBottom: 3 }}>選擇商品規格</div>
-                <div id="sale-product-picker-title" style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.35, color: "#1F3A5F", overflowWrap: "anywhere" }}>{displayProductName(product.name)}</div>
+                <div id="sale-product-picker-title" style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.35, color: "#1F3A5F", overflowWrap: "anywhere" }}>{productDisplayName(product.name)}</div>
               </div>
             ) : null;
           })()}
@@ -5535,7 +5530,7 @@ function SaleTab({
                   <div style={{ background: "#EAF4FF", border: "1px solid #B7D4F2", borderRadius: 12, padding: 14, marginBottom: 12 }}>
                     <div style={{ color: "#1F3A5F", fontSize: 14, fontWeight: 800 }}>需要購買數量</div>
                     <div style={{ color: "#64748B", fontSize: 12, marginTop: 4 }}>
-                      {displayProductName(quantityPrompt.product.name)}（{sizeLabel(quantityPrompt.size)}）
+                      {productDisplayName(quantityPrompt.product.name)}（{sizeLabel(quantityPrompt.size)}）
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 12 }}>
                       {[1, 2, 3].map((quantity) => (
@@ -5808,7 +5803,7 @@ function SaleTab({
             </div>
             <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: "#FFF7ED", fontSize: 13 }}>
               <div>上一張單：#{String(possibleDuplicateOrder.id || "").toUpperCase()} · {possibleDuplicateOrder.time || ""}</div>
-              <div style={{ marginTop: 4 }}>{(possibleDuplicateOrder.items || []).map((item) => `${item.name}（${sizeLabel(item)}）×${item.qty}`).join("、")}</div>
+              <div style={{ marginTop: 4 }}>{(possibleDuplicateOrder.items || []).map((item) => `${productDisplayName(item.name)}（${sizeLabel(item)}）×${item.qty}`).join("、")}</div>
               <strong style={{ display: "block", marginTop: 5 }}>金額：{fmt(possibleDuplicateOrder.total)}</strong>
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
@@ -5973,7 +5968,7 @@ function DirectExchangeProductPicker({
               {product ? "選擇退回規格" : "選擇退回款式"}
             </div>
             <div id="direct-exchange-picker-title" style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.35, color: "#1F3A5F", overflowWrap: "anywhere" }}>
-              {product ? displayProductName(product.name) : "無原單退換"}
+              {product ? productDisplayName(product.name) : "無原單退換"}
             </div>
           </div>
           <button type="button" className="pos-btn" onClick={onClose} aria-label="關閉退回貨品選擇" style={{ width: 40, height: 40, flexShrink: 0, display: "grid", placeItems: "center", borderRadius: 10, background: "#F1F5F9", border: "1px solid #E2E8F0", color: "#334155" }}>
@@ -5994,7 +5989,7 @@ function DirectExchangeProductPicker({
                   onClick={() => onSelectProduct(item.id)}
                   style={{ padding: "12px 10px", borderRadius: 10, background: productGenderBackground(item), color: "#222", border: "1px solid #ddd", fontSize: 16, fontWeight: 700, textAlign: "left" }}
                 >
-                  {displayProductName(item.name)}
+                  {productDisplayName(item.name)}
                 </button>
               ))}
             </div>

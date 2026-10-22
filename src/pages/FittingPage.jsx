@@ -13,6 +13,7 @@ import { queueOrderService, ORDER_STATUS } from "../services/queueOrderService";
 import { supabase, isSupabaseConfigured } from "../supabaseClient";
 import { productGenderBackground } from "../data/productGender.js";
 import { lengthDimensionLabel, sizeDimensionLabel } from "../data/productDimensions.js";
+import { productDisplayName } from "../data/productDisplayName.js";
 import { findQueueOrders, normalizeQueueLookup } from "../data/queueOrderLookup.js";
 import { getFittingDraft, removeFittingDraft, setFittingDraft } from "../data/fittingDrafts.js";
 import { getActiveFittingOrder } from "../data/fittingOrderState.js";
@@ -52,13 +53,6 @@ const defaultProducts = [
 ];
 
 const emptySelection = { productId: "", size: "", length: "", quantity: 1 };
-
-const displayProductName = (name = "") => name
-  .replace(/(?:【)?(?:男生|女生|男女生)(?:】)?\s*[-–—:：]?\s*/g, "")
-  .replace(/\b(?:Boy|Girl)[`'’]s\b\s*[-–—:：]?\s*/gi, "")
-  .replace(/\s+/g, " ")
-  .replace(/校\s+褸/g, "校褸")
-  .trim();
 
 const hasLengthOptions = (product) => (product?.sizes || []).some((size) => typeof size === "object" && size.length);
 const formatPrice = (price) => `$${Math.round(Number(price)).toLocaleString("en-HK")}`;
@@ -637,7 +631,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
               return (
                 <div key={`${item.productId}-${item.length || ""}-${item.size}-${index}`} style={styles.cartRow}>
                   <div style={styles.cartRowInfo}>
-                    <div style={styles.cartRowName}>{displayProductName(selectedProduct?.name || "未知款式")}</div>
+                    <div style={styles.cartRowName}>{productDisplayName(selectedProduct?.name || "未知款式")}</div>
                     <div style={styles.cartRowMeta}>
                       {item.length ? `${lengthDimensionLabel(selectedProduct)} ${item.length} · ` : ""}
                       {item.isTailored || item.is_tailored ? "裁碼" : sizeDimensionLabel(selectedProduct)} {item.size}
@@ -688,7 +682,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
                           borderColor: "#ddd",
                         }}
                       >
-                        {displayProductName(product.name)}
+                        {productDisplayName(product.name)}
                       </button>
                     ))}
                   </div>
@@ -710,7 +704,7 @@ export default function FittingPage({ currentSchoolId = "", products = defaultPr
                     </button>
                     <div style={styles.selectedProduct}>
                       <div style={styles.selectedProductLabel}>目前選擇款式</div>
-                      <div style={styles.selectedProductName}>{displayProductName(selectedProduct?.name || "未知款式")}</div>
+                      <div style={styles.selectedProductName}>{productDisplayName(selectedProduct?.name || "未知款式")}</div>
                     </div>
                     {item.size && item.quantityConfirmed === false ? (
                       <div style={styles.quantityPrompt}>
