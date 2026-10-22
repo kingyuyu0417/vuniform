@@ -34,12 +34,33 @@ const SIZE_TERMINALS = [
 const genderPrefix = /^(男生|女生|男女生)\s*[-–—:：]?\s*/;
 const englishGroupPrefix = /^(Boy[`'’]s\s*&\s*Girl[`'’]s)\s*/i;
 const normalizeNameKey = (name) => String(name || "").replace(/[\s\-–—:：]/g, "").toLowerCase();
-const productGender = (name) => String(name || "").match(genderPrefix)?.[1]
-  || (englishGroupPrefix.test(String(name || "")) ? "unisex" : "");
-const productIdentityName = (name) => String(name || "")
-  .replace(/^(?:Boy[`'’]s\s*&\s*Girl[`'’]s|男生|女生|男女生)\s*[-–—:：]?\s*/i, "")
-  .replace(/[／/、，,\s\-–—:：]/g, "")
-  .toLowerCase();
+const productIdentity = (product) => {
+  const name = String(product.name || "");
+  const genderLabel = name.match(genderPrefix)?.[1];
+  const gender = ["boys", "girls", "unisex"].includes(product.gender)
+    ? product.gender
+    : genderLabel === "男生" ? "boys"
+      : genderLabel === "女生" ? "girls"
+        : genderLabel === "男女生" || englishGroupPrefix.test(name) ? "unisex" : "";
+  const season = product.season
+    || (/^(?:夏季|夏裝)/.test(name) ? "summer" : "")
+    || (/^(?:冬季|冬裝)/.test(name) ? "winter" : "")
+    || (/^(?:全年|四季|兩季通用)/.test(name) ? "all" : "");
+  const nameKey = name
+    .replace(/^(?:Boy[`'’]s\s*&\s*Girl[`'’]s|男生|女生|男女生)\s*[-–—:：]?\s*/i, "")
+    .replace(/[（(【][^）)】]*[）)】]/g, "")
+    .replace(/[／/、，,\s]/g, "")
+    .toLowerCase();
+  return {
+    key: `${product.school || ""}\u0000${product.branch_id || product.branchId || ""}\u0000${nameKey}`,
+    gender,
+    season,
+  };
+};
+const compatibleProductIdentity = (first, second) => (
+  (!first.gender || !second.gender || first.gender === second.gender || first.gender === "unisex" || second.gender === "unisex")
+  && (!first.season || !second.season || first.season === second.season)
+);
 
 const withPrefix = (name, prefix) => {
   const cleanName = String(name || "").replace(/^[-–—:：\s]+/, "").trim();
@@ -164,11 +185,12 @@ export const splitCompositeImportRows = (rows = []) => {
 export const findProductCatalogReviewGroups = (products = []) => {
   const families = new Map();
   products.forEach((product) => {
-    const nameKey = productIdentityName(product.name);
-    const familyKey = `${product.school || ""}\u0000${product.branch_id || ""}\u0000${productGender(product.name)}\u0000${nameKey}`;
-    if (!families.has(familyKey)) families.set(familyKey, { id: familyKey, school: product.school || "", products: [] });
+    const identity = productIdentity(product);
+    const familyKey = identity.key;
+    if (!families.has(familyKey)) families.set(familyKey, { id: familyKey, school: product.school || "", products: [], identities: new Map() });
     const family = families.get(familyKey);
     family.products.push(product);
+    family.identities.set(product.id, identity);
   });
 
   return [...families.values()].flatMap((family) => {
@@ -189,24 +211,48 @@ export const findProductCatalogReviewGroups = (products = []) => {
       if (!entriesBySize.has(key)) entriesBySize.set(key, []);
       entriesBySize.get(key).push(entry);
     });
+    const conflictingProductIds = new Set();
     const conflicts = [...pricesBySize].flatMap(([key, prices]) => {
       if (prices.size < 2) return [];
       const matchingEntries = entriesBySize.get(key);
+      const conflictingEntries = new Set();
+      matchingEntries.forEach((entry, index) => {
+        matchingEntries.slice(index + 1).forEach((otherEntry) => {
+          if (
+            Number(entry.size.price) !== Number(otherEntry.size.price)
+            && Number.isFinite(Number(entry.size.price))
+            && Number.isFinite(Number(otherEntry.size.price))
+            && compatibleProductIdentity(
+              family.identities.get(entry.productId) || {},
+              family.identities.get(otherEntry.productId) || {},
+            )
+          ) {
+            conflictingEntries.add(entry);
+            conflictingEntries.add(otherEntry);
+          }
+        });
+      });
+      if (conflictingEntries.size === 0) return [];
+      const variants = new Map();
+      conflictingEntries.forEach((entry) => {
+        conflictingProductIds.add(entry.productId);
+        variants.set(`${entry.productId}\u0000${entry.size.price}`, {
+          productId: entry.productId,
+          productName: entry.sourceName,
+          price: Number(entry.size.price),
+        });
+      });
       return [{
         size: matchingEntries[0].size,
-        variants: matchingEntries
-          .filter((entry) => Number.isFinite(Number(entry.size.price)))
-          .map((entry) => ({
-            productId: entry.productId,
-            productName: entry.sourceName,
-            price: Number(entry.size.price),
-          })),
+        variants: [...variants.values()],
       }];
     });
     if (!conflicts.length) return [];
 
     return [{
-      ...family,
+      id: family.id,
+      school: family.school,
+      products: family.products.filter((product) => conflictingProductIds.has(product.id)),
       entries,
       conflicts,
     }];

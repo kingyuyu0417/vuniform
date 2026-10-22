@@ -2818,7 +2818,10 @@ export default function UniformPOS() {
   };
 
   const persistProductCatalogConsolidation = async (sourceProducts) => {
-    const unresolvedCount = countUnresolvedPriceConflictProducts(sourceProducts);
+    const unresolvedCount = removeProductCatalogReviewProducts(
+      sourceProducts,
+      findProductCatalogReviewGroups(sourceProducts),
+    ).removedCount;
     setProductsCatalogWarning(unresolvedCount
       ? `另有 ${unresolvedCount} 筆商品的相同尺碼有不同價格，系統無法判斷其款式，已保留原資料，請管理員核對後分開匯入。`
       : "");
