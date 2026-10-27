@@ -4541,6 +4541,8 @@ export default function UniformPOS() {
         .sale-size-button { min-height: 76px; }
         @media (max-width: 560px) {
           .pos-page-content { padding: 14px 14px calc(96px + env(safe-area-inset-bottom, 0px)); }
+          .pos-btn { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+          .pos-btn:active { transform: none; }
           .exchange-comparison-headings { display: none !important; }
           .exchange-comparison-row { grid-template-columns: minmax(0, 1fr) !important; gap: 8px !important; }
           .exchange-comparison-side { padding: 8px 10px !important; }
