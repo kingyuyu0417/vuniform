@@ -3839,7 +3839,9 @@ export default function UniformPOS() {
   const settlementDue = fullReplacementMode ? replacementSettlement.collectDue : cartTotal;
   const cartSourceMeta = cart.find((item) => item.sourceQueueNo || item.sourceGuestName) || {};
   const cashAmount = paymentMethod === "cash"
-    ? (cashReceived === "" ? (exchangeMode ? 0 : Math.max(0, settlementDue)) : Number(cashReceived || 0))
+    ? (cashReceived === ""
+      ? (exchangeMode && !fullReplacementMode ? Math.max(0, settlementDue) : exchangeMode ? 0 : Math.max(0, settlementDue))
+      : Number(cashReceived || 0))
     : Math.max(settlementDue, 0);
   const changeDue = calculateCashSettlement(settlementDue, cashAmount).changeDue;
   const refundDue = fullReplacementMode
@@ -3856,6 +3858,9 @@ export default function UniformPOS() {
       setStorageError("整單替換需要安全連線至正式交易資料庫，請檢查網絡後再試。");
       return;
     }
+    const recordedAdjustmentReason = exchangeMode && !fullReplacementMode
+      ? "更換尺碼"
+      : adjustmentReason;
     const conflictingProductIds = findUnresolvedPriceConflictProductIds(products);
     const priceIssues = cart.flatMap((item) => {
       if ((item.exchangeReturn && !item.untrackedExchange) || item.sourceOrderId) return [];
@@ -3892,7 +3897,9 @@ export default function UniformPOS() {
     }
     const now = new Date();
     const received = paymentMethod === "cash"
-      ? (cashReceived === "" ? (exchangeMode ? 0 : Math.max(0, settlementDue)) : Number(cashReceived || 0))
+      ? (cashReceived === ""
+        ? (exchangeMode && !fullReplacementMode ? Math.max(0, settlementDue) : exchangeMode ? 0 : Math.max(0, settlementDue))
+        : Number(cashReceived || 0))
       : Math.max(settlementDue, 0);
     const sourceMeta = cart.find((item) => item.sourceQueueNo || item.sourceGuestName) || {};
     const order = {
@@ -3917,7 +3924,7 @@ export default function UniformPOS() {
       cashReceived: received,
       changeDue: calculateCashSettlement(settlementDue, received).changeDue,
       refundDue,
-      adjustmentReason: exchangeMode || fullReplacementMode ? adjustmentReason : "",
+      adjustmentReason: exchangeMode || fullReplacementMode ? recordedAdjustmentReason : "",
       untrackedExchange: cart.some((item) => item.exchangeReturn && item.untrackedExchange),
       replacementSourceReceiptId: fullSaleReplacement?.id || "",
       replacementReason: fullReplacementMode ? adjustmentReason : "",
@@ -4926,6 +4933,7 @@ function SaleTab({
   const selectedProductData = productsById.get(selectedProduct);
   const exchangeSourceReceiptId = cart.find((item) => item.exchangeSourceReceiptId)?.exchangeSourceReceiptId || "";
   const fullReplacementMode = Boolean(fullSaleReplacement?.id);
+  const standardExchangeMode = exchangeMode && !fullReplacementMode;
   const replacementSettlement = fullReplacementMode
     ? getReplacementSettlement(fullSaleReplacement.total, cartTotal)
     : null;
@@ -5315,29 +5323,37 @@ function SaleTab({
           <div role="dialog" aria-modal="true" aria-labelledby="exchange-preview-title" style={{ width: "min(560px, 100%)", maxHeight: "85vh", overflowY: "auto", boxSizing: "border-box", padding: 18, borderRadius: 14, background: "#fff", boxShadow: "0 20px 50px rgba(15,23,42,0.25)" }}>
             <div id="exchange-preview-title" style={{ fontSize: 18, fontWeight: 800, color: "#1F3A5F" }}>{fullReplacementMode ? "整單替換確認" : "退換貨結帳預覽"}</div>
             <div style={{ marginTop: 6, color: "#64748B", fontSize: 13 }}>{untrackedExchangeMode ? "無原單退換：退回抵扣按目前學校目錄售價計算，並建立新單。" : `原單：#${fullSaleReplacement?.id || exchangeSourceReceiptId || "未連結"}`}</div>
-            <label style={{ display: "grid", gap: 6, marginTop: 12, fontSize: 13, fontWeight: 700 }}>
-              退換原因（必須記錄）
-              <select value={exchangeReason} onChange={(event) => setExchangeReason(event.target.value)} style={{ padding: 9, border: "1px solid #CBD5E1", borderRadius: 8, fontSize: 15 }}>
-                <option value="">請選擇原因</option>
-                <option value="尺碼不合">尺碼不合</option>
-                <option value="更換款式">更換款式</option>
-                <option value="貨品問題">貨品問題</option>
-                <option value="客人取消">客人取消</option>
-                <option value="原單輸入錯誤">原單輸入錯誤</option>
-                <option value="其他">其他</option>
-              </select>
-            </label>
-            {exchangeReason === "其他" && (
-              <input
-                aria-label="其他退換原因"
-                value={exchangeReasonNote}
-                onChange={(event) => setExchangeReasonNote(event.target.value)}
-                maxLength={500}
-                placeholder="請填寫退換原因"
-                style={{ width: "100%", boxSizing: "border-box", marginTop: 8, padding: 9, border: "1px solid #CBD5E1", borderRadius: 8, fontSize: 15 }}
-              />
-            )}
-            {exchangeReason && <div style={{ color: "#475569", fontSize: 13 }}>記錄原因：{exchangeReason === "其他" ? `其他：${exchangeReasonNote.trim() || "（待填寫）"}` : exchangeReason}</div>}
+            {standardExchangeMode
+              ? <div style={{ marginTop: 12, padding: "9px 11px", borderRadius: 8, background: "#F1F5F9", color: "#475569", fontSize: 13 }}>
+                退換原因：更換尺碼
+              </div>
+              : (
+                <>
+                  <label style={{ display: "grid", gap: 6, marginTop: 12, fontSize: 13, fontWeight: 700 }}>
+                    退換原因（必須記錄）
+                    <select value={exchangeReason} onChange={(event) => setExchangeReason(event.target.value)} style={{ padding: 9, border: "1px solid #CBD5E1", borderRadius: 8, fontSize: 15 }}>
+                      <option value="">請選擇原因</option>
+                      <option value="尺碼不合">尺碼不合</option>
+                      <option value="更換款式">更換款式</option>
+                      <option value="貨品問題">貨品問題</option>
+                      <option value="客人取消">客人取消</option>
+                      <option value="原單輸入錯誤">原單輸入錯誤</option>
+                      <option value="其他">其他</option>
+                    </select>
+                  </label>
+                  {exchangeReason === "其他" && (
+                    <input
+                      aria-label="其他退換原因"
+                      value={exchangeReasonNote}
+                      onChange={(event) => setExchangeReasonNote(event.target.value)}
+                      maxLength={500}
+                      placeholder="請填寫退換原因"
+                      style={{ width: "100%", boxSizing: "border-box", marginTop: 8, padding: 9, border: "1px solid #CBD5E1", borderRadius: 8, fontSize: 15 }}
+                    />
+                  )}
+                  {exchangeReason && <div style={{ color: "#475569", fontSize: 13 }}>記錄原因：{exchangeReason === "其他" ? `其他：${exchangeReasonNote.trim() || "（待填寫）"}` : exchangeReason}</div>}
+                </>
+              )}
             {fullReplacementMode && (
               <div style={{ marginTop: 14, padding: 10, borderRadius: 8, background: "#FEF3C7", color: "#78350F", fontSize: 13 }}>
                 舊單將保留作廢稽核紀錄。新單總額 {fmt(cartTotal)}；原單總額 {fmt(fullSaleReplacement.total)}；{replacementSettlement.difference > 0 ? `需收差額 ${fmt(replacementSettlement.collectDue)}` : replacementSettlement.difference < 0 ? `需退差額 ${fmt(replacementSettlement.refundDue)}` : "無須收退款"}。
@@ -5369,7 +5385,7 @@ function SaleTab({
                 <span>{refundDue > 0 ? "退款方式" : "補款方式"}</span>
                 <strong>{PAYMENT_METHOD_LABELS[refundDue > 0 ? refundMethod : paymentMethod] || "現金"}</strong>
               </div>
-              {settlementMethod === "cash" && settlementDue > 0 && (
+              {settlementMethod === "cash" && settlementDue > 0 && !standardExchangeMode && (
                 <>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                     <span>現金交付</span><strong>{fmt(cashAmount)}</strong>
@@ -5381,7 +5397,7 @@ function SaleTab({
                 </>
               )}
             </div>
-            {settlementMethod === "cash" && settlementDue > 0 && (
+            {settlementMethod === "cash" && settlementDue > 0 && !standardExchangeMode && (
               <label style={{ display: "grid", gap: 6, marginTop: 12, fontSize: 13, fontWeight: 700 }}>
                 客人交付現金
                 <input
@@ -5404,9 +5420,11 @@ function SaleTab({
               <button
                 type="button"
                 className="pos-btn"
-                disabled={!exchangeReason || (exchangeReason === "其他" && !exchangeReasonNote.trim()) || cashShortfall > 0}
+                disabled={(!standardExchangeMode && (!exchangeReason || (exchangeReason === "其他" && !exchangeReasonNote.trim()))) || cashShortfall > 0}
                 onClick={() => {
-                  const reason = exchangeReason === "其他" ? `其他：${exchangeReasonNote.trim()}` : exchangeReason;
+                  const reason = standardExchangeMode
+                    ? "更換尺碼"
+                    : exchangeReason === "其他" ? `其他：${exchangeReasonNote.trim()}` : exchangeReason;
                   requestCheckout(reason);
                 }}
                 style={{
@@ -5414,7 +5432,7 @@ function SaleTab({
                   padding: 11,
                   borderRadius: 9,
                   border: 0,
-                  background: !exchangeReason || (exchangeReason === "其他" && !exchangeReasonNote.trim()) || cashShortfall > 0 ? "#9CA3AF" : "#1F3A5F",
+                  background: (!standardExchangeMode && (!exchangeReason || (exchangeReason === "其他" && !exchangeReasonNote.trim()))) || cashShortfall > 0 ? "#9CA3AF" : "#1F3A5F",
                   color: "#fff",
                   fontWeight: 700,
                   opacity: cashShortfall > 0 ? 0.7 : 1,
@@ -5721,7 +5739,7 @@ function SaleTab({
               </select>
             </div>
 
-            {settlementMethod === "cash" && !(exchangeMode && refundDue > 0) && settlementDue > 0 && (
+            {settlementMethod === "cash" && !standardExchangeMode && !(exchangeMode && refundDue > 0) && settlementDue > 0 && (
             <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, paddingTop: 10, borderTop: "1px solid #E5E5E0" }}>
               <label htmlFor="cash-received" style={{ fontSize: 17, fontWeight: 600, color: "#45515F" }}>{exchangeMode || fullReplacementMode ? "客人交付現金" : "實收現金"}</label>
               <input

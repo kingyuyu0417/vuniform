@@ -4,6 +4,7 @@ import { calculateCashSettlement, findPossibleDuplicateSale, summarizeDailyClose
 
 test("calculates cash change and outstanding amount without reversing the signs", () => {
   assert.deepEqual(calculateCashSettlement(80, 100), { changeDue: 20, shortfall: 0 });
+  assert.deepEqual(calculateCashSettlement(20, 20), { changeDue: 0, shortfall: 0 });
   assert.deepEqual(calculateCashSettlement(80, 60), { changeDue: 0, shortfall: 20 });
   assert.deepEqual(calculateCashSettlement(-20, 0), { changeDue: 0, shortfall: 0 });
 });
