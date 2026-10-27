@@ -1,7 +1,6 @@
 import React, { lazy, Suspense, useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import Papa from "papaparse";
-import qrcode from "qrcode-generator";
 import { useLocation, useNavigate, Routes, Route, Navigate } from "react-router-dom";
 import { Plus, Minus, Trash2, Printer, Bluetooth, ChevronDown, ChevronUp, ChevronLeft, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown, X, ShoppingCart, Settings, ClipboardList, Check, AlertCircle, Upload, Download, School, Users, Eye, EyeOff, MapPin, GraduationCap, Search, QrCode, House, Radio } from "lucide-react";
 import { isSupabaseConfigured, isSupabaseAuthEnabled, supabase, createPasswordVerificationClient } from "./supabaseClient";
@@ -4567,17 +4566,21 @@ export default function UniformPOS() {
           .exchange-comparison-item-controls .pos-btn { width: 40px !important; height: 40px !important; }
           .receipt-modal-overlay {
             align-items: flex-start !important;
-            overflow-y: auto;
+            overflow: hidden;
             padding: max(8px, env(safe-area-inset-top)) 10px calc(80px + env(safe-area-inset-bottom, 0px)) !important;
+            overscroll-behavior-y: contain;
+          }
+          .receipt-modal-panel {
+            max-height: calc(100vh - max(8px, env(safe-area-inset-top)) - 80px - env(safe-area-inset-bottom, 0px)) !important;
+            max-height: calc(100dvh - max(8px, env(safe-area-inset-top)) - 80px - env(safe-area-inset-bottom, 0px)) !important;
+            padding: 16px !important;
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
             -webkit-overflow-scrolling: touch;
             overscroll-behavior-y: contain;
             touch-action: pan-y;
-          }
-          .receipt-modal-panel {
-            max-height: none !important;
-            padding: 16px !important;
-            overflow: visible !important;
-            flex: 0 0 auto;
+            min-height: 0;
+            flex: 0 1 auto;
             margin: 0 auto;
             position: relative;
             isolation: isolate;
@@ -9346,33 +9349,44 @@ function RecordsTab({ salesLog, loadOrdersForDateRange, loadHistoricalSales, rec
 
 function ReceiptQR({ order, language = "zh" }) {
   const [status, setStatus] = useState("loading");
-  const [modules, setModules] = useState(null);
+  const [qrCode, setQrCode] = useState(null);
   const qrText = JSON.stringify(createCustomerReceiptOrder(order));
 
   useEffect(() => {
     let cancelled = false;
+    let worker;
     setStatus("loading");
-    setModules(null);
+    setQrCode(null);
     const createQr = async () => {
       try {
         const receiptUrl = await buildReceiptUrl(order, language);
-        let qr;
-        try {
-          qr = qrcode(0, "M");
-          qr.addData(receiptUrl);
-          qr.make();
-        } catch {
-          qr = qrcode(0, "L");
-          qr.addData(receiptUrl);
-          qr.make();
-        }
-        const count = qr.getModuleCount();
-        const grid = Array.from({ length: count }, (_, row) =>
-          Array.from({ length: count }, (_, column) => qr.isDark(row, column))
-        );
         if (cancelled) return;
-        setModules(grid);
-        setStatus("ok");
+        worker = new Worker(new URL("./receiptQrWorker.js", import.meta.url), { type: "module" });
+        worker.onmessage = ({ data }) => {
+          if (cancelled) return;
+          if (data?.error) {
+            console.error("QR產生失敗", new Error(data.error));
+            setStatus("error");
+            worker.terminate();
+            return;
+          }
+          if (typeof data?.code?.path !== "string" || !Number.isInteger(data.code.moduleCount)) {
+            console.error("QR產生失敗", new Error("QR worker returned invalid code data."));
+            setStatus("error");
+            worker.terminate();
+            return;
+          }
+          setQrCode(data.code);
+          setStatus("ok");
+          worker.terminate();
+        };
+        worker.onerror = (error) => {
+          if (cancelled) return;
+          console.error("QR產生失敗", error);
+          setStatus("error");
+          worker.terminate();
+        };
+        worker.postMessage(receiptUrl);
       } catch (error) {
         if (cancelled) return;
         console.error("QR產生失敗", error);
@@ -9382,25 +9396,12 @@ function ReceiptQR({ order, language = "zh" }) {
     createQr();
     return () => {
       cancelled = true;
+      worker?.terminate();
     };
   }, [qrText, language]);
 
   const size = 240;
   const quietZone = 4;
-  const moduleCount = modules?.length || 0;
-  const qrPath = modules ? modules.flatMap((row, rowIndex) => {
-    const segments = [];
-    for (let column = 0; column < row.length;) {
-      if (!row[column]) {
-        column += 1;
-        continue;
-      }
-      const start = column;
-      while (column < row.length && row[column]) column += 1;
-      segments.push(`M${start + quietZone} ${rowIndex + quietZone}h${column - start}v1h-${column - start}z`);
-    }
-    return segments;
-  }).join("") : "";
 
   return (
     <div
@@ -9439,17 +9440,17 @@ function ReceiptQR({ order, language = "zh" }) {
           </div>
         )}
         {status === "loading" && <div style={{ fontSize: 11, color: "#999" }}>{language === "en" ? "Generating…" : "產生緊…"}</div>}
-        {status === "ok" && modules && (
+        {status === "ok" && qrCode && (
           <svg
             width={size}
             height={size}
-            viewBox={`0 0 ${moduleCount + quietZone * 2} ${moduleCount + quietZone * 2}`}
+            viewBox={`0 0 ${qrCode.moduleCount + quietZone * 2} ${qrCode.moduleCount + quietZone * 2}`}
             role="img"
             aria-label={language === "en" ? "Scannable customer receipt QR code" : "客人電子收據 QR Code"}
             shapeRendering="crispEdges"
             style={{ display: "block", background: "#fff" }}
           >
-            <path d={qrPath} fill="#000" />
+            <path d={qrCode.path} fill="#000" />
           </svg>
         )}
       </div>
