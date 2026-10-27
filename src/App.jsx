@@ -2801,6 +2801,23 @@ export default function UniformPOS() {
     }
   };
 
+  const loadHistoricalSales = () => {
+    if (!isSupabaseAuthEnabled || !session?.id || salesHistoryLoadSessionRef.current === session.id) return;
+    salesHistoryLoadSessionRef.current = session.id;
+    loadSecureOrders()
+      .then((orders) => {
+        if (Array.isArray(orders)) {
+          setSalesLog(orders);
+        } else {
+          salesHistoryLoadSessionRef.current = "";
+        }
+      })
+      .catch((error) => {
+        salesHistoryLoadSessionRef.current = "";
+        console.error("載入完整銷售記錄失敗", error);
+      });
+  };
+
   const loadSecureProducts = async () => {
     if (!supabase) return [];
     const queryProducts = (includeReceiptName) => supabase
@@ -2898,7 +2915,8 @@ export default function UniformPOS() {
     (async () => {
       try {
         const salesLoadKey = isSupabaseAuthEnabled ? session.id : "local";
-        if (salesHistoryLoadSessionRef.current !== salesLoadKey) {
+        const shouldLoadSalesHistory = !isSupabaseAuthEnabled || routeTab === "sale";
+        if (shouldLoadSalesHistory && salesHistoryLoadSessionRef.current !== salesLoadKey) {
           salesHistoryLoadSessionRef.current = salesLoadKey;
           const salesPromise = isSupabaseAuthEnabled
             ? loadSecureOrders()
@@ -2968,7 +2986,7 @@ export default function UniformPOS() {
     return () => {
       active = false;
     };
-  }, [authReady, session]);
+  }, [authReady, session, routeTab]);
 
   // 第一次加載時自動刷新以確保從 Supabase 加載產品
   useEffect(() => {
@@ -4652,6 +4670,7 @@ export default function UniformPOS() {
               <RecordsTab
                 salesLog={salesLog}
                 loadOrdersForDateRange={(dateRange) => loadSecureOrders("", dateRange)}
+                loadHistoricalSales={loadHistoricalSales}
                 recordsAccessKey={session?.id || ""}
                 branchId={session?.role === ROLES.ADMIN ? "" : session?.branchId || ""}
                 restrictToBranch={Boolean(session && session.role !== ROLES.ADMIN)}
@@ -4822,6 +4841,7 @@ export default function UniformPOS() {
                   <RecordsTab
                     salesLog={salesLog}
                     loadOrdersForDateRange={(dateRange) => loadSecureOrders("", dateRange)}
+                    loadHistoricalSales={loadHistoricalSales}
                     recordsAccessKey={session?.id || ""}
                     branchId={session?.role === ROLES.ADMIN ? "" : session?.branchId || ""}
                     restrictToBranch={Boolean(session && session.role !== ROLES.ADMIN)}
@@ -8525,7 +8545,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
   );
 }
 
-function RecordsTab({ salesLog, loadOrdersForDateRange, recordsAccessKey = "", branchId = "", restrictToBranch = false, selectedSchool = "", onReprint, canVoidSales = false, onVoidSale, canViewAllDates, canExportSales, schoolMeta = {}, products = [] }) {
+function RecordsTab({ salesLog, loadOrdersForDateRange, loadHistoricalSales, recordsAccessKey = "", branchId = "", restrictToBranch = false, selectedSchool = "", onReprint, canVoidSales = false, onVoidSale, canViewAllDates, canExportSales, schoolMeta = {}, products = [] }) {
   const [startDate, setStartDate] = useState(todayStr());
   const [endDate, setEndDate] = useState(todayStr());
   const [remoteDateOrders, setRemoteDateOrders] = useState(null);
@@ -8544,6 +8564,8 @@ function RecordsTab({ salesLog, loadOrdersForDateRange, recordsAccessKey = "", b
   const [salesExportError, setSalesExportError] = useState("");
   const loadOrdersForDateRangeRef = useRef(loadOrdersForDateRange);
   loadOrdersForDateRangeRef.current = loadOrdersForDateRange;
+  const loadHistoricalSalesRef = useRef(loadHistoricalSales);
+  loadHistoricalSalesRef.current = loadHistoricalSales;
   const today = todayStr();
   const effectiveStartDate = canViewAllDates ? startDate : today;
   const effectiveEndDate = canViewAllDates ? endDate : today;
@@ -8574,6 +8596,7 @@ function RecordsTab({ salesLog, loadOrdersForDateRange, recordsAccessKey = "", b
         if (!active) return;
         if (!Array.isArray(orders)) throw new Error("伺服器未能回傳銷售記錄。");
         setRemoteDateOrders(orders);
+        loadHistoricalSalesRef.current?.();
       })
       .catch((error) => {
         if (!active) return;
@@ -8637,7 +8660,7 @@ function RecordsTab({ salesLog, loadOrdersForDateRange, recordsAccessKey = "", b
   const availableSchools = Array.from(new Set(dateOrders.filter(outletMatches).map((o) => o.school).filter(Boolean)))
     .sort((a, b) => a.localeCompare(b, "zh-Hant"));
   const dayOrders = dateOrders.filter((o) => outletMatches(o) && (!schoolFilter || o.school === schoolFilter));
-  const closeoutScopeOrders = branchOrders.filter((order) =>
+  const closeoutScopeOrders = recordOrders.filter((order) =>
     outletMatches(order)
     && (!schoolFilter || order.school === schoolFilter)
   );
