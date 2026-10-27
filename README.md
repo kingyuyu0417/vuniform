@@ -66,6 +66,8 @@ Auth 模式的銷售交易會用 `create_order_idempotently` 一次寫入 `order
 
 每個尺碼可在商品管理輸入「兩件優惠總價」。結帳時，同款、同單價及同優惠總價的尺碼可混搭；每兩件套用一次優惠，奇數剩餘件按原價計算。退回優惠商品時會按原單及先前退貨重新計算退款。正式啟用前，請在 Supabase SQL Editor 先執行更新後的 `supabase/idempotent-sales-checkout.sql`，再執行 `supabase/replace-sales-order.sql`，然後部署前端；若缺少資料庫欄位，系統會阻止優惠結帳。部署後仍須在商品管理為適用商品尺碼設定優惠價，系統不會自行修改現有商品價格。
 
+若整單替換結帳顯示 `P0001: Replacement must stay in the original branch`，請管理員在 Supabase SQL Editor 重新執行 `supabase/replace-sales-order.sql`，更新替換 RPC。RPC 會先確認職員仍有權限處理原單分店，再以資料庫原單的分店欄位建立替換單；完成後重新載入銷售頁，保留原購物車及金額重試，不要另開新單。
+
 ## Auth 員工管理功能
 
 員工管理功能使用 Supabase Edge Function，service key 只放在 Supabase server-side secrets，不可放入 `.env.local`：

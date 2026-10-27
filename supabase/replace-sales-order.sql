@@ -35,6 +35,7 @@ declare
   source_branch_id text;
   source_voided_at timestamptz;
   source_void_reason text;
+  replacement_order_data jsonb := order_data;
   new_total integer := greatest(coalesce((order_data ->> 'total')::integer, 0), 0);
   expected_delta integer;
   requested_delta integer := coalesce((order_data ->> 'settlement_delta')::integer, 0);
@@ -115,9 +116,12 @@ begin
     raise exception 'Replacement must stay in the original school';
   end if;
 
-  if coalesce(order_data ->> 'branch_id', '') is distinct from coalesce(source_branch_id, '') then
-    raise exception 'Replacement must stay in the original branch';
-  end if;
+  replacement_order_data := jsonb_set(
+    coalesce(order_data, '{}'::jsonb),
+    '{branch_id}',
+    coalesce(to_jsonb(source_branch_id), 'null'::jsonb),
+    true
+  );
 
   if exists (
     select 1
@@ -157,7 +161,7 @@ begin
     raise exception 'Cash tender fields are not valid when no amount is collected';
   end if;
 
-  replacement_id := public.create_order_idempotently(order_data, p_checkout_key);
+  replacement_id := public.create_order_idempotently(replacement_order_data, p_checkout_key);
 
   if source_voided_at is not null then
     select o.id
