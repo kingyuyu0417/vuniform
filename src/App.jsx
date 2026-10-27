@@ -58,7 +58,7 @@ import { naturalSizeSort } from "./data/sizeSort";
 import { calculateMatrixPrices } from "./data/matrixPricing";
 import { canReplaceOrder, getReplacementBranchId, getReplacementSettlement } from "./data/orderReplacement";
 import { findProductForOrderItem } from "./data/orderProductMatching";
-import { mergeOrderUpdates } from "./data/orderSync";
+import { getOrderDateRangeBounds, mergeOrderUpdates } from "./data/orderSync";
 import { calculateCashSettlement, findPossibleDuplicateSale, isExchangeAdjustmentOrder, PAYMENT_METHOD_LABELS, PAYMENT_METHOD_LABELS_EN, summarizeDailyCloseout } from "./data/salesCloseout";
 import { encodeReceiptQrPayload } from "./data/receiptQrPayload";
 import {
@@ -2092,6 +2092,7 @@ export default function UniformPOS() {
   const productCatalogMigrationStateRef = useRef("idle");
   const ordersRealtimeActiveRef = useRef(false);
   const ordersRealtimeConnectedRef = useRef(false);
+  const salesHistoryLoadSessionRef = useRef("");
   const productsRef = useRef(products);
   const tabRef = useRef(tab);
   const productReceiptNameColumnAvailableRef = useRef(true);
@@ -2402,7 +2403,7 @@ export default function UniformPOS() {
       return { error: "帳戶尚未設定員工角色，請聯絡管理員。" };
     }
     setSession({ id: profile.id, name: profile.display_name, role: profile.role, branchId: profile.branch_id || "" });
-    await refreshFromCloud({ skipProductsWhileEditing: false });
+    await refreshFromCloud({ skipProductsWhileEditing: false, skipOrders: true });
     navigate("/menu");
     return { error: "" };
   };
@@ -2663,17 +2664,26 @@ export default function UniformPOS() {
     }
   };
 
-  const loadSecureOrders = async (orderId = "") => {
+  const loadSecureOrders = async (orderId = "", dateRange = null) => {
     if (!supabase) return [];
     try {
       const branchScoped = Boolean(session && session.role !== ROLES.ADMIN);
       const branchId = branchScoped ? session.branchId || "__unassigned__" : "";
-      const selectOrders = (includeReceiptName, includePromotion, includeUntrackedExchange) => {
+      const selectOrders = (includeReceiptName, includePromotion, includeUntrackedExchange, offset = 0) => {
         let query = supabase
           .from("orders")
           .select(`id, school, branch_id, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, ${includeUntrackedExchange ? "untracked_exchange, " : ""}replacement_source_receipt_id, replacement_reason, settlement_delta, replacement_cash_received, replacement_change_due, adjustment_reason, payment_method, refund_method, refund_due, duplicate_confirmed, duplicate_source_receipt_id, voided_at, voided_by, void_reason, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, ${includeReceiptName ? "receipt_name_en, " : ""}price, qty, is_return, source_order_item_id${includePromotion ? ", two_piece_price, discount_amount" : ""})`)
           .order("created_at", { ascending: false });
         if (orderId) query = query.eq("id", orderId);
+        if (dateRange) {
+          const bounds = getOrderDateRangeBounds(dateRange.startDate, dateRange.endDate);
+          if (!bounds) return null;
+          query = query
+            .gte("created_at", bounds.startInclusive)
+            .lt("created_at", bounds.endExclusive)
+            .order("id", { ascending: true })
+            .range(offset, offset + 499);
+        }
         if (branchScoped) query = query.eq("branch_id", branchId);
         return query;
       };
@@ -2701,6 +2711,27 @@ export default function UniformPOS() {
         console.warn("資料庫尚未安裝無原單退換欄位，改用相容查詢載入銷售記錄。", error);
         includeUntrackedExchange = false;
         ({ data, error } = await selectOrders(includeReceiptName, includePromotion, includeUntrackedExchange));
+      }
+      if (!error && dateRange && Array.isArray(data) && data.length === 500) {
+        const allOrders = [...data];
+        let offset = data.length;
+        let page = data;
+        while (page.length === 500) {
+          const nextPage = await selectOrders(
+            includeReceiptName,
+            includePromotion,
+            includeUntrackedExchange,
+            offset,
+          );
+          if (nextPage.error) {
+            console.error("載入所選日期銷售記錄分頁失敗", nextPage.error);
+            return null;
+          }
+          page = nextPage.data || [];
+          allOrders.push(...page);
+          offset += page.length;
+        }
+        data = allOrders;
       }
       if (error) {
         console.error("loadSecureOrders 查詢失敗", error);
@@ -2866,15 +2897,19 @@ export default function UniformPOS() {
 
     (async () => {
       try {
-        const salesPromise = isSupabaseAuthEnabled
-          ? loadSecureOrders()
-          : window.storage.get("sales-log", true);
-        salesPromise.then((sales) => {
-          if (!active) return;
-          if (isSupabaseAuthEnabled ? Array.isArray(sales) : sales) {
-            setSalesLog(isSupabaseAuthEnabled ? sales : JSON.parse(sales.value));
-          }
-        }).catch((error) => console.error("載入銷售記錄失敗", error));
+        const salesLoadKey = isSupabaseAuthEnabled ? session.id : "local";
+        if (salesHistoryLoadSessionRef.current !== salesLoadKey) {
+          salesHistoryLoadSessionRef.current = salesLoadKey;
+          const salesPromise = isSupabaseAuthEnabled
+            ? loadSecureOrders()
+            : window.storage.get("sales-log", true);
+          salesPromise.then((sales) => {
+            if (!active) return;
+            if (isSupabaseAuthEnabled ? Array.isArray(sales) : sales) {
+              setSalesLog(isSupabaseAuthEnabled ? sales : JSON.parse(sales.value));
+            }
+          }).catch((error) => console.error("載入銷售記錄失敗", error));
+        }
 
         const [deleted, p, a, sm, branchMap] = await Promise.all([
           window.storage.get("deleted-schools", false).catch(() => null),
@@ -2940,7 +2975,7 @@ export default function UniformPOS() {
     const timer = setTimeout(() => {
       if (loaded && authReady && (!isSupabaseAuthEnabled || session) && products.length <= 20) {
         // 如果只有默認產品或很少的產品，嘗試從 Supabase 重新加載
-        refreshFromCloud({ skipProductsWhileEditing: false });
+        refreshFromCloud({ skipProductsWhileEditing: false, skipOrders: true });
       }
     }, 2000);
     return () => clearTimeout(timer);
@@ -4616,6 +4651,8 @@ export default function UniformPOS() {
             element={
               <RecordsTab
                 salesLog={salesLog}
+                loadOrdersForDateRange={(dateRange) => loadSecureOrders("", dateRange)}
+                recordsAccessKey={session?.id || ""}
                 branchId={session?.role === ROLES.ADMIN ? "" : session?.branchId || ""}
                 restrictToBranch={Boolean(session && session.role !== ROLES.ADMIN)}
                 selectedSchool={selectedSchool || publicRouteSchool}
@@ -4784,6 +4821,8 @@ export default function UniformPOS() {
                 {tab === "records" && (
                   <RecordsTab
                     salesLog={salesLog}
+                    loadOrdersForDateRange={(dateRange) => loadSecureOrders("", dateRange)}
+                    recordsAccessKey={session?.id || ""}
                     branchId={session?.role === ROLES.ADMIN ? "" : session?.branchId || ""}
                     restrictToBranch={Boolean(session && session.role !== ROLES.ADMIN)}
                     selectedSchool={selectedSchool || publicRouteSchool}
@@ -8486,9 +8525,12 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
   );
 }
 
-function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selectedSchool = "", onReprint, canVoidSales = false, onVoidSale, canViewAllDates, canExportSales, schoolMeta = {}, products = [] }) {
+function RecordsTab({ salesLog, loadOrdersForDateRange, recordsAccessKey = "", branchId = "", restrictToBranch = false, selectedSchool = "", onReprint, canVoidSales = false, onVoidSale, canViewAllDates, canExportSales, schoolMeta = {}, products = [] }) {
   const [startDate, setStartDate] = useState(todayStr());
   const [endDate, setEndDate] = useState(todayStr());
+  const [remoteDateOrders, setRemoteDateOrders] = useState(null);
+  const [dateOrdersLoading, setDateOrdersLoading] = useState(false);
+  const [ordersLoadError, setOrdersLoadError] = useState("");
   const [outletFilter, setOutletFilter] = useState("");
   const [schoolFilter, setSchoolFilter] = useState("");
   const [phoneSearch, setPhoneSearch] = useState("");
@@ -8500,6 +8542,8 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
   const [voidSubmitting, setVoidSubmitting] = useState(false);
   const [exportingSales, setExportingSales] = useState(false);
   const [salesExportError, setSalesExportError] = useState("");
+  const loadOrdersForDateRangeRef = useRef(loadOrdersForDateRange);
+  loadOrdersForDateRangeRef.current = loadOrdersForDateRange;
   const today = todayStr();
   const effectiveStartDate = canViewAllDates ? startDate : today;
   const effectiveEndDate = canViewAllDates ? endDate : today;
@@ -8512,13 +8556,55 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
   const dateRangeLabel = effectiveStartDate === effectiveEndDate
     ? effectiveStartDate
     : `${effectiveStartDate} 至 ${effectiveEndDate}`;
+  useEffect(() => {
+    const loadOrders = loadOrdersForDateRangeRef.current;
+    if (!loadOrders || !validDateRange) {
+      setRemoteDateOrders(null);
+      setDateOrdersLoading(false);
+      setOrdersLoadError("");
+      return undefined;
+    }
+
+    let active = true;
+    setRemoteDateOrders(null);
+    setDateOrdersLoading(true);
+    setOrdersLoadError("");
+    loadOrders({ startDate: effectiveStartDate, endDate: effectiveEndDate })
+      .then((orders) => {
+        if (!active) return;
+        if (!Array.isArray(orders)) throw new Error("伺服器未能回傳銷售記錄。");
+        setRemoteDateOrders(orders);
+      })
+      .catch((error) => {
+        if (!active) return;
+        console.error("載入所選日期銷售記錄失敗", error);
+        setOrdersLoadError(error?.message || "請檢查網絡連線後重試。");
+      })
+      .finally(() => {
+        if (active) setDateOrdersLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [effectiveStartDate, effectiveEndDate, validDateRange, recordsAccessKey, branchId, restrictToBranch]);
   const normalizedPhoneSearch = phoneSearch.replace(/\D/g, "").slice(-4);
   const normalizedReceiptSearch = receiptSearch.trim().toLowerCase().replace(/^#/, "");
   const branchOrders = restrictToBranch
     ? salesLog.filter((order) => branchId && order.branchId === branchId)
     : salesLog;
+  const selectedSalesLog = branchOrders.filter((order) => (
+    order.date >= effectiveStartDate && order.date <= effectiveEndDate
+  ));
+  const recordOrders = loadOrdersForDateRange
+    ? (Array.isArray(remoteDateOrders) ? mergeOrderUpdates(remoteDateOrders, selectedSalesLog) : [])
+    : branchOrders;
   const visibleOrders = validDateRange
-    ? branchOrders.filter((order) => order.date >= effectiveStartDate && order.date <= effectiveEndDate)
+    ? recordOrders.filter((order) => (
+      (!restrictToBranch || (branchId && order.branchId === branchId))
+      && order.date >= effectiveStartDate
+      && order.date <= effectiveEndDate
+    ))
     : [];
   const dateOrders = normalizedReceiptSearch
     ? visibleOrders.filter((o) => String(o.id || "").toLowerCase().includes(normalizedReceiptSearch))
@@ -8862,8 +8948,10 @@ function RecordsTab({ salesLog, branchId = "", restrictToBranch = false, selecte
           ))}
         </div>
       )}
-      <div style={{ fontSize: 13, color: "#666", marginBottom: 8 }}>{dayOrders.length} 張單（有效 {activeDayOrders.length} 張）</div>
-      {dayOrders.length === 0 && <div style={{ fontSize: 13, color: "#999" }}>此日期範圍未有交易記錄</div>}
+      {dateOrdersLoading && <div role="status" style={{ fontSize: 13, color: "#475569", marginBottom: 8 }}>正在載入所選日期的單據…</div>}
+      {ordersLoadError && <div role="alert" style={{ fontSize: 13, color: "#B42318", marginBottom: 8 }}>載入單據失敗：{ordersLoadError}</div>}
+      {!dateOrdersLoading && !ordersLoadError && <div style={{ fontSize: 13, color: "#666", marginBottom: 8 }}>{dayOrders.length} 張單（有效 {activeDayOrders.length} 張）</div>}
+      {!dateOrdersLoading && !ordersLoadError && dayOrders.length === 0 && <div style={{ fontSize: 13, color: "#999" }}>此日期範圍未有交易記錄</div>}
       {dayOrders.map((o) => (
         <div
           key={o.id}

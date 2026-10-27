@@ -122,6 +122,8 @@ Cloudflare Pages 會在每次 `git push` 後自動部署。專案的 Cloudflare 
 
 如要啟用銷售單據即時同步，部署前請先在 Supabase SQL Editor 執行 [sales-orders-realtime.sql](./supabase/sales-orders-realtime.sql)。此 SQL 只將 `public.orders` 加入 Realtime publication，資料仍按現有 RLS 權限傳送。
 
+如要加快紀錄頁按日期搜尋，請在 Supabase SQL Editor 執行 [sales-record-date-indexes.sql](./supabase/sales-record-date-indexes.sql)，再部署前端；紀錄頁會按已選日期範圍查詢單據，不再等候全量單據及明細載入後才顯示。
+
 目前 schema 的匿名政策只適合測試。正式公開前，必須改用 Supabase Auth 和更嚴格的 Row Level Security，避免任何人讀寫全部 POS 資料。
 
 ## 預設登入 PIN
