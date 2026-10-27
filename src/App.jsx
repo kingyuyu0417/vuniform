@@ -50,6 +50,11 @@ import { createSalesExportWorkbook, findPreviousSalesPeriod } from "./data/sales
 import { createPriceListWorkbook } from "./data/priceListExport";
 import { buildReceiptNameCandidates } from "./data/receiptProductNames";
 import { clearCheckoutAttempt, getOrCreateCheckoutAttempt } from "./data/checkoutAttempt";
+import {
+  getCheckoutDraftStorageKey,
+  getCheckoutDraftTabId,
+  parseCheckoutDraft,
+} from "./data/checkoutDraft";
 import { getRemainingReturnQuantity, hasUntrackedExchangeHistory } from "./data/returnLimits";
 import { calculateCartLineTotals, calculateReturnDiscounts, validTwoPiecePrice } from "./data/quantityPromotions";
 import { appendExchangeDraft, getDraftExchangeReturnQuantity } from "./data/exchangeDraft";
@@ -2064,6 +2069,10 @@ export default function UniformPOS() {
   const [pendingSaleProductId, setPendingSaleProductId] = useState("");
   const [exchangeReplacementQueue, setExchangeReplacementQueue] = useState([]);
   const exchangeReplacementQueueRef = useRef([]);
+  const [checkoutDraftKey, setCheckoutDraftKey] = useState("");
+  const [checkoutDraftReady, setCheckoutDraftReady] = useState(false);
+  const [checkoutDraftRecovered, setCheckoutDraftRecovered] = useState(false);
+  const [checkoutDraftError, setCheckoutDraftError] = useState("");
   const [receipt, setReceipt] = useState(null);
   const receiptLanguage = "zh";
   const [cashReceived, setCashReceived] = useState("");
@@ -2149,6 +2158,103 @@ export default function UniformPOS() {
     .filter((school) => school && !deletedSchoolsRuntime.has(school))
     .sort((a, b) => a.localeCompare(b, "zh-Hant")), [accessibleProducts, branchAssignedSchools, deletedSchools]);
   const customerSchools = useMemo(() => listSchools(products), [products]);
+
+  useEffect(() => {
+    if (!authReady || !session?.id) return undefined;
+    let active = true;
+    const cashierId = session.id;
+    setCheckoutDraftReady(false);
+    setCheckoutDraftKey("");
+    setCheckoutDraftRecovered(false);
+    setCheckoutDraftError("");
+    setCart([]);
+    setFullSaleReplacement(null);
+    setExchangeReplacementQueue([]);
+    exchangeReplacementQueueRef.current = [];
+    setCashReceived("");
+    setPaymentMethod("cash");
+    setRefundMethod("cash");
+
+    const restoreDraft = async () => {
+      try {
+        const tabId = getCheckoutDraftTabId(window.sessionStorage);
+        const storageKey = getCheckoutDraftStorageKey(cashierId, tabId);
+        const saved = await window.storage.get(storageKey, false);
+        if (!active) return;
+        const draft = parseCheckoutDraft(saved?.value);
+        if (draft && (draft.branchId || "") === (session.branchId || "")) {
+          setCart(draft.cart);
+          setFullSaleReplacement(draft.fullSaleReplacement || null);
+          exchangeReplacementQueueRef.current = Array.isArray(draft.exchangeReplacementQueue)
+            ? draft.exchangeReplacementQueue
+            : [];
+          setExchangeReplacementQueue(exchangeReplacementQueueRef.current);
+          setCashReceived(draft.cashReceived || "");
+          setPaymentMethod(draft.paymentMethod || "cash");
+          setRefundMethod(draft.refundMethod || "cash");
+          if (draft.school) setSelectedSchool(draft.school);
+          setCheckoutDraftRecovered(true);
+        } else if (saved?.value) {
+          await window.storage.delete(storageKey, false);
+        }
+        if (!active) return;
+        setCheckoutDraftKey(storageKey);
+        setCheckoutDraftReady(true);
+      } catch (error) {
+        if (!active) return;
+        console.error("還原未完成銷售草稿失敗", error);
+        setCheckoutDraftError("未能讀取本機銷售草稿；為免覆蓋資料，暫停自動保存。");
+      }
+    };
+
+    restoreDraft();
+    return () => {
+      active = false;
+    };
+  }, [authReady, session?.id, session?.branchId]);
+
+  useEffect(() => {
+    if (!checkoutDraftReady || !checkoutDraftKey) return;
+    if (cart.length === 0 && !fullSaleReplacement) {
+      window.storage.delete(checkoutDraftKey, false).catch((error) => {
+        console.error("清除已完成銷售草稿失敗", error);
+        setCheckoutDraftError("未能清除已完成草稿，請確認本機儲存空間。");
+      });
+      setCheckoutDraftRecovered(false);
+      return;
+    }
+
+    const draft = {
+      savedAt: new Date().toISOString(),
+      cashierId: session?.id || "",
+      branchId: session?.branchId || "",
+      school: selectedSchool || "",
+      cart,
+      fullSaleReplacement,
+      exchangeReplacementQueue,
+      cashReceived,
+      paymentMethod,
+      refundMethod,
+    };
+    window.storage.set(checkoutDraftKey, JSON.stringify(draft), false).then(() => {
+      setCheckoutDraftError("");
+    }).catch((error) => {
+      console.error("自動保存銷售草稿失敗", error);
+      setCheckoutDraftError("銷售草稿未能自動保存；請勿重新整理，並檢查本機儲存空間。");
+    });
+  }, [
+    checkoutDraftReady,
+    checkoutDraftKey,
+    cart,
+    fullSaleReplacement,
+    exchangeReplacementQueue,
+    cashReceived,
+    paymentMethod,
+    refundMethod,
+    selectedSchool,
+    session?.id,
+    session?.branchId,
+  ]);
 
   useEffect(() => {
     window.storage.get("held-sales", false).then((saved) => {
@@ -2427,6 +2533,8 @@ export default function UniformPOS() {
 
   const logout = () => {
     if (!window.confirm("確定要登出目前帳戶？")) return;
+    setCheckoutDraftReady(false);
+    setCheckoutDraftKey("");
     setSession(null);
     if (isSupabaseAuthEnabled && supabase) supabase.auth.signOut().catch(() => {});
     window.storage.delete("current-session", false).catch(() => {});
@@ -4709,6 +4817,10 @@ export default function UniformPOS() {
                 cartCount={cartCount}
                 checkout={checkout}
                 checkoutSubmitting={checkoutSubmitting}
+                checkoutDraftReady={checkoutDraftReady}
+                checkoutDraftRecovered={checkoutDraftRecovered}
+                checkoutDraftError={checkoutDraftError}
+                onDismissDraftNotice={() => setCheckoutDraftRecovered(false)}
                 cashierId={session?.id || ""}
                 branchId={session?.branchId || ""}
                 paymentMethod={paymentMethod}
@@ -4759,6 +4871,10 @@ export default function UniformPOS() {
                     cartCount={cartCount}
                     checkout={checkout}
                     checkoutSubmitting={checkoutSubmitting}
+                    checkoutDraftReady={checkoutDraftReady}
+                    checkoutDraftRecovered={checkoutDraftRecovered}
+                    checkoutDraftError={checkoutDraftError}
+                    onDismissDraftNotice={() => setCheckoutDraftRecovered(false)}
                     cashierId={session?.id || ""}
                     branchId={session?.branchId || ""}
                     paymentMethod={paymentMethod}
@@ -5063,6 +5179,10 @@ function SaleTab({
   cartCount,
   checkout,
   checkoutSubmitting = false,
+  checkoutDraftReady = false,
+  checkoutDraftRecovered = false,
+  checkoutDraftError = "",
+  onDismissDraftNotice,
   cashierId = "",
   branchId = "",
   selectedSchool,
@@ -5326,6 +5446,22 @@ function SaleTab({
 
   return (
     <div aria-busy={checkoutSubmitting} style={{ position: "relative" }}>
+      {checkoutDraftReady && cart.length > 0 && !checkoutDraftRecovered && (
+        <div role="status" style={{ marginBottom: 10, padding: "8px 12px", borderRadius: 9, background: "#EFF8FF", border: "1px solid #B2DDFF", color: "#175CD3", fontSize: 12 }}>
+          未完成交易會自動保存在此裝置，重新整理後可還原。
+        </div>
+      )}
+      {checkoutDraftRecovered && (
+        <div role="status" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, padding: "9px 12px", borderRadius: 9, background: "#ECFDF3", border: "1px solid #ABEFC6", color: "#067647", fontSize: 13 }}>
+          <span style={{ flex: 1 }}>已還原此裝置上次未完成的交易草稿；請核對款式及金額後再埋單。</span>
+          <button type="button" className="pos-btn" onClick={onDismissDraftNotice} aria-label="關閉草稿還原提示" style={{ background: "transparent", color: "#067647", padding: 3 }}>×</button>
+        </div>
+      )}
+      {checkoutDraftError && (
+        <div role="alert" style={{ marginBottom: 10, padding: "9px 12px", borderRadius: 9, background: "#FEF3F2", border: "1px solid #FECDCA", color: "#B42318", fontSize: 13 }}>
+          {checkoutDraftError}
+        </div>
+      )}
       {checkoutSubmitting && (
         <div
           role="status"
