@@ -5303,6 +5303,11 @@ function SaleTab({
   const returnedCartItems = pricedCart.filter((item) => item.exchangeReturn);
   const replacementCartItems = pricedCart.filter((item) => !item.exchangeReturn);
   const exchangeComparisonRows = buildExchangeComparisonRows(returnedCartItems, replacementCartItems);
+  const completedExchangeReplacementCount = replacementCartItems.reduce(
+    (total, item) => total + Math.max(0, Number(item.qty || 0)),
+    0,
+  );
+  const exchangeReplacementCount = completedExchangeReplacementCount + exchangeReplacementQueue.length;
   const untrackedExchangeMode = returnedCartItems.some((item) => item.untrackedExchange);
   const settlementMethod = (exchangeMode || fullReplacementMode) && refundDue > 0 ? refundMethod : paymentMethod;
   const settlementDue = fullReplacementMode
@@ -5959,6 +5964,25 @@ function SaleTab({
             const categoryLabel = hasLengthOptions(product) ? `先揀${lengthDimensionLabel(product)}，再揀${sizeDimensionLabel(product)}：` : "揀尺碼：";
             return (
               <>
+                {exchangeMode && exchangeReplacementQueue.length > 0 && (
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, padding: "12px 14px", borderRadius: 12, background: "#FFF7ED", border: "2px solid #FDBA74", color: "#7C2D12" }}
+                  >
+                    <div style={{ minWidth: 62, padding: "8px 6px", borderRadius: 9, background: "#9A3412", color: "#fff", fontSize: 17, fontWeight: 900, textAlign: "center", whiteSpace: "nowrap" }}>
+                      第 {completedExchangeReplacementCount + 1} 件
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 800 }}>
+                        換入尺碼（共 {exchangeReplacementCount} 件）
+                      </div>
+                      <div style={{ marginTop: 3, fontSize: 12, lineHeight: 1.45 }}>
+                        每件要各選一次；即使尺碼相同，第二件也要再按一次。
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {quantityPrompt && (
                   <div style={{ background: "#EAF4FF", border: "1px solid #B7D4F2", borderRadius: 12, padding: 14, marginBottom: 12 }}>
                     <div style={{ color: "#1F3A5F", fontSize: 14, fontWeight: 800 }}>需要購買數量</div>
