@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { appendExchangeDraft, getDraftExchangeReturnQuantity } from "./exchangeDraft.js";
+import {
+  appendExchangeDraft,
+  buildExchangeReplacementQueue,
+  getDraftExchangeReturnQuantity,
+} from "./exchangeDraft.js";
 
 test("appends exchange returns and queues replacements without losing current cart items", () => {
   const existingCart = [
@@ -30,4 +34,17 @@ test("counts only draft returns for the same source item and receipt", () => {
   assert.equal(getDraftExchangeReturnQuantity(cart, "item-1", "receipt-1"), 3);
   assert.equal(getDraftExchangeReturnQuantity(cart, "item-1", "receipt-2"), 3);
   assert.equal(getDraftExchangeReturnQuantity(cart, "item-2", "receipt-1"), 0);
+});
+
+test("queues one replacement selection for every returned unit", () => {
+  const returns = [
+    { productId: "shirt", qty: 2 },
+    { productId: "trousers", qty: 1 },
+  ];
+
+  assert.deepEqual(buildExchangeReplacementQueue(returns), ["shirt", "shirt", "trousers"]);
+  assert.deepEqual(
+    appendExchangeDraft([], returns, []).replacementQueue,
+    ["shirt", "shirt", "trousers"],
+  );
 });
