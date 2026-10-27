@@ -53,6 +53,7 @@ import { clearCheckoutAttempt, getOrCreateCheckoutAttempt } from "./data/checkou
 import { getRemainingReturnQuantity, hasUntrackedExchangeHistory } from "./data/returnLimits";
 import { calculateCartLineTotals, calculateReturnDiscounts, validTwoPiecePrice } from "./data/quantityPromotions";
 import { appendExchangeDraft, getDraftExchangeReturnQuantity } from "./data/exchangeDraft";
+import { buildExchangeComparisonRows } from "./data/exchangeComparison";
 import { naturalSizeSort } from "./data/sizeSort";
 import { calculateMatrixPrices } from "./data/matrixPricing";
 import { canReplaceOrder, getReplacementBranchId, getReplacementSettlement } from "./data/orderReplacement";
@@ -4864,6 +4865,65 @@ export default function UniformPOS() {
   );
 }
 
+function ExchangeComparisonTable({ rows, editable = false, onChangeQty, onRemove }) {
+  const renderItems = (items, isReturn) => items.map((item) => (
+    <div key={item.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, padding: "7px 0", borderTop: "1px solid rgba(148,163,184,0.2)" }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, overflowWrap: "anywhere" }}>
+          {productDisplayName(item.name)}（{sizeLabel(item)}）
+        </div>
+        <div style={{ marginTop: 2, fontSize: 12, color: "#475569" }}>
+          {item.qty}{productUnit(item.name, item.size)} × {fmt(item.price)}
+          {item.discountAmount > 0 ? ` · 優惠 −${fmt(item.discountAmount)}` : ""}
+        </div>
+        <div style={{ marginTop: 2, fontSize: 13, fontWeight: 700, color: isReturn ? "#9A3412" : "#166534" }}>
+          {isReturn ? "抵扣" : "新貨"} {fmt(Math.abs(item.lineTotal))}
+        </div>
+      </div>
+      {editable && (
+        <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+          {!isReturn && (
+            <>
+              <button type="button" className="pos-btn" aria-label={`減少${item.name}數量`} onClick={() => onChangeQty(item.key, -1)} style={{ width: 30, height: 30, borderRadius: 7, background: "#fff", border: "1px solid #CBD5E1" }}>
+                <Minus size={15} style={{ margin: "auto" }} />
+              </button>
+              <button type="button" className="pos-btn" aria-label={`增加${item.name}數量`} onClick={() => onChangeQty(item.key, 1)} style={{ width: 30, height: 30, borderRadius: 7, background: "#fff", border: "1px solid #CBD5E1" }}>
+                <Plus size={15} style={{ margin: "auto" }} />
+              </button>
+            </>
+          )}
+          <button type="button" className="pos-btn" aria-label={`移除${isReturn ? "退回" : "換入"}${item.name}`} onClick={() => onRemove(item.key)} style={{ width: 30, height: 30, borderRadius: 7, background: "#fff", border: "1px solid #E2E8F0", color: "#BE123C" }}>
+            <Trash2 size={15} style={{ margin: "auto" }} />
+          </button>
+        </div>
+      )}
+    </div>
+  ));
+
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 8 }}>
+        <div style={{ padding: "8px 10px", borderRadius: 8, background: "#FFF7ED", color: "#9A3412", fontSize: 13, fontWeight: 800, textAlign: "center" }}>退回／換出</div>
+        <div style={{ padding: "8px 10px", borderRadius: 8, background: "#ECFDF3", color: "#166534", fontSize: 13, fontWeight: 800, textAlign: "center" }}>新貨／換入</div>
+      </div>
+      {rows.map((row) => (
+        <div key={row.key} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 8 }}>
+          <div style={{ minWidth: 0, padding: "4px 8px", borderRadius: 8, background: "#FFFBF5", border: "1px solid #FED7AA" }}>
+            {row.returnedItems.length > 0
+              ? renderItems(row.returnedItems, true)
+              : <div style={{ padding: "8px 0", color: "#94A3B8", fontSize: 12, textAlign: "center" }}>— 無退回貨品</div>}
+          </div>
+          <div style={{ minWidth: 0, padding: "4px 8px", borderRadius: 8, background: "#F5FCF7", border: "1px solid #BBF7D0" }}>
+            {row.replacementItems.length > 0
+              ? renderItems(row.replacementItems, false)
+              : <div style={{ padding: "8px 0", color: "#94A3B8", fontSize: 12, textAlign: "center" }}>— 無換入貨品</div>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function SaleTab({
   products,
   selectedProduct,
@@ -4970,6 +5030,7 @@ function SaleTab({
   }, [exchangeSourceReceiptId, fullSaleReplacement?.id]);
   const returnedCartItems = pricedCart.filter((item) => item.exchangeReturn);
   const replacementCartItems = pricedCart.filter((item) => !item.exchangeReturn);
+  const exchangeComparisonRows = buildExchangeComparisonRows(returnedCartItems, replacementCartItems);
   const untrackedExchangeMode = returnedCartItems.some((item) => item.untrackedExchange);
   const settlementMethod = (exchangeMode || fullReplacementMode) && refundDue > 0 ? refundMethod : paymentMethod;
   const settlementDue = fullReplacementMode
@@ -5391,20 +5452,22 @@ function SaleTab({
                 舊單將保留作廢稽核紀錄。新單總額 {fmt(cartTotal)}；原單總額 {fmt(fullSaleReplacement.total)}；{replacementSettlement.difference > 0 ? `需收差額 ${fmt(replacementSettlement.collectDue)}` : replacementSettlement.difference < 0 ? `需退差額 ${fmt(replacementSettlement.refundDue)}` : "無須收退款"}。
               </div>
             )}
-            <div style={{ marginTop: 14, fontWeight: 700, color: "#9A3412" }}>退回貨品</div>
-            {returnedCartItems.map((item, index) => (
-              <div key={`return-${item.key || index}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 6, fontSize: 14 }}>
-                <span>{productDisplayName(item.name)}（{sizeLabel(item)}）× {item.qty}</span>
-                <span>−{fmt(Math.abs(item.lineTotal))}</span>
-              </div>
-            ))}
-            <div style={{ marginTop: 14, fontWeight: 700, color: "#166534" }}>換入貨品</div>
-            {replacementCartItems.length > 0 ? replacementCartItems.map((item, index) => (
-              <div key={`replacement-${item.key || index}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 6, fontSize: 14 }}>
-                <span>{productDisplayName(item.name)}（{sizeLabel(item)}）× {item.qty}</span>
-                <span>{fmt(Math.abs(item.lineTotal))}</span>
-              </div>
-            )) : <div style={{ marginTop: 6, color: "#64748B", fontSize: 13 }}>沒有換入貨品</div>}
+            {fullReplacementMode ? (
+              <>
+                <div style={{ marginTop: 14, fontWeight: 700, color: "#166534" }}>整單替換新貨</div>
+                {replacementCartItems.map((item, index) => (
+                  <div key={`replacement-${item.key || index}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 6, fontSize: 14 }}>
+                    <span>{productDisplayName(item.name)}（{sizeLabel(item)}）× {item.qty}</span>
+                    <span>{fmt(Math.abs(item.lineTotal))}</span>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <>
+                <div style={{ marginTop: 14, marginBottom: 8, fontWeight: 700, color: "#1F3A5F" }}>貨品換貨對照</div>
+                <ExchangeComparisonTable rows={exchangeComparisonRows} />
+              </>
+            )}
             <div style={{ marginTop: 14, padding: 12, borderRadius: 10, background: "#F8FAFC", display: "grid", gap: 7 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                 <span>{fullReplacementMode ? "新單總額" : "本次對淨收入的影響"}</span><strong>{fmt(cartTotal)}</strong>
@@ -5711,9 +5774,16 @@ function SaleTab({
       )}
 
       <div style={{ background: "#F7F7F5", borderRadius: 12, padding: 14 }}>
-        <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 10 }}>購物車</div>
+        <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 10 }}>{exchangeMode ? "退換貨品對照" : "購物車"}</div>
         {cart.length === 0 && <div style={{ fontSize: 16, color: "#999" }}>未揀任何貨品</div>}
-        {pricedCart.map((c) => (
+        {exchangeMode ? (
+          <ExchangeComparisonTable
+            rows={exchangeComparisonRows}
+            editable
+            onChangeQty={changeQty}
+            onRemove={removeItem}
+          />
+        ) : pricedCart.map((c) => (
           <div key={c.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #E5E5E0" }}>
             <div style={{ flex: 1, minWidth: 0, lineHeight: 1.4 }}>
               <div style={{ fontSize: 18, fontWeight: 500 }}>{c.exchangeReturn ? "換出：" : ""}{c.name}（{sizeLabel(c)}）</div>
