@@ -198,7 +198,7 @@
         </section>
         ${english
           ? `<div class="actions language-control"><button class="secondary" onclick="setReceiptLanguage('zh')">查看中文版本</button></div>`
-          : `<div class="policy">英文版本由 Google Translate 提供。開啟後，收據內容（包括客人姓氏、電話末四位、單號、商品及金額）會傳送至 Google。</div><div class="actions language-control"><a class="secondary translate-link" href="${escapeHtml(translateUrl)}" target="_blank" rel="noopener noreferrer">View in English · Google Translate</a></div>`}
+          : `<div class="actions language-control"><a class="secondary translate-link" href="${escapeHtml(translateUrl)}" target="_blank" rel="noopener noreferrer">View in English · Google Translate</a></div>`}
         <div class="actions"><button onclick="window.print()">${english ? "Print / Save as PDF" : "列印／另存為 PDF"}</button><button class="secondary" onclick="window.close()">${english ? "Close" : "關閉"}</button></div>`;
     };
     try {
