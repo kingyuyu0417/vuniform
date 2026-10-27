@@ -52,6 +52,7 @@ import { buildReceiptNameCandidates } from "./data/receiptProductNames";
 import { clearCheckoutAttempt, getOrCreateCheckoutAttempt } from "./data/checkoutAttempt";
 import { getRemainingReturnQuantity, hasUntrackedExchangeHistory } from "./data/returnLimits";
 import { calculateCartLineTotals, calculateReturnDiscounts, validTwoPiecePrice } from "./data/quantityPromotions";
+import { appendExchangeDraft, getDraftExchangeReturnQuantity } from "./data/exchangeDraft";
 import { naturalSizeSort } from "./data/sizeSort";
 import { calculateMatrixPrices } from "./data/matrixPricing";
 import { canReplaceOrder, getReplacementBranchId, getReplacementSettlement } from "./data/orderReplacement";
@@ -3363,12 +3364,26 @@ export default function UniformPOS() {
     setFullSaleReplacement(null);
     const items = Array.isArray(selectedItems) ? selectedItems : [selectedItems];
     const hasSourceReceipt = Boolean(order.id);
+    const currentReturnItems = cart.filter((item) => item.exchangeReturn);
+    const hasExchangeDraft = currentReturnItems.length > 0;
+    const compatibleDraft = currentReturnItems.every((item) => (
+      Boolean(item.untrackedExchange) === !hasSourceReceipt
+      && (!hasSourceReceipt || String(item.exchangeSourceReceiptId || "") === String(order.id))
+    ));
+    if (hasExchangeDraft && !compatibleDraft) {
+      setStorageError("目前退換購物車已連結其他原單或退換方式不同；請先完成該筆退換，再開始新的退換。");
+      return false;
+    }
     const conflictingProductIds = findUnresolvedPriceConflictProductIds(products);
     if (hasSourceReceipt && items.some((item) => !item.id)) {
       setStorageError("退換貨必須連結原單貨品記錄，請重新載入原單後再試。");
       return false;
     }
-    if (hasSourceReceipt && items.some((item) => Number(item.qty || 1) > getRemainingReturnQuantity(item, salesLog))) {
+    if (hasSourceReceipt && items.some((item) => Number(item.qty || 1) > Math.max(
+      0,
+      getRemainingReturnQuantity(item, salesLog)
+        - getDraftExchangeReturnQuantity(cart, item.id, order.id),
+    ))) {
       setStorageError("退回數量超出原單尚未退回數量，請重新選擇。");
       return false;
     }
@@ -3403,12 +3418,17 @@ export default function UniformPOS() {
         .filter((entry) => entry.exchangeSourceReceiptId === order.id && !entry.voidedAt)
         .flatMap((entry) => (entry.items || []).filter((item) => item.exchangeReturn))
       : [];
+    const draftReturns = hasSourceReceipt
+      ? currentReturnItems.filter((item) => String(item.exchangeSourceReceiptId || "") === String(order.id))
+      : [];
     const returnDiscounts = hasSourceReceipt
-      ? calculateReturnDiscounts(order.items || [], items, previousReturns)
+      ? calculateReturnDiscounts(order.items || [], items, [...previousReturns, ...draftReturns])
       : items.map(() => 0);
-    setPaymentMethod(order.paymentMethod || "cash");
-    setRefundMethod(order.paymentMethod || "cash");
-    setCart(exchangeItems.map(({ item, product, originalSize }, index) => ({
+    if (!hasExchangeDraft) {
+      setPaymentMethod(order.paymentMethod || "cash");
+      setRefundMethod(order.paymentMethod || "cash");
+    }
+    const newReturnItems = exchangeItems.map(({ item, product, originalSize }, index) => ({
       key: uid(),
       productId: product.id,
       name: item.name,
@@ -3427,13 +3447,19 @@ export default function UniformPOS() {
       sourceOrderItemId: hasSourceReceipt ? String(item.id) : "",
       sourceGuestName: order.customerName || "",
       sourceGuestPhone: order.customerPhone || "",
-    })));
+    }));
+    const draft = hasExchangeDraft
+      ? appendExchangeDraft(cart, newReturnItems, exchangeReplacementQueueRef.current)
+      : {
+        cart: newReturnItems,
+        replacementQueue: newReturnItems.map((item) => item.productId),
+      };
+    setCart(draft.cart);
     setCashReceived("");
-    setSelectedProduct(null);
-    const replacementQueue = exchangeItems.map(({ product }) => product.id);
-    exchangeReplacementQueueRef.current = replacementQueue;
-    setExchangeReplacementQueue(replacementQueue);
-    setPendingSaleProductId(exchangeItems[0].product.id);
+    if (!hasExchangeDraft) setSelectedProduct(null);
+    exchangeReplacementQueueRef.current = draft.replacementQueue;
+    setExchangeReplacementQueue(draft.replacementQueue);
+    if (!hasExchangeDraft) setPendingSaleProductId(exchangeItems[0].product.id);
     setReceipt(null);
     setTab("sale");
     navigate("/sale", { replace: true });
@@ -5061,11 +5087,12 @@ function SaleTab({
     const selectedWithQuantities = exchangeItems.map((item) => ({
       ...item,
       qty: Math.max(1, Math.min(
-        getRemainingReturnQuantity(item, salesLog),
+        Math.max(0, getRemainingReturnQuantity(item, salesLog)
+          - getDraftExchangeReturnQuantity(cart, item.id, exchangeOrder.id)),
         Number(exchangeItemQuantities[item._exchangeIndex] || 1),
       )),
     }));
-    onExchange?.(exchangeOrder, selectedWithQuantities);
+    if (onExchange?.(exchangeOrder, selectedWithQuantities) === false) return;
     setExchangePickerOpen(false);
     setExchangeOrder(null);
     setExchangeItems([]);
@@ -5110,12 +5137,12 @@ function SaleTab({
 
   const confirmDirectExchange = () => {
     if (directExchangeItems.length === 0) return;
-    onExchange?.({
+    if (onExchange?.({
       id: "",
       school: selectedSchool,
       customerName: "",
       customerPhone: "",
-    }, directExchangeItems);
+    }, directExchangeItems) === false) return;
     setDirectExchangeQuantityPrompt(null);
     setDirectExchangePickerOpen(false);
     setDirectExchangeOpen(false);
@@ -5160,7 +5187,7 @@ function SaleTab({
       <button
         className="pos-btn"
         type="button"
-        disabled={!selectedSchool || cart.length > 0 || fullReplacementMode || checkoutSubmitting}
+        disabled={!selectedSchool || (cart.length > 0 && !untrackedExchangeMode) || fullReplacementMode || checkoutSubmitting}
         onClick={() => {
           setDirectExchangeItems([]);
           setDirectExchangeProductId("");
@@ -5168,10 +5195,12 @@ function SaleTab({
           setDirectExchangeOpen(true);
           setDirectExchangePickerOpen(true);
         }}
-        title="退回抵扣按目前學校目錄售價計算；新單不連結來源收據"
+        title={untrackedExchangeMode
+          ? "繼續追加退回款式；退回抵扣按目前學校目錄售價計算"
+          : "退回抵扣按目前學校目錄售價計算；新單不連結來源收據"}
         style={{ width: "100%", padding: "12px", borderRadius: 10, background: "#ECFDF3", color: "#166534", border: "1px solid #86EFAC", fontSize: 14, fontWeight: 700, marginBottom: 12 }}
       >
-        無原單退換（按現時目錄售價抵扣）
+        {untrackedExchangeMode ? "＋追加無原單退回款式" : "無原單退換（按現時目錄售價抵扣）"}
       </button>
       {directExchangeOpen && (
         <div style={{ background: "#ECFDF3", border: "1px solid #86EFAC", borderRadius: 10, padding: 12, marginBottom: 12 }}>
@@ -5258,6 +5287,8 @@ function SaleTab({
           onClose={() => {
             setExchangePickerOpen(false);
             setExchangeOrder(null);
+            setExchangeItems([]);
+            setExchangeItemQuantities({});
           }}
         >
           {hasUntrackedExchangeHistory(exchangeOrder, salesLog) && (
@@ -5266,7 +5297,8 @@ function SaleTab({
             </div>
           )}
           {exchangeOrder.items.filter((item) => !item.exchangeReturn).map((item, index) => {
-            const remaining = getRemainingReturnQuantity(item, salesLog);
+            const remaining = Math.max(0, getRemainingReturnQuantity(item, salesLog)
+              - getDraftExchangeReturnQuantity(cart, item.id, exchangeOrder.id));
             const selected = exchangeItems.some((entry) => entry._exchangeIndex === index);
             const selectedQuantity = Number(exchangeItemQuantities[index] || 1);
             return (
