@@ -4467,6 +4467,9 @@ export default function UniformPOS() {
         }
         .pos-btn { cursor: pointer; border: none; outline: none; }
         .pos-btn:active { transform: scale(0.97); }
+        .record-order-card { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+        .record-order-card:focus:not(:focus-visible) { outline: none; }
+        .record-order-card:focus-visible { outline: 2px solid #1F3A5F; outline-offset: 2px; }
         .receipt-modal-overlay, .receipt-modal-panel { box-sizing: border-box; }
         .receipt-modal-header {
           position: sticky;
@@ -9256,6 +9259,7 @@ function RecordsTab({ salesLog, loadOrdersForDateRange, loadHistoricalSales, rec
       {dayOrders.map((o) => (
         <div
           key={o.id}
+          className="record-order-card"
           role="button"
           tabIndex={0}
           onClick={() => onReprint(o)}

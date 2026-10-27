@@ -55,10 +55,12 @@ export default function DirectoryPage({ availableIds = [], onNavigate }) {
         ))}
       </div>
       <style>{`
-        .directory-grid .pos-btn:hover {
-          transform: translateY(-2px);
-          border-color: #B8CBE1;
-          box-shadow: 0 8px 18px rgba(31, 58, 95, 0.11);
+        @media (hover: hover) and (pointer: fine) {
+          .directory-grid .pos-btn:hover {
+            transform: translateY(-2px);
+            border-color: #B8CBE1;
+            box-shadow: 0 8px 18px rgba(31, 58, 95, 0.11);
+          }
         }
         @media (max-width: 520px) {
           .directory-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
