@@ -4541,6 +4541,25 @@ export default function UniformPOS() {
         .sale-size-button { min-height: 76px; }
         @media (max-width: 560px) {
           .pos-page-content { padding: 14px 14px calc(96px + env(safe-area-inset-bottom, 0px)); }
+          .exchange-comparison-headings { display: none !important; }
+          .exchange-comparison-row { grid-template-columns: minmax(0, 1fr) !important; gap: 8px !important; }
+          .exchange-comparison-side { padding: 8px 10px !important; }
+          .exchange-comparison-side::before {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 12px;
+            font-weight: 800;
+            content: attr(data-label);
+          }
+          .exchange-comparison-side--return::before { color: #9A3412; }
+          .exchange-comparison-side--replacement::before { color: #166534; }
+          .exchange-comparison-item { align-items: flex-start !important; flex-wrap: wrap; gap: 8px !important; padding: 8px 0 !important; }
+          .exchange-comparison-item-details { flex: 1 1 100%; width: 100%; }
+          .exchange-comparison-item-details > div:first-child { font-size: 15px !important; line-height: 1.45; }
+          .exchange-comparison-item-details > div:nth-child(2) { font-size: 13px !important; }
+          .exchange-comparison-item-details > div:nth-child(3) { font-size: 14px !important; }
+          .exchange-comparison-item-controls { width: 100%; justify-content: flex-end !important; gap: 8px !important; }
+          .exchange-comparison-item-controls .pos-btn { width: 40px !important; height: 40px !important; }
           .receipt-modal-overlay {
             align-items: flex-start !important;
             overflow-y: auto;
@@ -5112,8 +5131,8 @@ export default function UniformPOS() {
 
 function ExchangeComparisonTable({ rows, editable = false, onChangeQty, onRemove }) {
   const renderItems = (items, isReturn) => items.map((item) => (
-    <div key={item.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, padding: "7px 0", borderTop: "1px solid rgba(148,163,184,0.2)" }}>
-      <div style={{ minWidth: 0 }}>
+    <div key={item.key} className="exchange-comparison-item" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, padding: "7px 0", borderTop: "1px solid rgba(148,163,184,0.2)" }}>
+      <div className="exchange-comparison-item-details" style={{ minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 700, overflowWrap: "anywhere" }}>
           {productDisplayName(item.name)}（{sizeLabel(item)}）
         </div>
@@ -5126,7 +5145,7 @@ function ExchangeComparisonTable({ rows, editable = false, onChangeQty, onRemove
         </div>
       </div>
       {editable && (
-        <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+        <div className="exchange-comparison-item-controls" style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
           {!isReturn && (
             <>
               <button type="button" className="pos-btn" aria-label={`減少${item.name}數量`} onClick={() => onChangeQty(item.key, -1)} style={{ width: 30, height: 30, borderRadius: 7, background: "#fff", border: "1px solid #CBD5E1" }}>
@@ -5146,19 +5165,19 @@ function ExchangeComparisonTable({ rows, editable = false, onChangeQty, onRemove
   ));
 
   return (
-    <div style={{ display: "grid", gap: 8 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 8 }}>
+    <div className="exchange-comparison-table" style={{ display: "grid", gap: 8 }}>
+      <div className="exchange-comparison-headings" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 8 }}>
         <div style={{ padding: "8px 10px", borderRadius: 8, background: "#FFF7ED", color: "#9A3412", fontSize: 13, fontWeight: 800, textAlign: "center" }}>退回／換出</div>
         <div style={{ padding: "8px 10px", borderRadius: 8, background: "#ECFDF3", color: "#166534", fontSize: 13, fontWeight: 800, textAlign: "center" }}>新貨／換入</div>
       </div>
       {rows.map((row) => (
-        <div key={row.key} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 8 }}>
-          <div style={{ minWidth: 0, padding: "4px 8px", borderRadius: 8, background: "#FFFBF5", border: "1px solid #FED7AA" }}>
+        <div key={row.key} className="exchange-comparison-row" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 8 }}>
+          <div className="exchange-comparison-side exchange-comparison-side--return" data-label="退回／換出" style={{ minWidth: 0, padding: "4px 8px", borderRadius: 8, background: "#FFFBF5", border: "1px solid #FED7AA" }}>
             {row.returnedItems.length > 0
               ? renderItems(row.returnedItems, true)
               : <div style={{ padding: "8px 0", color: "#94A3B8", fontSize: 12, textAlign: "center" }}>— 無退回貨品</div>}
           </div>
-          <div style={{ minWidth: 0, padding: "4px 8px", borderRadius: 8, background: "#F5FCF7", border: "1px solid #BBF7D0" }}>
+          <div className="exchange-comparison-side exchange-comparison-side--replacement" data-label="新貨／換入" style={{ minWidth: 0, padding: "4px 8px", borderRadius: 8, background: "#F5FCF7", border: "1px solid #BBF7D0" }}>
             {row.replacementItems.length > 0
               ? renderItems(row.replacementItems, false)
               : <div style={{ padding: "8px 0", color: "#94A3B8", fontSize: 12, textAlign: "center" }}>— 無換入貨品</div>}
