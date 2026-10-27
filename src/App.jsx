@@ -60,6 +60,7 @@ import { calculateCartLineTotals, calculateReturnDiscounts, validTwoPiecePrice }
 import { appendExchangeDraft, getDraftExchangeReturnQuantity } from "./data/exchangeDraft";
 import { buildExchangeComparisonRows } from "./data/exchangeComparison";
 import { naturalSizeSort } from "./data/sizeSort";
+import { canonicalSchoolName, schoolCatalogKey } from "./data/schoolNames";
 import { calculateMatrixPrices } from "./data/matrixPricing";
 import { canReplaceOrder, getReplacementBranchId, getReplacementSettlement } from "./data/orderReplacement";
 import { findProductForOrderItem } from "./data/orderProductMatching";
@@ -251,7 +252,7 @@ const netOrderTotal = (order) => Number(order.total || 0) - (
 // 只列出目前商品庫內實際有商品的學校，避免選到空商品學校
 const UNASSIGNED = "（未分類）";
 let deletedSchoolsRuntime = new Set();
-const schoolOf = (p) => (p.school && p.school.trim()) || UNASSIGNED;
+const schoolOf = (p) => canonicalSchoolName((p.school && p.school.trim()) || UNASSIGNED);
 const normalizeProductSizes = (sizes = []) => sizes.map((size) => ({
   ...size,
   isTailored: isTailoredSize(size),
@@ -283,10 +284,6 @@ const compatibleProductIdentities = (first, second) => (
   compatibleProductGenders(first?.gender, second?.gender)
   && (!first?.season || !second?.season || first.season === second.season)
 );
-const SCHOOL_NAME_ALIASES = {
-  "保良局董玉梯紀念中學": "保良局董玉娣中學",
-};
-const canonicalSchoolName = (name) => SCHOOL_NAME_ALIASES[name] || name;
 const genderOf = (product) => {
   const gender = getProductGender(product);
   if (gender === "boys") return "男裝";
@@ -3053,7 +3050,7 @@ export default function UniformPOS() {
         ]);
         if (!active) return;
         const deletedList = deleted && deleted.value ? JSON.parse(deleted.value) : [];
-        deletedSchoolsRuntime = new Set(Array.isArray(deletedList) ? deletedList : []);
+        deletedSchoolsRuntime = new Set(Array.isArray(deletedList) ? deletedList.map(canonicalSchoolName) : []);
         setDeletedSchools([...deletedSchoolsRuntime]);
         setBranchSchoolIds(branchMap);
         if (p) {
@@ -4766,6 +4763,7 @@ export default function UniformPOS() {
                 saveSchoolMeta={saveSchoolMeta}
                 setDeletedSchools={setDeletedSchools}
                 selectedSchool={selectedSchool}
+                onSelectSchool={setSelectedSchool}
                 branchSchoolIds={branchSchoolIds}
                 branchId={session.role === ROLES.ADMIN ? "" : session.branchId}
                 availableSchools={schools}
@@ -4948,6 +4946,7 @@ export default function UniformPOS() {
                     saveSchoolMeta={saveSchoolMeta}
                     setDeletedSchools={setDeletedSchools}
                     selectedSchool={selectedSchool}
+                    onSelectSchool={setSelectedSchool}
                     branchSchoolIds={branchSchoolIds}
                     branchId={session.role === ROLES.ADMIN ? "" : session.branchId}
                     availableSchools={schools}
@@ -5241,6 +5240,11 @@ function SaleTab({
     () => schoolProducts.filter((product) => conflictingProductIds.has(product.id)),
     [schoolProducts, conflictingProductIds],
   );
+  const unpricedProducts = useMemo(
+    () => schoolProducts.filter((product) => !conflictingProductIds.has(product.id)
+      && product.sizes.some((size) => !isPricedSize(size))),
+    [schoolProducts, conflictingProductIds],
+  );
   const visibleProducts = useMemo(() => schoolProducts
     .filter((product) => !conflictingProductIds.has(product.id))
     .filter((product) => product.sizes.some(isPricedSize)), [schoolProducts, conflictingProductIds]);
@@ -5474,6 +5478,11 @@ function SaleTab({
         <div role="alert" style={{ marginBottom: 12, padding: 10, borderRadius: 9, border: "1px solid #F0C36D", background: "#FFFBEB", color: "#7C4A03", fontSize: 12 }}>
           <strong>{blockedPriceProducts.length} 款商品價格有衝突，已暫停銷售及換貨，避免收錯價。</strong>
           <div style={{ marginTop: 3 }}>請管理員先在商品頁核對或清除相關款式，再重新匯入正確價格。</div>
+        </div>
+      )}
+      {unpricedProducts.length > 0 && (
+        <div role="status" style={{ marginBottom: 12, padding: 10, borderRadius: 9, border: "1px solid #F0C36D", background: "#FFFBEB", color: "#7C4A03", fontSize: 12 }}>
+          {unpricedProducts.length} 款商品仍有尺碼未設定售價；未定價的款式或尺碼不會出現在銷售選項。請到「商品」分頁補上售價。
         </div>
       )}
       {fullReplacementMode && (
@@ -6422,7 +6431,7 @@ function DirectExchangeProductPicker({
   );
 }
 
-function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogProducts, loadLatestProducts, importResult, setImportResult, productsSaveError = "", productsSaveState = "saved", productsCatalogWarning = "", sourceIntegrityWarning = "", canManageSchools = true, canImportExport = true, schoolMeta = {}, saveSchoolMeta = async () => {}, setDeletedSchools = () => {}, selectedSchool = null, branchSchoolIds = {}, branchId = "", availableSchools }) {
+function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogProducts, loadLatestProducts, importResult, setImportResult, productsSaveError = "", productsSaveState = "saved", productsCatalogWarning = "", sourceIntegrityWarning = "", canManageSchools = true, canImportExport = true, schoolMeta = {}, saveSchoolMeta = async () => {}, setDeletedSchools = () => {}, selectedSchool = null, onSelectSchool = () => {}, branchSchoolIds = {}, branchId = "", availableSchools }) {
   const [expanded, setExpanded] = useState(null);
   const [newProductWizard, setNewProductWizard] = useState(null);
   const [importing, setImporting] = useState(false);
@@ -6549,7 +6558,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
       })
       .slice(0, 8)
     : [];
-  const newSchoolCatalogEntry = schoolCatalog[newSchoolName.trim()];
+  const newSchoolCatalogEntry = schoolCatalog[schoolCatalogKey(newSchoolName)];
 
   useEffect(() => {
     productsRef.current = products;
@@ -6905,8 +6914,9 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
   };
 
   const applyCatalogToNewSchool = (value) => {
-    const name = value.trim();
-    const match = schoolCatalog[name];
+    const name = canonicalSchoolName(value);
+    const catalogKey = schoolCatalogKey(name);
+    const match = schoolCatalog[catalogKey];
     if (!match) {
       setNewSchoolCategory("");
       return;
@@ -6917,7 +6927,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
       setNewSchoolRegion(match.region);
       setNewSchoolDistrict(match.district || HK_DISTRICTS[match.region][0]);
     }
-    setNewSchoolOutlet(outletNameForSchool(value.trim(), { [value.trim()]: match }));
+    setNewSchoolOutlet(workbookSchoolOutlets[catalogKey] || outletNameForSchool(name, { [name]: match }));
   };
 
   const selectSchoolSuggestion = (school) => {
@@ -6927,32 +6937,33 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
   };
 
   const confirmAddSchool = () => {
-    const name = newSchoolName.trim();
+    const name = canonicalSchoolName(newSchoolName);
     if (!name) {
       setNewSchoolError("請輸入學校名稱");
       return;
     }
     // 防止重複學校名（唔理大小寫同前後空格）
-    const dup = schools.find((sc) => sc.toLowerCase() === name.toLowerCase());
+    const dup = schools.find((sc) => canonicalSchoolName(sc).toLowerCase() === name.toLowerCase());
     if (dup) {
       alert(`「${dup}」已經存在，唔可以重複新增。`);
       return;
     }
-    const nextDeletedSchools = [...deletedSchoolsRuntime].filter((school) => school !== name);
+    const nextDeletedSchools = [...deletedSchoolsRuntime].filter((school) => canonicalSchoolName(school) !== name);
     if (nextDeletedSchools.length !== deletedSchoolsRuntime.size) {
       deletedSchoolsRuntime = new Set(nextDeletedSchools);
       setDeletedSchools(nextDeletedSchools);
       window.storage.set("deleted-schools", JSON.stringify(nextDeletedSchools), false).catch((e) => console.error("更新已刪除學校清單失敗", e));
     }
-    const catalogEntry = schoolCatalog[name];
+    const catalogEntry = schoolCatalog[schoolCatalogKey(name)];
     const schoolMetaEntry = catalogEntry
       ? { category: catalogEntry.category || "", level: catalogEntry.level || newSchoolLevel, region: catalogEntry.region || newSchoolRegion, district: catalogEntry.district || newSchoolDistrict }
       : { category: "", level: newSchoolLevel, region: newSchoolRegion, district: newSchoolDistrict };
-    schoolMetaEntry.outletName = newSchoolOutlet;
+    schoolMetaEntry.outletName = workbookSchoolOutlets[schoolCatalogKey(name)] || newSchoolOutlet;
     if (!productsRef.current.some((product) => schoolOf(product) === name)) {
       addSchoolStarterProduct(name, { ...schoolMeta, [name]: schoolMetaEntry });
     }
     saveSchoolMeta({ ...schoolMeta, [name]: schoolMetaEntry });
+    onSelectSchool(name);
     setAddingSchool(false);
     setNewSchoolName("");
     setNewSchoolError("");
@@ -8361,7 +8372,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
               const value = e.target.value;
               setNewSchoolName(value);
               setNewSchoolError("");
-              if (!schoolCatalog[value.trim()]) setNewSchoolCategory("");
+              if (!schoolCatalog[schoolCatalogKey(value)]) setNewSchoolCategory("");
             }}
             onBlur={(e) => {
               window.setTimeout(() => applyCatalogToNewSchool(e.target.value), 0);
