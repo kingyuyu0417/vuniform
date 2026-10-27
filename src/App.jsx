@@ -57,6 +57,7 @@ import { buildExchangeComparisonRows } from "./data/exchangeComparison";
 import { naturalSizeSort } from "./data/sizeSort";
 import { calculateMatrixPrices } from "./data/matrixPricing";
 import { canReplaceOrder, getReplacementBranchId, getReplacementSettlement } from "./data/orderReplacement";
+import { findProductForOrderItem } from "./data/orderProductMatching";
 import { calculateCashSettlement, findPossibleDuplicateSale, isExchangeAdjustmentOrder, PAYMENT_METHOD_LABELS, PAYMENT_METHOD_LABELS_EN, summarizeDailyCloseout } from "./data/salesCloseout";
 import { encodeReceiptQrPayload } from "./data/receiptQrPayload";
 import {
@@ -3321,8 +3322,10 @@ export default function UniformPOS() {
     setPaymentMethod(order.paymentMethod || "cash");
     setRefundMethod(order.paymentMethod || "cash");
     setCart((order.items || []).map((item) => {
-      const product = products.find((candidate) => String(candidate.id) === String(item.productId))
-        || products.find((candidate) => candidate.name === item.name);
+      const product = findProductForOrderItem(products, {
+        school: canonicalSchoolName(order.school || selectedSchool),
+        branchId: order.branchId,
+      }, item);
       const matchingSize = product?.sizes?.find((size) => sizeIdentityKey(size) === sizeIdentityKey(item));
       return {
         key: uid(),
@@ -3389,8 +3392,10 @@ export default function UniformPOS() {
       return false;
     }
     const exchangeItems = items.map((item) => {
-      const product = products.find((candidate) => String(candidate.id) === String(item.productId))
-        || products.find((candidate) => candidate.name === item.name);
+      const product = findProductForOrderItem(products, {
+        school: canonicalSchoolName(order.school || selectedSchool),
+        branchId: order.branchId,
+      }, item);
       const originalSize = product?.sizes?.find((size) => sizeIdentityKey(size) === sizeIdentityKey(item))
         || product?.sizes?.find((size) => String(size.size) === String(item.size) && isTailoredSize(size) === isTailoredSize(item))
         || {
@@ -3655,7 +3660,10 @@ export default function UniformPOS() {
 
   const handleHandover = (ticket) => {
     const orderItems = ticket.items.map((item) => {
-      const product = products.find((p) => p.name === item.productName);
+      const product = findProductForOrderItem(products, {
+        school: canonicalSchoolName(ticket.school || ticket.school_id || ticket.schoolId || selectedSchool),
+        branchId: ticket.branchId || ticket.branch_id,
+      }, item);
       const sizeEntry = product?.sizes?.find((s) => sizeIdentityKey(s) === sizeIdentityKey(item))
         || product?.sizes?.find((s) => String(s.size) === String(item.size) && isTailoredSize(s) === isTailoredSize(item));
       const price = Number(item.price || sizeEntry?.price || 0);
@@ -3712,7 +3720,10 @@ export default function UniformPOS() {
     const readyItems = sourceItems.map((item, index) => {
       const productName = item.product_name || item.productName || item.name || "未知產品";
       const productId = item.product_id || item.productId || "";
-      const product = products.find((p) => p.id === productId || p.name === productName) || null;
+      const product = findProductForOrderItem(products, {
+        school: canonicalSchoolName(order.school || order.school_id || order.schoolId || selectedSchool),
+        branchId: order.branchId || order.branch_id,
+      }, { productId, name: productName });
       const size = item.size || "";
       const length = item.length || "";
       const isTailored = Boolean(item.isTailored || item.is_tailored);
@@ -4991,7 +5002,6 @@ function SaleTab({
   const [directExchangeLength, setDirectExchangeLength] = useState("");
   const pricedCart = calculateCartLineTotals(cart);
   const schools = useMemo(() => listSchools(products), [products]);
-  const productsById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
   const conflictingProductIds = useMemo(() => findUnresolvedPriceConflictProductIds(products), [products]);
   const schoolProducts = useMemo(() => selectedSchool
     ? products.filter((product) => schoolOf(product) === selectedSchool)
@@ -5016,7 +5026,7 @@ function SaleTab({
     )
     : [], [salesLog, selectedSchool, exchangeDate]);
   const sortedProducts = filteredProducts;
-  const selectedProductData = productsById.get(selectedProduct);
+  const selectedProductData = schoolProducts.find((product) => product.id === selectedProduct);
   const exchangeSourceReceiptId = cart.find((item) => item.exchangeSourceReceiptId)?.exchangeSourceReceiptId || "";
   const fullReplacementMode = Boolean(fullSaleReplacement?.id);
   const standardExchangeMode = exchangeMode && !fullReplacementMode;
