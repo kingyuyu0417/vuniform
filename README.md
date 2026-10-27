@@ -120,6 +120,8 @@ Cloudflare Pages 會在每次 `git push` 後自動部署。專案的 Cloudflare 
 
 數量優惠功能亦須先執行更新後的 [idempotent-sales-checkout.sql](./supabase/idempotent-sales-checkout.sql) 及 [replace-sales-order.sql](./supabase/replace-sales-order.sql)，再部署前端；其後在商品管理逐尺碼設定兩件優惠總價。
 
+如要啟用銷售單據即時同步，部署前請先在 Supabase SQL Editor 執行 [sales-orders-realtime.sql](./supabase/sales-orders-realtime.sql)。此 SQL 只將 `public.orders` 加入 Realtime publication，資料仍按現有 RLS 權限傳送。
+
 目前 schema 的匿名政策只適合測試。正式公開前，必須改用 Supabase Auth 和更嚴格的 Row Level Security，避免任何人讀寫全部 POS 資料。
 
 ## 預設登入 PIN

@@ -58,6 +58,7 @@ import { naturalSizeSort } from "./data/sizeSort";
 import { calculateMatrixPrices } from "./data/matrixPricing";
 import { canReplaceOrder, getReplacementBranchId, getReplacementSettlement } from "./data/orderReplacement";
 import { findProductForOrderItem } from "./data/orderProductMatching";
+import { mergeOrderUpdates } from "./data/orderSync";
 import { calculateCashSettlement, findPossibleDuplicateSale, isExchangeAdjustmentOrder, PAYMENT_METHOD_LABELS, PAYMENT_METHOD_LABELS_EN, summarizeDailyCloseout } from "./data/salesCloseout";
 import { encodeReceiptQrPayload } from "./data/receiptQrPayload";
 import {
@@ -2089,6 +2090,8 @@ export default function UniformPOS() {
   const productsSaveGenerationRef = useRef(0);
   const productsSaveBlockedRef = useRef(false);
   const productCatalogMigrationStateRef = useRef("idle");
+  const ordersRealtimeActiveRef = useRef(false);
+  const ordersRealtimeConnectedRef = useRef(false);
   const productsRef = useRef(products);
   const tabRef = useRef(tab);
   const productReceiptNameColumnAvailableRef = useRef(true);
@@ -2558,7 +2561,7 @@ export default function UniformPOS() {
   };
 
   // 由雲端（共用儲存）攞返最新一份 products / sales-log
-  const refreshFromCloud = async ({ skipProductsWhileEditing = true } = {}) => {
+  const refreshFromCloud = async ({ skipProductsWhileEditing = true, skipOrders = false } = {}) => {
     if (!authReady || (isSupabaseAuthEnabled && !session)) return;
     setSyncing(true);
     try {
@@ -2578,7 +2581,9 @@ export default function UniformPOS() {
             return null;
           });
 
-      const loadOrdersSafe = isSupabaseAuthEnabled 
+      const loadOrdersSafe = skipOrders
+        ? Promise.resolve(null)
+        : isSupabaseAuthEnabled
         ? loadSecureOrders().catch((error) => {
             console.error("載入訂單失敗", error);
             return null;
@@ -2658,29 +2663,30 @@ export default function UniformPOS() {
     }
   };
 
-  const loadSecureOrders = async () => {
+  const loadSecureOrders = async (orderId = "") => {
     if (!supabase) return [];
     try {
       const branchScoped = Boolean(session && session.role !== ROLES.ADMIN);
       const branchId = branchScoped ? session.branchId || "__unassigned__" : "";
-      const selectOrders = (includeReceiptName, includePromotion, includeUntrackedExchange) => supabase
-        .from("orders")
-        .select(`id, school, branch_id, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, ${includeUntrackedExchange ? "untracked_exchange, " : ""}replacement_source_receipt_id, replacement_reason, settlement_delta, replacement_cash_received, replacement_change_due, adjustment_reason, payment_method, refund_method, refund_due, duplicate_confirmed, duplicate_source_receipt_id, voided_at, voided_by, void_reason, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, ${includeReceiptName ? "receipt_name_en, " : ""}price, qty, is_return, source_order_item_id${includePromotion ? ", two_piece_price, discount_amount" : ""})`)
-        .order("created_at", { ascending: false });
+      const selectOrders = (includeReceiptName, includePromotion, includeUntrackedExchange) => {
+        let query = supabase
+          .from("orders")
+          .select(`id, school, branch_id, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, ${includeUntrackedExchange ? "untracked_exchange, " : ""}replacement_source_receipt_id, replacement_reason, settlement_delta, replacement_cash_received, replacement_change_due, adjustment_reason, payment_method, refund_method, refund_due, duplicate_confirmed, duplicate_source_receipt_id, voided_at, voided_by, void_reason, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, ${includeReceiptName ? "receipt_name_en, " : ""}price, qty, is_return, source_order_item_id${includePromotion ? ", two_piece_price, discount_amount" : ""})`)
+          .order("created_at", { ascending: false });
+        if (orderId) query = query.eq("id", orderId);
+        if (branchScoped) query = query.eq("branch_id", branchId);
+        return query;
+      };
       let includeReceiptName = orderReceiptNameColumnAvailableRef.current;
       let includePromotion = true;
       let includeUntrackedExchange = true;
-      let query = selectOrders(includeReceiptName, includePromotion, includeUntrackedExchange);
-      if (branchScoped) query = query.eq("branch_id", branchId);
-      let { data, error } = await query;
+      let { data, error } = await selectOrders(includeReceiptName, includePromotion, includeUntrackedExchange);
 
       if (error?.code === "42703" && /two_piece_price|discount_amount/i.test(String(error.message || ""))) {
         console.warn("資料庫尚未安裝數量優惠商品明細欄位，改用相容查詢載入銷售記錄。", error);
         orderItemPromotionColumnsAvailableRef.current = false;
         includePromotion = false;
-        let legacyQuery = selectOrders(includeReceiptName, includePromotion, includeUntrackedExchange);
-        if (branchScoped) legacyQuery = legacyQuery.eq("branch_id", branchId);
-        ({ data, error } = await legacyQuery);
+        ({ data, error } = await selectOrders(includeReceiptName, includePromotion, includeUntrackedExchange));
       } else if (!error) {
         orderItemPromotionColumnsAvailableRef.current = true;
       }
@@ -2689,16 +2695,12 @@ export default function UniformPOS() {
         console.warn("資料庫尚未安裝英文收據名稱欄位，改用相容查詢載入銷售記錄。", error);
         orderReceiptNameColumnAvailableRef.current = false;
         includeReceiptName = false;
-        let legacyQuery = selectOrders(includeReceiptName, includePromotion, includeUntrackedExchange);
-        if (branchScoped) legacyQuery = legacyQuery.eq("branch_id", branchId);
-        ({ data, error } = await legacyQuery);
+        ({ data, error } = await selectOrders(includeReceiptName, includePromotion, includeUntrackedExchange));
       }
       if (error?.code === "42703" && String(error.message || "").includes("untracked_exchange")) {
         console.warn("資料庫尚未安裝無原單退換欄位，改用相容查詢載入銷售記錄。", error);
         includeUntrackedExchange = false;
-        let legacyQuery = selectOrders(includeReceiptName, includePromotion, includeUntrackedExchange);
-        if (branchScoped) legacyQuery = legacyQuery.eq("branch_id", branchId);
-        ({ data, error } = await legacyQuery);
+        ({ data, error } = await selectOrders(includeReceiptName, includePromotion, includeUntrackedExchange));
       }
       if (error) {
         console.error("loadSecureOrders 查詢失敗", error);
@@ -2944,11 +2946,61 @@ export default function UniformPOS() {
     return () => clearTimeout(timer);
   }, [loaded]);
 
-  // 每30秒自動由雲端拉一次最新資料
+  useEffect(() => {
+    if (!authReady || !session || !supabase || !isSupabaseAuthEnabled) return undefined;
+    let active = true;
+    const branchFilter = session.role === ROLES.ADMIN || !session.branchId
+      ? ""
+      : `branch_id=eq.${session.branchId}`;
+    const channel = supabase
+      .channel(`sales-orders:${session.id}`)
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "orders",
+        ...(branchFilter ? { filter: branchFilter } : {}),
+      }, async (payload) => {
+        if (!active) return;
+        const orderId = String(payload.new?.id || payload.old?.id || "");
+        if (!orderId) return;
+        if (payload.eventType === "DELETE") {
+          setSalesLog((current) => current.filter((order) => String(order.id) !== orderId));
+          return;
+        }
+        try {
+          const updatedOrders = await loadSecureOrders(orderId);
+          if (!active || !Array.isArray(updatedOrders)) return;
+          setSalesLog((current) => mergeOrderUpdates(current, updatedOrders));
+        } catch (error) {
+          console.error("即時同步銷售單據失敗", error);
+        }
+      })
+      .subscribe((status) => {
+        if (!active) return;
+        if (status === "SUBSCRIBED") {
+          ordersRealtimeActiveRef.current = true;
+          if (ordersRealtimeConnectedRef.current) {
+            refreshFromCloud({ skipProductsWhileEditing: false });
+          }
+          ordersRealtimeConnectedRef.current = true;
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          ordersRealtimeActiveRef.current = false;
+          console.warn(`銷售記錄即時同步狀態：${status}，將使用定時同步。`);
+        }
+      });
+
+    return () => {
+      active = false;
+      ordersRealtimeActiveRef.current = false;
+      supabase.removeChannel(channel);
+    };
+  }, [authReady, session?.id, session?.role, session?.branchId]);
+
+  // Keep the existing poll as a fallback; realtime normally avoids repeatedly reloading order history.
   useEffect(() => {
     if (!authReady || (isSupabaseAuthEnabled && !session)) return undefined;
     const timer = setInterval(() => {
-      refreshFromCloud();
+      refreshFromCloud({ skipOrders: ordersRealtimeActiveRef.current });
     }, 30000);
     return () => clearInterval(timer);
   }, [authReady, session]);
