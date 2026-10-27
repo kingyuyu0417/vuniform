@@ -4977,8 +4977,6 @@ function SaleTab({
   };
   const [exchangePickerOpen, setExchangePickerOpen] = useState(false);
   const [exchangeOrder, setExchangeOrder] = useState(null);
-  const [exchangeItems, setExchangeItems] = useState([]);
-  const [exchangeItemQuantities, setExchangeItemQuantities] = useState({});
   const [exchangeSearch, setExchangeSearch] = useState("");
   const [exchangePreviewOpen, setExchangePreviewOpen] = useState(false);
   const [exchangeReason, setExchangeReason] = useState("");
@@ -4991,8 +4989,6 @@ function SaleTab({
   const [directExchangePickerOpen, setDirectExchangePickerOpen] = useState(false);
   const [directExchangeProductId, setDirectExchangeProductId] = useState("");
   const [directExchangeLength, setDirectExchangeLength] = useState("");
-  const [directExchangeQuantityPrompt, setDirectExchangeQuantityPrompt] = useState(null);
-  const [directExchangeItems, setDirectExchangeItems] = useState([]);
   const pricedCart = calculateCartLineTotals(cart);
   const schools = useMemo(() => listSchools(products), [products]);
   const productsById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
@@ -5117,12 +5113,25 @@ function SaleTab({
   useEffect(() => {
     setExchangePickerOpen(false);
     setExchangeOrder(null);
-    setExchangeItems([]);
-    setExchangeItemQuantities({});
     setExchangeSearch("");
   }, [selectedSchool]);
 
   const handleSizeSelect = (product, size) => {
+    if (exchangeMode && exchangeReplacementQueue.length > 0) {
+      addToCart(product, size, 1);
+      setSelectedProduct(null);
+      setSelectedLength("");
+      const nextProductId = onExchangeReplacementAdded?.();
+      if (nextProductId) {
+        setSelectedProduct(nextProductId);
+      } else if (untrackedExchangeMode) {
+        setDirectExchangeOpen(true);
+        setDirectExchangePickerOpen(true);
+      } else {
+        openExchangePicker();
+      }
+      return;
+    }
     setQuantityPrompt({ product, size, quantity: "", custom: false });
   };
 
@@ -5146,31 +5155,20 @@ function SaleTab({
     setExchangeOrder(
       sourceReceiptId && String(exchangeOrder?.id || "") === String(sourceReceiptId)
         ? exchangeOrder
-        : null,
+        : sourceReceiptId
+          ? salesLog.find((order) => String(order.id || "") === String(sourceReceiptId)) || null
+          : null,
     );
-    setExchangeItems([]);
-    setExchangeItemQuantities({});
     setExchangeSearch("");
   };
 
-  const confirmExchangeItems = () => {
-    if (!exchangeOrder || exchangeItems.length === 0) return;
-    const selectedWithQuantities = exchangeItems.map((item) => ({
-      ...item,
-      qty: Math.max(1, Math.min(
-        Math.max(0, getRemainingReturnQuantity(item, salesLog)
-          - getDraftExchangeReturnQuantity(cart, item.id, exchangeOrder.id)),
-        Number(exchangeItemQuantities[item._exchangeIndex] || 1),
-      )),
-    }));
-    if (onExchange?.(exchangeOrder, selectedWithQuantities) === false) return;
-    setExchangePickerOpen(false);
-    setExchangeItems([]);
-    setExchangeItemQuantities({});
-  };
-
   const startDirectExchange = (product, size, quantity = 1) => {
-    setDirectExchangeItems([{
+    const started = onExchange?.({
+      id: "",
+      school: selectedSchool,
+      customerName: "",
+      customerPhone: "",
+    }, [{
       productId: product.id,
       name: product.name,
       size: size.size,
@@ -5178,39 +5176,31 @@ function SaleTab({
       isTailored: Boolean(size.isTailored),
       price: Number(size.price || 0),
       qty: quantity,
-    }]);
-    setDirectExchangeQuantityPrompt(null);
+    }]) !== false;
+    if (!started) return;
+    setDirectExchangePickerOpen(false);
+    setDirectExchangeOpen(false);
     setDirectExchangeProductId("");
     setDirectExchangeLength("");
+    return true;
   };
 
   const closeDirectExchangePicker = () => {
     setDirectExchangePickerOpen(false);
-    setDirectExchangeQuantityPrompt(null);
     setDirectExchangeProductId("");
     setDirectExchangeLength("");
   };
 
   const selectDirectExchangeProduct = (productId) => {
-    setDirectExchangeQuantityPrompt(null);
     setDirectExchangeLength("");
     setDirectExchangeProductId(productId);
   };
 
-  const confirmDirectExchange = () => {
-    if (directExchangeItems.length === 0) return;
-    if (onExchange?.({
-      id: "",
-      school: selectedSchool,
-      customerName: "",
-      customerPhone: "",
-    }, directExchangeItems) === false) return;
-    setDirectExchangeQuantityPrompt(null);
-    setDirectExchangePickerOpen(false);
-    setDirectExchangeOpen(false);
-    setDirectExchangeProductId("");
-    setDirectExchangeLength("");
-    setDirectExchangeItems([]);
+  const selectReceiptExchangeItem = (item, remaining) => {
+    if (!exchangeOrder || remaining <= 0) return;
+    const selectedItem = { ...item, qty: 1 };
+    if (onExchange?.(exchangeOrder, [selectedItem]) === false) return;
+    setExchangePickerOpen(false);
   };
 
   return (
@@ -5252,7 +5242,6 @@ function SaleTab({
         type="button"
         disabled={!selectedSchool || (cart.length > 0 && !untrackedExchangeMode) || fullReplacementMode || checkoutSubmitting || exchangeReplacementQueue.length > 0}
         onClick={() => {
-          setDirectExchangeItems([]);
           setDirectExchangeProductId("");
           setDirectExchangeLength("");
           setDirectExchangeOpen(true);
@@ -5268,41 +5257,26 @@ function SaleTab({
       {exchangeMode && (
         <div style={{ marginTop: -4, marginBottom: 12, padding: "8px 10px", borderRadius: 8, background: "#F8FAFC", color: "#475569", fontSize: 12, lineHeight: 1.5 }}>
           {exchangeReplacementQueue.length > 0
-            ? "本件第二步：為剛才的退回貨品選擇要換入的新貨；完成後再開始下一件。"
-            : "逐件處理：先選一件退回貨品，再選這件要換入的新貨；完成後可繼續下一件。"}
+            ? "請直接選擇本件換入尺碼；選好後會自動進入下一件退回貨品。"
+            : "每次先選退回貨品，然後直接選換入尺碼；完成後自動進入下一件。"}
         </div>
       )}
       {directExchangeOpen && (
         <div style={{ background: "#ECFDF3", border: "1px solid #86EFAC", borderRadius: 10, padding: 12, marginBottom: 12 }}>
-          <div style={{ color: "#166534", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>第一步：選一件客人退回的款式及尺碼，下一步選擇換入新貨</div>
-          {directExchangeItems.length > 0 && (
-            <div style={{ background: "#fff", border: "1px solid #86EFAC", borderRadius: 8, padding: 8, marginBottom: 10 }}>
-              <div style={{ color: "#166534", fontSize: 12, fontWeight: 800, marginBottom: 6 }}>本件退回貨品</div>
-              {directExchangeItems.map((item) => (
-                <div key={`${item.productId}-${item.size}-${item.length}`} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, padding: "4px 0", borderBottom: "1px solid #DCFCE7" }}>
-                  <span>{productDisplayName(item.name)}（{sizeLabel(item)}）× {item.qty}{productUnit(item.name, item.size)}；抵扣 {fmt(item.price * item.qty)}</span>
-                  <button className="pos-btn" onClick={() => setDirectExchangeItems((current) => current.filter((entry) => entry !== item))} style={{ padding: "2px 6px", background: "transparent", color: "#166534", fontSize: 11 }}>移除</button>
-                </div>
-              ))}
-              <button className="pos-btn" onClick={confirmDirectExchange} style={{ width: "100%", marginTop: 8, padding: 9, borderRadius: 8, background: "#166534", color: "#fff", fontWeight: 800 }}>
-                確認此件退回，下一步選新貨
-              </button>
-            </div>
-          )}
+          <div style={{ color: "#166534", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>選擇退回款式及尺碼後，會直接跳到本件換入尺碼</div>
           <button
             type="button"
             className="pos-btn"
             onClick={() => {
               setDirectExchangeProductId("");
               setDirectExchangeLength("");
-              setDirectExchangeQuantityPrompt(null);
               setDirectExchangePickerOpen(true);
             }}
             style={{ width: "100%", padding: 10, borderRadius: 8, background: "#fff", border: "1px solid #86EFAC", color: "#166534", fontWeight: 800 }}
           >
             + 選擇本件退回款式及尺碼
           </button>
-          <button className="pos-btn" onClick={() => { setDirectExchangeOpen(false); setDirectExchangePickerOpen(false); setDirectExchangeQuantityPrompt(null); setDirectExchangeItems([]); }} style={{ width: "100%", marginTop: 8, padding: 7, background: "transparent", color: "#166534" }}>取消</button>
+          <button className="pos-btn" onClick={() => { setDirectExchangeOpen(false); setDirectExchangePickerOpen(false); }} style={{ width: "100%", marginTop: 8, padding: 7, background: "transparent", color: "#166534" }}>取消</button>
         </div>
       )}
       {directExchangeOpen && directExchangePickerOpen && createPortal(
@@ -5310,16 +5284,13 @@ function SaleTab({
           products={filteredProducts}
           productId={directExchangeProductId}
           selectedLength={directExchangeLength}
-          quantityPrompt={directExchangeQuantityPrompt}
+          quantityPrompt={null}
           onSelectProduct={selectDirectExchangeProduct}
           onSelectLength={setDirectExchangeLength}
-          onSelectSize={(product, size) => setDirectExchangeQuantityPrompt({ size, custom: false, quantity: "" })}
-          onSetQuantityPrompt={setDirectExchangeQuantityPrompt}
-          onAddQuantity={startDirectExchange}
+          onSelectSize={(product, size) => startDirectExchange(product, size)}
           onBackToProducts={() => {
             setDirectExchangeProductId("");
             setDirectExchangeLength("");
-            setDirectExchangeQuantityPrompt(null);
           }}
           onClose={closeDirectExchangePicker}
         />,
@@ -5341,7 +5312,7 @@ function SaleTab({
                 if (!query) return true;
                 return String(order.id || "").toLowerCase().includes(query);
               }).slice(0, 20).map((order) => (
-                <button key={order.id} className="pos-btn" onClick={() => { setExchangeOrder(order); setExchangeItems([]); setExchangeItemQuantities({}); }} style={{ textAlign: "left", padding: "9px 10px", borderRadius: 8, background: "#fff", border: "1px solid #FDBA74", color: "#7C2D12" }}>
+                <button key={order.id} className="pos-btn" onClick={() => setExchangeOrder(order)} style={{ textAlign: "left", padding: "9px 10px", borderRadius: 8, background: "#fff", border: "1px solid #FDBA74", color: "#7C2D12" }}>
                   #{order.id} · {order.date} · {fmt(order.total)}
                 </button>
               ))}
@@ -5353,12 +5324,8 @@ function SaleTab({
       )}
       {exchangePickerOpen && exchangeOrder && createPortal(
         <SaleSelectionModal
-          title="本件第一步：選一款要退回的貨品及數量"
-          onClose={() => {
-            setExchangePickerOpen(false);
-            setExchangeItems([]);
-            setExchangeItemQuantities({});
-          }}
+          title="選擇本件退回貨品，然後直接選換入尺碼"
+          onClose={() => setExchangePickerOpen(false)}
         >
           {hasUntrackedExchangeHistory(exchangeOrder, salesLog) && (
             <div role="alert" style={{ marginBottom: 8, padding: 8, borderRadius: 8, background: "#FEF2F2", color: "#991B1B", fontSize: 12 }}>
@@ -5368,44 +5335,19 @@ function SaleTab({
           {exchangeOrder.items.filter((item) => !item.exchangeReturn).map((item, index) => {
             const remaining = Math.max(0, getRemainingReturnQuantity(item, salesLog)
               - getDraftExchangeReturnQuantity(cart, item.id, exchangeOrder.id));
-            const selected = exchangeItems.some((entry) => entry._exchangeIndex === index);
-            const selectedQuantity = Number(exchangeItemQuantities[index] || 1);
             return (
-              <div key={`${item.name}-${item.size}-${index}`} style={{ padding: 8, marginBottom: 6, borderRadius: 8, background: "#fff", border: "1px solid #FDBA74", color: "#7C2D12" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <input
-                    type="checkbox"
-                    disabled={remaining <= 0}
-                    checked={selected}
-                    onChange={() => {
-                      setExchangeItems(selected ? [] : [{ ...item, _exchangeIndex: index }]);
-                      setExchangeItemQuantities(selected ? {} : { [index]: Math.min(1, remaining) });
-                    }}
-                  />
-                  <span>{productDisplayName(item.name)}（{sizeLabel(item)}）× {item.qty}{productUnit(item.name, item.size)}；尚可退 {remaining}{productUnit(item.name, item.size)}</span>
-                </label>
-                {selected && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, paddingLeft: 24 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700 }}>本件退回</span>
-                    <input
-                      type="number"
-                      min="1"
-                      max={remaining}
-                      inputMode="numeric"
-                      value={selectedQuantity}
-                      onChange={(event) => {
-                        const value = Number(event.target.value);
-                        setExchangeItemQuantities((previous) => ({ ...previous, [index]: Number.isFinite(value) ? Math.max(1, Math.min(remaining, value)) : 1 }));
-                      }}
-                      style={{ width: 64, padding: "6px 8px", border: "1px solid #FDBA74", borderRadius: 6, fontSize: 16, fontWeight: 700 }}
-                    />
-                    <span style={{ fontSize: 12 }}>{productUnit(item.name, item.size)}（最多 {remaining}）</span>
-                  </div>
-                )}
-              </div>
+              <button
+                key={`${item.name}-${item.size}-${index}`}
+                type="button"
+                className="pos-btn"
+                disabled={remaining <= 0}
+                onClick={() => selectReceiptExchangeItem(item, remaining)}
+                style={{ width: "100%", padding: 10, marginBottom: 6, borderRadius: 8, background: remaining > 0 ? "#fff" : "#F8FAFC", border: "1px solid #FDBA74", color: "#7C2D12", textAlign: "left", opacity: remaining > 0 ? 1 : 0.55 }}
+              >
+                {productDisplayName(item.name)}（{sizeLabel(item)}）× {item.qty}{productUnit(item.name, item.size)}；尚可退 {remaining}{productUnit(item.name, item.size)}。選擇後即刻選換入尺碼
+              </button>
             );
           })}
-          <button className="pos-btn" disabled={exchangeItems.length !== 1} onClick={confirmExchangeItems} style={{ width: "100%", padding: 10, borderRadius: 8, background: "#166534", color: "#fff", fontWeight: 700 }}>確定此件退回，下一步選擇換入新貨</button>
           <button className="pos-btn" onClick={() => setExchangeOrder(null)} style={{ width: "100%", marginTop: 6, padding: 7, background: "transparent", color: "#9A3412" }}>返回單據選擇</button>
         </SaleSelectionModal>,
         document.body,
@@ -9242,50 +9184,26 @@ function ReceiptModal({ order, orders = [], language = "zh", actionError = "", o
         )}
         {canExchangeItems && (exchangeSelection ? (
           <div style={{ background: "#FFF7ED", border: "1px solid #FDBA74", borderRadius: 10, padding: 12, marginBottom: 8 }}>
-            <div style={{ color: "#9A3412", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>本件第一步：選一款要退回的貨品及數量</div>
+            <div style={{ color: "#9A3412", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>選擇本件退回貨品，系統會直接帶你選擇換入尺碼</div>
             {order.items.map((item, index) => {
               const remaining = getRemainingReturnQuantity(item, orders);
-              const selectedItem = exchangeSelection.find((selected) => selected.index === index);
               return (
-                <div key={`${item.name}-${item.size}-${index}`} style={{ width: "100%", boxSizing: "border-box", padding: "10px", marginBottom: 6, borderRadius: 8, background: "#fff", border: "1px solid #FDBA74", color: "#7C2D12" }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: remaining > 0 ? "pointer" : "not-allowed" }}>
-                    <input
-                      type="checkbox"
-                      disabled={remaining <= 0}
-                      checked={Boolean(selectedItem)}
-                      onChange={() => setExchangeSelection((current) => current.some((selected) => selected.index === index)
-                        ? []
-                        : [{ ...item, index, qty: remaining }])}
-                    />
-                    <span>{item.name}（{sizeLabel(item)}）× {item.qty}，尚可退 {remaining}，原價 {fmt(item.price)}</span>
-                  </label>
-                  {selectedItem && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, paddingLeft: 24 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700 }}>本件退回</span>
-                      <input
-                        type="number"
-                        min="1"
-                        max={remaining}
-                        value={selectedItem.qty}
-                        onChange={(event) => {
-                          const value = Number(event.target.value);
-                          setExchangeSelection((current) => current.map((selected) => selected.index === index
-                            ? { ...selected, qty: Number.isFinite(value) ? Math.max(1, Math.min(remaining, value)) : 1 }
-                            : selected));
-                        }}
-                        style={{ width: 64, padding: "6px 8px", border: "1px solid #FDBA74", borderRadius: 6, fontSize: 16, fontWeight: 700 }}
-                      />
-                      <span style={{ fontSize: 12 }}>最多 {remaining}</span>
-                    </div>
-                  )}
-                </div>
+                <button
+                  key={`${item.name}-${item.size}-${index}`}
+                  type="button"
+                  className="pos-btn"
+                  disabled={remaining <= 0}
+                  onClick={() => {
+                    if (onExchange?.(order, [{ ...item, qty: 1 }]) !== false) {
+                      setExchangeSelection(null);
+                    }
+                  }}
+                  style={{ width: "100%", boxSizing: "border-box", padding: 10, marginBottom: 6, borderRadius: 8, background: "#fff", border: "1px solid #FDBA74", color: "#7C2D12", textAlign: "left", opacity: remaining > 0 ? 1 : 0.55 }}
+                >
+                  {item.name}（{sizeLabel(item)}）× {item.qty}，尚可退 {remaining}，原價 {fmt(item.price)}。選擇後即刻選換入尺碼
+                </button>
               );
             })}
-            <button type="button" className="pos-btn" disabled={exchangeSelection.length !== 1} onClick={() => {
-              if (onExchange?.(order, exchangeSelection) !== false) setExchangeSelection([]);
-            }} style={{ width: "100%", padding: "10px", marginTop: 4, borderRadius: 8, background: "#166534", border: "none", color: "#fff", fontWeight: 700 }}>
-              確定此件退回，下一步選擇換入新貨
-            </button>
             <button type="button" className="pos-btn" onClick={() => setExchangeSelection(null)} style={{ width: "100%", padding: "8px", borderRadius: 8, background: "transparent", color: "#9A3412" }}>
               取消
             </button>
