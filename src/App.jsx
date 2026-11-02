@@ -2638,7 +2638,7 @@ export default function UniformPOS() {
   };
 
   useEffect(() => {
-    if (!loaded) return;
+    if (!loaded || productsReadySessionKey !== currentProductsSessionKey) return;
     if (!selectedSchool || !schools.includes(selectedSchool)) {
       setSelectedSchool(() => (
         schools.includes(DESIGNATED_SCHOOL)
@@ -2646,24 +2646,29 @@ export default function UniformPOS() {
           : (schools[0] || DESIGNATED_SCHOOL)
       ));
     }
-  }, [loaded, schools, selectedSchool]);
+  }, [loaded, productsReadySessionKey, currentProductsSessionKey, schools, selectedSchool]);
 
   useEffect(() => {
-    if (!loaded) return;
+    if (!loaded || productsReadySessionKey !== currentProductsSessionKey) return;
     if (location.pathname !== "/menu") return;
     const routeSchool = new URLSearchParams(location.search).get("school_id")
       || new URLSearchParams(location.search).get("school");
     if (routeSchool && schools.includes(routeSchool) && routeSchool !== selectedSchool) {
       setSelectedSchool(routeSchool);
     }
-  }, [loaded, location.pathname, location.search, schools, selectedSchool]);
+  }, [loaded, productsReadySessionKey, currentProductsSessionKey, location.pathname, location.search, schools, selectedSchool]);
 
   useEffect(() => {
-    if (!loaded || !selectedSchool || !schools.includes(selectedSchool)) return;
+    if (
+      !loaded
+      || productsReadySessionKey !== currentProductsSessionKey
+      || !selectedSchool
+      || !schools.includes(selectedSchool)
+    ) return;
     window.storage.set("last-school", selectedSchool, false).catch((error) => {
       console.error("記住學校選擇失敗", error);
     });
-  }, [loaded, selectedSchool]);
+  }, [loaded, productsReadySessionKey, currentProductsSessionKey, selectedSchool, schools]);
 
   useEffect(() => {
     if (!products.some((product) => product.id === selectedProduct)) {
