@@ -2315,7 +2315,7 @@ export default function UniformPOS() {
     });
     const timer = window.setInterval(cleanup, 30 * 1000);
     return () => window.clearInterval(timer);
-  }, [authReady, session]);
+  }, [authReady, session?.id]);
 
   const persistHeldSales = (next) => {
     setHeldSales(next);
@@ -2449,6 +2449,14 @@ export default function UniformPOS() {
     const { data: listener } = supabase.auth.onAuthStateChange((event) => {
       if ((event === "SIGNED_IN" || event === "PASSWORD_RECOVERY") && isPasswordSetupLink()) {
         setPasswordSetupRequired(true);
+      }
+      if (event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED" || event === "SIGNED_IN" || event === "PASSWORD_RECOVERY") {
+        return;
+      }
+      if (event === "SIGNED_OUT") {
+        setSession(null);
+        setAuthReady(true);
+        return;
       }
       loadAuthSession();
     });
@@ -3029,18 +3037,12 @@ export default function UniformPOS() {
 
     (async () => {
       try {
-        const salesLoadKey = isSupabaseAuthEnabled ? session.id : "local";
-        const shouldLoadSalesHistory = !isSupabaseAuthEnabled || routeTab === "sale";
-        if (shouldLoadSalesHistory && salesHistoryLoadSessionRef.current !== salesLoadKey) {
-          salesHistoryLoadSessionRef.current = salesLoadKey;
-          const salesPromise = isSupabaseAuthEnabled
-            ? loadSecureOrders()
-            : window.storage.get("sales-log", true);
+        if (!isSupabaseAuthEnabled && salesHistoryLoadSessionRef.current !== "local") {
+          salesHistoryLoadSessionRef.current = "local";
+          const salesPromise = window.storage.get("sales-log", true);
           salesPromise.then((sales) => {
             if (!active) return;
-            if (isSupabaseAuthEnabled ? Array.isArray(sales) : sales) {
-              setSalesLog(isSupabaseAuthEnabled ? sales : JSON.parse(sales.value));
-            }
+            if (sales) setSalesLog(JSON.parse(sales.value));
           }).catch((error) => console.error("載入銷售記錄失敗", error));
         }
 
@@ -3101,7 +3103,12 @@ export default function UniformPOS() {
     return () => {
       active = false;
     };
-  }, [authReady, session, routeTab]);
+  }, [authReady, session?.id, session?.branchId, session?.role]);
+
+  useEffect(() => {
+    if (!authReady || !isSupabaseAuthEnabled || routeTab !== "sale" || !session?.id) return;
+    loadHistoricalSales();
+  }, [authReady, routeTab, session?.id]);
 
   // 第一次加載時自動刷新以確保從 Supabase 加載產品
   useEffect(() => {
@@ -3181,7 +3188,7 @@ export default function UniformPOS() {
       refreshFromCloud({ skipOrders: ordersRealtimeActiveRef.current });
     }, 30000);
     return () => clearInterval(timer);
-  }, [authReady, session]);
+  }, [authReady, session?.id]);
 
   const persistProducts = async (next, { orderOnly = false, insertProductIds = [], updateProductIds = [] } = {}) => {
     try {
