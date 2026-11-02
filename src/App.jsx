@@ -168,6 +168,7 @@ const DEFAULT_PRODUCTS = [
 ];
 
 const PRODUCT_CATALOG_FALLBACK = databaseProductsSnapshot;
+const hasMeaningfulProductCatalog = (items = []) => items.some((product) => product && product.school && product.school !== DEFAULT_SCHOOL);
 
 const fmt = (n) => `$${Math.round(n).toLocaleString("en-HK")}`;
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -2054,6 +2055,9 @@ export default function UniformPOS() {
   const location = useLocation();
   const routeTab = STAFF_ROUTE_TABS[location.pathname];
   const [loaded, setLoaded] = useState(false); // 啟用正確的初始化以從 Supabase 加載產品
+  const startupRefreshAttemptedRef = useRef(false);
+  const refreshFromCloudInFlightRef = useRef(false);
+  const startupHydrationKeyRef = useRef("");
   const [products, setProducts] = useState(() => enforceAuthoritativeProducts(DEFAULT_PRODUCTS));
   const [deletedSchools, setDeletedSchools] = useState([]);
   const [salesLog, setSalesLog] = useState([]);
@@ -2672,6 +2676,8 @@ export default function UniformPOS() {
   // 由雲端（共用儲存）攞返最新一份 products / sales-log
   const refreshFromCloud = async ({ skipProductsWhileEditing = true, skipOrders = false } = {}) => {
     if (!authReady || (isSupabaseAuthEnabled && !session)) return;
+    if (refreshFromCloudInFlightRef.current) return;
+    refreshFromCloudInFlightRef.current = true;
     setSyncing(true);
     try {
       const refreshGeneration = productsSaveGenerationRef.current;
@@ -2768,6 +2774,7 @@ export default function UniformPOS() {
       console.error("同步失敗，但應用應繼續運行", e);
       // 不重新拋出異常，允許應用繼續運行
     } finally {
+      refreshFromCloudInFlightRef.current = false;
       setSyncing(false);
     }
   };
@@ -3098,14 +3105,24 @@ export default function UniformPOS() {
 
   // 第一次加載時自動刷新以確保從 Supabase 加載產品
   useEffect(() => {
+    if (!loaded || !authReady || (isSupabaseAuthEnabled && !session)) return undefined;
+
+    const startupHydrationKey = `${session?.id || "guest"}:${selectedSchool || ""}:${products.length}:${products.some((product) => product?.school && product.school !== DEFAULT_SCHOOL)}`;
+    const shouldAttemptStartupRefresh = !startupRefreshAttemptedRef.current
+      && products.length <= 20
+      && !hasMeaningfulProductCatalog(products)
+      && startupHydrationKeyRef.current !== startupHydrationKey;
+
+    if (!shouldAttemptStartupRefresh) return undefined;
+
+    startupHydrationKeyRef.current = startupHydrationKey;
+    startupRefreshAttemptedRef.current = true;
     const timer = setTimeout(() => {
-      if (loaded && authReady && (!isSupabaseAuthEnabled || session) && products.length <= 20) {
-        // 如果只有默認產品或很少的產品，嘗試從 Supabase 重新加載
-        refreshFromCloud({ skipProductsWhileEditing: false, skipOrders: true });
-      }
+      // 只有在仍停留在預設示範資料庫時才在啟動期重試，避免對已載入正式商品庫進行冗餘 refresh。
+      refreshFromCloud({ skipProductsWhileEditing: false, skipOrders: true });
     }, 2000);
     return () => clearTimeout(timer);
-  }, [loaded]);
+  }, [loaded, authReady, session, selectedSchool, products]);
 
   useEffect(() => {
     if (!authReady || !session || !supabase || !isSupabaseAuthEnabled) return undefined;
