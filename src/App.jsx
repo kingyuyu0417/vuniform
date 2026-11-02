@@ -4566,13 +4566,18 @@ export default function UniformPOS() {
         .record-order-card:focus-visible { outline: 2px solid #1F3A5F; outline-offset: 2px; }
         .receipt-modal-overlay, .receipt-modal-panel { box-sizing: border-box; }
         .receipt-modal-header {
-          position: sticky;
-          top: -20px;
-          z-index: 2;
-          margin: -20px -20px 10px;
+          flex: 0 0 auto;
           padding: 10px 12px 10px 20px;
           background: #fff;
           border-bottom: 1px solid #E5E7EB;
+        }
+        .receipt-modal-content {
+          flex: 1 1 auto;
+          min-height: 0;
+          overflow-y: auto;
+          overscroll-behavior-y: contain;
+          -webkit-overflow-scrolling: touch;
+          padding: 10px 20px 20px;
         }
         .receipt-modal-close {
           flex: 0 0 44px;
@@ -4668,12 +4673,7 @@ export default function UniformPOS() {
           .receipt-modal-panel {
             max-height: calc(100vh - max(8px, env(safe-area-inset-top)) - 80px - env(safe-area-inset-bottom, 0px)) !important;
             max-height: calc(100dvh - max(8px, env(safe-area-inset-top)) - 80px - env(safe-area-inset-bottom, 0px)) !important;
-            padding: 16px !important;
-            overflow-x: hidden !important;
-            overflow-y: auto !important;
-            -webkit-overflow-scrolling: touch;
-            overscroll-behavior-y: contain;
-            touch-action: pan-y;
+            overflow: hidden !important;
             min-height: 0;
             flex: 0 1 auto;
             margin: 0 auto;
@@ -4681,9 +4681,11 @@ export default function UniformPOS() {
             isolation: isolate;
           }
           .receipt-modal-header {
-            top: -16px;
-            margin: -16px -16px 10px;
             padding-left: 16px;
+          }
+          .receipt-modal-content {
+            overflow-x: hidden;
+            padding: 10px 16px 16px;
           }
           .sale-product-grid { gap: 8px; }
           .sale-product-button { min-height: 76px; padding: 10px 8px !important; font-size: 16px !important; line-height: 1.35; }
@@ -9649,7 +9651,7 @@ function ReceiptModal({ order, orders = [], language = "zh", actionError = "", o
 
   return createPortal(
     <div className="receipt-modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20, overscrollBehavior: "contain" }}>
-      <div className="receipt-modal-panel" role="dialog" aria-modal="true" aria-labelledby="receipt-modal-title" style={{ background: "#fff", borderRadius: 14, maxWidth: 340, width: "100%", padding: 20, maxHeight: "85vh", overflowY: "auto" }}>
+      <div className="receipt-modal-panel" role="dialog" aria-modal="true" aria-labelledby="receipt-modal-title" style={{ background: "#fff", borderRadius: 14, maxWidth: 340, width: "100%", display: "flex", flexDirection: "column", padding: 0, maxHeight: "85vh", overflow: "hidden" }}>
         <div className="receipt-modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div id="receipt-modal-title" style={{ fontSize: 16, fontWeight: 600 }}>{english ? "Transaction completed" : "交易完成"}</div>
           <button className="pos-btn receipt-modal-close" type="button" aria-label={english ? "Close receipt" : "關閉收據"} onClick={onClose} style={{ background: "none" }}>
@@ -9657,6 +9659,7 @@ function ReceiptModal({ order, orders = [], language = "zh", actionError = "", o
           </button>
         </div>
 
+        <div className="receipt-modal-content">
         <ReceiptQR order={order} language={language} />
 
         <div style={{ background: "#FAFAF8", border: "1px dashed #ccc", borderRadius: 8, padding: 12, fontFamily: "monospace", fontSize: 12, lineHeight: 1.6, marginBottom: 14 }}>
@@ -9818,6 +9821,7 @@ function ReceiptModal({ order, orders = [], language = "zh", actionError = "", o
             <span>{btStatus.msg}</span>
           </div>
         )}
+        </div>
       </div>
     </div>,
     document.body,
