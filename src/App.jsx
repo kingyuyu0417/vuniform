@@ -2055,6 +2055,8 @@ export default function UniformPOS() {
   const location = useLocation();
   const routeTab = STAFF_ROUTE_TABS[location.pathname];
   const [loaded, setLoaded] = useState(false); // 啟用正確的初始化以從 Supabase 加載產品
+  const [productsReadySessionKey, setProductsReadySessionKey] = useState("");
+  const [productsLoadError, setProductsLoadError] = useState("");
   const startupRefreshAttemptedRef = useRef(false);
   const refreshFromCloudInFlightRef = useRef(false);
   const startupHydrationKeyRef = useRef("");
@@ -2145,6 +2147,7 @@ export default function UniformPOS() {
   const [session, setSession] = useState(null); // { id, name, role, branchId } | null
   const [authReady, setAuthReady] = useState(!isSupabaseAuthEnabled || !supabase); // Wait for auth only when a client is configured
   const [passwordSetupRequired, setPasswordSetupRequired] = useState(false);
+  const currentProductsSessionKey = `${session?.id || "local"}:${session?.branchId || ""}:${session?.role || ""}`;
   const perms = session ? permissionsForRole(session.role) : null;
   const accessibleProducts = useMemo(() => (
     !isSupabaseAuthEnabled || session?.role === ROLES.ADMIN
@@ -2288,10 +2291,12 @@ export default function UniformPOS() {
       const today = getHongKongDate();
       if (today === lastDate) return;
       lastDate = today;
-      try {
-        await queueOrderService.clearExpiredData();
-      } catch (error) {
-        console.error("清理過期排隊資料失敗", error);
+      if (QUEUE_FEATURES_ENABLED) {
+        try {
+          await queueOrderService.clearExpiredData();
+        } catch (error) {
+          console.error("清理過期排隊資料失敗", error);
+        }
       }
       setHeldSales((previous) => {
         const current = previous.filter((hold) => getHongKongDate(hold.createdAt) === today);
@@ -2310,9 +2315,11 @@ export default function UniformPOS() {
       exchangeReplacementQueueRef.current = [];
     };
 
-    queueOrderService.clearExpiredData().catch((error) => {
-      console.error("清理過期排隊資料失敗", error);
-    });
+    if (QUEUE_FEATURES_ENABLED) {
+      queueOrderService.clearExpiredData().catch((error) => {
+        console.error("清理過期排隊資料失敗", error);
+      });
+    }
     const timer = window.setInterval(cleanup, 30 * 1000);
     return () => window.clearInterval(timer);
   }, [authReady, session?.id]);
@@ -3034,8 +3041,32 @@ export default function UniformPOS() {
       return;
     }
     let active = true;
+    setProductsLoadError("");
+    if (productsReadySessionKey !== currentProductsSessionKey) {
+      productsRef.current = [];
+      setProducts([]);
+    }
 
     (async () => {
+      const productsPromise = (
+        isSupabaseAuthEnabled
+          ? loadSecureProducts()
+          : loadProducts({
+            storage: window.storage,
+            supabase,
+            isSupabaseAuthEnabled,
+            fallbackProducts: PRODUCT_CATALOG_FALLBACK,
+          })
+      ).catch((error) => {
+        console.error("載入產品失敗", error);
+        return null;
+      });
+      const branchMapPromise = loadBranchSchoolMap().catch((error) => {
+        console.error("載入分店學校資料失敗", error);
+        return null;
+      });
+      let productCatalogLoaded = false;
+
       try {
         if (!isSupabaseAuthEnabled && salesHistoryLoadSessionRef.current !== "local") {
           salesHistoryLoadSessionRef.current = "local";
@@ -3046,24 +3077,31 @@ export default function UniformPOS() {
           }).catch((error) => console.error("載入銷售記錄失敗", error));
         }
 
-        const [deleted, p, a, sm, branchMap] = await Promise.all([
+        const [deleted, a, sm] = await Promise.all([
           window.storage.get("deleted-schools", false).catch(() => null),
-          isSupabaseAuthEnabled
-            ? loadSecureProducts()
-            : loadProducts({
-              storage: window.storage,
-              supabase,
-              isSupabaseAuthEnabled,
-              fallbackProducts: PRODUCT_CATALOG_FALLBACK,
-            }),
           window.storage.get("staff-accounts", true).catch(() => null),
           window.storage.get("school-meta", true).catch(() => null),
-          loadBranchSchoolMap(),
         ]);
         if (!active) return;
         const deletedList = deleted && deleted.value ? JSON.parse(deleted.value) : [];
         deletedSchoolsRuntime = new Set(Array.isArray(deletedList) ? deletedList.map(canonicalSchoolName) : []);
         setDeletedSchools([...deletedSchoolsRuntime]);
+        if (a && a.value) {
+          setAccounts(JSON.parse(a.value));
+        } else {
+          await window.storage.set("staff-accounts", JSON.stringify(DEFAULT_ACCOUNTS), true).catch(() => {});
+        }
+        if (sm && sm.value) setSchoolMeta(JSON.parse(sm.value));
+        setLastSync(new Date());
+        setLoaded(true);
+
+        const [p, branchMap] = await Promise.all([productsPromise, branchMapPromise]);
+        if (!active) return;
+        if (!Array.isArray(p) || !branchMap) {
+          setProductsLoadError("產品資料未能載入，請重新載入頁面後再試。");
+          return;
+        }
+        productCatalogLoaded = true;
         setBranchSchoolIds(branchMap);
         if (p) {
           const authoritative = enforceAuthoritativeProducts(p)
@@ -3086,17 +3124,16 @@ export default function UniformPOS() {
             setSourceIntegrityWarning("產品資料來源不完整：目前只檢測到示範資料，已阻止當作正式產品庫。");
           }
         }
-        if (a && a.value) {
-          setAccounts(JSON.parse(a.value));
-        } else {
-          await window.storage.set("staff-accounts", JSON.stringify(DEFAULT_ACCOUNTS), true).catch(() => {});
-        }
-        if (sm && sm.value) setSchoolMeta(JSON.parse(sm.value));
-        setLastSync(new Date());
       } catch (e) {
         console.error("載入資料失敗", e);
+        if (active) setProductsLoadError("啟動資料未能載入，請重新載入頁面後再試。");
       } finally {
-        if (active) setLoaded(true);
+        if (active) {
+          setLoaded(true);
+          if (productCatalogLoaded) {
+            setProductsReadySessionKey(currentProductsSessionKey);
+          }
+        }
       }
     })();
 
@@ -3113,6 +3150,7 @@ export default function UniformPOS() {
   // 第一次加載時自動刷新以確保從 Supabase 加載產品
   useEffect(() => {
     if (!loaded || !authReady || (isSupabaseAuthEnabled && !session)) return undefined;
+    if (productsReadySessionKey !== currentProductsSessionKey) return undefined;
 
     const startupHydrationKey = `${session?.id || "guest"}:${selectedSchool || ""}:${products.length}:${products.some((product) => product?.school && product.school !== DEFAULT_SCHOOL)}`;
     const shouldAttemptStartupRefresh = !startupRefreshAttemptedRef.current
@@ -3129,7 +3167,7 @@ export default function UniformPOS() {
       refreshFromCloud({ skipProductsWhileEditing: false, skipOrders: true });
     }, 2000);
     return () => clearTimeout(timer);
-  }, [loaded, authReady, session, selectedSchool, products]);
+  }, [loaded, authReady, session, selectedSchool, products, productsReadySessionKey, currentProductsSessionKey]);
 
   useEffect(() => {
     if (!authReady || !session || !supabase || !isSupabaseAuthEnabled) return undefined;
@@ -3710,6 +3748,7 @@ export default function UniformPOS() {
   };
 
   useEffect(() => {
+    if (!QUEUE_FEATURES_ENABLED) return undefined;
     if (!authReady || (isSupabaseAuthEnabled && !session)) return undefined;
     let isMounted = true;
 
@@ -3801,7 +3840,7 @@ export default function UniformPOS() {
       isMounted = false;
       supabase.removeChannel(channel);
     };
-  }, [authReady, session]);
+  }, [authReady, session?.id]);
 
   const handleGuestSubmit = (guest) => {
     setQueueVisits((prev) => [guest, ...prev]);
@@ -4444,10 +4483,13 @@ export default function UniformPOS() {
     return <Suspense fallback={<PageLoading />}><ManualPickupDisplayPage schoolName={publicRouteSchool} /></Suspense>;
   }
 
-  if (!loaded) {
+  if (!loaded || (
+    (routeTab === "sale" || routeTab === "products")
+    && productsReadySessionKey !== currentProductsSessionKey
+  )) {
     return (
       <div style={{ padding: 40, textAlign: "center", color: "var(--text-secondary, #666)" }}>
-        載入緊…
+        {productsLoadError || "載入緊…"}
       </div>
     );
   }
