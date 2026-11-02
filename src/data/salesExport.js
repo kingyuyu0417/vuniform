@@ -489,7 +489,7 @@ export const buildSalesExportSheets = (orders, {
     {
       name: "商品明細",
       rows: [
-        ["日期", "單號", "訂單狀態", "學校", "門店", "開單員工", "款式", "尺碼", "長度", "數量", "單價", "兩件優惠總價", "優惠減免", "商品小計", "退回標記"],
+        ["日期", "單號", "訂單狀態", "學校", "門店", "開單員工", "款式", "尺碼", "長度", "數量", "單價", "兩件優惠總價", "三件優惠總價", "優惠減免", "商品小計", "退回標記"],
         ...rows.flatMap((order) => (Array.isArray(order.items) ? order.items : []).map((item) => [
           order.date || "",
           order.id || "",
@@ -503,12 +503,13 @@ export const buildSalesExportSheets = (orders, {
           quantityOf(item),
           amountOf(item.price),
           item.twoPiecePrice ?? "",
+          item.threePiecePrice ?? "",
           Math.max(0, amountOf(item.discountAmount)),
           itemAmount(item),
           item.exchangeReturn ? "退回" : "無退回標記",
         ])),
       ],
-      widths: [13, 24, 15, 32, 16, 16, 32, 14, 12, 10, 12, 16, 12, 14, 12],
+      widths: [13, 24, 15, 32, 16, 16, 32, 14, 12, 10, 12, 16, 16, 12, 14, 12],
     },
     ...[
       { name: "按學校", keyOf: (order) => order.school },

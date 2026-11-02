@@ -122,7 +122,7 @@ Cloudflare Pages 會在每次 `git push` 後自動部署。專案的 Cloudflare 
 
 部署商品英文收據名稱功能前，請先在 Supabase SQL Editor 執行 [product-receipt-name-en.sql](./supabase/product-receipt-name-en.sql)，再執行更新後的 [idempotent-sales-checkout.sql](./supabase/idempotent-sales-checkout.sql) 以更新交易 RPC，最後才部署前端。這會為商品及銷售項目新增英文收據名稱欄位，舊資料預設為空白。
 
-數量優惠功能亦須先執行更新後的 [idempotent-sales-checkout.sql](./supabase/idempotent-sales-checkout.sql) 及 [replace-sales-order.sql](./supabase/replace-sales-order.sql)，再部署前端；其後在商品管理逐尺碼設定兩件優惠總價。
+數量優惠功能（兩件及三件優惠）須先在 Supabase SQL Editor 依序執行更新後的 [idempotent-sales-checkout.sql](./supabase/idempotent-sales-checkout.sql) 及 [replace-sales-order.sql](./supabase/replace-sales-order.sql)，再部署前端；其後在商品管理逐尺碼設定兩件及／或三件優惠總價。購買多件時，系統會自動選擇總價最低的兩件／三件優惠組合。
 
 如要啟用銷售單據即時同步，部署前請先在 Supabase SQL Editor 執行 [sales-orders-realtime.sql](./supabase/sales-orders-realtime.sql)。此 SQL 只將 `public.orders` 加入 Realtime publication，資料仍按現有 RLS 權限傳送。
 

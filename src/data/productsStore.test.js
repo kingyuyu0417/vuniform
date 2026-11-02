@@ -60,14 +60,15 @@ test("normalizes saved English receipt names from both product storage shapes", 
   assert.equal(products[1].receiptNameEn, "Custom Trousers");
 });
 
-test("preserves two-piece promotion prices when normalizing products", () => {
+test("preserves two-piece and three-piece promotion prices when normalizing products", () => {
   const [product] = normalizeProducts([{
     id: "undershirt",
     name: "長袖底衫",
-    sizes: [{ size: "20-24", price: 40, twoPiecePrice: 73 }],
+    sizes: [{ size: "20-24", price: 40, twoPiecePrice: 73, threePiecePrice: 110 }],
   }]);
 
   assert.equal(product.sizes[0].twoPiecePrice, 73);
+  assert.equal(product.sizes[0].threePiecePrice, 110);
 });
 
 test("persists and verifies English receipt names with authoritative Supabase products", async () => {

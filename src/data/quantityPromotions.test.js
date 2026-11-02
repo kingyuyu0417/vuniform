@@ -4,6 +4,7 @@ import {
   calculateCartLineTotals,
   calculateReturnDiscounts,
   quantityPromotionTotal,
+  validThreePiecePrice,
   validTwoPiecePrice,
 } from "./quantityPromotions.js";
 
@@ -15,11 +16,29 @@ test("accepts only a valid lower two-piece total price", () => {
   assert.equal(validTwoPiecePrice(40, ""), null);
 });
 
+test("accepts only a valid lower three-piece total price", () => {
+  assert.equal(validThreePiecePrice(40, 110), 110);
+  assert.equal(validThreePiecePrice(40, 120), null);
+  assert.equal(validThreePiecePrice(40, -1), null);
+  assert.equal(validThreePiecePrice(40, 109.5), null);
+  assert.equal(validThreePiecePrice(40, ""), null);
+});
+
 test("repeats a two-piece offer and charges the list price for an odd item", () => {
-  assert.equal(quantityPromotionTotal(40, 73, 1), 40);
-  assert.equal(quantityPromotionTotal(40, 73, 2), 73);
-  assert.equal(quantityPromotionTotal(40, 73, 3), 113);
-  assert.equal(quantityPromotionTotal(40, 73, 4), 146);
+  assert.equal(quantityPromotionTotal(40, 73, null, 1), 40);
+  assert.equal(quantityPromotionTotal(40, 73, null, 2), 73);
+  assert.equal(quantityPromotionTotal(40, 73, null, 3), 113);
+  assert.equal(quantityPromotionTotal(40, 73, null, 4), 146);
+});
+
+test("chooses the lowest combination of two-piece, three-piece, and single prices", () => {
+  assert.equal(quantityPromotionTotal(40, 73, 110, 1), 40);
+  assert.equal(quantityPromotionTotal(40, 73, 110, 2), 73);
+  assert.equal(quantityPromotionTotal(40, 73, 110, 3), 110);
+  assert.equal(quantityPromotionTotal(40, 73, 110, 4), 146);
+  assert.equal(quantityPromotionTotal(40, 73, 110, 5), 183);
+  assert.equal(quantityPromotionTotal(40, 73, 110, 6), 219);
+  assert.equal(quantityPromotionTotal(40, 73, 100, 6), 200);
 });
 
 test("pools only matching product, unit price, and promotion price", () => {
@@ -45,6 +64,32 @@ test("allocates repeated bundle discounts across mixed-size lines", () => {
   ]);
 
   assert.deepEqual(totals.map((item) => [item.discountAmount, item.lineTotal]), [[7, 73], [7, 73]]);
+});
+
+test("applies the best three-piece price across mixed-size lines", () => {
+  const totals = calculateCartLineTotals([
+    { productId: "shirt", name: "底衫", size: "20-24", price: 40, threePiecePrice: 110, qty: 1 },
+    { productId: "shirt", name: "底衫", size: "26-30", price: 40, threePiecePrice: 110, qty: 2 },
+  ]);
+
+  assert.deepEqual(totals.map((item) => [item.discountAmount, item.lineTotal]), [
+    [0, 40],
+    [10, 70],
+  ]);
+});
+
+test("mixes three-piece and two-piece offers for the lowest five-item total", () => {
+  const totals = calculateCartLineTotals([{
+    productId: "shirt",
+    name: "底衫",
+    price: 40,
+    twoPiecePrice: 73,
+    threePiecePrice: 110,
+    qty: 5,
+  }]);
+
+  assert.equal(totals[0].discountAmount, 17);
+  assert.equal(totals[0].lineTotal, 183);
 });
 
 test("does not apply offers to returns or committed customer orders", () => {
@@ -104,4 +149,20 @@ test("accounts for earlier partial returns when refunding the last item in a pai
   }];
 
   assert.deepEqual(calculateReturnDiscounts(source, selected, previousReturns), [0]);
+});
+
+test("refunds a three-item offer while preserving the best remaining two-item price", () => {
+  const source = [{
+    id: "item-3",
+    name: "底衫",
+    size: "20-24",
+    price: 40,
+    qty: 3,
+    twoPiecePrice: 73,
+    threePiecePrice: 100,
+    discountAmount: 20,
+  }];
+  const selected = [{ id: "item-3", name: "底衫", size: "20-24", price: 40, qty: 1 }];
+
+  assert.deepEqual(calculateReturnDiscounts(source, selected), [13]);
 });

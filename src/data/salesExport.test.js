@@ -59,7 +59,7 @@ test("exports order amounts once per order and keeps item rows separate", () => 
   const items = findSheet(sheets, "商品明細").rows;
   assert.equal(items.length, 4);
   assert.equal(items[0].includes("單據金額"), false);
-  assert.equal(items[1][13], 200);
+  assert.equal(items[1][14], 200);
   assert.equal(items[3][2], "已作廢");
 
   const summary = findSheet(sheets, "摘要").rows;
@@ -82,6 +82,7 @@ test("exports bundle price, discount, and net item amount for promotion auditing
       price: 40,
       qty: 2,
       twoPiecePrice: 73,
+      threePiecePrice: 110,
       discountAmount: 7,
     }],
   }]), "商品明細").rows;
@@ -90,11 +91,12 @@ test("exports bundle price, discount, and net item amount for promotion auditing
     "數量",
     "單價",
     "兩件優惠總價",
+    "三件優惠總價",
     "優惠減免",
     "商品小計",
     "退回標記",
   ]);
-  assert.deepEqual(itemRows[1].slice(9), [2, 40, 73, 7, 73, "無退回標記"]);
+  assert.deepEqual(itemRows[1].slice(9), [2, 40, 73, 110, 7, 73, "無退回標記"]);
 });
 
 test("groups by school, outlet, cashier, and item without counting voided sales", () => {

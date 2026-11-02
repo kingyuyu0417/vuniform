@@ -172,6 +172,7 @@ create table if not exists public.order_items (
   price numeric default 0,
   qty integer default 1,
   two_piece_price integer,
+  three_piece_price integer,
   discount_amount integer not null default 0,
   receipt_name_en text not null default '',
   created_at timestamptz not null default now()

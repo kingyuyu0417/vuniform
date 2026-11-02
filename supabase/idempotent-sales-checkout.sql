@@ -3,6 +3,71 @@
 -- untracked_exchange marker and remain separate from source-linked exchanges.
 begin;
 
+create or replace function public.quantity_promotion_total(
+  p_unit_price integer,
+  p_two_piece_price integer,
+  p_three_piece_price integer,
+  p_quantity integer
+)
+returns integer
+language plpgsql
+immutable
+as $$
+declare
+  quantity_value integer := greatest(coalesce(p_quantity, 0), 0);
+  max_three_piece_count integer;
+  max_even_three_piece_count integer;
+  max_odd_three_piece_count integer;
+  three_piece_count integer;
+  remaining_quantity integer;
+  pair_count integer;
+  single_count integer;
+  candidate_total integer;
+  best_total integer;
+begin
+  if p_unit_price is null or p_unit_price < 0 then
+    return null;
+  end if;
+
+  if p_two_piece_price is not null
+     and (p_two_piece_price < 0 or p_two_piece_price >= p_unit_price * 2) then
+    return null;
+  end if;
+  if p_three_piece_price is not null
+     and (p_three_piece_price < 0 or p_three_piece_price >= p_unit_price * 3) then
+    return null;
+  end if;
+
+  max_three_piece_count := case
+    when p_three_piece_price is null then 0
+    else quantity_value / 3
+  end;
+  max_even_three_piece_count := max_three_piece_count - mod(max_three_piece_count, 2);
+  max_odd_three_piece_count := max_three_piece_count
+    - case when mod(max_three_piece_count, 2) = 1 then 0 else 1 end;
+
+  for three_piece_count in
+    select distinct candidate
+    from unnest(array[0, 1, max_even_three_piece_count, max_odd_three_piece_count]) as candidates(candidate)
+    where candidate between 0 and max_three_piece_count
+    order by candidate
+  loop
+    remaining_quantity := quantity_value - three_piece_count * 3;
+    pair_count := case
+      when p_two_piece_price is null then 0
+      else remaining_quantity / 2
+    end;
+    single_count := remaining_quantity - pair_count * 2;
+    candidate_total := three_piece_count * coalesce(p_three_piece_price, p_unit_price * 3)
+      + pair_count * coalesce(p_two_piece_price, p_unit_price * 2)
+      + single_count * p_unit_price;
+    best_total := least(coalesce(best_total, candidate_total), candidate_total);
+  end loop;
+
+  return best_total;
+end;
+$$;
+
 alter table public.orders
   add column if not exists branch_id text,
   add column if not exists checkout_key text,
@@ -31,6 +96,7 @@ alter table public.order_items
   add column if not exists source_order_item_id text,
   add column if not exists receipt_name_en text not null default '',
   add column if not exists two_piece_price integer,
+  add column if not exists three_piece_price integer,
   add column if not exists discount_amount integer not null default 0;
 
 alter table public.products
@@ -159,6 +225,7 @@ begin
     update public.order_items as saved_item
        set receipt_name_en = coalesce(item.receipt_name_en, ''),
            two_piece_price = item.two_piece_price,
+           three_piece_price = item.three_piece_price,
            discount_amount = coalesce(item.discount_amount, 0)
     from jsonb_to_recordset(order_data -> 'items') as item(
       name text,
@@ -170,6 +237,7 @@ begin
       source_order_item_id text,
       receipt_name_en text,
       two_piece_price integer,
+      three_piece_price integer,
       discount_amount integer
     )
     where saved_item.order_id = receipt_id
@@ -196,7 +264,12 @@ begin
               or coalesce(item.discount_amount, 0) < 0
               or coalesce(item.discount_amount, 0) > item.price * item.qty
               or (coalesce(item.discount_amount, 0) > 0
-                and (item.two_piece_price is null or item.two_piece_price < 0 or item.two_piece_price >= item.price * 2))
+                and item.two_piece_price is null
+                and item.three_piece_price is null)
+              or (item.two_piece_price is not null
+                and (item.two_piece_price < 0 or item.two_piece_price >= item.price * 2))
+              or (item.three_piece_price is not null
+                and (item.three_piece_price < 0 or item.three_piece_price >= item.price * 3))
          )::integer
     into requested_item_net_total, requested_item_count, invalid_item_count
   from jsonb_to_recordset(order_data -> 'items') as item(
@@ -204,13 +277,14 @@ begin
     qty integer,
     is_return boolean,
     two_piece_price integer,
+    three_piece_price integer,
     discount_amount integer
   );
 
   select exists (
     select 1
     from (
-      select item.name, item.price, item.two_piece_price,
+      select item.name, item.price, item.two_piece_price, item.three_piece_price,
              sum(item.qty)::integer as quantity,
              sum(coalesce(item.discount_amount, 0))::integer as discount
       from jsonb_to_recordset(order_data -> 'items') as item(
@@ -219,16 +293,26 @@ begin
         qty integer,
         is_return boolean,
         two_piece_price integer,
+        three_piece_price integer,
         discount_amount integer
       )
       where not coalesce(item.is_return, false)
-        and item.two_piece_price is not null
-      group by item.name, item.price, item.two_piece_price
+        and (item.two_piece_price is not null or item.three_piece_price is not null)
+      group by item.name, item.price, item.two_piece_price, item.three_piece_price
     ) as promotion_group
-    where promotion_group.two_piece_price < 0
-       or promotion_group.two_piece_price >= promotion_group.price * 2
-       or promotion_group.discount <> (promotion_group.quantity / 2)
-         * (promotion_group.price * 2 - promotion_group.two_piece_price)
+    where (promotion_group.two_piece_price is not null
+         and (promotion_group.two_piece_price < 0
+           or promotion_group.two_piece_price >= promotion_group.price * 2))
+       or (promotion_group.three_piece_price is not null
+         and (promotion_group.three_piece_price < 0
+           or promotion_group.three_piece_price >= promotion_group.price * 3))
+       or promotion_group.discount <> promotion_group.price * promotion_group.quantity
+         - public.quantity_promotion_total(
+           promotion_group.price,
+           promotion_group.two_piece_price,
+           promotion_group.three_piece_price,
+           promotion_group.quantity
+         )
   ) into invalid_promotion_group;
 
   if exists (
@@ -240,7 +324,8 @@ begin
       price integer,
       is_return boolean,
       source_order_item_id text,
-      two_piece_price integer
+      two_piece_price integer,
+      three_piece_price integer
     )
     join public.order_items as source_item
       on source_item.id::text = requested.source_order_item_id
@@ -251,6 +336,7 @@ begin
         or nullif(requested.length, '') is distinct from source_item.length
         or requested.price is distinct from source_item.price
         or requested.two_piece_price is distinct from source_item.two_piece_price
+        or requested.three_piece_price is distinct from source_item.three_piece_price
       )
   ) then
     raise exception 'Returned item details must match the original sale item';
@@ -358,6 +444,7 @@ begin
            source_item.name,
            source_item.price,
            source_item.two_piece_price,
+           source_item.three_piece_price,
            sum(requested.qty)::integer as current_qty,
            sum(requested.price * requested.qty)::integer as current_base,
            sum(coalesce(requested.discount_amount, 0))::integer as current_discount
@@ -371,8 +458,9 @@ begin
     join public.order_items as source_item
       on source_item.id::text = requested.source_order_item_id
     where coalesce(requested.is_return, false)
-      and source_item.two_piece_price is not null
-    group by source_item.order_id, source_item.name, source_item.price, source_item.two_piece_price
+      and (source_item.two_piece_price is not null or source_item.three_piece_price is not null)
+    group by source_item.order_id, source_item.name, source_item.price,
+             source_item.two_piece_price, source_item.three_piece_price
   ),
   return_pricing as (
     select current_group.*,
@@ -392,6 +480,7 @@ begin
         and source_item.name is not distinct from current_group.name
         and source_item.price = current_group.price
         and source_item.two_piece_price = current_group.two_piece_price
+        and source_item.three_piece_price = current_group.three_piece_price
     ) as original
     left join lateral (
       select coalesce(sum(return_item.qty), 0)::integer as returned_qty,
@@ -409,6 +498,7 @@ begin
         and source_item.name is not distinct from current_group.name
         and source_item.price = current_group.price
         and source_item.two_piece_price = current_group.two_piece_price
+        and source_item.three_piece_price = current_group.three_piece_price
     ) as previous on true
   )
   select exists (
@@ -420,11 +510,11 @@ begin
         0,
         pricing.original_total
           - pricing.previous_refunded_total
-          - (
-            greatest(pricing.original_qty - pricing.previous_returned_qty - pricing.current_qty, 0) / 2
-              * pricing.two_piece_price
-            + mod(greatest(pricing.original_qty - pricing.previous_returned_qty - pricing.current_qty, 0), 2)
-              * pricing.price
+          - public.quantity_promotion_total(
+            pricing.price,
+            pricing.two_piece_price,
+            pricing.three_piece_price,
+            greatest(pricing.original_qty - pricing.previous_returned_qty - pricing.current_qty, 0)
           )
       )
     )
@@ -481,7 +571,7 @@ begin
     payload_hash
   );
 
-  insert into public.order_items (order_id, name, size, length, price, qty, is_return, source_order_item_id, receipt_name_en, two_piece_price, discount_amount)
+  insert into public.order_items (order_id, name, size, length, price, qty, is_return, source_order_item_id, receipt_name_en, two_piece_price, three_piece_price, discount_amount)
   select
     receipt_id,
     item.name,
@@ -493,6 +583,7 @@ begin
     nullif(item.source_order_item_id, ''),
     coalesce(item.receipt_name_en, ''),
     item.two_piece_price,
+    item.three_piece_price,
     coalesce(item.discount_amount, 0)
   from jsonb_to_recordset(order_data -> 'items')
     as item(
@@ -505,6 +596,7 @@ begin
       source_order_item_id text,
       receipt_name_en text,
       two_piece_price integer,
+      three_piece_price integer,
       discount_amount integer
     );
 

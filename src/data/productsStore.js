@@ -23,7 +23,14 @@ const productDataSignature = (product) => JSON.stringify([
   product.category || "",
   product.style || "",
   product.priceMode,
-  product.sizes.map((size) => [size.size, size.length, size.price, size.twoPiecePrice, Boolean(size.isTailored)]),
+  product.sizes.map((size) => [
+    size.size,
+    size.length,
+    size.price,
+    size.twoPiecePrice,
+    size.threePiecePrice,
+    Boolean(size.isTailored),
+  ]),
 ]);
 const assertNoConflictingSizePrices = (products = []) => {
   products.forEach((product) => {

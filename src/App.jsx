@@ -55,7 +55,12 @@ import {
   parseCheckoutDraft,
 } from "./data/checkoutDraft";
 import { getRemainingReturnQuantity, hasUntrackedExchangeHistory } from "./data/returnLimits";
-import { calculateCartLineTotals, calculateReturnDiscounts, validTwoPiecePrice } from "./data/quantityPromotions";
+import {
+  calculateCartLineTotals,
+  calculateReturnDiscounts,
+  validThreePiecePrice,
+  validTwoPiecePrice,
+} from "./data/quantityPromotions";
 import {
   appendExchangeDraft,
   buildExchangeReplacementQueue,
@@ -1764,7 +1769,7 @@ const receiptFieldLabels = (language) => language === "en" ? {
   cashier: "服務員",
   items: "商品明細",
   quantity: "數量",
-  promotion: "兩件優惠",
+  promotion: "數量優惠",
   promotionAdjustment: "優惠差額調整",
   itemCount: "商品件數",
   total: "應付總額",
@@ -2807,7 +2812,7 @@ export default function UniformPOS() {
       const selectOrders = (includeReceiptName, includePromotion, includeUntrackedExchange, offset = 0) => {
         let query = supabase
           .from("orders")
-          .select(`id, school, branch_id, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, ${includeUntrackedExchange ? "untracked_exchange, " : ""}replacement_source_receipt_id, replacement_reason, settlement_delta, replacement_cash_received, replacement_change_due, adjustment_reason, payment_method, refund_method, refund_due, duplicate_confirmed, duplicate_source_receipt_id, voided_at, voided_by, void_reason, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, ${includeReceiptName ? "receipt_name_en, " : ""}price, qty, is_return, source_order_item_id${includePromotion ? ", two_piece_price, discount_amount" : ""})`)
+          .select(`id, school, branch_id, outlet_name, outlet_address, outlet_phone, customer_surname, customer_phone_last4, exchange_source_receipt_id, ${includeUntrackedExchange ? "untracked_exchange, " : ""}replacement_source_receipt_id, replacement_reason, settlement_delta, replacement_cash_received, replacement_change_due, adjustment_reason, payment_method, refund_method, refund_due, duplicate_confirmed, duplicate_source_receipt_id, voided_at, voided_by, void_reason, cashier_id, cashier_name, total, item_count, created_at, order_items(id, name, size, length, ${includeReceiptName ? "receipt_name_en, " : ""}price, qty, is_return, source_order_item_id${includePromotion ? ", two_piece_price, three_piece_price, discount_amount" : ""})`)
           .order("created_at", { ascending: false });
         if (orderId) query = query.eq("id", orderId);
         if (dateRange) {
@@ -2827,7 +2832,7 @@ export default function UniformPOS() {
       let includeUntrackedExchange = true;
       let { data, error } = await selectOrders(includeReceiptName, includePromotion, includeUntrackedExchange);
 
-      if (error?.code === "42703" && /two_piece_price|discount_amount/i.test(String(error.message || ""))) {
+      if (error?.code === "42703" && /two_piece_price|three_piece_price|discount_amount/i.test(String(error.message || ""))) {
         console.warn("資料庫尚未安裝數量優惠商品明細欄位，改用相容查詢載入銷售記錄。", error);
         orderItemPromotionColumnsAvailableRef.current = false;
         includePromotion = false;
@@ -2892,6 +2897,7 @@ export default function UniformPOS() {
               receiptNameEn: item.receipt_name_en || "",
               length: item.length || "",
               twoPiecePrice: item.two_piece_price ?? null,
+              threePiecePrice: item.three_piece_price ?? null,
               discountAmount: Number(item.discount_amount || 0),
               exchangeReturn: Boolean(item.is_return),
               sourceOrderItemId: item.source_order_item_id || "",
@@ -3437,6 +3443,7 @@ export default function UniformPOS() {
             is_return: Boolean(item.exchangeReturn),
             source_order_item_id: item.sourceOrderItemId || null,
             two_piece_price: item.twoPiecePrice ?? null,
+            three_piece_price: item.threePiecePrice ?? null,
             discount_amount: Math.max(0, Number(item.discountAmount || 0)),
           })),
         };
@@ -3462,7 +3469,7 @@ export default function UniformPOS() {
         if (!receiptId) throw new Error("交易服務沒有回傳收據編號");
         const { data: savedItems, error: itemLoadError } = await supabase
           .from("order_items")
-          .select(`id, name, size, length, receipt_name_en, price, qty, is_return, source_order_item_id${orderItemPromotionColumnsAvailableRef.current === false ? "" : ", two_piece_price, discount_amount"}`)
+          .select(`id, name, size, length, receipt_name_en, price, qty, is_return, source_order_item_id${orderItemPromotionColumnsAvailableRef.current === false ? "" : ", two_piece_price, three_piece_price, discount_amount"}`)
           .eq("order_id", receiptId);
         if (itemLoadError) throw itemLoadError;
         if (!Array.isArray(savedItems) || savedItems.length !== order.items.length) {
@@ -3480,12 +3487,14 @@ export default function UniformPOS() {
             Number(item.price || 0),
             Number(item.qty || 0),
             item.twoPiecePrice == null ? "" : Number(item.twoPiecePrice),
+            item.threePiecePrice == null ? "" : Number(item.threePiecePrice),
             Number(item.discountAmount || 0),
           ].join("\u0000");
           const expectedPromotions = order.items.map(promotionSignature).sort();
           const savedPromotions = savedItems.map((item) => promotionSignature({
             ...item,
             twoPiecePrice: item.two_piece_price,
+            threePiecePrice: item.three_piece_price,
             discountAmount: item.discount_amount,
           })).sort();
           if (JSON.stringify(savedPromotions) !== JSON.stringify(expectedPromotions)) {
@@ -3501,6 +3510,7 @@ export default function UniformPOS() {
             receiptNameEn: item.receipt_name_en || "",
             length: item.length || "",
             twoPiecePrice: item.two_piece_price ?? null,
+            threePiecePrice: item.three_piece_price ?? null,
             discountAmount: Number(item.discount_amount || 0),
             exchangeReturn: Boolean(item.is_return),
             sourceOrderItemId: item.source_order_item_id || "",
@@ -3538,7 +3548,7 @@ export default function UniformPOS() {
           ? "請管理員先在 Supabase 執行 supabase/replace-sales-order.sql。"
           : "請管理員先在 Supabase 執行 supabase/idempotent-sales-checkout.sql。"
         : "";
-      const promotionMigrationNote = /two_piece_price|discount_amount/i.test(errorReason)
+      const promotionMigrationNote = /two_piece_price|three_piece_price|discount_amount/i.test(errorReason)
         ? "請管理員執行更新後的 supabase/idempotent-sales-checkout.sql 及 supabase/replace-sales-order.sql，再重新載入系統。"
         : "";
       setStorageError(`交易結果未能確認${detail}。請勿另開新單；保持相同商品及金額後重試，系統會沿用同一交易識別碼。${promotionMigrationNote || migrationNote}`);
@@ -3567,6 +3577,7 @@ export default function UniformPOS() {
         isTailored: Boolean(sizeObj.isTailored),
         price: sizeObj.price,
         twoPiecePrice: validTwoPiecePrice(sizeObj.price, sizeObj.twoPiecePrice),
+        threePiecePrice: validThreePiecePrice(sizeObj.price, sizeObj.threePiecePrice),
         qty,
         applyPromotion: true,
       }];
@@ -3622,6 +3633,11 @@ export default function UniformPOS() {
             ? validTwoPiecePrice(matchingSize.price, matchingSize.twoPiecePrice)
             : null)
           : item.twoPiecePrice ?? null,
+        threePiecePrice: matchingSize
+          ? (Number(matchingSize.price) === Number(item.price)
+            ? validThreePiecePrice(matchingSize.price, matchingSize.threePiecePrice)
+            : null)
+          : item.threePiecePrice ?? null,
         discountAmount: 0,
         applyPromotion: true,
         replacementSourceOrderItemId: item.id ? String(item.id) : "",
@@ -3725,6 +3741,7 @@ export default function UniformPOS() {
       price: Math.abs(Number(hasSourceReceipt ? item.price ?? originalSize.price ?? 0 : originalSize.price)),
       qty: Math.max(1, Number(item.qty || 1)),
       twoPiecePrice: item.twoPiecePrice ?? null,
+      threePiecePrice: item.threePiecePrice ?? null,
       discountAmount: returnDiscounts[index],
       applyPromotion: false,
       exchangeReturn: true,
@@ -4199,14 +4216,20 @@ export default function UniformPOS() {
       if (matchingSizes.length !== 1
         || Number(matchingSizes[0]?.price) !== Number(item.price)
         || validTwoPiecePrice(matchingSizes[0]?.price, matchingSizes[0]?.twoPiecePrice)
-          !== validTwoPiecePrice(item.price, item.twoPiecePrice)) {
+          !== validTwoPiecePrice(item.price, item.twoPiecePrice)
+        || validThreePiecePrice(matchingSizes[0]?.price, matchingSizes[0]?.threePiecePrice)
+          !== validThreePiecePrice(item.price, item.threePiecePrice)) {
         const priceDetails = matchingSizes.length === 1
           ? `\u8cfc\u7269\u8eca $${item.price}\uff0c\u5546\u54c1\u8cc7\u6599\u73fe\u50f9 $${matchingSizes[0].price}`
           : "\u627e\u4e0d\u5230\u552f\u4e00\u5c3a\u78bc\u50f9\u683c";
         const promotionMismatch = matchingSizes.length === 1
-          && validTwoPiecePrice(matchingSizes[0].price, matchingSizes[0].twoPiecePrice)
-            !== validTwoPiecePrice(item.price, item.twoPiecePrice);
-        return [`${product.name}\uff08${sizeLabel(item)}\uff09\u50f9\u683c\uff0f\u512a\u60e0\u6838\u5c0d\u4e0d\u7b26\uff08${priceDetails}${promotionMismatch ? "\uff1b\u5169\u4ef6\u512a\u60e0\u689d\u4ef6\u4ea6\u4e0d\u7b26" : ""}\uff09`];
+          && (
+            validTwoPiecePrice(matchingSizes[0].price, matchingSizes[0].twoPiecePrice)
+              !== validTwoPiecePrice(item.price, item.twoPiecePrice)
+            || validThreePiecePrice(matchingSizes[0].price, matchingSizes[0].threePiecePrice)
+              !== validThreePiecePrice(item.price, item.threePiecePrice)
+          );
+        return [`${product.name}\uff08${sizeLabel(item)}\uff09\u50f9\u683c\uff0f\u512a\u60e0\u6838\u5c0d\u4e0d\u7b26\uff08${priceDetails}${promotionMismatch ? "\uff1b\u6578\u91cf\u512a\u60e0\u689d\u4ef6\u4ea6\u4e0d\u7b26" : ""}\uff09`];
       }
       return [];
     });
@@ -4234,6 +4257,7 @@ export default function UniformPOS() {
         price: item.price,
         qty: item.qty,
         twoPiecePrice: item.twoPiecePrice ?? null,
+        threePiecePrice: item.threePiecePrice ?? null,
         discountAmount: Math.max(0, Number(item.discountAmount || 0)),
         exchangeReturn: item.exchangeReturn,
         exchangeSourceReceiptId: item.exchangeSourceReceiptId,
@@ -6140,6 +6164,9 @@ function SaleTab({
                     {validTwoPiecePrice(s.price, s.twoPiecePrice) !== null && (
                       <div style={{ fontSize: 11, color: "#28784B", marginTop: 2 }}>兩件 {fmt(s.twoPiecePrice)}</div>
                     )}
+                    {validThreePiecePrice(s.price, s.threePiecePrice) !== null && (
+                      <div style={{ fontSize: 11, color: "#28784B", marginTop: 2 }}>三件 {fmt(s.threePiecePrice)}</div>
+                    )}
                   </button>
                 ))}
               </div>
@@ -6177,6 +6204,9 @@ function SaleTab({
                       {validTwoPiecePrice(s.price, s.twoPiecePrice) !== null && (
                         <div style={{ fontSize: 11, color: "#28784B", marginTop: 2 }}>兩件 {fmt(s.twoPiecePrice)}</div>
                       )}
+                      {validThreePiecePrice(s.price, s.threePiecePrice) !== null && (
+                        <div style={{ fontSize: 11, color: "#28784B", marginTop: 2 }}>三件 {fmt(s.threePiecePrice)}</div>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -6204,7 +6234,7 @@ function SaleTab({
               <div style={{ fontSize: 18, fontWeight: 500 }}>{c.exchangeReturn ? "換出：" : ""}{c.name}（{sizeLabel(c)}）</div>
               <div style={{ fontSize: 16, color: c.exchangeReturn ? "#9A3412" : "#888" }}>{c.exchangeReturn ? "-" : ""}{fmt(c.price)} x {c.qty}{productUnit(c.name, c.size)} = {fmt((c.exchangeReturn ? -1 : 1) * c.price * c.qty)}</div>
               {c.discountAmount > 0 && (
-                <div style={{ fontSize: 14, color: "#28784B" }}>{c.exchangeReturn ? "優惠差額調整" : "兩件優惠"} −{fmt(c.discountAmount)}</div>
+                <div style={{ fontSize: 14, color: "#28784B" }}>{c.exchangeReturn ? "優惠差額調整" : "數量優惠"} −{fmt(c.discountAmount)}</div>
               )}
               {c.discountAmount > 0 && (
                 <div style={{ fontSize: 16, fontWeight: 600 }}>{c.exchangeReturn ? "退款金額" : "優惠後"}：{fmt(Math.abs(c.lineTotal))}</div>
@@ -6517,7 +6547,7 @@ function DirectExchangeProductPicker({
           </button>
         </div>
         <div style={{ marginBottom: 12, padding: "9px 10px", borderRadius: 9, background: "#ECFDF3", color: "#166534", fontSize: 12 }}>
-          退回抵扣按目前目錄單價計算，不套用兩件優惠。
+          退回抵扣按目前目錄單價計算，不套用數量優惠。
         </div>
         {!product ? (
           products.length > 0 ? (
@@ -6820,7 +6850,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
       const additions = existingSizes
         .filter((size) => !existingKeys.has(sizeIdentityKey({ ...size, length: normalizedLength })))
         .map((size) => ({
-          size: size.size,
+          ...size,
           length: normalizedLength,
           isTailored: isTailoredSize(size),
           price: size.price ?? null,
@@ -8488,6 +8518,22 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                     title="輸入買兩件的總價；同款、同單價和同優惠價的尺碼可混搭"
                     style={{ width: 92, minWidth: 0, padding: 8, borderRadius: 8, border: "1px solid #A7D5B4", fontSize: 12 }}
                   />
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={s.threePiecePrice ?? ""}
+                    onChange={(e) => {
+                      updateProduct(p.id, (current) => ({
+                        sizes: current.sizes.map((size, index) => index === i
+                          ? { ...size, threePiecePrice: e.target.value === "" ? null : Number(e.target.value) }
+                          : size),
+                      }));
+                    }}
+                    placeholder="三件優惠總價"
+                    title="輸入買三件的總價；同款、同單價和同優惠價的尺碼可混搭"
+                    style={{ width: 92, minWidth: 0, padding: 8, borderRadius: 8, border: "1px solid #A7D5B4", fontSize: 12 }}
+                  />
                   <button
                     type="button"
                     className="pos-btn"
@@ -8508,6 +8554,14 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                 && validTwoPiecePrice(size.price, size.twoPiecePrice) === null) && (
                 <div style={{ marginBottom: 8, padding: 8, borderRadius: 7, background: "#FFF1F2", color: "#B42318", fontSize: 12 }}>
                   兩件優惠總價必須是整數，並低於該尺碼兩件原價；優惠只會配對同款、同單價及同優惠價商品。
+                </div>
+              )}
+              {p.sizes.some((size) => size.threePiecePrice !== null
+                && size.threePiecePrice !== undefined
+                && size.threePiecePrice !== ""
+                && validThreePiecePrice(size.price, size.threePiecePrice) === null) && (
+                <div style={{ marginBottom: 8, padding: 8, borderRadius: 7, background: "#FFF1F2", color: "#B42318", fontSize: 12 }}>
+                  三件優惠總價必須是整數，並低於該尺碼三件原價；優惠只會配對同款、同單價及同優惠價商品。
                 </div>
               )}
               <button
