@@ -17,3 +17,9 @@ test("accepts size objects and preserves pair units for ordinary socks", () => {
 test("does not treat multi-pair sizes of non-sock products as packs", () => {
   assert.equal(productUnit("恤衫", "3對"), "件");
 });
+
+test("uses bank transaction count units for bank fees", () => {
+  assert.equal(productUnit("銀行行政費"), "筆");
+  assert.equal(productUnit("銀行手續費"), "筆");
+  assert.equal(productUnit("銀行轉帳費"), "筆");
+});

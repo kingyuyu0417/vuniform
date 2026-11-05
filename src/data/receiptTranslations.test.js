@@ -5,6 +5,7 @@ import {
   englishReceiptProductUnit,
   formatReceiptSize,
   receiptProductTranslationTerms,
+  receiptProductUnit,
   receiptTranslationText,
   receiptSchoolTranslations,
   translateReceiptProductName,
@@ -27,6 +28,12 @@ test("translates reusable and plastic bags as product names and size values", ()
 
 test("preserves ordinary sock pair units", () => {
   assert.equal(englishReceiptProductUnit("長襪", "均碼", 1), "pairs");
+});
+
+test("uses bank transaction count units on Chinese and English receipts", () => {
+  assert.equal(receiptProductUnit("銀行行政費"), "筆");
+  assert.equal(englishReceiptProductUnit("銀行行政費", "", 1), "transaction");
+  assert.equal(englishReceiptProductUnit("銀行行政費", "", 4), "transactions");
 });
 
 test("translates the school, branch, and products on the provided receipt", () => {

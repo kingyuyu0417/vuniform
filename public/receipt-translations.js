@@ -239,6 +239,7 @@ export const createCustomerReceiptOrder = (order = {}) => ({
 export const receiptProductUnit = (productName = "", size = "") => {
   const name = String(productName || "").replace(/\s+/g, "");
   const normalizedSize = String(size || "").replace(/\s+/g, "");
+  if (/銀行(?:行政費|手續費|轉帳費)/.test(name)) return "筆";
   if (/襪/.test(name) && /^\d+對$/.test(normalizedSize)) return "包";
   if (/襪.*[（(]?\d+對|[（(]3對[）)]/.test(name)) return "包";
   if (/襪|鞋|手套/.test(name)) return "對";
@@ -251,6 +252,7 @@ export const receiptProductUnit = (productName = "", size = "") => {
 export const englishReceiptProductUnit = (productName, size = "", quantity = 1) => {
   const unit = receiptProductUnit(productName, size);
   if (unit === "包") return Number(quantity) === 1 ? "pack" : "packs";
+  if (unit === "筆") return Number(quantity) === 1 ? "transaction" : "transactions";
   return {
     "件": "pcs",
     "對": "pairs",
