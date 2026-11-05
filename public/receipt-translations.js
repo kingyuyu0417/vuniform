@@ -213,6 +213,7 @@ export const createCustomerReceiptOrder = (order = {}) => ({
     length: item.length || "",
     qty: Number(item.qty) || 0,
     price: Number(item.price) || 0,
+    discountAmount: Math.max(0, Number(item.discountAmount) || 0),
     exchangeReturn: Boolean(item.exchangeReturn),
   })),
   itemCount: Number(order.itemCount) || 0,
