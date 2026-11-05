@@ -89,6 +89,7 @@ export const PRIMARY_PRODUCT_CATEGORIES = [
     ] }],
   },
   { value: "belt", label: "皮帶", selectors: [] },
+  { value: "shopping-bag", label: "購物袋", selectors: [] },
 ];
 
 const tailoredSizes = (sizes) => [...sizes, "裁碼"];
@@ -232,6 +233,9 @@ export const buildDefaultProductName = ({ season, gender, category, options }) =
 };
 
 export const getPrimaryProductSizePreset = ({ school, schoolLevel, season, gender, category, options = {} }) => {
+  if (category === "shopping-bag") {
+    return { source: "購物袋類型", sizes: ["膠袋", "環保袋"] };
+  }
   if (category === "skirt") {
     const simplePreset = school === SUZHOU_PRIMARY_SCHOOL && ["summer", "winter"].includes(season)
       ? SUZHOU_SIZE_PRESETS

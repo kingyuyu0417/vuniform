@@ -20,7 +20,7 @@ test("defines the agreed seasonal and primary-school product categories", () => 
   assert.deepEqual(PRODUCT_SEASON_OPTIONS.map(({ value }) => value), ["summer", "winter", "all"]);
   assert.deepEqual(PRIMARY_PRODUCT_CATEGORIES.map(({ value }) => value), [
     "shirt", "skirt", "trousers", "sweater", "school-jacket", "sports-top",
-    "sports-trousers", "sports-jacket", "undershirt", "tie", "socks", "belt",
+    "sports-trousers", "sports-jacket", "undershirt", "tie", "socks", "belt", "shopping-bag",
   ]);
 });
 
@@ -36,6 +36,23 @@ test("builds a name and style label from the selected product options", () => {
   assert.deepEqual(getDefaultProductOptions("shirt", "boys"), { sleeve: "short", collar: "round" });
   assert.deepEqual(getProductSelectorOptions("tie", "style", "girls").map(({ value }) => value), ["butterfly-tie"]);
   assert.deepEqual(normalizeProductOptions("tie", "girls", { style: "bow-tie" }), { style: "butterfly-tie" });
+  assert.equal(buildDefaultProductName({
+    season: "all",
+    gender: "unisex",
+    category: "shopping-bag",
+  }), "兩季通用 男女通用 購物袋");
+});
+
+test("provides bag variants in the new-product wizard for any season and school", () => {
+  assert.deepEqual(getPrimaryProductSizePreset({
+    school: "其他小學",
+    season: "all",
+    gender: "unisex",
+    category: "shopping-bag",
+  }), {
+    source: "購物袋類型",
+    sizes: ["膠袋", "環保袋"],
+  });
 });
 
 test("provides school-specific, season- and style-matched sizes without prices", () => {
