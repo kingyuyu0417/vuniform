@@ -25,6 +25,7 @@ const QueueDisplayPage = lazy(() => import("./pages/QueueDisplayPage"));
 const DirectoryPage = lazy(() => import("./pages/DirectoryPage"));
 import { getHongKongDate, QUEUE_MANAGEMENT_SERVICE_KEY, QUEUE_SERVICE, queueOrderService } from "./services/queueOrderService";
 import { findConflictingProductIds } from "./data/productConflictDetection";
+import { getProductImportDimensions } from "./data/productImportDimensions";
 import { getProductGender, productGenderBackground, PRODUCT_GENDER_OPTIONS } from "./data/productGender";
 import {
   buildDefaultProductName,
@@ -663,8 +664,9 @@ const mergeCSVIntoProducts = (csvText, existingProducts) => {
   parsed.data.forEach((row, idx) => {
     const school = (row["學校"] || "").trim();
     const name = (row["款式名稱"] || "").trim();
-    const size = (row["尺碼"] || row["腰圍"] || row["碼數"] || "").toString().trim();
-    const length = (row["長度"] || row["褲長"] || row["裙長"] || "").toString().trim();
+    const dimensions = getProductImportDimensions(row);
+    const size = String(dimensions.size || "").trim();
+    const length = String(dimensions.length || "").trim();
     const price = Number(row["價錢"]);
     if (!name || !size) return; // 缺款式名或碼數嘅行略過
     if (Number.isNaN(price)) {
@@ -706,8 +708,6 @@ const smartImportRows = (rows, existingProducts, branchSchoolIds = {}) => {
   const headerAliases = {
     school: ["學校", "学校", "school"],
     name: ["款式名稱", "款式", "商品名稱", "品名", "name", "product"],
-    length: ["長度", "袖長", "褲長", "裙長", "length"],
-    size: ["尺碼", "碼數", "腰圍", "上圍", "領圍", "size"],
     price: ["價錢", "價格", "單價", "price"],
     branchId: ["分店ID", "branch_id", "branch"],
     gender: ["性別區", "性別", "gender"],
@@ -715,6 +715,7 @@ const smartImportRows = (rows, existingProducts, branchSchoolIds = {}) => {
   const aliases = Object.fromEntries(Object.entries(headerAliases).flatMap(([key, names]) => names.map((name) => [normalizeImportHeader(name), key])));
   const mappedRows = rows.map((row, index) => ({
     ...Object.fromEntries(Object.entries(row).map(([key, value]) => [aliases[normalizeImportHeader(key)] || key, value])),
+    ...getProductImportDimensions(row),
     __sourceRow: index + 2,
   }));
   const previewRows = [];

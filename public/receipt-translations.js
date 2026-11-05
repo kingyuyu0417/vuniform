@@ -169,7 +169,7 @@ export const translateReceiptSchool = (value) => {
 export const receiptDimensionLabels = (productName = "") => {
   const name = String(productName || "").replace(/\s+/g, "");
   if (/裙/.test(name)) return { length: "裙長", size: "上圍" };
-  if (/長袖.*(?:恤衫|襯衫)|(?:恤衫|襯衫).*長袖/.test(name)) return { length: "袖長", size: "領圍" };
+  if (/長袖.*(?:恤衫|襯衫)|(?:恤衫|襯衫).*長袖/.test(name)) return { length: "領圍", size: "袖長" };
   if (/(?:西褲|長褲|短褲|運動褲|褲)/.test(name)) return { length: "褲長", size: "腰圍" };
   return { length: "", size: "尺碼" };
 };
@@ -177,8 +177,8 @@ export const receiptDimensionLabels = (productName = "") => {
 export const formatReceiptSize = (productName, size, length, english = false) => {
   const labels = receiptDimensionLabels(productName);
   const englishLabels = {
-    length: labels.length === "裙長" ? "Skirt length" : labels.length === "袖長" ? "Sleeve length" : labels.length === "褲長" ? "Trouser length" : "Length",
-    size: labels.size === "上圍" ? "Chest" : labels.size === "領圍" ? "Collar" : labels.size === "腰圍" ? "Waist" : "Size",
+    length: labels.length === "裙長" ? "Skirt length" : labels.length === "領圍" ? "Collar" : labels.length === "褲長" ? "Trouser length" : "Length",
+    size: labels.size === "上圍" ? "Chest" : labels.size === "袖長" ? "Sleeve length" : labels.size === "腰圍" ? "Waist" : "Size",
   };
   const displayLabels = english ? englishLabels : labels;
   const formattedValue = (value) => {

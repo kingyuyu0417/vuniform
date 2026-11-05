@@ -124,6 +124,8 @@ test("translates catalog schools, composable product names, common sizes, and me
 test("formats translated receipt dimensions in English", () => {
   assert.equal(formatReceiptSize("長褲", "30", "40", true), "Trouser length: 40 (Waist: 30)");
   assert.equal(formatReceiptSize("長褲", "30", "40", false), "褲長：40（腰圍：30）");
+  assert.equal(formatReceiptSize("冬季 男裝 恤衫（長袖／尖領）", "16", "32", false), "領圍：32（袖長：16）");
+  assert.equal(formatReceiptSize("冬季 男裝 恤衫（長袖／尖領）", "16", "32", true), "Collar: 32 (Sleeve length: 16)");
   assert.equal(formatReceiptSize("上衣", "特大碼", "", true), "Size: Extra Large");
 });
 
