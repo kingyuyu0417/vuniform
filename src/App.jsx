@@ -26,6 +26,7 @@ const DirectoryPage = lazy(() => import("./pages/DirectoryPage"));
 import { getHongKongDate, QUEUE_MANAGEMENT_SERVICE_KEY, QUEUE_SERVICE, queueOrderService } from "./services/queueOrderService";
 import { findConflictingProductIds } from "./data/productConflictDetection";
 import { getProductImportDimensions } from "./data/productImportDimensions";
+import { detectProductImportMode, hasStandardProductImportHeaders } from "./data/productImportMode";
 import { getProductGender, productGenderBackground, PRODUCT_GENDER_OPTIONS } from "./data/productGender";
 import {
   buildDefaultProductName,
@@ -6769,7 +6770,6 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
   const newProductSchoolLevel = normalizeSchoolLevel(activeSchool || "", schoolMeta);
 
   const fileInputRef = useRef(null);
-  const analyzerFileInputRef = useRef(null);
   const noticeInputRef = useRef(null);
   const [addingSchool, setAddingSchool] = useState(false);
   const [newSchoolName, setNewSchoolName] = useState("");
@@ -7248,20 +7248,16 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     URL.revokeObjectURL(url);
   };
 
-  const handleImportFile = async (e) => {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = "";
+  const handleImportFile = async (file, preloadedWorkbook = null) => {
     if (!file) return;
     setImportPreviewSearch("");
     setImporting(true);
     try {
-      const extension = file.name.toLowerCase().split(".").pop();
       const xlsx = await import("xlsx");
-      const workbook = xlsx.read(await file.arrayBuffer(), { type: "array" });
+      const workbook = preloadedWorkbook || xlsx.read(await file.arrayBuffer(), { type: "array" });
       const selectedSheet = selectImportSheet(workbook, xlsx, activeSchool);
       const sheetRows = selectedSheet?.rows || [];
-      const headerText = sheetRows.slice(0, 6).flat().map((value) => normalizeImportHeader(value)).join("|");
-      const isStandardFormat = ["學校", "款式名稱", "尺碼", "價錢"].every((header) => headerText.includes(normalizeImportHeader(header)));
+      const isStandardFormat = hasStandardProductImportHeaders(sheetRows);
       const converted = isStandardFormat
         ? { rows: xlsx.utils.sheet_to_json(selectedSheet.sheet, { defval: "" }), warnings: [] }
         : convertIrregularPriceList(sheetRows);
@@ -7367,12 +7363,40 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     }
   };
 
+  const handleUnifiedImportFile = async (event) => {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = "";
+    if (!file) return;
+    setImporting(true);
+    try {
+      const extension = file.name.toLowerCase().split(".").pop();
+      if (extension === "csv") {
+        setImporting(false);
+        await handleImportFile(file);
+        return;
+      }
+
+      const xlsx = await import("xlsx");
+      const workbook = xlsx.read(await file.arrayBuffer(), { type: "array" });
+      const selectedSheet = selectImportSheet(workbook, xlsx, activeSchool);
+      const mode = detectProductImportMode(file.name, selectedSheet?.rows || []);
+      setImporting(false);
+      if (mode === "analyzer") {
+        await handleAnalyzerImportFile(file);
+      } else {
+        await handleImportFile(file, workbook);
+      }
+    } catch (error) {
+      console.error("辨識商品匯入檔案失敗", error);
+      setImportResult({ summary: null, errors: [`未能辨識匯入檔案：${error?.message || "請確認檔案格式後重試。"}`] });
+      setImporting(false);
+    }
+  };
+
   // 價目表分析匯入：用 uniform-import-analyzer 解析學校價目 Excel，
   // 轉做標準行後重用現有 smartImportRows → preview → confirmImport 流程。
   // 呢條路強制行 preview，唔會自動套用；組合價按用戶決定唔入 DB。
-  const handleAnalyzerImportFile = async (e) => {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = "";
+  const handleAnalyzerImportFile = async (file) => {
     if (!file) return;
     setImportPreviewSearch("");
     setGenericImportAcknowledged(false);
@@ -7875,7 +7899,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
         <div style={{ borderTop: "1px solid #E5E5E0", marginTop: 14, paddingTop: 14 }}>
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>批量匯入 / 匯出</div>
         <div style={{ fontSize: 12, color: "#888", marginBottom: 10, lineHeight: 1.5 }}>
-          新學校可先用智能匯入處理標準欄位 Excel／CSV；原始並排價目表可用分析匯入嘗試通用辨識。管理員核對後可選擇記住版面，下次仍須逐項確認；工作表結構改變時會停用舊版面並退回通用辨識。
+          選取 Excel／CSV 後會自動辨識：標準資料或 CSV 使用智能匯入，原始價目表使用版面分析。分析結果仍須核對；管理員可選擇記住版面，工作表結構改變時會退回通用辨識。
         </div>
         <label style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10, fontSize: 12, color: "#475569", cursor: "pointer" }}>
           <input
@@ -7892,16 +7916,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
             disabled={importing}
             style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "#1F3A5F", color: "#fff", fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
           >
-            <Upload size={14} /> {importing ? "分析緊…" : "智能匯入 Excel／CSV"}
-          </button>
-          <button
-            className="pos-btn"
-            onClick={() => analyzerFileInputRef.current && analyzerFileInputRef.current.click()}
-            disabled={importing}
-            title="先使用學校專用版面，未設定時嘗試通用辨識；所有結果都必須預覽核對後才能匯入"
-            style={{ flex: 1, padding: "10px 0", borderRadius: 10, background: "#0F766E", color: "#fff", fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
-          >
-            <Upload size={14} /> {importing ? "分析緊…" : "價目表分析匯入"}
+            <Upload size={14} /> {importing ? "分析緊…" : "匯入 Excel／CSV（自動辨識）"}
           </button>
           <button
             className="pos-btn"
@@ -7922,8 +7937,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
             匯入歷史
           </button>
 
-          <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" onChange={handleImportFile} style={{ display: "none" }} />
-          <input ref={analyzerFileInputRef} type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" onChange={handleAnalyzerImportFile} style={{ display: "none" }} />
+          <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" onChange={handleUnifiedImportFile} style={{ display: "none" }} />
         </div>
 
         {canManageSchools && supabase && isSupabaseAuthEnabled && (
