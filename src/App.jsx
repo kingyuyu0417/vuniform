@@ -28,6 +28,7 @@ import { findConflictingProductIds } from "./data/productConflictDetection";
 import { getProductImportDimensions } from "./data/productImportDimensions";
 import { PRODUCT_IMPORT_HEADER_ALIASES, normalizeProductImportHeader } from "./data/productImportHeaders";
 import { detectProductImportMode, hasStandardProductImportHeaders } from "./data/productImportMode";
+import { getSchoolFromStaffRoute } from "./data/routeSchool";
 import { getProductGender, productGenderBackground, PRODUCT_GENDER_OPTIONS } from "./data/productGender";
 import {
   buildDefaultProductName,
@@ -2116,10 +2117,7 @@ export default function UniformPOS() {
   useEffect(() => { tabRef.current = tab; }, [tab]);
 
   const [selectedSchool, setSelectedSchool] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    const schoolFromUrl = window.location.pathname === "/menu"
-      ? params.get("school_id") || params.get("school")
-      : "";
+    const schoolFromUrl = getSchoolFromStaffRoute(window.location.pathname, window.location.search);
     if (schoolFromUrl) return schoolFromUrl;
     try {
       return window.localStorage.getItem("last-school")?.trim() || DESIGNATED_SCHOOL;
@@ -2650,9 +2648,7 @@ export default function UniformPOS() {
 
   useEffect(() => {
     if (!loaded || productsReadySessionKey !== currentProductsSessionKey) return;
-    if (location.pathname !== "/menu") return;
-    const routeSchool = new URLSearchParams(location.search).get("school_id")
-      || new URLSearchParams(location.search).get("school");
+    const routeSchool = getSchoolFromStaffRoute(location.pathname, location.search);
     if (routeSchool && schools.includes(routeSchool) && routeSchool !== selectedSchool) {
       setSelectedSchool(routeSchool);
     }
