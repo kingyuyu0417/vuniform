@@ -65,21 +65,21 @@ test("preserves prices when filling newly created matrix combinations", () => {
   assert.deepEqual(result.sizes.map((item) => item.price), [75, 53]);
 });
 
-test("applies waist base prices and trouser-length surcharges", () => {
+test("applies trouser-length base prices and waist surcharges", () => {
   const result = calculateMatrixPrices([
-    { length: "38.5", size: "24", price: null },
-    { length: "40", size: "25", price: null },
-    { length: "41.5", size: "26", price: null },
-    { length: "42", size: "27", price: null },
-    { length: "43", size: "28", price: null },
-    { length: "50", size: "30", price: null },
+    { length: "33", size: "24", price: null },
+    { length: "33", size: "25", price: null },
+    { length: "34", size: "24", price: null },
+    { length: "34", size: "26", price: null },
   ], {
-    basePrices: "24=96,25=99,26=102,27=106,28=113,30=128",
-    surcharges: "32+=0,40=10,41.5=20,42=20,43+=30",
-  }, { baseDimension: "size", surchargeDimension: "length" });
+    basePrices: "33=96,34=99",
+    surcharges: "24=0,25=10,26+=20",
+  });
 
-  assert.deepEqual(result.sizes.map((item) => item.price), [96, 109, 122, 126, 143, 158]);
-  assert.equal(result.matchedCount, 6);
+  assert.deepEqual(result.sizes.map((item) => item.price), [96, 106, 99, 119]);
+  assert.equal(result.pricing.baseDimension, "length");
+  assert.equal(result.pricing.surchargeDimension, "size");
+  assert.equal(result.matchedCount, 4);
 });
 
 test("applies skirt-length base prices and chest-width surcharge bands", () => {

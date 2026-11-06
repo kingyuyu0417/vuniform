@@ -11,6 +11,21 @@ test("routes standard Excel files to smart import", () => {
   assert.equal(hasStandardProductImportHeaders(rows), true);
 });
 
+test("routes smart-import header aliases to smart import", () => {
+  const rows = [
+    ["學校", "款式", "碼數", "價格"],
+    ["示範小學", "白恤衫", "M", 100],
+  ];
+  assert.equal(detectProductImportMode("products.xlsx", rows), "smart");
+  assert.equal(hasStandardProductImportHeaders(rows), true);
+});
+
+test("recognizes headers with whitespace and English aliases", () => {
+  assert.equal(hasStandardProductImportHeaders([
+    [" School ", "商品 名稱", " size ", "單價"],
+  ]), true);
+});
+
 test("routes parallel price-list Excel files to layout analysis", () => {
   assert.equal(detectProductImportMode("price-list.xls", [
     ["冬季價目表"],

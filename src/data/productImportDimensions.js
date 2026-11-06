@@ -1,24 +1,19 @@
-const normalizeHeader = (value) => String(value || "").replace(/\s+/g, "").toLowerCase();
-
-const dimensionAliases = {
-  length: ["length", "長度", "領圍", "褲長", "裙長"],
-  size: ["size", "尺碼", "碼數", "腰圍", "袖長", "上圍"],
-};
+import { PRODUCT_IMPORT_HEADER_ALIASES, normalizeProductImportHeader } from "./productImportHeaders.js";
 
 export const getProductImportDimensions = (row = {}) => {
   const valuesByHeader = new Map(
-    Object.entries(row).map(([header, value]) => [normalizeHeader(header), value]),
+    Object.entries(row).map(([header, value]) => [normalizeProductImportHeader(header), value]),
   );
   const getValue = (aliases) => {
     for (const alias of aliases) {
-      const value = valuesByHeader.get(normalizeHeader(alias));
+      const value = valuesByHeader.get(normalizeProductImportHeader(alias));
       if (value !== undefined && value !== null && String(value).trim() !== "") return value;
     }
     return "";
   };
 
   return {
-    length: getValue(dimensionAliases.length),
-    size: getValue(dimensionAliases.size),
+    length: getValue(PRODUCT_IMPORT_HEADER_ALIASES.length),
+    size: getValue(PRODUCT_IMPORT_HEADER_ALIASES.size),
   };
 };

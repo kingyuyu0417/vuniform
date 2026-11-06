@@ -26,6 +26,7 @@ const DirectoryPage = lazy(() => import("./pages/DirectoryPage"));
 import { getHongKongDate, QUEUE_MANAGEMENT_SERVICE_KEY, QUEUE_SERVICE, queueOrderService } from "./services/queueOrderService";
 import { findConflictingProductIds } from "./data/productConflictDetection";
 import { getProductImportDimensions } from "./data/productImportDimensions";
+import { PRODUCT_IMPORT_HEADER_ALIASES, normalizeProductImportHeader } from "./data/productImportHeaders";
 import { detectProductImportMode, hasStandardProductImportHeaders } from "./data/productImportMode";
 import { getProductGender, productGenderBackground, PRODUCT_GENDER_OPTIONS } from "./data/productGender";
 import {
@@ -43,7 +44,6 @@ import {
   PRODUCT_GENDER_OPTIONS as PRODUCT_CREATION_GENDER_OPTIONS,
   PRODUCT_SEASON_OPTIONS,
   SKIRT_CHEST_SURCHARGE_RULES,
-  SECONDARY_TROUSER_SURCHARGE_RULES,
   splitProductSizePairs,
 } from "./data/primaryProductTemplates";
 import { productUnit } from "./data/productUnits";
@@ -703,19 +703,12 @@ const mergeCSVIntoProducts = (csvText, existingProducts) => {
   return { next, summary: { addedProducts, addedSizes, updatedSizes }, errors };
 };
 
-const normalizeImportHeader = (value) => String(value || "").replace(/\s+/g, "").toLowerCase();
 const HIGH_CONFIDENCE_IMPORT_THRESHOLD = 0.95;
 const smartImportRows = (rows, existingProducts, branchSchoolIds = {}) => {
-  const headerAliases = {
-    school: ["學校", "学校", "school"],
-    name: ["款式名稱", "款式", "商品名稱", "品名", "name", "product"],
-    price: ["價錢", "價格", "單價", "price"],
-    branchId: ["分店ID", "branch_id", "branch"],
-    gender: ["性別區", "性別", "gender"],
-  };
-  const aliases = Object.fromEntries(Object.entries(headerAliases).flatMap(([key, names]) => names.map((name) => [normalizeImportHeader(name), key])));
+  const aliases = Object.fromEntries(Object.entries(PRODUCT_IMPORT_HEADER_ALIASES)
+    .flatMap(([key, names]) => names.map((name) => [normalizeProductImportHeader(name), key])));
   const mappedRows = rows.map((row, index) => ({
-    ...Object.fromEntries(Object.entries(row).map(([key, value]) => [aliases[normalizeImportHeader(key)] || key, value])),
+    ...Object.fromEntries(Object.entries(row).map(([key, value]) => [aliases[normalizeProductImportHeader(key)] || key, value])),
     ...getProductImportDimensions(row),
     __sourceRow: index + 2,
   }));
@@ -7073,29 +7066,18 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
   };
 
   const applyMatrixPricing = (product) => {
-    const isSecondaryTrousers = product.category === "trousers"
-      && normalizeSchoolLevel(product.school, schoolMeta) === "中學";
     const draft = matrixDrafts[product.id] || {};
-    const defaultSurchargeRules = isSecondaryTrousers
-      ? SECONDARY_TROUSER_SURCHARGE_RULES
-      : product.category === "skirt" ? SKIRT_CHEST_SURCHARGE_RULES : "";
+    const defaultSurchargeRules = product.category === "skirt" ? SKIRT_CHEST_SURCHARGE_RULES : "";
     const pricingDraft = defaultSurchargeRules
       ? { ...draft, surcharges: draft.surcharges || defaultSurchargeRules }
       : draft;
-    const dimensions = isSecondaryTrousers
-      ? { baseDimension: "size", surchargeDimension: "length" }
-      : {};
-    const calculated = calculateMatrixPrices(product.sizes, pricingDraft, dimensions);
+    const calculated = calculateMatrixPrices(product.sizes, pricingDraft);
     if (!calculated) {
-      window.alert(isSecondaryTrousers
-        ? "請輸入按腰圍的基本價，例如：24=96,25=99,26=102；系統會按褲長自動加價。"
-        : `請輸入按${lengthDimensionLabel(product)}的基本價及按${sizeDimensionLabel(product)}的加價規則，例如：30=93,31=93；40=10,41.5=20,43+=30。`);
+      window.alert(`請輸入按${lengthDimensionLabel(product)}的基本價及按${sizeDimensionLabel(product)}的加價規則，例如：30=93,31=93；40=10,41.5=20,43+=30。`);
       return;
     }
     if (calculated.matchedCount === 0) {
-      window.alert(isSecondaryTrousers
-        ? "目前的腰圍基本價沒有匹配任何商品組合，請檢查基本價格式，例如：24=96,25=99。"
-        : `目前輸入的基本價及加價規則，沒有匹配任何商品組合。請確認基本價對應第一欄（${lengthDimensionLabel(product)}），加價規則對應第二欄（${sizeDimensionLabel(product)}）。`);
+      window.alert(`目前輸入的基本價及加價規則，沒有匹配任何商品組合。請確認基本價對應第一欄（${lengthDimensionLabel(product)}），加價規則對應第二欄（${sizeDimensionLabel(product)}）。`);
       return;
     }
     updateProduct(product.id, {
@@ -7103,7 +7085,6 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
       priceMode: "matrix",
       sizes: calculated.sizes,
       pricing: calculated.pricing,
-      ...(isSecondaryTrousers ? { surchargeRules: SECONDARY_TROUSER_SURCHARGE_RULES } : {}),
     });
   };
 
@@ -8416,12 +8397,9 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
               {productPriceMode(p) === "matrix" && (
                 <div style={{ padding: 9, marginBottom: 10, background: "#F0F7FF", border: "1px solid #B8D8F5", borderRadius: 8 }}>
                   {(() => {
-                    const isSecondaryTrousers = p.category === "trousers" && normalizeSchoolLevel(p.school, schoolMeta) === "中學";
-                    const defaultSurchargeRules = isSecondaryTrousers
-                      ? SECONDARY_TROUSER_SURCHARGE_RULES
-                      : p.category === "skirt" ? SKIRT_CHEST_SURCHARGE_RULES : "";
-                    const basePriceDimension = isSecondaryTrousers ? sizeDimensionLabel(p) : lengthDimensionLabel(p);
-                    const surchargeDimension = isSecondaryTrousers ? lengthDimensionLabel(p) : sizeDimensionLabel(p);
+                    const defaultSurchargeRules = p.category === "skirt" ? SKIRT_CHEST_SURCHARGE_RULES : "";
+                    const basePriceDimension = lengthDimensionLabel(p);
+                    const surchargeDimension = sizeDimensionLabel(p);
                     return (
                       <>
                   <div style={{ fontSize: 12, color: "#1F3A5F", fontWeight: 600, marginBottom: 5 }}>批量建立{lengthDimensionLabel(p)} × {sizeDimensionLabel(p)}組合</div>
@@ -8441,8 +8419,8 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                   <button className="pos-btn" onClick={() => applyMatrixDraft(p)} style={{ padding: "7px 10px", borderRadius: 7, background: "#1F3A5F", color: "#fff", fontSize: 12 }}>建立組合（保留已有價格）</button>
                   <div style={{ borderTop: "1px solid #D9E2EC", marginTop: 9, paddingTop: 9 }}>
                     <div style={{ fontSize: 11, color: "#52657A", marginBottom: 5 }}>
-                      {isSecondaryTrousers
-                        ? "輸入各腰圍基本價；系統按褲長自動加價（32–38.5：+$0；40：+$10；41.5–42：+$20；43 或以上：+$30）。"
+                      {p.category === "trousers"
+                        ? "第一項輸入各褲長基本價；第二項按腰圍輸入加價規則。"
                         : p.category === "skirt"
                           ? "輸入各裙長基本價；系統按胸寬自動加價（36–38：+$0；40：+$10；42：+$20；44 或以上：+$30）。"
                         : `可選：按${lengthDimensionLabel(p)}套基本價，再按${sizeDimensionLabel(p)}套加價。`}
@@ -8450,13 +8428,13 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                     <input
                       value={matrixDrafts[p.id]?.basePrices || ""}
                       onChange={(e) => updateMatrixDraft(p.id, "basePrices", e.target.value)}
-                      placeholder={`${basePriceDimension}基本價，例如：${isSecondaryTrousers ? "24=96,25=99,26=102,27=106" : "30=128,31=128"}`}
+                      placeholder={`${basePriceDimension}基本價，例如：${p.category === "trousers" ? "33=96,34=99,35=102" : "30=128,31=128"}`}
                       style={{ width: "100%", padding: 7, marginBottom: 6, borderRadius: 7, border: "1px solid #B8C7D8", fontSize: 12, boxSizing: "border-box" }}
                     />
                     <input
                       value={matrixDrafts[p.id]?.surcharges ?? defaultSurchargeRules}
                       onChange={(e) => updateMatrixDraft(p.id, "surcharges", e.target.value)}
-                      placeholder={`${surchargeDimension}加價規則，例如：${isSecondaryTrousers ? "32+=0,40=10,41.5=20,42=20,43+=30" : p.category === "skirt" ? "36+=0,40=10,42=20,44+=30" : "40=10,41.5+=20,43+=30"}`}
+                      placeholder={`${surchargeDimension}加價規則，例如：${p.category === "trousers" ? "24=0,25=10,26+=20" : p.category === "skirt" ? "36+=0,40=10,42=20,44+=30" : "40=10,41.5+=20,43+=30"}`}
                       style={{ width: "100%", padding: 7, marginBottom: 6, borderRadius: 7, border: "1px solid #B8C7D8", fontSize: 12, boxSizing: "border-box" }}
                     />
                     <button className="pos-btn" onClick={() => applyMatrixPricing(p)} style={{ padding: "7px 10px", borderRadius: 7, background: "#28784B", color: "#fff", fontSize: 12 }}>{isSecondaryTrousers ? "計算並套用售價" : "重新套用價格（會更新每格價格）"}</button>
@@ -8928,7 +8906,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                         {newProductSizeMatrix
                           ? `會建立 ${newProductSizeMatrix.lengths.length} × ${newProductSizeMatrix.sizes.length}，共 ${newProductSizeMatrix.combinations.length} 組；建立後可設定各組價格。`
                           : `請在兩欄各輸入至少一項${newProductMatrixDimensions.length}和${newProductMatrixDimensions.size}。`}
-                        {newProductWizard.category === "trousers" ? " 價格可按腰圍設基本價，再按褲長加價。" : ""}
+                        {newProductWizard.category === "trousers" ? " 價格可按褲長設基本價，再按腰圍加價。" : ""}
                       </div>
                     </>
                     : newProductWizard.usesPairedDimensions

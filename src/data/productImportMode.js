@@ -1,9 +1,11 @@
-const normalizeHeader = (value) => String(value ?? "").replace(/\s+/g, "").toLowerCase();
+import { PRODUCT_IMPORT_HEADER_ALIASES, normalizeProductImportHeader } from "./productImportHeaders.js";
 
 export const hasStandardProductImportHeaders = (rows = []) => {
-  const headerText = rows.slice(0, 6).flat().map(normalizeHeader).join("|");
-  return ["學校", "款式名稱", "尺碼", "價錢"]
-    .every((header) => headerText.includes(normalizeHeader(header)));
+  const headers = new Set(rows.slice(0, 6).flat().map(normalizeProductImportHeader));
+  return ["school", "name", "size", "price"].every((field) => (
+    PRODUCT_IMPORT_HEADER_ALIASES[field]
+      .some((alias) => headers.has(normalizeProductImportHeader(alias)))
+  ));
 };
 
 export const detectProductImportMode = (fileName, rows = []) => {

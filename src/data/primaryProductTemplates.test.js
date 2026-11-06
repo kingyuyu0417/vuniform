@@ -207,7 +207,7 @@ test("provides the agreed primary and secondary trousers size sets", () => {
   assert.deepEqual(secondaryTrousers.matrix.sizes, ["24", "25", "26", "27", "28", "29", "30", "32", "34", "36", "38", "40", "42", "44", "46", "48", "50", "52"]);
   assert.deepEqual(secondaryTrousers.sizes, secondaryTrousers.matrix.sizes);
   assert.equal(secondaryTrousers.matrix.lengths.length * secondaryTrousers.matrix.sizes.length, 252);
-  assert.equal(secondaryTrousers.surchargeRules, "32+=0,40=10,41.5=20,42=20,43+=30");
+  assert.equal(secondaryTrousers.surchargeRules, undefined);
 });
 
 test("provides the agreed skirt length by chest-width matrix", () => {
