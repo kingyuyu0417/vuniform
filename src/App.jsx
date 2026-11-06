@@ -2035,7 +2035,6 @@ export class AppErrorBoundary extends React.Component {
             >
               重新整理
             </button>
-            {paymentWarning && <div role="alert" style={{ marginTop: 8, color: "#B42318", fontWeight: 700, fontSize: 13 }}>{paymentWarning}</div>}
           </div>
         </div>
       );
@@ -8433,7 +8432,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                       placeholder={`${surchargeDimension}加價規則，例如：${p.category === "trousers" ? "24=0,25=10,26+=20" : p.category === "skirt" ? "36+=0,40=10,42=20,44+=30" : "40=10,41.5+=20,43+=30"}`}
                       style={{ width: "100%", padding: 7, marginBottom: 6, borderRadius: 7, border: "1px solid #B8C7D8", fontSize: 12, boxSizing: "border-box" }}
                     />
-                    <button className="pos-btn" onClick={() => applyMatrixPricing(p)} style={{ padding: "7px 10px", borderRadius: 7, background: "#28784B", color: "#fff", fontSize: 12 }}>{isSecondaryTrousers ? "計算並套用售價" : "重新套用價格（會更新每格價格）"}</button>
+                    <button className="pos-btn" onClick={() => applyMatrixPricing(p)} style={{ padding: "7px 10px", borderRadius: 7, background: "#28784B", color: "#fff", fontSize: 12 }}>重新套用價格（會更新每格價格）</button>
                   </div>
                       </>
                     );
