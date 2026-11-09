@@ -72,6 +72,20 @@ Auth 模式的銷售交易會用 `create_order_idempotently` 一次寫入 `order
 
 若整單替換結帳顯示 `P0001: Replacement must stay in the original branch`，請管理員在 Supabase SQL Editor 重新執行 `supabase/replace-sales-order.sql`，更新替換 RPC。RPC 會先確認職員仍有權限處理原單分店，再以資料庫原單的分店欄位建立替換單；完成後重新載入銷售頁，保留原購物車及金額重試，不要另開新單。
 
+## 唯讀商品完整性檢查
+
+`npm run verify:schools` 檢查 repo 商品 JSON。需要檢查 Supabase 雲端商品時，可另外執行：
+
+```bash
+npm run verify:supabase-products
+```
+
+此命令只對 `products` 執行分頁 `SELECT`，使用目前登入員工的 Supabase JWT 和公開 anon/publishable key，並遵守現有 RLS／分店權限；不會寫入、修正或刪除資料，也不會在部署檢查或 POS 收銀流程中自動執行。互動式終端會隱藏 JWT 輸入；非互動環境可透過 `SUPABASE_ACCESS_TOKEN` 傳入短期的 `authenticated` 使用者 JWT。腳本拒絕 service-role key，亦不會把 JWT 寫入檔案或輸出。
+
+雲端檢查報告只會儲存在本機 `.local-reports/`，已加入 Git 忽略清單，不會提交或部署。報告範圍只包括該員工帳戶依 RLS 可讀取的商品，不代表其他分店或整個資料庫。沒有授權的資料或查詢錯誤會明確停止，不會產生「通過」報告。未定價尺碼列作警告，因 POS 支援尚未定價的商品。
+
+店舖瀏覽器的本機資料不會自動匯出或上傳；如需檢查，須由管理員另行匯出並設計明確的離線匯入流程。
+
 ## Auth 員工管理功能
 
 員工管理功能使用 Supabase Edge Function，service key 只放在 Supabase server-side secrets，不可放入 `.env.local`：
