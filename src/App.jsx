@@ -7177,7 +7177,9 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     if (schoolPosition < 0 || schoolPosition === targetPosition) return;
     const next = [...currentProducts];
     const [selectedProduct] = next.splice(currentIndex, 1);
-    const targetIndex = schoolIndexes[targetPosition] - (currentIndex < schoolIndexes[targetPosition] ? 1 : 0);
+    const targetIndex = boundary === "start"
+      ? schoolIndexes[targetPosition]
+      : schoolIndexes[targetPosition] + 1 - (currentIndex <= schoolIndexes[targetPosition] ? 1 : 0);
     next.splice(targetIndex, 0, selectedProduct);
     saveProductChanges(next, { orderOnly: true });
   };
