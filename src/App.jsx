@@ -296,12 +296,6 @@ const compatibleProductIdentities = (first, second) => (
   compatibleProductGenders(first?.gender, second?.gender)
   && (!first?.season || !second?.season || first.season === second.season)
 );
-const genderOf = (product) => {
-  const gender = getProductGender(product);
-  if (gender === "boys") return "男裝";
-  if (gender === "girls") return "女裝";
-  return "男女通用";
-};
 const productGenderForSaleItem = (catalog, school, branchId, itemName) => {
   const candidates = catalog.filter((product) => schoolOf(product) === school && product.name === itemName);
   const normalizedBranchId = String(branchId || "").trim();
@@ -5375,7 +5369,7 @@ function SaleTab({
   onDiscardHeldSale,
   onClearCart,
 }) {
-  const [genderFilter, setGenderFilter] = useState("全部");
+  const [seasonFilter, setSeasonFilter] = useState("全部");
   const [showExchangeTools, setShowExchangeTools] = useState(false);
   const [selectedLength, setSelectedLength] = useState("");
   const [quantityPrompt, setQuantityPrompt] = useState(null);
@@ -5419,8 +5413,8 @@ function SaleTab({
     .filter((product) => !conflictingProductIds.has(product.id))
     .filter((product) => product.sizes.some(isPricedSize)), [schoolProducts, conflictingProductIds]);
   const filteredProducts = useMemo(() => visibleProducts.filter((product) =>
-    genderFilter === "全部" || genderOf(product) === genderFilter || genderOf(product) === "男女通用"
-  ), [visibleProducts, genderFilter]);
+    seasonFilter === "全部" || seasonOf(product) === seasonFilter || seasonOf(product) === "全年"
+  ), [visibleProducts, seasonFilter]);
   const exchangeDate = todayStr();
   const exchangeOrders = useMemo(() => selectedSchool
     ? salesLog.filter((order) =>
@@ -5505,7 +5499,7 @@ function SaleTab({
     ) {
       setSelectedProduct(null);
     }
-  }, [genderFilter, selectedSchool, products, selectedProduct, exchangeReplacementQueue]);
+  }, [seasonFilter, selectedSchool, products, selectedProduct, exchangeReplacementQueue]);
 
   useEffect(() => {
     setSelectedLength("");
@@ -6031,15 +6025,17 @@ function SaleTab({
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 12, padding: 4, background: "#F7F7F5", borderRadius: 10 }}>
-        {["全部", "男裝", "女裝"].map((gender) => (
+      <div role="group" aria-label="按季節篩選商品" style={{ display: "flex", gap: 6, marginBottom: 12, padding: 4, background: "#F1F5F9", borderRadius: 12 }}>
+        {["全部", "夏季", "冬季"].map((season) => (
           <button
-            key={gender}
+            key={season}
+            type="button"
+            aria-pressed={seasonFilter === season}
             className="pos-btn"
-            onClick={() => setGenderFilter(gender)}
-            style={{ flex: 1, padding: "9px 4px", borderRadius: 8, background: genderFilter === gender ? "#1F3A5F" : "transparent", color: genderFilter === gender ? "#fff" : "#555", fontSize: 13, fontWeight: 600 }}
+            onClick={() => setSeasonFilter(season)}
+            style={{ flex: 1, minHeight: 40, padding: "9px 4px", borderRadius: 9, border: 0, background: seasonFilter === season ? "#1F3A5F" : "transparent", color: seasonFilter === season ? "#fff" : "#475569", fontSize: 14, fontWeight: seasonFilter === season ? 700 : 600, transition: "background 150ms ease, color 150ms ease" }}
           >
-            {gender}
+            {season}
           </button>
         ))}
       </div>
