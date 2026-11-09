@@ -4631,7 +4631,7 @@ export default function UniformPOS() {
         .sale-product-button { min-height: 76px; }
         .sale-size-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
         .sale-size-button { min-height: 76px; }
-        .sale-exchange-tools-toggle, .product-order-toggle { display: none; }
+        .sale-exchange-tools-toggle { display: none; }
         @media (max-width: 560px) {
           .pos-page-content { padding: 14px 14px calc(96px + env(safe-area-inset-bottom, 0px)); }
           .pos-btn { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
@@ -4663,22 +4663,6 @@ export default function UniformPOS() {
           .sale-exchange-tool-actions { display: none; }
           .sale-exchange-tools.is-open .sale-exchange-tool-actions { display: grid; gap: 8px; margin-top: 8px; }
           .sale-exchange-tool-actions > .pos-btn { margin: 0 !important; }
-          .product-order-toggle {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            margin: 0 0 8px auto;
-            padding: 7px 10px;
-            border: 1px solid #DCE3EA;
-            border-radius: 8px;
-            background: #fff;
-            color: #1F3A5F;
-            font-size: 12px;
-            font-weight: 700;
-          }
-          .product-order-controls { display: none !important; }
-          .product-order-controls.is-visible { display: flex !important; }
-          .product-order-controls.is-visible .pos-btn { min-width: 40px; min-height: 40px; }
           .records-filter-bar {
             display: grid !important;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -6742,7 +6726,7 @@ function DirectExchangeProductPicker({
 
 function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogProducts, loadLatestProducts, importResult, setImportResult, productsSaveError = "", productsSaveState = "saved", productsCatalogWarning = "", sourceIntegrityWarning = "", canManageSchools = true, canImportExport = true, schoolMeta = {}, saveSchoolMeta = async () => {}, setDeletedSchools = () => {}, selectedSchool = null, onSelectSchool = () => {}, branchSchoolIds = {}, branchId = "", availableSchools }) {
   const [expanded, setExpanded] = useState(null);
-  const [showProductOrderControls, setShowProductOrderControls] = useState(false);
+  const [productOrderOpen, setProductOrderOpen] = useState(false);
   const [newProductWizard, setNewProductWizard] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
@@ -7177,24 +7161,6 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
     const next = [...currentProducts];
     const nextIndex = schoolIndexes[nextPosition];
     [next[currentIndex], next[nextIndex]] = [next[nextIndex], next[currentIndex]];
-    saveProductChanges(next, { orderOnly: true });
-  };
-
-  const moveProductToBoundary = (id, boundary) => {
-    const currentProducts = productsRef.current;
-    const currentIndex = currentProducts.findIndex((product) => product.id === id);
-    if (currentIndex < 0) return;
-    const currentSchool = schoolOf(currentProducts[currentIndex]);
-    const schoolIndexes = currentProducts
-      .map((product, index) => (schoolOf(product) === currentSchool ? index : -1))
-      .filter((index) => index >= 0);
-    const schoolPosition = schoolIndexes.indexOf(currentIndex);
-    const targetPosition = boundary === "start" ? 0 : schoolIndexes.length - 1;
-    if (schoolPosition < 0 || schoolPosition === targetPosition) return;
-    const next = [...currentProducts];
-    const [selectedProduct] = next.splice(currentIndex, 1);
-    const targetIndex = schoolIndexes[targetPosition] - (currentIndex < schoolIndexes[targetPosition] ? 1 : 0);
-    next.splice(targetIndex, 0, selectedProduct);
     saveProductChanges(next, { orderOnly: true });
   };
 
@@ -8401,13 +8367,14 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
 
       <button
         type="button"
-        className="pos-btn product-order-toggle"
-        aria-expanded={showProductOrderControls}
-        onClick={() => setShowProductOrderControls((current) => !current)}
+        className="pos-btn"
+        disabled={!activeSchool || visibleProducts.length < 2}
+        onClick={() => setProductOrderOpen(true)}
+        style={{ display: "block", margin: "0 0 8px auto", padding: "8px 12px", border: "1px solid #DCE3EA", borderRadius: 8, background: "#fff", color: "#1F3A5F", fontSize: 13, fontWeight: 700, opacity: !activeSchool || visibleProducts.length < 2 ? 0.55 : 1 }}
       >
-        {showProductOrderControls ? "完成排序" : "調整商品排序"}
+        調整商品排序
       </button>
-      {visibleProducts.map((p, productIndex) => (
+      {visibleProducts.map((p) => (
         <div key={p.id} style={{ background: "#fff", border: "1px solid #E5E5E0", borderRadius: 10, marginBottom: 8, overflow: "hidden" }}>
           <div style={{ display: "flex", alignItems: "stretch" }}>
             <button
@@ -8421,12 +8388,6 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
             </span>
             {expanded === p.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>
-            <div className={`product-order-controls${showProductOrderControls ? " is-visible" : ""}`} style={{ display: "flex", flexDirection: "column", borderLeft: "1px solid #E5E5E0" }}>
-              <button className="pos-btn" onClick={() => moveProductToBoundary(p.id, "start")} disabled={productIndex === 0} title="移到最前" style={{ flex: 1, padding: "4px 8px", background: "#fff", color: "#1F3A5F" }}><ChevronsUp size={14} /></button>
-              <button className="pos-btn" onClick={() => moveProduct(p.id, -1)} disabled={productIndex === 0} title="向上移動" style={{ flex: 1, padding: "4px 8px", background: "#fff", color: "#1F3A5F" }}><ArrowUp size={14} /></button>
-              <button className="pos-btn" onClick={() => moveProduct(p.id, 1)} disabled={productIndex === visibleProducts.length - 1} title="向下移動" style={{ flex: 1, padding: "4px 8px", background: "#fff", color: "#1F3A5F" }}><ArrowDown size={14} /></button>
-              <button className="pos-btn" onClick={() => moveProductToBoundary(p.id, "end")} disabled={productIndex === visibleProducts.length - 1} title="移到最後" style={{ flex: 1, padding: "4px 8px", background: "#fff", color: "#1F3A5F" }}><ChevronsDown size={14} /></button>
-            </div>
           </div>
           {expanded === p.id && (
             <div style={{ padding: "0 14px 14px" }}>
@@ -8626,6 +8587,50 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                   </button>
                 </div>
               ))}
+              {productOrderOpen && createPortal(
+                <div
+                  role="presentation"
+                  onMouseDown={(event) => {
+                    if (event.target === event.currentTarget) setProductOrderOpen(false);
+                  }}
+                  style={{ position: "fixed", inset: 0, zIndex: 1200, display: "grid", placeItems: "center", padding: 12, background: "rgba(15,23,42,0.62)" }}
+                >
+                  <section
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="product-order-title"
+                    style={{ display: "flex", flexDirection: "column", width: "min(100%, 560px)", maxHeight: "min(90vh, 780px)", boxSizing: "border-box", overflow: "hidden", borderRadius: 14, background: "#fff", boxShadow: "0 20px 60px rgba(15,23,42,0.3)" }}
+                  >
+                    <header style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, padding: "16px 18px", borderBottom: "1px solid #E5E7EB" }}>
+                      <div style={{ minWidth: 0 }}>
+                        <h2 id="product-order-title" style={{ margin: 0, color: "#1F3A5F", fontSize: 18 }}>調整商品排序</h2>
+                        <div style={{ marginTop: 4, color: "#667085", fontSize: 12, overflowWrap: "anywhere" }}>{activeSchool} · 共 {visibleProducts.length} 款</div>
+                        <div style={{ marginTop: 5, color: "#667085", fontSize: 12 }}>只顯示商品名稱；排序會即時保存並套用至銷售頁。</div>
+                      </div>
+                      <button type="button" className="pos-btn" onClick={() => setProductOrderOpen(false)} aria-label="關閉商品排序" style={{ display: "grid", flex: "0 0 40px", width: 40, height: 40, placeItems: "center", borderRadius: 9, background: "#F1F5F9", color: "#334155" }}>
+                        <X size={19} />
+                      </button>
+                    </header>
+                    <ol style={{ margin: 0, padding: "8px 14px 14px", overflowY: "auto", listStyle: "none", overscrollBehavior: "contain" }}>
+                      {visibleProducts.map((product, productIndex) => (
+                        <li key={product.id} style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 54, padding: "7px 4px", borderBottom: "1px solid #EEF1F5" }}>
+                          <span aria-hidden="true" style={{ flex: "0 0 30px", color: "#667085", fontSize: 13, fontWeight: 700, textAlign: "center" }}>{productIndex + 1}</span>
+                          <span style={{ flex: 1, minWidth: 0, color: "#1F2937", fontSize: 14, lineHeight: 1.4, overflowWrap: "anywhere" }}>{product.name}</span>
+                          <div style={{ display: "flex", flex: "0 0 auto", gap: 6 }}>
+                            <button type="button" className="pos-btn" onClick={() => moveProduct(product.id, -1)} disabled={productIndex === 0} aria-label={`將${product.name}向上移`} title="向上移動" style={{ display: "grid", width: 40, height: 42, placeItems: "center", borderRadius: 8, background: "#F8FAFC", color: "#1F3A5F", opacity: productIndex === 0 ? 0.4 : 1 }}>
+                              <ArrowUp size={17} />
+                            </button>
+                            <button type="button" className="pos-btn" onClick={() => moveProduct(product.id, 1)} disabled={productIndex === visibleProducts.length - 1} aria-label={`將${product.name}向下移`} title="向下移動" style={{ display: "grid", width: 40, height: 42, placeItems: "center", borderRadius: 8, background: "#F8FAFC", color: "#1F3A5F", opacity: productIndex === visibleProducts.length - 1 ? 0.4 : 1 }}>
+                              <ArrowDown size={17} />
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  </section>
+                </div>,
+                document.body,
+              )}
               {p.sizes.some((size) => size.twoPiecePrice !== null
                 && size.twoPiecePrice !== undefined
                 && size.twoPiecePrice !== ""
