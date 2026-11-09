@@ -8604,76 +8604,6 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
                   </button>
                 </div>
               ))}
-              {productOrderOpen && createPortal(
-                <div
-                  role="presentation"
-                  onMouseDown={(event) => {
-                    if (event.target === event.currentTarget) setProductOrderOpen(false);
-                  }}
-                  style={{ position: "fixed", inset: 0, zIndex: 1200, display: "grid", placeItems: "center", padding: 12, background: "rgba(15,23,42,0.62)" }}
-                >
-                  <section
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="product-order-title"
-                    style={{ display: "flex", flexDirection: "column", width: "min(100%, 560px)", maxHeight: "min(90vh, 780px)", boxSizing: "border-box", overflow: "hidden", borderRadius: 14, background: "#fff", boxShadow: "0 20px 60px rgba(15,23,42,0.3)" }}
-                  >
-                    <header style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, padding: "16px 18px", borderBottom: "1px solid #E5E7EB" }}>
-                      <div style={{ minWidth: 0 }}>
-                        <h2 id="product-order-title" style={{ margin: 0, color: "#1F3A5F", fontSize: 18 }}>調整商品排序</h2>
-                        <div style={{ marginTop: 4, color: "#667085", fontSize: 12, overflowWrap: "anywhere" }}>
-                          {activeSchool ? `${activeSchool} · 共 ${visibleProducts.length} 款` : "請先選擇學校"}
-                        </div>
-                        <div style={{ marginTop: 5, color: "#667085", fontSize: 12 }}>只顯示商品名稱；排序會即時保存並套用至銷售頁。</div>
-                      </div>
-                      <button type="button" className="pos-btn" onClick={() => setProductOrderOpen(false)} aria-label="關閉商品排序" style={{ display: "grid", flex: "0 0 40px", width: 40, height: 40, placeItems: "center", borderRadius: 9, background: "#F1F5F9", color: "#334155" }}>
-                        <X size={19} />
-                      </button>
-                    </header>
-                    {!activeSchool ? (
-                      <div style={{ padding: 18 }}>
-                        <label htmlFor="product-order-school" style={{ display: "block", marginBottom: 8, color: "#475569", fontSize: 13, fontWeight: 700 }}>選擇要排序的學校</label>
-                        <select
-                          id="product-order-school"
-                          value=""
-                          onChange={(event) => onSelectSchool(event.target.value)}
-                          style={{ width: "100%", boxSizing: "border-box", padding: 10, border: "1px solid #CBD5E1", borderRadius: 8, background: "#fff", fontSize: 14 }}
-                        >
-                          <option value="" disabled>請選擇學校</option>
-                          {schools.map((school) => <option key={school} value={school}>{school}</option>)}
-                        </select>
-                        {schools.length === 0 && <div style={{ marginTop: 8, color: "#667085", fontSize: 12 }}>目前沒有可排序的學校商品。</div>}
-                      </div>
-                    ) : visibleProducts.length === 0 ? (
-                      <div style={{ padding: 18, color: "#667085", fontSize: 13 }}>此學校目前沒有商品。</div>
-                    ) : (
-                    <ol style={{ margin: 0, padding: "8px 14px 14px", overflowY: "auto", listStyle: "none", overscrollBehavior: "contain" }}>
-                      {visibleProducts.map((product, productIndex) => (
-                        <li key={product.id} style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 54, padding: "7px 4px", borderBottom: "1px solid #EEF1F5" }}>
-                          <span aria-hidden="true" style={{ flex: "0 0 30px", color: "#667085", fontSize: 13, fontWeight: 700, textAlign: "center" }}>{productIndex + 1}</span>
-                          <span style={{ flex: 1, minWidth: 0, color: "#1F2937", fontSize: 14, lineHeight: 1.4, overflowWrap: "anywhere" }}>{product.name}</span>
-                          <div style={{ display: "flex", flex: "0 0 auto", gap: 6 }}>
-                            <button type="button" className="pos-btn" onClick={() => moveProductToBoundary(product.id, "start")} disabled={productIndex === 0} aria-label={`將${product.name}移到最頂`} title="移到最頂" style={{ display: "grid", width: 36, height: 42, placeItems: "center", borderRadius: 8, background: "#F8FAFC", color: "#1F3A5F", opacity: productIndex === 0 ? 0.4 : 1 }}>
-                              <ChevronsUp size={17} />
-                            </button>
-                            <button type="button" className="pos-btn" onClick={() => moveProduct(product.id, -1)} disabled={productIndex === 0} aria-label={`將${product.name}向上移`} title="向上移動" style={{ display: "grid", width: 36, height: 42, placeItems: "center", borderRadius: 8, background: "#F8FAFC", color: "#1F3A5F", opacity: productIndex === 0 ? 0.4 : 1 }}>
-                              <ArrowUp size={17} />
-                            </button>
-                            <button type="button" className="pos-btn" onClick={() => moveProduct(product.id, 1)} disabled={productIndex === visibleProducts.length - 1} aria-label={`將${product.name}向下移`} title="向下移動" style={{ display: "grid", width: 36, height: 42, placeItems: "center", borderRadius: 8, background: "#F8FAFC", color: "#1F3A5F", opacity: productIndex === visibleProducts.length - 1 ? 0.4 : 1 }}>
-                              <ArrowDown size={17} />
-                            </button>
-                            <button type="button" className="pos-btn" onClick={() => moveProductToBoundary(product.id, "end")} disabled={productIndex === visibleProducts.length - 1} aria-label={`將${product.name}移到最底`} title="移到最底" style={{ display: "grid", width: 36, height: 42, placeItems: "center", borderRadius: 8, background: "#F8FAFC", color: "#1F3A5F", opacity: productIndex === visibleProducts.length - 1 ? 0.4 : 1 }}>
-                              <ChevronsDown size={17} />
-                            </button>
-                          </div>
-                        </li>
-                      ))}
-                    </ol>
-                    )}
-                  </section>
-                </div>,
-                document.body,
-              )}
               {p.sizes.some((size) => size.twoPiecePrice !== null
                 && size.twoPiecePrice !== undefined
                 && size.twoPiecePrice !== ""
@@ -8749,6 +8679,77 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
           )}
         </div>
       ))}
+
+      {productOrderOpen && createPortal(
+        <div
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setProductOrderOpen(false);
+          }}
+          style={{ position: "fixed", inset: 0, zIndex: 1200, display: "grid", placeItems: "center", padding: 12, background: "rgba(15,23,42,0.62)" }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="product-order-title"
+            style={{ display: "flex", flexDirection: "column", width: "min(100%, 560px)", maxHeight: "min(90vh, 780px)", boxSizing: "border-box", overflow: "hidden", borderRadius: 14, background: "#fff", boxShadow: "0 20px 60px rgba(15,23,42,0.3)" }}
+          >
+            <header style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, padding: "16px 18px", borderBottom: "1px solid #E5E7EB" }}>
+              <div style={{ minWidth: 0 }}>
+                <h2 id="product-order-title" style={{ margin: 0, color: "#1F3A5F", fontSize: 18 }}>調整商品排序</h2>
+                <div style={{ marginTop: 4, color: "#667085", fontSize: 12, overflowWrap: "anywhere" }}>
+                  {activeSchool ? `${activeSchool} · 共 ${visibleProducts.length} 款` : "請先選擇學校"}
+                </div>
+                <div style={{ marginTop: 5, color: "#667085", fontSize: 12 }}>只顯示商品名稱；排序會即時保存並套用至銷售頁。</div>
+              </div>
+              <button type="button" className="pos-btn" onClick={() => setProductOrderOpen(false)} aria-label="關閉商品排序" style={{ display: "grid", flex: "0 0 40px", width: 40, height: 40, placeItems: "center", borderRadius: 9, background: "#F1F5F9", color: "#334155" }}>
+                <X size={19} />
+              </button>
+            </header>
+            {!activeSchool ? (
+              <div style={{ padding: 18 }}>
+                <label htmlFor="product-order-school" style={{ display: "block", marginBottom: 8, color: "#475569", fontSize: 13, fontWeight: 700 }}>選擇要排序的學校</label>
+                <select
+                  id="product-order-school"
+                  value=""
+                  onChange={(event) => onSelectSchool(event.target.value)}
+                  style={{ width: "100%", boxSizing: "border-box", padding: 10, border: "1px solid #CBD5E1", borderRadius: 8, background: "#fff", fontSize: 14 }}
+                >
+                  <option value="" disabled>請選擇學校</option>
+                  {schools.map((school) => <option key={school} value={school}>{school}</option>)}
+                </select>
+                {schools.length === 0 && <div style={{ marginTop: 8, color: "#667085", fontSize: 12 }}>目前沒有可排序的學校商品。</div>}
+              </div>
+            ) : visibleProducts.length === 0 ? (
+              <div style={{ padding: 18, color: "#667085", fontSize: 13 }}>此學校目前沒有商品。</div>
+            ) : (
+              <ol style={{ margin: 0, padding: "8px 14px 14px", overflowY: "auto", listStyle: "none", overscrollBehavior: "contain" }}>
+                {visibleProducts.map((product, productIndex) => (
+                  <li key={product.id} style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 54, padding: "7px 4px", borderBottom: "1px solid #EEF1F5" }}>
+                    <span aria-hidden="true" style={{ flex: "0 0 30px", color: "#667085", fontSize: 13, fontWeight: 700, textAlign: "center" }}>{productIndex + 1}</span>
+                    <span style={{ flex: 1, minWidth: 0, color: "#1F2937", fontSize: 14, lineHeight: 1.4, overflowWrap: "anywhere" }}>{product.name}</span>
+                    <div style={{ display: "flex", flex: "0 0 auto", gap: 6 }}>
+                      <button type="button" className="pos-btn" onClick={() => moveProductToBoundary(product.id, "start")} disabled={productIndex === 0} aria-label={`將${product.name}移到最頂`} title="移到最頂" style={{ display: "grid", width: 36, height: 42, placeItems: "center", borderRadius: 8, background: "#F8FAFC", color: "#1F3A5F", opacity: productIndex === 0 ? 0.4 : 1 }}>
+                        <ChevronsUp size={17} />
+                      </button>
+                      <button type="button" className="pos-btn" onClick={() => moveProduct(product.id, -1)} disabled={productIndex === 0} aria-label={`將${product.name}向上移`} title="向上移動" style={{ display: "grid", width: 36, height: 42, placeItems: "center", borderRadius: 8, background: "#F8FAFC", color: "#1F3A5F", opacity: productIndex === 0 ? 0.4 : 1 }}>
+                        <ArrowUp size={17} />
+                      </button>
+                      <button type="button" className="pos-btn" onClick={() => moveProduct(product.id, 1)} disabled={productIndex === visibleProducts.length - 1} aria-label={`將${product.name}向下移`} title="向下移動" style={{ display: "grid", width: 36, height: 42, placeItems: "center", borderRadius: 8, background: "#F8FAFC", color: "#1F3A5F", opacity: productIndex === visibleProducts.length - 1 ? 0.4 : 1 }}>
+                        <ArrowDown size={17} />
+                      </button>
+                      <button type="button" className="pos-btn" onClick={() => moveProductToBoundary(product.id, "end")} disabled={productIndex === visibleProducts.length - 1} aria-label={`將${product.name}移到最底`} title="移到最底" style={{ display: "grid", width: 36, height: 42, placeItems: "center", borderRadius: 8, background: "#F8FAFC", color: "#1F3A5F", opacity: productIndex === visibleProducts.length - 1 ? 0.4 : 1 }}>
+                        <ChevronsDown size={17} />
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
+        </div>,
+        document.body,
+      )}
 
       {addingSchool && (
         <div style={{ marginBottom: 10, background: "#F7F7F5", padding: 12, borderRadius: 10 }}>
