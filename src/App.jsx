@@ -4631,10 +4631,75 @@ export default function UniformPOS() {
         .sale-product-button { min-height: 76px; }
         .sale-size-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
         .sale-size-button { min-height: 76px; }
+        .sale-exchange-tools-toggle, .product-order-toggle { display: none; }
         @media (max-width: 560px) {
           .pos-page-content { padding: 14px 14px calc(96px + env(safe-area-inset-bottom, 0px)); }
           .pos-btn { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
           .pos-btn:active { transform: none; }
+          .pos-header-card { padding: 10px 12px !important; }
+          .pos-header-main { align-items: center !important; gap: 8px; }
+          .pos-header-identity { flex: 1 1 0; min-width: 0; }
+          .pos-header-school-switcher { flex: 1 1 0; min-width: 0; max-width: 100%; }
+          .pos-header-school-name { display: block; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px !important; }
+          .pos-header-date { display: block; margin-top: 1px !important; font-size: 11px !important; white-space: nowrap; }
+          .pos-header-actions { flex: 0 0 48%; width: 48%; min-width: 0; gap: 4px !important; }
+          .pos-header-actions .pos-btn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px !important; padding: 4px 6px !important; }
+          .pos-return-directory-wrap { display: none; }
+          .sale-exchange-tools { margin-bottom: 10px; }
+          .sale-exchange-tools-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            min-height: 42px;
+            padding: 9px 12px;
+            border: 1px solid #D7DEE8;
+            border-radius: 9px;
+            background: #fff;
+            color: #1F3A5F;
+            font-size: 13px;
+            font-weight: 700;
+          }
+          .sale-exchange-tool-actions { display: none; }
+          .sale-exchange-tools.is-open .sale-exchange-tool-actions { display: grid; gap: 8px; margin-top: 8px; }
+          .sale-exchange-tool-actions > .pos-btn { margin: 0 !important; }
+          .product-order-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin: 0 0 8px auto;
+            padding: 7px 10px;
+            border: 1px solid #DCE3EA;
+            border-radius: 8px;
+            background: #fff;
+            color: #1F3A5F;
+            font-size: 12px;
+            font-weight: 700;
+          }
+          .product-order-controls { display: none !important; }
+          .product-order-controls.is-visible { display: flex !important; }
+          .product-order-controls.is-visible .pos-btn { min-width: 40px; min-height: 40px; }
+          .records-filter-bar {
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            align-items: stretch !important;
+            gap: 8px !important;
+          }
+          .records-filter-bar > input,
+          .records-filter-bar > select,
+          .records-filter-bar > label,
+          .records-filter-bar > [aria-label="指定門店"],
+          .records-filter-bar > div:not(.records-export-wrap) {
+            width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
+          }
+          .records-filter-bar > input,
+          .records-filter-bar > select { font-size: 13px !important; }
+          .records-filter-bar > label { display: grid !important; grid-template-columns: auto minmax(0, 1fr); gap: 5px !important; }
+          .records-filter-bar input[type="date"] { width: 100%; min-width: 0; box-sizing: border-box; padding: 8px 4px !important; }
+          .records-filter-bar .records-export-wrap { grid-column: 1 / -1; margin-left: 0 !important; }
+          .records-filter-bar .records-export-wrap > button { width: 100%; justify-content: center; }
           .exchange-comparison-headings { display: none !important; }
           .exchange-comparison-row { grid-template-columns: minmax(0, 1fr) !important; gap: 8px !important; }
           .exchange-comparison-side { padding: 8px 10px !important; }
@@ -4708,45 +4773,45 @@ export default function UniformPOS() {
           </div>
         )}
 
-        <div style={{ background: "linear-gradient(135deg, #1F3A5F 0%, #294D78 100%)", color: "#fff", padding: "18px 20px", borderRadius: canSwitchSchool && schoolPanelOpen ? "0" : "0 0 16px 16px", position: "relative", boxShadow: "0 3px 12px rgba(31, 58, 95, 0.18)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div className="pos-header-card" style={{ background: "linear-gradient(135deg, #1F3A5F 0%, #294D78 100%)", color: "#fff", padding: "18px 20px", borderRadius: canSwitchSchool && schoolPanelOpen ? "0" : "0 0 16px 16px", position: "relative", boxShadow: "0 3px 12px rgba(31, 58, 95, 0.18)" }}>
+        <div className="pos-header-main" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           {session.role === ROLES.GUEST ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div className="pos-header-identity" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div>
-                <div style={{ fontSize: 18, fontWeight: 600 }}>{selectedSchool}</div>
-                <div style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>客人登記系統</div>
+                <div className="pos-header-school-name" style={{ fontSize: 18, fontWeight: 600 }}>{selectedSchool}</div>
+                <div className="pos-header-date" style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>客人登記系統</div>
               </div>
             </div>
           ) : schools.length > 0 ? (
             canSwitchSchool ? (
             <button
-              className="pos-btn"
+              className="pos-btn pos-header-school-switcher"
               onClick={() => setSchoolPanelOpen((v) => !v)}
               style={{ background: "none", color: "#fff", textAlign: "left", display: "flex", alignItems: "center", gap: 6 }}
             >
-              <div>
-                <div style={{ fontSize: 18, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                  {selectedSchool || "校服銷售"}
+              <div className="pos-header-identity">
+                <div style={{ fontSize: 18, fontWeight: 600, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                  <span className="pos-header-school-name">{selectedSchool || "校服銷售"}</span>
                   {schoolPanelOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </div>
-                <div style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>{todayStr()}</div>
+                <div className="pos-header-date" style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>{todayStr()}</div>
               </div>
             </button>
             ) : (
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div className="pos-header-identity" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div>
-                  <div style={{ fontSize: 18, fontWeight: 600 }}>{selectedSchool || "校服銷售"}</div>
-                  <div style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>{todayStr()}</div>
+                  <div className="pos-header-school-name" style={{ fontSize: 18, fontWeight: 600 }}>{selectedSchool || "校服銷售"}</div>
+                  <div className="pos-header-date" style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>{todayStr()}</div>
                 </div>
               </div>
             )
           ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div className="pos-header-identity" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div>
-                <div style={{ fontSize: 18, fontWeight: 600 }}>
+                <div className="pos-header-school-name" style={{ fontSize: 18, fontWeight: 600 }}>
                   {session.role !== ROLES.ADMIN ? "暫無可選學校" : "校服銷售"}
                 </div>
-                <div style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>
+                <div className="pos-header-date" style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>
                   {session.role !== ROLES.ADMIN
                     ? (session.branchId ? "請管理員確認此分店的學校分配" : "請管理員為此帳戶指派分店")
                     : todayStr()}
@@ -4754,7 +4819,7 @@ export default function UniformPOS() {
               </div>
             </div>
           )}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
+          <div className="pos-header-actions" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
             {session.role !== ROLES.GUEST && (
               <button
                 className="pos-btn"
@@ -4791,7 +4856,7 @@ export default function UniformPOS() {
       {canSwitchSchool && schoolPanelOpen && <div style={{ height: 16, background: "#294D78", borderRadius: "0 0 16px 16px" }} />}
 
       {session.role !== ROLES.GUEST && !isDirectoryPage && (
-        <div style={{ padding: "12px 16px 0" }}>
+        <div className="pos-return-directory-wrap" style={{ padding: "12px 16px 0" }}>
           <button
             className="pos-btn"
             onClick={() => navigate("/menu")}
@@ -5327,6 +5392,7 @@ function SaleTab({
   onClearCart,
 }) {
   const [genderFilter, setGenderFilter] = useState("全部");
+  const [showExchangeTools, setShowExchangeTools] = useState(false);
   const [selectedLength, setSelectedLength] = useState("");
   const [quantityPrompt, setQuantityPrompt] = useState(null);
   const closeProductPicker = () => {
@@ -5625,32 +5691,45 @@ function SaleTab({
           <button type="button" className="pos-btn" onClick={onCancelFullReplacement} style={{ padding: "8px 10px", borderRadius: 8, background: "#fff", border: "1px solid #D97706", color: "#92400E", fontWeight: 700, whiteSpace: "nowrap" }}>取消替換</button>
         </div>
       )}
-      <button
-        className="pos-btn"
-        onClick={openExchangePicker}
-        disabled={fullReplacementMode || checkoutSubmitting || exchangeReplacementQueue.length > 0}
-        style={{ width: "100%", padding: "12px 0", borderRadius: 10, background: "#FFF7ED", color: "#9A3412", border: "1px solid #FDBA74", fontSize: 14, fontWeight: 700, marginBottom: 12, opacity: exchangeReplacementQueue.length > 0 ? 0.6 : 1 }}
-      >
-        {exchangeMode ? "＋下一件：原單換貨／補差額" : "快速換貨／補差額（逐件處理）"}
-      </button>
-      <button
-        className="pos-btn"
-        type="button"
-        disabled={!selectedSchool || (cart.length > 0 && !untrackedExchangeMode) || fullReplacementMode || checkoutSubmitting || exchangeReplacementQueue.length > 0}
-        onClick={() => {
-          setDirectExchangeProductId("");
-          setDirectExchangeLength("");
-          setDirectExchangeQuantityPrompt(null);
-          setDirectExchangeOpen(true);
-          setDirectExchangePickerOpen(true);
-        }}
-        title={untrackedExchangeMode
-          ? "繼續追加退回款式；退回抵扣按目前學校目錄售價計算"
-          : "退回抵扣按目前學校目錄售價計算；新單不連結來源收據"}
-        style={{ width: "100%", padding: "12px", borderRadius: 10, background: "#ECFDF3", color: "#166534", border: "1px solid #86EFAC", fontSize: 14, fontWeight: 700, marginBottom: 12 }}
-      >
-        {untrackedExchangeMode ? "＋下一件：無原單退換" : "無原單退換（逐件選退回及新貨）"}
-      </button>
+      <div className={`sale-exchange-tools${showExchangeTools ? " is-open" : ""}`}>
+        <button
+          type="button"
+          className="pos-btn sale-exchange-tools-toggle"
+          aria-expanded={showExchangeTools}
+          onClick={() => setShowExchangeTools((current) => !current)}
+        >
+          <span>退換貨及補差額</span>
+          {showExchangeTools ? <ChevronUp size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}
+        </button>
+        <div className="sale-exchange-tool-actions">
+          <button
+            className="pos-btn"
+            onClick={openExchangePicker}
+            disabled={fullReplacementMode || checkoutSubmitting || exchangeReplacementQueue.length > 0}
+            style={{ width: "100%", padding: "12px 0", borderRadius: 10, background: "#FFF7ED", color: "#9A3412", border: "1px solid #FDBA74", fontSize: 14, fontWeight: 700, marginBottom: 12, opacity: exchangeReplacementQueue.length > 0 ? 0.6 : 1 }}
+          >
+            {exchangeMode ? "＋下一件：原單換貨／補差額" : "快速換貨／補差額（逐件處理）"}
+          </button>
+          <button
+            className="pos-btn"
+            type="button"
+            disabled={!selectedSchool || (cart.length > 0 && !untrackedExchangeMode) || fullReplacementMode || checkoutSubmitting || exchangeReplacementQueue.length > 0}
+            onClick={() => {
+              setDirectExchangeProductId("");
+              setDirectExchangeLength("");
+              setDirectExchangeQuantityPrompt(null);
+              setDirectExchangeOpen(true);
+              setDirectExchangePickerOpen(true);
+            }}
+            title={untrackedExchangeMode
+              ? "繼續追加退回款式；退回抵扣按目前學校目錄售價計算"
+              : "退回抵扣按目前學校目錄售價計算；新單不連結來源收據"}
+            style={{ width: "100%", padding: "12px", borderRadius: 10, background: "#ECFDF3", color: "#166534", border: "1px solid #86EFAC", fontSize: 14, fontWeight: 700, marginBottom: 12 }}
+          >
+            {untrackedExchangeMode ? "＋下一件：無原單退換" : "無原單退換（逐件選退回及新貨）"}
+          </button>
+        </div>
+      </div>
       {exchangeMode && (
         <div style={{ marginTop: -4, marginBottom: 12, padding: "8px 10px", borderRadius: 8, background: "#F8FAFC", color: "#475569", fontSize: 12, lineHeight: 1.5 }}>
           {exchangeReplacementQueue.length > 0
@@ -6663,6 +6742,7 @@ function DirectExchangeProductPicker({
 
 function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogProducts, loadLatestProducts, importResult, setImportResult, productsSaveError = "", productsSaveState = "saved", productsCatalogWarning = "", sourceIntegrityWarning = "", canManageSchools = true, canImportExport = true, schoolMeta = {}, saveSchoolMeta = async () => {}, setDeletedSchools = () => {}, selectedSchool = null, onSelectSchool = () => {}, branchSchoolIds = {}, branchId = "", availableSchools }) {
   const [expanded, setExpanded] = useState(null);
+  const [showProductOrderControls, setShowProductOrderControls] = useState(false);
   const [newProductWizard, setNewProductWizard] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
@@ -8319,6 +8399,14 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
         </div>
       )}
 
+      <button
+        type="button"
+        className="pos-btn product-order-toggle"
+        aria-expanded={showProductOrderControls}
+        onClick={() => setShowProductOrderControls((current) => !current)}
+      >
+        {showProductOrderControls ? "完成排序" : "調整商品排序"}
+      </button>
       {visibleProducts.map((p, productIndex) => (
         <div key={p.id} style={{ background: "#fff", border: "1px solid #E5E5E0", borderRadius: 10, marginBottom: 8, overflow: "hidden" }}>
           <div style={{ display: "flex", alignItems: "stretch" }}>
@@ -8333,7 +8421,7 @@ function ProductsTab({ products, saveProducts, saveProductsNow, deleteCatalogPro
             </span>
             {expanded === p.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>
-            <div style={{ display: "flex", flexDirection: "column", borderLeft: "1px solid #E5E5E0" }}>
+            <div className={`product-order-controls${showProductOrderControls ? " is-visible" : ""}`} style={{ display: "flex", flexDirection: "column", borderLeft: "1px solid #E5E5E0" }}>
               <button className="pos-btn" onClick={() => moveProductToBoundary(p.id, "start")} disabled={productIndex === 0} title="移到最前" style={{ flex: 1, padding: "4px 8px", background: "#fff", color: "#1F3A5F" }}><ChevronsUp size={14} /></button>
               <button className="pos-btn" onClick={() => moveProduct(p.id, -1)} disabled={productIndex === 0} title="向上移動" style={{ flex: 1, padding: "4px 8px", background: "#fff", color: "#1F3A5F" }}><ArrowUp size={14} /></button>
               <button className="pos-btn" onClick={() => moveProduct(p.id, 1)} disabled={productIndex === visibleProducts.length - 1} title="向下移動" style={{ flex: 1, padding: "4px 8px", background: "#fff", color: "#1F3A5F" }}><ArrowDown size={14} /></button>
@@ -9178,7 +9266,7 @@ function RecordsTab({ salesLog, loadOrdersForDateRange, loadHistoricalSales, rec
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+      <div className="records-filter-bar" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
         <input
           value={phoneSearch}
           onChange={(e) => setPhoneSearch(e.target.value.replace(/\D/g, "").slice(-4))}
@@ -9240,9 +9328,11 @@ function RecordsTab({ salesLog, loadOrdersForDateRange, loadHistoricalSales, rec
           {availableSchools.map((school) => <option key={school} value={school}>{school}</option>)}
         </select>
         {canExportSales && (
-          <button className="pos-btn" onClick={handleExportSales} disabled={exportingSales || !validDateRange} style={{ marginLeft: "auto", fontSize: 12, padding: "8px 12px", borderRadius: 8, background: "#fff", border: "1px solid #1F3A5F", color: "#1F3A5F", display: "flex", alignItems: "center", gap: 6, opacity: exportingSales || !validDateRange ? 0.6 : 1 }}>
-            <Download size={13} /> {exportingSales ? "整理報表中…" : "匯出分析報表"}
-          </button>
+          <div className="records-export-wrap" style={{ marginLeft: "auto" }}>
+            <button className="pos-btn" onClick={handleExportSales} disabled={exportingSales || !validDateRange} style={{ fontSize: 12, padding: "8px 12px", borderRadius: 8, background: "#fff", border: "1px solid #1F3A5F", color: "#1F3A5F", display: "flex", alignItems: "center", gap: 6, opacity: exportingSales || !validDateRange ? 0.6 : 1 }}>
+              <Download size={13} /> {exportingSales ? "整理報表中…" : "匯出分析報表"}
+            </button>
+          </div>
         )}
       </div>
       {!validDateRange && canViewAllDates && (
