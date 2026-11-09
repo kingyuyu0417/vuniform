@@ -1,6 +1,6 @@
 # School Integrity Report
 
-Generated at: 2026-10-16T08:48:35.963Z
+Generated at: 2026-11-09T08:57:36.341Z
 
 Summary: 1/1 schools passed; 0 failed.
 
